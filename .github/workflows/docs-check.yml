@@ -1,0 +1,65 @@
+name: Documentation Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - 'scripts/check-docs.js'
+      - '.github/workflows/docs-check.yml'
+  
+  push:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+
+  # 每天凌晨 2 点检查文档过期
+  schedule:
+    - cron: '0 2 * * *'
+
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史以便 git diff
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: 安装依赖
+        run: |
+          npm install -g glob
+          # 其他依赖根据实际需要添加
+      
+      - name: 运行文档检查（警告模式）
+        run: |
+          node scripts/check-docs.js
+        env:
+          DOCS_STRICT_MODE: 'false'
+      
+      - name: 检查过期文档（定时任务）
+        if: github.event_name == 'schedule'
+        run: |
+          node scripts/check-docs.js --stale
+      
+      - name: 注释 PR（如有问题）
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ 文档检查发现问题，请查看 CI 日志详情。'
+            })

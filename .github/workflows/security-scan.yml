@@ -1,0 +1,136 @@
+name: Security Scan
+
+on:
+  pull_request:
+    branches: [main, develop]
+  
+  push:
+    branches: [main, develop]
+  
+  # 每周一凌晨 3 点运行
+  schedule:
+    - cron: '0 3 * * 1'
+
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  secrets-scan:
+    name: 扫描泄露的密钥
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 扫描完整历史
+      
+      - name: TruffleHog 密钥扫描
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+      
+      - name: 检查常见密钥模式
+        run: |
+          echo "检查常见密钥模式..."
+          
+          # 检查是否有 .env 文件被提交
+          if git ls-files | grep -E '\.env$'; then
+            echo "❌ 错误：发现 .env 文件被提交"
+            exit 1
+          fi
+          
+          # 检查是否有私钥文件
+          if git ls-files | grep -E '\.(pem|key|p12|pfx)$'; then
+            echo "❌ 错误：发现私钥文件被提交"
+            exit 1
+          fi
+          
+          # 检查代码中是否有明显的密钥模式
+          if git grep -E '(password|secret|api[_-]?key|token)\s*=\s*["\x27][^"\x27]{8,}' -- '*.ts' '*.js' '*.json' 2>/dev/null; then
+            echo "⚠️  警告：发现可能的硬编码密钥"
+            echo "请检查是否为真实密钥，如是请立即移除"
+            # 第一版仅警告，不阻止合并
+            # exit 1
+          fi
+          
+          echo "✅ 密钥检查通过"
+
+  dependency-scan:
+    name: 依赖漏洞扫描
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: 安装依赖
+        run: npm ci
+      
+      - name: 运行 npm audit
+        run: |
+          echo "扫描依赖漏洞..."
+          # 第一版：只检查高危和严重漏洞
+          npm audit --audit-level=high || true
+          
+          # 生成报告（可选）
+          npm audit --json > audit-report.json || true
+      
+      - name: 上传审计报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: audit-report.json
+          retention-days: 30
+
+  gitignore-check:
+    name: 检查 .gitignore 配置
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+      
+      - name: 检查必需的 .gitignore 规则
+        run: |
+          echo "检查 .gitignore 配置..."
+          
+          REQUIRED_PATTERNS=(
+            ".env"
+            ".env.local"
+            ".env.production"
+            "*.pem"
+            "*.key"
+            "*.p12"
+            "node_modules"
+            "dist"
+            ".DS_Store"
+          )
+          
+          MISSING=()
+          
+          for pattern in "${REQUIRED_PATTERNS[@]}"; do
+            if ! grep -q "^${pattern}$" .gitignore 2>/dev/null; then
+              MISSING+=("$pattern")
+            fi
+          done
+          
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "⚠️  警告：以下模式未在 .gitignore 中找到："
+            printf '  - %s\n' "${MISSING[@]}"
+            echo ""
+            echo "建议添加到 .gitignore 以防止敏感文件被提交"
+            # 第一版仅警告
+            # exit 1
+          else
+            echo "✅ .gitignore 配置检查通过"
+          fi

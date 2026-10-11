@@ -1,0 +1,140 @@
+# 依赖
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 构建输出
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+
+# 环境变量（敏感信息）
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*.local
+
+# 密钥和证书
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets/
+credentials/
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 日志
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+lerna-debug.log*
+
+# 操作系统
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# 测试覆盖率
+coverage/
+.nyc_output/
+*.lcov
+.coverage
+htmlcov/
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.temp
+.cache/
+
+# Docker
+.dockerignore
+
+# Git
+.git/
+.gitattributes
+
+# Prisma
+prisma/.env
+
+# 备份文件
+*.bak
+*.backup
+*~
+
+# 编辑器临时文件
+.*.sw[a-z]
+*.un~
+Session.vim
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# 上传的文件（应该存储在 OSS，不提交到 Git）
+uploads/
+public/uploads/
+
+# 本地配置
+config.local.json
+config.local.js
+
+# Worktree 目录（应在仓库外）
+# ../tenant-system-worktrees/ 不会被包含，因为在外部
+
+# 审计报告
+audit-report.json
+npm-audit.json
+
+# 性能测试结果
+benchmark-results/
+load-test-results/
+
+# 文档草稿（临时）
+docs/**/*-draft.md
+docs/**/*-temp.md
+
+# 数据库备份（本地测试用）
+*.sql
+*.dump
+backups/

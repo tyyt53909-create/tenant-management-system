@@ -1,0 +1,131 @@
+# CODEOWNERS - 代码所有者配置
+#
+# 说明：
+# 本文件定义了需要特定审核人批准的代码区域
+# 格式：路径模式 @审核人GitHub用户名
+#
+# 重要提示：
+# 1. 单人仓库下，所有 @owner 替换为实际 GitHub 用户名
+# 2. 如果所有提交来自同一账号，CODEOWNERS 主要用于：
+#    - 提醒自己哪些区域需要特别注意
+#    - 在 PR 中自动标记需要仔细审核的文件
+#    - 为未来可能加入的协作者预留规则
+# 3. GitHub 设置要求：
+#    - Settings > Branches > Branch protection rules
+#    - 启用 "Require a pull request before merging"
+#    - 启用 "Require review from Code Owners"
+#
+# 实施建议（单人仓库）：
+# - 方案A：不启用 Code Owners 强制审核，仅作为提醒标记
+# - 方案B：使用第二个 GitHub 账号（如个人+工作账号）作为审核人
+# - 方案C：邀请信任的朋友/同事作为只读协作者，负责审核关键代码
+#
+# 请将所有 @owner 替换为您的 GitHub 用户名
+
+# ============================================
+# 核心业务模块（需仔细审核）
+# ============================================
+
+# 认证模块
+/src/modules/auth/**                    @owner
+
+# 账单与收款
+/src/modules/billing/**                 @owner
+
+# 预付账户
+/src/modules/prepay/**                  @owner
+
+# 退租结算
+/src/modules/checkout/**                @owner
+
+# ============================================
+# 权限和安全
+# ============================================
+
+# 权限守卫
+/src/common/guards/**                   @owner
+
+# 拦截器（审计日志、数据转换）
+/src/common/interceptors/**             @owner
+
+# 认证策略
+/src/modules/auth/strategies/**         @owner
+
+# ============================================
+# 数据库
+# ============================================
+
+# Prisma Schema（数据模型变更）
+/prisma/schema.prisma                   @owner
+
+# 数据库迁移
+/prisma/migrations/**                   @owner
+
+# 种子数据
+/prisma/seed.ts                         @owner
+
+# ============================================
+# 关键文档
+# ============================================
+
+# 数据模型文档
+/docs/02-数据模型.md                    @owner
+
+# 权限矩阵文档
+/docs/03-权限矩阵.md                    @owner
+
+# 状态机文档
+/docs/04-状态机.md                      @owner
+
+# 安全与合规清单
+/docs/06-安全与合规清单.md              @owner
+
+# ADR（架构决策记录）
+/docs/adr/**                            @owner
+
+# ============================================
+# 配置与部署
+# ============================================
+
+# GitHub Workflows
+/.github/workflows/**                   @owner
+
+# Docker 配置
+/docker-compose.yml                     @owner
+/Dockerfile                             @owner
+
+# 环境变量示例（确保不泄露密钥）
+/.env.example                           @owner
+
+# Package.json（依赖管理）
+/package.json                           @owner
+/package-lock.json                      @owner
+
+# TypeScript 配置
+/tsconfig.json                          @owner
+
+# ============================================
+# 说明
+# ============================================
+#
+# 单人仓库实施步骤：
+#
+# 1. 替换 @owner 为您的 GitHub 用户名
+#    例如：将所有 @owner 替换为 @zhangsan
+#
+# 2. 在 GitHub 仓库设置中（Settings > Branches）：
+#    a. 保护 main 分支
+#    b. 启用 "Require a pull request before merging"
+#    c. 启用 "Require approvals" 设置为 1
+#    d. （可选）启用 "Require review from Code Owners"
+#
+# 3. 如果只有一个账号：
+#    - 不启用 "Require review from Code Owners"
+#    - CODEOWNERS 仍会在 PR 中标记需要注意的文件
+#    - 自己审核后点击 "Approve" 再合并
+#
+# 4. 如果有多个账号或协作者：
+#    - 启用 "Require review from Code Owners"
+#    - 使用第二个账号审核关键变更
+#
+# ============================================
