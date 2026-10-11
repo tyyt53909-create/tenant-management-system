@@ -1,14 +1,17 @@
 ---
-status: in_progress
+status: completed
 task_id: T120
 stage: 阶段1
 priority: P0
 model_tier: 普通
 estimated_hours: 3
+actual_hours: 1
 branch: feature/T120-tenants-crud
 worktree: /Users/Admin/ai/租客管理系統-worktrees/T120-tenants-crud
 model: Claude Opus 5.5
 start_time: 2026-10-11
+complete_time: 2026-10-11
+pr: pending
 ---
 
 # T120: 租客管理 CRUD
