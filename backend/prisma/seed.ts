@@ -1,5 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import * as dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+// 获取当前文件目录（ES 模块）
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// 加载 .env 文件
+dotenv.config({ path: resolve(__dirname, '../.env') });
 
 const prisma = new PrismaClient();
 
