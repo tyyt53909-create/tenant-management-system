@@ -15,6 +15,7 @@ import { BillsModule } from './modules/bills/bills.module.js';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module.js';
 import { MetersModule } from './modules/meters/meters.module.js';
 import { PrepayModule } from './modules/prepay/prepay.module.js';
+import { CheckoutModule } from './modules/checkout/checkout.module.js';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PrepayModule } from './modules/prepay/prepay.module.js';
     MaintenanceModule,
     MetersModule,
     PrepayModule,
+    CheckoutModule,
   ],
   controllers: [AppController],
   providers: [AppService],
