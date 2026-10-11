@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,4 +10,798 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 表定义将在 T101 任务中添加
+// ============================================
+// 枚举定义
+// ============================================
+
+// 房间类型
+enum RoomType {
+  SINGLE      // 单间
+  ONE_BED     // 一室
+  TWO_BED     // 两室
+  THREE_BED   // 三室
+  STUDIO      // 开间
+}
+
+// 房间状态
+enum RoomStatus {
+  VACANT          // 空置
+  RESERVED        // 预订（已签合同未入住）
+  OCCUPIED        // 已租
+  MAINTENANCE     // 维修中
+}
+
+// 清洁状态
+enum CleanStatus {
+  CLEAN           // 已清洁（可出租）
+  PENDING_CLEAN   // 待清洁
+  CLEANING        // 清洁中
+}
+
+// 公共区域类型
+enum PublicAreaType {
+  HALLWAY      // 走廊
+  STAIRWELL    // 楼梯间
+  ELEVATOR     // 电梯
+  ROOF         // 天台
+  ENTRANCE     // 入口
+  OTHER        // 其他
+}
+
+// 证件类型
+enum IdType {
+  ID_CARD       // 身份证
+  PASSPORT      // 护照
+  OTHER         // 其他
+}
+
+// 登记状态
+enum RegistrationStatus {
+  NOT_REGISTERED    // 未登记
+  PENDING           // 待申报
+  REGISTERED        // 已登记
+  REJECTED          // 被驳回
+}
+
+// 付款周期
+enum PaymentCycle {
+  MONTHLY       // 月付
+  QUARTERLY     // 季付
+  SEMI_ANNUAL   // 半年付
+  ANNUAL        // 年付
+}
+
+// 合同状态
+enum ContractStatus {
+  DRAFT         // 草稿
+  ACTIVE        // 生效中
+  EXPIRED       // 已到期
+  TERMINATED    // 已终止（提前退租）
+  RENEWED       // 已续签（被新合同替代）
+}
+
+// 附件类型
+enum AttachmentType {
+  CONTRACT_SCAN   // 合同扫描件
+  ID_PHOTO        // 证件照片（第二阶段）
+  OTHER           // 其他
+}
+
+// 账单类型
+enum BillType {
+  RENT        // 租金账单
+  UTILITY     // 水电费账单（预付账户不足时补缴）
+  OTHER       // 其他费用
+}
+
+// 账单状态
+enum BillStatus {
+  PENDING     // 待缴费
+  PARTIAL     // 部分缴费
+  PAID        // 已缴清
+  OVERDUE     // 逾期
+  CANCELLED   // 已取消
+}
+
+// 付款方式
+enum PaymentMethod {
+  CASH          // 现金
+  BANK_TRANSFER // 银行转账
+  WECHAT        // 微信
+  ALIPAY        // 支付宝
+  OTHER         // 其他
+}
+
+// 预付交易类型
+enum PrepayTransactionType {
+  RECHARGE      // 充值
+  DEDUCTION     // 扣费
+  REFUND        // 退款
+  ADJUSTMENT    // 调整（管理员手动）
+}
+
+// 关联类型
+enum RelatedType {
+  METER_READING      // 关联读数
+  CHECKOUT           // 关联退租
+  MANUAL_ADJUSTMENT  // 手动调整
+}
+
+// 水电表类型
+enum MeterType {
+  ELECTRICITY   // 电表
+  WATER         // 水表
+  GAS           // 燃气表（预留）
+}
+
+// 读数来源
+enum ReadingSource {
+  MANUAL    // 手动录入
+  DEVICE    // 智能设备（第二阶段）
+}
+
+// 报修类别
+enum MaintenanceCategory {
+  PLUMBING      // 水管
+  ELECTRICAL    // 电路
+  APPLIANCE     // 电器
+  FURNITURE     // 家具
+  DOOR_WINDOW   // 门窗
+  OTHER         // 其他
+}
+
+// 报修优先级
+enum MaintenancePriority {
+  LOW           // 低
+  NORMAL        // 普通
+  URGENT        // 紧急
+}
+
+// 报修状态
+enum MaintenanceStatus {
+  SUBMITTED     // 已提交
+  ACKNOWLEDGED  // 已受理
+  ASSIGNED      // 已派单
+  IN_PROGRESS   // 维修中
+  PENDING_CONFIRM // 待确认（等租客确认完成）
+  COMPLETED     // 已完成
+  CANCELLED     // 已取消
+}
+
+// 退租状态
+enum CheckoutStatus {
+  DRAFT       // 草稿（管理者填写结算单）
+  PENDING     // 待处理（已提交结算单，等待打款）
+  COMPLETED   // 已完成
+  CANCELLED   // 已取消
+}
+
+// 退租结算项类型
+enum CheckoutItemType {
+  RENT_REFUND       // 租金退还
+  DEPOSIT_REFUND    // 押金退还
+  DEPOSIT_DEDUCTION // 押金扣除
+  UTILITY_REFUND    // 水电余额退还
+  OTHER_FEE         // 其他费用
+  OTHER_REFUND      // 其他退款
+}
+
+// 租金折算方式
+enum RentCalculationMethod {
+  ACTUAL_DAYS       // 实际天数 ÷ 当月天数
+  FIXED_30_DAYS     // 固定按30天
+}
+
+// 用户角色
+enum UserRole {
+  ADMIN       // 管理者
+  CLEANER     // 保洁
+  TENANT      // 租客
+}
+
+// 通知优先级
+enum NotificationPriority {
+  NORMAL    // 普通
+  URGENT    // 紧急
+}
+
+// 设备类型
+enum DeviceType {
+  ANDROID
+  IOS
+  WEB
+}
+
+// ============================================
+// P0 核心表（18张）
+// ============================================
+
+// 1. Building（楼栋）
+model Building {
+  id        String   @id @default(cuid())
+  name      String   // "XX号楼"
+  address   String?  // 详细地址
+  floors    Int      // 楼层数
+  metadata  Json?    // 扩展信息
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rooms        Room[]
+  publicAreas  PublicArea[]
+  contracts    Contract[]
+  meters       Meter[]
+
+  @@index([isActive])
+  @@map("buildings")
+}
+
+// 2. Room（房间）
+model Room {
+  id          String      @id @default(cuid())
+  buildingId  String
+  building    Building    @relation(fields: [buildingId], references: [id])
+  
+  floor       Int
+  roomNumber  String
+  roomType    RoomType
+  area        Decimal?    @db.Decimal(6, 2)
+  
+  facilities  Json?
+  description String?     @db.Text
+  
+  status      RoomStatus   @default(VACANT)
+  cleanStatus CleanStatus  @default(CLEAN)
+  
+  version     Int         @default(0)  // 乐观锁
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  contracts           Contract[]
+  meters              Meter[]
+  maintenanceRequests MaintenanceRequest[]
+  checkoutRecords     CheckoutRecord[]
+  photos              RoomPhoto[]
+
+  @@unique([buildingId, floor, roomNumber])
+  @@index([buildingId, status])
+  @@index([status, cleanStatus])
+  @@map("rooms")
+}
+
+// 3. PublicArea（公共区域）
+model PublicArea {
+  id         String         @id @default(cuid())
+  buildingId String
+  building   Building       @relation(fields: [buildingId], references: [id])
+  
+  name       String
+  areaType   PublicAreaType
+  floor      Int?
+  
+  createdAt  DateTime       @default(now())
+
+  meters Meter[]
+
+  @@index([buildingId])
+  @@map("public_areas")
+}
+
+// 4. Tenant（租客）
+model Tenant {
+  id               String    @id @default(cuid())
+  name             String
+  phone            String    @unique
+  email            String?   @unique
+  
+  emergencyContact String?
+  emergencyPhone   String?
+  
+  tags             Json?
+  notes            String?   @db.Text
+  
+  isActive         Boolean   @default(true)
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user                 User?  @relation(fields: [userId], references: [id])
+  userId               String? @unique
+  
+  contracts            Contract[]
+  prepayAccounts       PrepayAccount[]
+  maintenanceRequests  MaintenanceRequest[]
+  registration         TenantRegistration?
+
+  @@index([isActive])
+  @@index([phone])
+  @@map("tenants")
+}
+
+// 5. User（用户账号）
+model User {
+  id               String    @id @default(cuid())
+  email            String?   @unique
+  phone            String?   @unique
+  passwordHash     String
+  
+  role             UserRole
+  
+  inviteCode       String?   @unique
+  inviteExpiredAt  DateTime?
+  invitedBy        String?
+  
+  isActive         Boolean   @default(true)
+  lastLoginAt      DateTime?
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenant       Tenant?
+  auditLogs    AuditLog[]
+  notifications Notification[]
+  deviceTokens  DeviceToken[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([inviteCode])
+  @@index([role, isActive])
+  @@map("users")
+}
+
+// 6. Contract（合同）
+model Contract {
+  id             String         @id @default(cuid())
+  buildingId     String
+  building       Building       @relation(fields: [buildingId], references: [id])
+  roomId         String
+  room           Room           @relation(fields: [roomId], references: [id])
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  
+  contractNumber String         @unique
+  
+  rentAmount     Int
+  depositAmount  Int
+  
+  paymentCycle   PaymentCycle
+  paymentDay     Int
+  
+  startDate      DateTime       @db.Date
+  endDate        DateTime       @db.Date
+  
+  lateFeeRule    Json
+  
+  status         ContractStatus @default(DRAFT)
+  
+  renewedFromId  String?        @unique
+  renewedFrom    Contract?      @relation("ContractRenewal", fields: [renewedFromId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  renewedTo      Contract?      @relation("ContractRenewal")
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  bills           Bill[]
+  attachments     ContractAttachment[]
+  checkoutRecords CheckoutRecord[]
+
+  @@index([buildingId, status])
+  @@index([tenantId, status])
+  @@index([roomId, status])
+  @@index([status, endDate])
+  @@map("contracts")
+}
+
+// 7. ContractAttachment（合同附件）
+model ContractAttachment {
+  id         String         @id @default(cuid())
+  contractId String
+  contract   Contract       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  type       AttachmentType
+  fileName   String
+  fileUrl    String
+  fileSize   Int
+  mimeType   String
+  
+  uploadedBy String
+  createdAt  DateTime       @default(now())
+
+  @@index([contractId])
+  @@map("contract_attachments")
+}
+
+// 8. Bill（账单）
+model Bill {
+  id           String     @id @default(cuid())
+  contractId   String
+  contract     Contract   @relation(fields: [contractId], references: [id])
+  
+  billNumber   String     @unique
+  billType     BillType
+  period       String
+  
+  amount       Int
+  paidAmount   Int        @default(0)
+  
+  snapshot     Json
+  
+  dueDate      DateTime   @db.Date
+  status       BillStatus @default(PENDING)
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  paymentRecords PaymentRecord[]
+  lateFees       LateFee[]
+
+  @@index([contractId, status])
+  @@index([status, dueDate])
+  @@map("bills")
+}
+
+// 9. PaymentRecord（收款记录）
+model PaymentRecord {
+  id                String        @id @default(cuid())
+  billId            String
+  bill              Bill          @relation(fields: [billId], references: [id])
+  
+  amount            Int
+  paymentMethod     PaymentMethod
+  transactionNumber String?
+  
+  paidAt            DateTime      @db.Timestamp
+  confirmedBy       String
+  notes             String?       @db.Text
+  
+  createdAt         DateTime      @default(now())
+
+  @@index([billId])
+  @@index([paidAt])
+  @@map("payment_records")
+}
+
+// 10. LateFee（滞纳金）
+model LateFee {
+  id               String    @id @default(cuid())
+  billId           String
+  bill             Bill      @relation(fields: [billId], references: [id])
+  
+  suggestedAmount  Int
+  confirmedAmount  Int?
+  overdueDays      Int
+  
+  calculation      Json
+  notes            String?   @db.Text
+  
+  confirmedAt      DateTime?
+  confirmedBy      String?
+  
+  createdAt        DateTime  @default(now())
+
+  @@index([billId])
+  @@map("late_fees")
+}
+
+// 11. PrepayAccount（预付账户）
+model PrepayAccount {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  tenant                Tenant   @relation(fields: [tenantId], references: [id])
+  roomId                String
+  
+  balanceCache          Int      @default(0)
+  lowBalanceThreshold   Int      @default(10000)
+  
+  lastNotifiedAt        DateTime?
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  transactions PrepayTransaction[]
+
+  @@unique([tenantId, roomId])
+  @@index([tenantId])
+  @@index([balanceCache])
+  @@map("prepay_accounts")
+}
+
+// 12. PrepayTransaction（预付流水）
+model PrepayTransaction {
+  id            String                 @id @default(cuid())
+  accountId     String
+  account       PrepayAccount          @relation(fields: [accountId], references: [id])
+  
+  type          PrepayTransactionType
+  amount        Int
+  balanceAfter  Int
+  
+  relatedId     String?
+  relatedType   RelatedType?
+  description   String
+  
+  operatorId    String
+  
+  createdAt     DateTime               @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([relatedId, relatedType])
+  @@map("prepay_transactions")
+}
+
+// 13. Meter（水电表）
+model Meter {
+  id                 String      @id @default(cuid())
+  buildingId         String
+  building           Building    @relation(fields: [buildingId], references: [id])
+  
+  roomId             String?
+  room               Room?       @relation(fields: [roomId], references: [id])
+  publicAreaId       String?
+  publicArea         PublicArea? @relation(fields: [publicAreaId], references: [id])
+  
+  meterType          MeterType
+  meterNumber        String
+  
+  unitPrice          Int
+  priceEffectiveDate DateTime    @db.Date
+  
+  isActive           Boolean     @default(true)
+  
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  readings       MeterReading[]
+
+  @@unique([meterNumber])
+  @@index([buildingId, meterType])
+  @@index([roomId])
+  @@index([publicAreaId])
+  @@map("meters")
+}
+
+// 14. MeterReading（读数记录）
+model MeterReading {
+  id              String        @id @default(cuid())
+  meterId         String
+  meter           Meter         @relation(fields: [meterId], references: [id])
+  
+  currentReading  Decimal       @db.Decimal(10, 2)
+  previousReading Decimal       @db.Decimal(10, 2)
+  usage           Decimal       @db.Decimal(10, 2)
+  
+  source          ReadingSource
+  readingTime     DateTime
+  readBy          String?
+  
+  notes           String?       @db.Text
+  
+  createdAt       DateTime      @default(now())
+
+  @@index([meterId, readingTime])
+  @@map("meter_readings")
+}
+
+// 15. MaintenanceRequest（报修工单）
+model MaintenanceRequest {
+  id          String              @id @default(cuid())
+  roomId      String
+  room        Room                @relation(fields: [roomId], references: [id])
+  tenantId    String
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  
+  title       String
+  description String              @db.Text
+  category    MaintenanceCategory
+  priority    MaintenancePriority @default(NORMAL)
+  
+  status      MaintenanceStatus   @default(SUBMITTED)
+  
+  assignedTo  String?
+  assignedAt  DateTime?
+  
+  resolvedAt  DateTime?
+  resolution  String?             @db.Text
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  photos MaintenancePhoto[]
+
+  @@index([roomId, status])
+  @@index([tenantId, status])
+  @@index([status, createdAt])
+  @@map("maintenance_requests")
+}
+
+// 16. MaintenancePhoto（报修照片）
+model MaintenancePhoto {
+  id        String             @id @default(cuid())
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  fileUrl   String
+  thumbnail String?
+  fileSize  Int
+  
+  createdAt DateTime           @default(now())
+
+  @@index([requestId])
+  @@map("maintenance_photos")
+}
+
+// 17. CheckoutRecord（退租记录）
+model CheckoutRecord {
+  id           String         @id @default(cuid())
+  contractId   String
+  contract     Contract       @relation(fields: [contractId], references: [id])
+  roomId       String
+  room         Room           @relation(fields: [roomId], references: [id])
+  
+  checkoutDate DateTime       @db.Date
+  totalRefund  Int
+  
+  status       CheckoutStatus @default(DRAFT)
+  notes        String?        @db.Text
+  
+  processedBy  String
+  processedAt  DateTime?
+  
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  items CheckoutItem[]
+
+  @@index([contractId])
+  @@index([status])
+  @@map("checkout_records")
+}
+
+// 18. CheckoutItem（退租明细）
+model CheckoutItem {
+  id           String                  @id @default(cuid())
+  checkoutId   String
+  checkout     CheckoutRecord          @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
+  
+  itemType     CheckoutItemType
+  description  String
+  amount       Int
+  
+  calculation  Json?
+  
+  isAdjusted   Boolean                 @default(false)
+  adjustReason String?                 @db.Text
+  
+  createdAt    DateTime                @default(now())
+
+  @@index([checkoutId])
+  @@map("checkout_items")
+}
+
+// ============================================
+// P1 表（2张，尽量实现）
+// ============================================
+
+// 19. Notification（通知）
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id])
+  
+  title     String
+  body      String               @db.Text
+  priority  NotificationPriority @default(NORMAL)
+  
+  isRead    Boolean              @default(false)
+  readAt    DateTime?
+  
+  data      Json?
+  
+  createdAt DateTime             @default(now())
+  expiredAt DateTime?
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// 20. AuditLog（审计日志）
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  
+  action     String
+  entityType String
+  entityId   String
+  
+  changes    Json
+  
+  ip         String
+  userAgent  String   @db.Text
+  
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// 预留表（4张，仅建表结构）
+// ============================================
+
+// 21. TenantRegistration（租客登记）
+model TenantRegistration {
+  id           String             @id @default(cuid())
+  tenantId     String             @unique
+  tenant       Tenant             @relation(fields: [tenantId], references: [id])
+  
+  idType       IdType
+  idNumber     String
+  
+  status       RegistrationStatus @default(NOT_REGISTERED)
+  registeredAt DateTime?
+  
+  notes        String?            @db.Text
+  
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("tenant_registrations")
+}
+
+// 22. DeviceToken（设备令牌）
+model DeviceToken {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id])
+  
+  token      String
+  deviceType DeviceType
+  deviceId   String
+  
+  isActive   Boolean    @default(true)
+  
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([userId, deviceId])
+  @@index([userId, isActive])
+  @@map("device_tokens")
+}
+
+// 23. RoomPhoto（房源照片）
+model RoomPhoto {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  
+  fileUrl   String
+  thumbnail String?
+  fileSize  Int
+  sortOrder Int      @default(0)
+  
+  createdAt DateTime @default(now())
+
+  @@index([roomId, sortOrder])
+  @@map("room_photos")
+}
+
+// 24. MeterPriceHistory（单价历史）
+model MeterPriceHistory {
+  id            String   @id @default(cuid())
+  meterType     MeterType
+  unitPrice     Int
+  effectiveDate DateTime @db.Date
+  
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  @@index([meterType, effectiveDate])
+  @@map("meter_price_history")
+}
