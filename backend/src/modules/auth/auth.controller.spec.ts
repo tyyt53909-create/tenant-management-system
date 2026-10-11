@@ -6,6 +6,7 @@ import { JwtAuthService } from './jwt.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthController', () => {
@@ -28,6 +29,8 @@ describe('AuthController', () => {
           provide: JwtAuthService,
           useValue: {
             generateTokens: vi.fn(),
+            verifyToken: vi.fn(),
+            refreshAccessToken: vi.fn(),
           },
         },
         {
@@ -232,6 +235,68 @@ describe('AuthController', () => {
       vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
 
       await expect(controller.login(dto)).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('refresh', () => {
+    const dto: RefreshTokenDto = {
+      refreshToken: 'valid-refresh-token',
+    };
+
+    it('应该成功刷新 Token', async () => {
+      const mockUser = {
+        id: 'user-123',
+        role: 'TENANT',
+        isActive: true,
+      };
+
+      vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
+        sub: 'user-123',
+        role: 'TENANT',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+      vi.spyOn(jwtService, 'refreshAccessToken').mockResolvedValue('new-access-token');
+
+      const result = await controller.refresh(dto);
+
+      expect(result.accessToken).toBe('new-access-token');
+      expect(jwtService.verifyToken).toHaveBeenCalledWith(dto.refreshToken);
+      expect(jwtService.refreshAccessToken).toHaveBeenCalledWith(
+        dto.refreshToken,
+        { sub: 'user-123', role: 'TENANT' },
+      );
+    });
+
+    it('应该拒绝无效的 Refresh Token', async () => {
+      vi.spyOn(jwtService, 'verifyToken').mockRejectedValue(new Error('Invalid token'));
+
+      await expect(controller.refresh(dto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('应该拒绝不存在的用户', async () => {
+      vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
+        sub: 'user-123',
+        role: 'TENANT',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+
+      await expect(controller.refresh(dto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('应该拒绝已禁用的用户', async () => {
+      const mockUser = {
+        id: 'user-123',
+        role: 'TENANT',
+        isActive: false,
+      };
+
+      vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
+        sub: 'user-123',
+        role: 'TENANT',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+
+      await expect(controller.refresh(dto)).rejects.toThrow(ForbiddenException);
     });
   });
 });
