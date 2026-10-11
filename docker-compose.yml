@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tenant-system-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tenant_user
+      POSTGRES_PASSWORD: tenant_password
+      POSTGRES_DB: tenant_system
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenant_user -d tenant_system"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tenant-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: tenant-system-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tenant-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  tenant-network:
+    driver: bridge
