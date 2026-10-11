@@ -12,6 +12,7 @@ import { TenantsModule } from './modules/tenants/tenants.module.js';
 import { BuildingsModule } from './modules/buildings/buildings.module.js';
 import { ContractsModule } from './modules/contracts/contracts.module.js';
 import { BillsModule } from './modules/bills/bills.module.js';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { BillsModule } from './modules/bills/bills.module.js';
     BuildingsModule,
     ContractsModule,
     BillsModule,
+    MaintenanceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
