@@ -1,0 +1,85 @@
+/* 全局样式 */
+page {
+  background-color: #f5f5f5;
+  font-size: 28rpx;
+  line-height: 1.6;
+}
+
+/* 通用容器 */
+.container {
+  padding: 20rpx;
+}
+
+.page {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+/* 卡片样式 */
+.card {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+}
+
+/* 按钮样式 */
+.btn-primary {
+  background-color: #07c160;
+  color: #fff;
+  border-radius: 8rpx;
+  padding: 20rpx;
+  text-align: center;
+  font-size: 32rpx;
+}
+
+.btn-secondary {
+  background-color: #fff;
+  color: #07c160;
+  border: 2rpx solid #07c160;
+  border-radius: 8rpx;
+  padding: 20rpx;
+  text-align: center;
+  font-size: 32rpx;
+}
+
+/* 文字样式 */
+.text-primary {
+  color: #07c160;
+}
+
+.text-secondary {
+  color: #888;
+}
+
+.text-danger {
+  color: #fa5151;
+}
+
+.text-warning {
+  color: #ff976a;
+}
+
+/* 间距 */
+.mt-10 { margin-top: 10rpx; }
+.mt-20 { margin-top: 20rpx; }
+.mb-10 { margin-bottom: 10rpx; }
+.mb-20 { margin-bottom: 20rpx; }
+
+/* 布局 */
+.flex {
+  display: flex;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

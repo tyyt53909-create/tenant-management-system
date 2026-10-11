@@ -1,0 +1,22 @@
+{
+  "name": "tenant-miniprogram",
+  "version": "1.0.0",
+  "description": "租客管理系统 - 租客小程序",
+  "main": "main.js",
+  "scripts": {
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "build:mp-weixin": "uni build -p mp-weixin",
+    "dev:h5": "uni",
+    "build:h5": "uni build"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "^3.0.0",
+    "@dcloudio/uni-mp-weixin": "^3.0.0",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@dcloudio/vite-plugin-uni": "^3.0.0",
+    "vite": "^5.0.0",
+    "typescript": "^5.0.0"
+  }
+}
