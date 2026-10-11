@@ -1,14 +1,17 @@
 ---
-status: in_progress
+status: completed
 task_id: T108
 stage: 阶段1
 priority: P0
 model_tier: 普通
 estimated_hours: 1
+actual_hours: 0.5
 branch: feature/T108-token-refresh
 worktree: /Users/Admin/ai/租客管理系統-worktrees/T108-token-refresh
 model: Claude Opus 5.5
 start_time: 2026-10-11
+complete_time: 2026-10-11
+pr: pending
 ---
 
 # T108: Token 刷新接口
