@@ -9,6 +9,7 @@ import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
 import { TenantsModule } from './modules/tenants/tenants.module.js';
+import { BuildingsModule } from './modules/buildings/buildings.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TenantsModule } from './modules/tenants/tenants.module.js';
     AuthModule,
     RoomsModule,
     TenantsModule,
+    BuildingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
