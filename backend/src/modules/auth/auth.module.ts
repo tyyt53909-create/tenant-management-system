@@ -6,6 +6,7 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 import { JwtAuthService } from './jwt.service.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
 import { InviteCodeService } from './invite-code.service.js';
+import { AuthController } from './auth.controller.js';
 import jwtConfig from '../../config/jwt.config.js';
 
 @Module({
@@ -24,6 +25,7 @@ import jwtConfig from '../../config/jwt.config.js';
     }),
     PrismaModule,
   ],
+  controllers: [AuthController],
   providers: [JwtAuthService, JwtStrategy, InviteCodeService],
   exports: [JwtAuthService, InviteCodeService, PassportModule],
 })
