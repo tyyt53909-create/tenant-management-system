@@ -8,6 +8,7 @@ import jwtConfig from './config/jwt.config.js';
 import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
+import { TenantsModule } from './modules/tenants/tenants.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RoomsModule } from './modules/rooms/rooms.module.js';
     PrismaModule,
     AuthModule,
     RoomsModule,
+    TenantsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
