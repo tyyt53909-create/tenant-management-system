@@ -1,14 +1,17 @@
 ---
-status: in_progress
+status: completed
 task_id: T104
 stage: 阶段1
 priority: P0
 model_tier: 强
 estimated_hours: 4
+actual_hours: 1.5
 branch: feature/T104-jwt-auth
 worktree: /Users/Admin/ai/租客管理系統-worktrees/T104-jwt-auth
 model: Claude Opus 5.5
 start_time: 2026-10-11
+complete_time: 2026-10-11
+pr: pending
 ---
 
 # T104: JWT 认证服务
