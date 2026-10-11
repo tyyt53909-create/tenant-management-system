@@ -13,6 +13,7 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/OneDrive/**',
+      '**/Library/CloudStorage/**',
       '**/.git/**',
       '**/coverage/**',
     ],
