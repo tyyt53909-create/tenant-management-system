@@ -1,5 +1,6 @@
-import { Controller, Post, Body, BadRequestException, ConflictException } from '@nestjs/common';
+import { Controller, Post, Body, BadRequestException, ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto.js';
+import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { InviteCodeService } from './invite-code.service.js';
 import { JwtAuthService } from './jwt.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -83,6 +84,66 @@ export class AuthController {
       user: {
         id: user.id,
         email: user.email!,
+        role: user.role,
+      },
+    };
+  }
+
+  @Post('login')
+  async login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
+    // 1. 查询用户（邮箱或手机号）
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: dto.identifier },
+          { phone: dto.identifier },
+        ],
+      },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        passwordHash: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    // 2. 验证用户是否存在
+    if (!user) {
+      throw new UnauthorizedException('邮箱/手机号或密码错误');
+    }
+
+    // 3. 验证用户是否激活
+    if (!user.isActive) {
+      throw new ForbiddenException('账号已被禁用');
+    }
+
+    // 4. 验证密码
+    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('邮箱/手机号或密码错误');
+    }
+
+    // 5. 更新最后登录时间
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    // 6. 生成 JWT Token
+    const tokens = await this.jwtService.generateTokens({
+      sub: user.id,
+      role: user.role,
+    });
+
+    // 7. 返回结果
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
         role: user.role,
       },
     };

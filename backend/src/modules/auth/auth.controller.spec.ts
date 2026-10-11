@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { InviteCodeService } from './invite-code.service';
 import { JwtAuthService } from './jwt.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import * as bcrypt from 'bcrypt';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -33,7 +35,9 @@ describe('AuthController', () => {
           useValue: {
             user: {
               findUnique: vi.fn(),
+              findFirst: vi.fn(),
               create: vi.fn(),
+              update: vi.fn(),
             },
             tenant: {
               create: vi.fn(),
@@ -130,6 +134,104 @@ describe('AuthController', () => {
         } as any);
 
       await expect(controller.register(dtoWithPhone)).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('login', () => {
+    const dto: LoginDto = {
+      identifier: 'test@example.com',
+      password: 'password123',
+    };
+
+    it('应该成功登录（使用邮箱）', async () => {
+      const mockUser = {
+        id: 'user-123',
+        email: 'test@example.com',
+        phone: '13800138000',
+        passwordHash: await bcrypt.hash('password123', 10),
+        role: 'TENANT',
+        isActive: true,
+      };
+
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+      vi.spyOn(prisma.user, 'update').mockResolvedValue(mockUser as any);
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
+
+      const result = await controller.login(dto);
+
+      expect(result.accessToken).toBe('access-token');
+      expect(result.user.email).toBe('test@example.com');
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { lastLoginAt: expect.any(Date) },
+      });
+    });
+
+    it('应该成功登录（使用手机号）', async () => {
+      const dtoWithPhone = {
+        identifier: '13800138000',
+        password: 'password123',
+      };
+
+      const mockUser = {
+        id: 'user-123',
+        email: 'test@example.com',
+        phone: '13800138000',
+        passwordHash: await bcrypt.hash('password123', 10),
+        role: 'TENANT',
+        isActive: true,
+      };
+
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+      vi.spyOn(prisma.user, 'update').mockResolvedValue(mockUser as any);
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
+
+      const result = await controller.login(dtoWithPhone);
+
+      expect(result.accessToken).toBe('access-token');
+      expect(result.user.phone).toBe('13800138000');
+    });
+
+    it('应该拒绝不存在的用户', async () => {
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+
+      await expect(controller.login(dto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('应该拒绝密码错误', async () => {
+      const mockUser = {
+        id: 'user-123',
+        email: 'test@example.com',
+        phone: null,
+        passwordHash: await bcrypt.hash('correct-password', 10),
+        role: 'TENANT',
+        isActive: true,
+      };
+
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+
+      await expect(controller.login(dto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('应该拒绝已禁用的用户', async () => {
+      const mockUser = {
+        id: 'user-123',
+        email: 'test@example.com',
+        phone: null,
+        passwordHash: await bcrypt.hash('password123', 10),
+        role: 'TENANT',
+        isActive: false,
+      };
+
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+
+      await expect(controller.login(dto)).rejects.toThrow(ForbiddenException);
     });
   });
 });
