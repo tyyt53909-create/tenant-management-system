@@ -3,6 +3,8 @@ import { PrepayService } from './prepay.service.js';
 import { CreatePrepayAccountDto } from './dto/create-prepay-account.dto.js';
 import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
 import { QueryPrepayAccountsDto } from './dto/query-prepay-accounts.dto.js';
+import { CreatePrepayTransactionDto } from './dto/create-prepay-transaction.dto.js';
+import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -47,6 +49,26 @@ export class PrepayController {
     }
     // 管理员查看所有交易
     return this.prepayService.findAllTransactions(query);
+  }
+
+  // 管理员：账户流水（分页）
+  @Get(':id/transactions')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findAccountTransactions(@Param('id') id: string, @Query() query: QueryPrepayTransactionsDto) {
+    return this.prepayService.findAccountTransactions(id, query);
+  }
+
+  // 管理员：登记充值/扣费/退款/调整
+  @Post(':id/transactions')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  createTransaction(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: CreatePrepayTransactionDto,
+  ) {
+    return this.prepayService.recordTransaction(id, dto, req.user.userId);
   }
 
   @Get(':id')
