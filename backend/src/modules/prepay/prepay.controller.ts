@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { PrepayService } from './prepay.service.js';
 import { CreatePrepayAccountDto } from './dto/create-prepay-account.dto.js';
 import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
@@ -20,11 +20,38 @@ export class PrepayController {
   }
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findAll(@Query() query: QueryPrepayAccountsDto) {
     return this.prepayService.findAll(query);
   }
 
+  // 租客查看自己的账户
+  @Get('my')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findMy(@Request() req) {
+    if (req.user.role === 'TENANT') {
+      return this.prepayService.findByTenant(req.user.tenantId);
+    }
+    return this.prepayService.findAll({});
+  }
+
+  // 租客查看自己的交易记录
+  @Get('transactions')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findTransactions(@Request() req, @Query() query: any) {
+    if (req.user.role === 'TENANT') {
+      return this.prepayService.findTransactionsByTenant(req.user.tenantId, query);
+    }
+    // 管理员查看所有交易
+    return this.prepayService.findAllTransactions(query);
+  }
+
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findOne(@Param('id') id: string) {
     return this.prepayService.findOne(id);
   }

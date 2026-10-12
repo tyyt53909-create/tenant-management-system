@@ -124,4 +124,60 @@ export class ContractsService {
     await this.prisma.contract.delete({ where: { id } });
     return { message: '合同已删除' };
   }
+
+  // 租客查看自己的合同
+  async findByTenant(tenantId: string, query: QueryContractsDto) {
+    const { page = 1, limit = 20, status } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = { tenantId };
+    if (status) where.status = status;
+
+    const [data, total] = await Promise.all([
+      this.prisma.contract.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          room: true,
+          building: { select: { name: true, address: true } },
+        },
+      }),
+      this.prisma.contract.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  // 租客查看单个合同（需验证归属）
+  async findOneForTenant(id: string, tenantId: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id },
+      include: {
+        room: true,
+        tenant: true,
+        building: true,
+      },
+    });
+
+    if (!contract) {
+      throw new NotFoundException('合同不存在');
+    }
+
+    // 验证合同是否属于该租客
+    if (contract.tenantId !== tenantId) {
+      throw new NotFoundException('合同不存在');
+    }
+
+    return contract;
+  }
 }

@@ -77,4 +77,79 @@ export class PrepayService {
     await this.prisma.prepayAccount.delete({ where: { id } });
     return { message: '预付账户已删除' };
   }
+
+  // 租客查看自己的账户
+  async findByTenant(tenantId: string) {
+    const account = await this.prisma.prepayAccount.findFirst({
+      where: { tenantId },
+      include: {
+        room: { select: { roomNumber: true } },
+      },
+    });
+
+    if (!account) {
+      throw new NotFoundException('预付账户不存在');
+    }
+
+    return account;
+  }
+
+  // 租客查看自己的交易记录
+  async findTransactionsByTenant(tenantId: string, query: any) {
+    const { page = 1, limit = 20 } = query;
+    const skip = (page - 1) * limit;
+
+    // 先获取租客的账户
+    const account = await this.prisma.prepayAccount.findFirst({
+      where: { tenantId },
+    });
+
+    if (!account) {
+      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.prepayTransaction.findMany({
+        where: { accountId: account.id },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.prepayTransaction.count({
+        where: { accountId: account.id },
+      }),
+    ]);
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  // 管理员查看所有交易
+  async findAllTransactions(query: any) {
+    const { page = 1, limit = 20 } = query;
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.prisma.prepayTransaction.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          account: {
+            include: {
+              tenant: { select: { name: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.prepayTransaction.count(),
+    ]);
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
 }
