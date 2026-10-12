@@ -2,8 +2,11 @@ import axios from 'axios';
 import type { AxiosInstance, AxiosResponse } from 'axios';
 import { ElMessage } from 'element-plus';
 
+// 统一 API 前缀：本地开发走 Vite 代理（/api → http://localhost:3000/api）
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
 const request: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -39,7 +42,7 @@ request.interceptors.response.use(
         if (refreshToken) {
           try {
             const response: any = await axios.post(
-              `${import.meta.env.VITE_API_BASE_URL}/auth/refresh`,
+              `${API_BASE_URL}/auth/refresh`,
               { refreshToken }
             );
             localStorage.setItem('access_token', response.data.accessToken);
