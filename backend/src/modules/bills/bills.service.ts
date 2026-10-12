@@ -120,4 +120,72 @@ export class BillsService {
     await this.prisma.bill.delete({ where: { id } });
     return { message: '账单已删除' };
   }
+
+  // 租客查看自己的账单
+  async findByTenant(tenantId: string, query: QueryBillsDto) {
+    const { page = 1, limit = 20, status, billType } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      contract: {
+        tenantId,
+      },
+    };
+    if (status) where.status = status;
+    if (billType) where.billType = billType;
+
+    const [data, total] = await Promise.all([
+      this.prisma.bill.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          contract: {
+            include: {
+              room: { select: { roomNumber: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.bill.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  // 租客查看单个账单（需验证归属）
+  async findOneForTenant(id: string, tenantId: string) {
+    const bill = await this.prisma.bill.findUnique({
+      where: { id },
+      include: {
+        contract: {
+          include: {
+            tenant: true,
+            room: true,
+          },
+        },
+        paymentRecords: true,
+      },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('账单不存在');
+    }
+
+    // 验证账单是否属于该租客
+    if (bill.contract.tenantId !== tenantId) {
+      throw new NotFoundException('账单不存在');
+    }
+
+    return bill;
+  }
 }

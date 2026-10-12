@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { ContractsService } from './contracts.service.js';
 import { CreateContractDto } from './dto/create-contract.dto.js';
 import { UpdateContractDto } from './dto/update-contract.dto.js';
@@ -20,12 +20,30 @@ export class ContractsController {
   }
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findAll(@Query() query: QueryContractsDto) {
     return this.contractsService.findAll(query);
   }
 
+  // 租客查看自己的合同
+  @Get('my')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findMy(@Request() req, @Query() query: QueryContractsDto) {
+    if (req.user.role === 'TENANT') {
+      return this.contractsService.findByTenant(req.user.tenantId, query);
+    }
+    return this.contractsService.findAll(query);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findOne(@Request() req, @Param('id') id: string) {
+    if (req.user.role === 'TENANT') {
+      return this.contractsService.findOneForTenant(id, req.user.tenantId);
+    }
     return this.contractsService.findOne(id);
   }
 

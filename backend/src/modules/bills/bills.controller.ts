@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { BillsService } from './bills.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
@@ -20,12 +20,33 @@ export class BillsController {
   }
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findAll(@Query() query: QueryBillsDto) {
     return this.billsService.findAll(query);
   }
 
+  // 租客查看自己的账单
+  @Get('my')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findMy(@Request() req, @Query() query: QueryBillsDto) {
+    // 租客只能查看自己的账单
+    if (req.user.role === 'TENANT') {
+      return this.billsService.findByTenant(req.user.tenantId, query);
+    }
+    // 管理员可以看所有
+    return this.billsService.findAll(query);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findOne(@Request() req, @Param('id') id: string) {
+    // 租客需要验证是否是自己的账单
+    if (req.user.role === 'TENANT') {
+      return this.billsService.findOneForTenant(id, req.user.tenantId);
+    }
     return this.billsService.findOne(id);
   }
 

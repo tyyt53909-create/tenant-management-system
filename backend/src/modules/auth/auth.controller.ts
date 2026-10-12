@@ -1,10 +1,11 @@
-import { Controller, Post, Body, BadRequestException, ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, BadRequestException, ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto.js';
 import { InviteCodeService } from './invite-code.service.js';
 import { JwtAuthService } from './jwt.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import * as bcrypt from 'bcrypt';
 
 @Controller('auth')
@@ -191,5 +192,37 @@ export class AuthController {
       // Token 验证失败
       throw new UnauthorizedException('Token 无效或已过期');
     }
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMe(@Request() req) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            emergencyContact: true,
+            emergencyPhone: true,
+          },
+        },
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+
+    return user;
   }
 }
