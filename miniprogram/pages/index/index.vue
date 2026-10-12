@@ -119,7 +119,7 @@ export default {
         // 获取报修
         const maintenanceRes = await getMyMaintenance({ page: 1, limit: 10 })
         this.pendingMaintenanceCount = maintenanceRes.data?.filter(
-          m => m.status !== 'CLOSED' && m.status !== 'RESOLVED'
+          m => m.status !== 'COMPLETED' && m.status !== 'CANCELLED'
         ).length || 0
       } catch (error) {
         console.error('加载数据失败:', error)

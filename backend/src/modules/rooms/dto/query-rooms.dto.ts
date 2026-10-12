@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, IsUUID, IsEnum, Min, Max } from 'class-validator';
+import { IsOptional, IsInt, IsString, IsEnum, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum RoomStatus {
@@ -26,7 +26,7 @@ export class QueryRoomsDto {
   @IsOptional()
   status?: RoomStatus;
 
-  @IsUUID('4', { message: '楼栋ID格式错误' })
+  @IsString({ message: '楼栋ID格式错误' })
   @IsOptional()
   buildingId?: string;
 

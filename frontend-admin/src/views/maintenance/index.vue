@@ -5,10 +5,12 @@
         <el-form-item label="状态">
           <el-select v-model="queryForm.status" placeholder="请选择状态" clearable>
             <el-option label="已提交" value="SUBMITTED" />
-            <el-option label="已分配" value="ASSIGNED" />
-            <el-option label="处理中" value="IN_PROGRESS" />
-            <el-option label="已解决" value="RESOLVED" />
-            <el-option label="已关闭" value="CLOSED" />
+            <el-option label="已受理" value="ACKNOWLEDGED" />
+            <el-option label="已派单" value="ASSIGNED" />
+            <el-option label="维修中" value="IN_PROGRESS" />
+            <el-option label="待确认" value="PENDING_CONFIRM" />
+            <el-option label="已完成" value="COMPLETED" />
+            <el-option label="已取消" value="CANCELLED" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -67,10 +69,12 @@
       <el-form :model="formData" label-width="100px">
         <el-form-item label="状态">
           <el-select v-model="formData.status">
-            <el-option label="已分配" value="ASSIGNED" />
-            <el-option label="处理中" value="IN_PROGRESS" />
-            <el-option label="已解决" value="RESOLVED" />
-            <el-option label="已关闭" value="CLOSED" />
+            <el-option label="已受理" value="ACKNOWLEDGED" />
+            <el-option label="已派单" value="ASSIGNED" />
+            <el-option label="维修中" value="IN_PROGRESS" />
+            <el-option label="待确认" value="PENDING_CONFIRM" />
+            <el-option label="已完成" value="COMPLETED" />
+            <el-option label="已取消" value="CANCELLED" />
           </el-select>
         </el-form-item>
         <el-form-item label="处理人">
@@ -131,18 +135,22 @@ const priorityTypeMap: Record<string, any> = {
 
 const statusMap: Record<string, string> = {
   SUBMITTED: '已提交',
-  ASSIGNED: '已分配',
-  IN_PROGRESS: '处理中',
-  RESOLVED: '已解决',
-  CLOSED: '已关闭',
+  ACKNOWLEDGED: '已受理',
+  ASSIGNED: '已派单',
+  IN_PROGRESS: '维修中',
+  PENDING_CONFIRM: '待确认',
+  COMPLETED: '已完成',
+  CANCELLED: '已取消',
 };
 
 const statusTypeMap: Record<string, any> = {
   SUBMITTED: 'warning',
+  ACKNOWLEDGED: 'info',
   ASSIGNED: 'info',
   IN_PROGRESS: '',
-  RESOLVED: 'success',
-  CLOSED: 'info',
+  PENDING_CONFIRM: 'warning',
+  COMPLETED: 'success',
+  CANCELLED: 'info',
 };
 
 const fetchData = async () => {

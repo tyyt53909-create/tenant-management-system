@@ -3,10 +3,12 @@ import { Type } from 'class-transformer';
 
 enum MaintenanceStatus {
   SUBMITTED = 'SUBMITTED',
+  ACKNOWLEDGED = 'ACKNOWLEDGED',
   ASSIGNED = 'ASSIGNED',
   IN_PROGRESS = 'IN_PROGRESS',
-  RESOLVED = 'RESOLVED',
-  CLOSED = 'CLOSED',
+  PENDING_CONFIRM = 'PENDING_CONFIRM',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
 }
 
 export class QueryMaintenanceDto {

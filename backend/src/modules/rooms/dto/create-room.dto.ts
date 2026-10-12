@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsUUID, IsInt, IsNumber, IsEnum, IsOptional, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsInt, IsNumber, IsEnum, IsOptional, Min } from 'class-validator';
 
 export enum RoomType {
   SINGLE = 'SINGLE',
@@ -13,7 +13,7 @@ export class CreateRoomDto {
   @IsNotEmpty({ message: '房号不能为空' })
   roomNumber: string;
 
-  @IsUUID('4', { message: '楼栋ID格式错误' })
+  @IsString({ message: '楼栋ID格式错误' })
   @IsNotEmpty({ message: '楼栋ID不能为空' })
   buildingId: string;
 

@@ -107,8 +107,8 @@ export default {
       const map = {
         MONTHLY: '月付',
         QUARTERLY: '季付',
-        SEMI_ANNUALLY: '半年付',
-        ANNUALLY: '年付'
+        SEMI_ANNUAL: '半年付',
+        ANNUAL: '年付'
       }
       return map[cycle] || cycle
     },

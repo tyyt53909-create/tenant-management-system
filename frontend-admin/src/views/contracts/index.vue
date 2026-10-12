@@ -100,8 +100,8 @@
           <el-select v-model="formData.paymentCycle">
             <el-option label="月付" value="MONTHLY" />
             <el-option label="季付" value="QUARTERLY" />
-            <el-option label="半年付" value="SEMI_ANNUALLY" />
-            <el-option label="年付" value="ANNUALLY" />
+            <el-option label="半年付" value="SEMI_ANNUAL" />
+            <el-option label="年付" value="ANNUAL" />
           </el-select>
         </el-form-item>
         <el-form-item label="付款日" prop="paymentDay">
@@ -158,8 +158,8 @@ const rules = {
 const paymentCycleMap: Record<string, string> = {
   MONTHLY: '月付',
   QUARTERLY: '季付',
-  SEMI_ANNUALLY: '半年付',
-  ANNUALLY: '年付',
+  SEMI_ANNUAL: '半年付',
+  ANNUAL: '年付',
 };
 
 const statusMap: Record<string, string> = {

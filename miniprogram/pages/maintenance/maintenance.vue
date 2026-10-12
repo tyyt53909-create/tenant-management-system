@@ -264,20 +264,24 @@ export default {
     getStatusText(status) {
       const map = {
         SUBMITTED: '已提交',
-        ASSIGNED: '已分配',
-        IN_PROGRESS: '处理中',
-        RESOLVED: '已解决',
-        CLOSED: '已关闭'
+        ACKNOWLEDGED: '已受理',
+        ASSIGNED: '已派单',
+        IN_PROGRESS: '维修中',
+        PENDING_CONFIRM: '待确认',
+        COMPLETED: '已完成',
+        CANCELLED: '已取消'
       }
       return map[status] || status
     },
     getStatusClass(status) {
       const map = {
         SUBMITTED: 'status-warning',
+        ACKNOWLEDGED: 'status-info',
         ASSIGNED: 'status-info',
         IN_PROGRESS: 'status-primary',
-        RESOLVED: 'status-success',
-        CLOSED: 'status-default'
+        PENDING_CONFIRM: 'status-warning',
+        COMPLETED: 'status-success',
+        CANCELLED: 'status-default'
       }
       return map[status] || ''
     },

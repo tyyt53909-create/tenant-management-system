@@ -1,10 +1,10 @@
-import { IsString, IsNotEmpty, IsInt, IsEnum, IsDateString, Min, Max } from 'class-validator';
+import { IsString, IsNotEmpty, IsInt, IsEnum, IsDateString, IsOptional, Min, Max } from 'class-validator';
 
 enum PaymentCycle {
   MONTHLY = 'MONTHLY',
   QUARTERLY = 'QUARTERLY',
-  SEMI_ANNUALLY = 'SEMI_ANNUALLY',
-  ANNUALLY = 'ANNUALLY',
+  SEMI_ANNUAL = 'SEMI_ANNUAL',
+  ANNUAL = 'ANNUAL',
 }
 
 export class CreateContractDto {
@@ -42,5 +42,6 @@ export class CreateContractDto {
   @IsDateString()
   endDate: string;
 
+  @IsOptional()
   lateFeeRule?: any; // JSON
 }
