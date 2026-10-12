@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { MaintenanceService } from './maintenance.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
@@ -13,17 +13,34 @@ export class MaintenanceController {
   constructor(private readonly maintenanceService: MaintenanceService) {}
 
   @Post()
-  create(@Body() createMaintenanceDto: CreateMaintenanceDto) {
-    return this.maintenanceService.create(createMaintenanceDto);
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  create(@Request() req: any, @Body() createMaintenanceDto: CreateMaintenanceDto) {
+    return this.maintenanceService.create(createMaintenanceDto, req.user);
   }
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findAll(@Query() query: QueryMaintenanceDto) {
     return this.maintenanceService.findAll(query);
   }
 
+  // 租客查看自己的报修（必须声明在 :id 之前）
+  @Get('my')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT')
+  findMy(@Request() req: any, @Query() query: QueryMaintenanceDto) {
+    return this.maintenanceService.findByTenant(req.user.tenantId, query);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findOne(@Request() req: any, @Param('id') id: string) {
+    if (req.user.role === 'TENANT') {
+      return this.maintenanceService.findOneForTenant(id, req.user.tenantId);
+    }
     return this.maintenanceService.findOne(id);
   }
 

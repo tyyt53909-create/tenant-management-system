@@ -1,5 +1,5 @@
-// API 基础配置
-const BASE_URL = 'http://localhost:3000'
+// API 基础配置（T138：必须带 /api 前缀，否则全部 404）
+const BASE_URL = 'http://localhost:3000/api'
 
 // 请求拦截器
 const request = (options) => {

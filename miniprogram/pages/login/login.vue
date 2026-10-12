@@ -74,7 +74,10 @@ export default {
 
       this.loading = true
       try {
-        const res = await login(this.form)
+        const res = await login({
+          identifier: this.form.account,
+          password: this.form.password
+        })
         
         // 保存 token
         uni.setStorageSync('access_token', res.accessToken)

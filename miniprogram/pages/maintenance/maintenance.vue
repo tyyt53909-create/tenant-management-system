@@ -218,13 +218,12 @@ export default {
       this.submitting = true
       try {
         // TODO: 如果有图片，需要先上传图片
+        // 租客身份与房间由服务端根据登录身份和生效合同自动关联（T138）
         const data = {
           title: this.form.title,
           category: this.form.category,
           priority: this.form.priority,
-          description: this.form.description,
-          roomId: 'room-001', // TODO: 从用户信息获取
-          tenantId: 'tenant-001' // TODO: 从用户信息获取
+          description: this.form.description
         }
 
         await createMaintenance(data)

@@ -16,12 +16,12 @@
       </view>
       <view class="transaction-item" v-for="item in transactions" :key="item.id">
         <view class="item-left">
-          <text class="type">{{ getTransactionTypeText(item.transactionType) }}</text>
+          <text class="type">{{ getTransactionTypeText(item.type) }}</text>
           <text class="time">{{ formatDate(item.createdAt) }}</text>
         </view>
         <view class="item-right">
-          <text :class="['amount', item.transactionType === 'RECHARGE' ? 'income' : 'expense']">
-            {{ item.transactionType === 'RECHARGE' ? '+' : '-' }}¥{{ (item.amount / 100).toFixed(2) }}
+          <text :class="['amount', item.amount >= 0 ? 'income' : 'expense']">
+            {{ item.amount >= 0 ? '+' : '-' }}¥{{ (Math.abs(item.amount) / 100).toFixed(2) }}
           </text>
         </view>
       </view>
@@ -49,7 +49,7 @@ export default {
     async loadData() {
       try {
         const accountRes = await getMyAccount()
-        this.balance = accountRes.balance || 0
+        this.balance = accountRes.balanceCache || 0
 
         const transactionsRes = await getRechargeRecords({ page: 1, limit: 50 })
         this.transactions = transactionsRes.data || []
@@ -66,8 +66,9 @@ export default {
     getTransactionTypeText(type) {
       const map = {
         RECHARGE: '充值',
-        PAYMENT: '支付',
-        REFUND: '退款'
+        DEDUCTION: '扣费',
+        REFUND: '退款',
+        ADJUSTMENT: '调整'
       }
       return map[type] || type
     },

@@ -8,11 +8,36 @@ import { QueryMaintenanceDto } from './dto/query-maintenance.dto.js';
 export class MaintenanceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateMaintenanceDto) {
+  async create(dto: CreateMaintenanceDto, user: { userId: string; role: string; tenantId?: string }) {
+    let roomId = dto.roomId;
+    let tenantId = dto.tenantId;
+
+    if (user.role === 'TENANT') {
+      // 租客自助报修：租客身份与房间均由服务端推导（忽略请求体中的 ID，防伪造）
+      if (!user.tenantId) {
+        throw new BadRequestException('租客账号未绑定租客档案，请联系管理员');
+      }
+
+      const contract = await this.prisma.contract.findFirst({
+        where: { tenantId: user.tenantId, status: 'ACTIVE' },
+      });
+
+      if (!contract) {
+        throw new BadRequestException('未找到生效合同，无法提交报修');
+      }
+
+      tenantId = user.tenantId;
+      roomId = contract.roomId;
+    }
+
+    if (!roomId || !tenantId) {
+      throw new BadRequestException('管理员需指定 roomId 与 tenantId');
+    }
+
     // 验证房源和租客存在
     const [room, tenant] = await Promise.all([
-      this.prisma.room.findUnique({ where: { id: dto.roomId } }),
-      this.prisma.tenant.findUnique({ where: { id: dto.tenantId } }),
+      this.prisma.room.findUnique({ where: { id: roomId } }),
+      this.prisma.tenant.findUnique({ where: { id: tenantId } }),
     ]);
 
     if (!room) throw new BadRequestException('房源不存在');
@@ -20,14 +45,49 @@ export class MaintenanceService {
 
     return this.prisma.maintenanceRequest.create({
       data: {
-        roomId: dto.roomId,
-        tenantId: dto.tenantId,
+        roomId,
+        tenantId,
         title: dto.title,
         description: dto.description,
         category: dto.category as any,
         priority: dto.priority as any || 'NORMAL',
       },
     });
+  }
+
+  /** 租客查看自己的报修工单（分页倒序） */
+  async findByTenant(tenantId: string, query: QueryMaintenanceDto) {
+    const { page = 1, limit = 20, status } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = { tenantId };
+    if (status) where.status = status;
+
+    const [data, total] = await Promise.all([
+      this.prisma.maintenanceRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.maintenanceRequest.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  /** 租客查询单条工单（仅限自己的） */
+  async findOneForTenant(id: string, tenantId: string) {
+    const request = await this.prisma.maintenanceRequest.findUnique({ where: { id } });
+
+    if (!request || request.tenantId !== tenantId) {
+      throw new NotFoundException('报修工单不存在');
+    }
+
+    return request;
   }
 
   async findAll(query: QueryMaintenanceDto) {
