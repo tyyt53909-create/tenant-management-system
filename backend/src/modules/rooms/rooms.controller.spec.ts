@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { RoomsController } from './rooms.controller';
-import { RoomsService } from './rooms.service';
+import { RoomsController } from './rooms.controller.js';
+import { RoomsService } from './rooms.service.js';
 
 describe('RoomsController', () => {
   let controller: RoomsController;
@@ -33,9 +33,9 @@ describe('RoomsController', () => {
         roomNumber: '101',
         buildingId: 'building-001',
         floor: 1,
-        roomType: 'SINGLE' as const,
+        roomType: 'SINGLE',
         area: 25.5,
-      };
+      } as any;
 
       const mockRoom = { id: 'room-123', ...dto, status: 'VACANT' };
       vi.spyOn(service, 'create').mockResolvedValue(mockRoom as any);
@@ -90,7 +90,7 @@ describe('RoomsController', () => {
 
   describe('update', () => {
     it('应该更新房源', async () => {
-      const dto = { status: 'MAINTENANCE' as const };
+      const dto = { status: 'MAINTENANCE' } as any;
       const mockRoom = { id: 'room-123', roomNumber: '101', status: 'MAINTENANCE' };
 
       vi.spyOn(service, 'update').mockResolvedValue(mockRoom as any);

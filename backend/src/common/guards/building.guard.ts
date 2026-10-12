@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { PrismaService } from '../../modules/prisma/prisma.service.js';
 
 @Injectable()
 export class BuildingGuard implements CanActivate {
@@ -15,7 +15,7 @@ export class BuildingGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest() as any;
     const user = request.user;
 
     // 管理员可以访问所有数据
@@ -25,8 +25,6 @@ export class BuildingGuard implements CanActivate {
 
     // 租客只能访问自己的数据
     if (user.role === 'TENANT') {
-      // 从请求中获取资源 ID
-      const resourceId = request.params.id;
       const query = request.query;
 
       // 如果有 buildingId 查询参数，验证租客是否属于该楼栋

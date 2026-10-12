@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
-import { InviteCodeService } from './invite-code.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { InviteCodeService } from './invite-code.service.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('InviteCodeService', () => {
   let service: InviteCodeService;

@@ -30,7 +30,7 @@ export class BillsController {
   @Get('my')
   @UseGuards(RolesGuard)
   @Roles('TENANT', 'ADMIN')
-  findMy(@Request() req, @Query() query: QueryBillsDto) {
+  findMy(@Request() req: any, @Query() query: QueryBillsDto) {
     // 租客只能查看自己的账单
     if (req.user.role === 'TENANT') {
       return this.billsService.findByTenant(req.user.tenantId, query);
@@ -42,7 +42,7 @@ export class BillsController {
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles('TENANT', 'ADMIN')
-  findOne(@Request() req, @Param('id') id: string) {
+  findOne(@Request() req: any, @Param('id') id: string) {
     // 租客需要验证是否是自己的账单
     if (req.user.role === 'TENANT') {
       return this.billsService.findOneForTenant(id, req.user.tenantId);

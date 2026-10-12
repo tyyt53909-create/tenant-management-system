@@ -2,14 +2,14 @@ import { PartialType } from '@nestjs/mapped-types';
 import { IsEnum, IsOptional } from 'class-validator';
 import { CreateRoomDto } from './create-room.dto.js';
 
-enum RoomStatus {
+export enum RoomStatus {
   VACANT = 'VACANT',
   RESERVED = 'RESERVED',
   OCCUPIED = 'OCCUPIED',
   MAINTENANCE = 'MAINTENANCE',
 }
 
-enum CleanStatus {
+export enum CleanStatus {
   CLEAN = 'CLEAN',
   PENDING_CLEAN = 'PENDING_CLEAN',
   CLEANING = 'CLEANING',

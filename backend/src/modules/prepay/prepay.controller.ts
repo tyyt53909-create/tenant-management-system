@@ -30,7 +30,7 @@ export class PrepayController {
   @Get('my')
   @UseGuards(RolesGuard)
   @Roles('TENANT', 'ADMIN')
-  findMy(@Request() req) {
+  findMy(@Request() req: any) {
     if (req.user.role === 'TENANT') {
       return this.prepayService.findByTenant(req.user.tenantId);
     }
@@ -41,7 +41,7 @@ export class PrepayController {
   @Get('transactions')
   @UseGuards(RolesGuard)
   @Roles('TENANT', 'ADMIN')
-  findTransactions(@Request() req, @Query() query: any) {
+  findTransactions(@Request() req: any, @Query() query: any) {
     if (req.user.role === 'TENANT') {
       return this.prepayService.findTransactionsByTenant(req.user.tenantId, query);
     }

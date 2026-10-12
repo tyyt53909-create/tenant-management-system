@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { TenantsService } from './tenants.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { TenantsService } from './tenants.service.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('TenantsService', () => {
   let service: TenantsService;

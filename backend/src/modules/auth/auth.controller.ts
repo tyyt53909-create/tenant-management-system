@@ -153,50 +153,50 @@ export class AuthController {
 
   @Post('refresh')
   async refresh(@Body() dto: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
+    // 1. 验证 Refresh Token（仅捕获 Token 解析失败）
+    let payload;
     try {
-      // 1. 验证 Refresh Token
-      const payload = await this.jwtService.verifyToken(dto.refreshToken);
-
-      // 2. 查询用户
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
-        select: {
-          id: true,
-          role: true,
-          isActive: true,
-        },
-      });
-
-      // 3. 验证用户是否存在
-      if (!user) {
-        throw new UnauthorizedException('用户不存在');
-      }
-
-      // 4. 验证用户是否激活
-      if (!user.isActive) {
-        throw new ForbiddenException('账号已被禁用');
-      }
-
-      // 5. 生成新的 Access Token
-      const accessToken = await this.jwtService.refreshAccessToken(
-        dto.refreshToken,
-        {
-          sub: user.id,
-          role: user.role,
-        },
-      );
-
-      // 6. 返回新的 Access Token
-      return { accessToken };
+      payload = await this.jwtService.verifyToken(dto.refreshToken);
     } catch {
-      // Token 验证失败
       throw new UnauthorizedException('Token 无效或已过期');
     }
+
+    // 2. 查询用户
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    // 3. 验证用户是否存在
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+
+    // 4. 验证用户是否激活
+    if (!user.isActive) {
+      throw new ForbiddenException('账号已被禁用');
+    }
+
+    // 5. 生成新的 Access Token
+    const accessToken = await this.jwtService.refreshAccessToken(
+      dto.refreshToken,
+      {
+        sub: user.id,
+        role: user.role,
+      },
+    );
+
+    // 6. 返回新的 Access Token
+    return { accessToken };
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async getMe(@Request() req) {
+  async getMe(@Request() req: any) {
     const user = await this.prisma.user.findUnique({
       where: { id: req.user.userId },
       select: {

@@ -1,7 +1,7 @@
 import { IsOptional, IsInt, IsUUID, IsEnum, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
-enum RoomStatus {
+export enum RoomStatus {
   VACANT = 'VACANT',
   OCCUPIED = 'OCCUPIED',
   MAINTENANCE = 'MAINTENANCE',

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
-import { RoomsService } from './rooms.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { RoomsService } from './rooms.service.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('RoomsService', () => {
   let service: RoomsService;
@@ -40,9 +40,9 @@ describe('RoomsService', () => {
       roomNumber: '101',
       buildingId: 'building-001',
       floor: 1,
-      roomType: 'SINGLE' as const,
+      roomType: 'SINGLE',
       area: 25.5,
-    };
+    } as any;
 
     it('应该成功创建房源', async () => {
       const mockBuilding = { id: 'building-001', name: '默认楼栋' };
@@ -103,7 +103,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'findMany').mockResolvedValue([]);
       vi.spyOn(prisma.room, 'count').mockResolvedValue(0);
 
-      await service.findAll({ page: 1, limit: 20, status: 'VACANT' });
+      await service.findAll({ page: 1, limit: 20, status: 'VACANT' } as any);
 
       expect(prisma.room.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -137,7 +137,7 @@ describe('RoomsService', () => {
   });
 
   describe('update', () => {
-    const dto = { status: 'MAINTENANCE' as const };
+    const dto = { status: 'MAINTENANCE' } as any;
 
     it('应该成功更新房源', async () => {
       const mockRoom = { id: 'room-123', roomNumber: '101', buildingId: 'building-001', floor: 1 };

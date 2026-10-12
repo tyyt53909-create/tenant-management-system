@@ -83,7 +83,7 @@ export class PrepayService {
     const account = await this.prisma.prepayAccount.findFirst({
       where: { tenantId },
       include: {
-        room: { select: { roomNumber: true } },
+        tenant: { select: { id: true, name: true } },
       },
     });
 
@@ -91,7 +91,13 @@ export class PrepayService {
       throw new NotFoundException('预付账户不存在');
     }
 
-    return account;
+    // PrepayAccount 无 room 关联，单独查询房间号
+    const room = await this.prisma.room.findUnique({
+      where: { id: account.roomId },
+      select: { id: true, roomNumber: true },
+    });
+
+    return { ...account, room };
   }
 
   // 租客查看自己的交易记录

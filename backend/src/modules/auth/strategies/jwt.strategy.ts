@@ -29,11 +29,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('用户不存在或已禁用');
     }
 
+    // 查询租客ID（租客角色需要，用于租客范围查询）
+    let tenantId: string | undefined;
+    if (user.role === 'TENANT') {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+      tenantId = tenant?.id;
+    }
+
     // 返回用户信息，会被附加到 request.user
     return {
       userId: payload.sub,
       role: payload.role,
       buildingId: payload.buildingId,
+      tenantId,
     };
   }
 }

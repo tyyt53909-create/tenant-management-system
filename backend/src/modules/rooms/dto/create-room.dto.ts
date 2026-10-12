@@ -1,6 +1,6 @@
 import { IsString, IsNotEmpty, IsUUID, IsInt, IsNumber, IsEnum, IsOptional, Min } from 'class-validator';
 
-enum RoomType {
+export enum RoomType {
   SINGLE = 'SINGLE',
   ONE_BED = 'ONE_BED',
   TWO_BED = 'TWO_BED',

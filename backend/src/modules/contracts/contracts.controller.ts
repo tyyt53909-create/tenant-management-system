@@ -30,7 +30,7 @@ export class ContractsController {
   @Get('my')
   @UseGuards(RolesGuard)
   @Roles('TENANT', 'ADMIN')
-  findMy(@Request() req, @Query() query: QueryContractsDto) {
+  findMy(@Request() req: any, @Query() query: QueryContractsDto) {
     if (req.user.role === 'TENANT') {
       return this.contractsService.findByTenant(req.user.tenantId, query);
     }
@@ -40,7 +40,7 @@ export class ContractsController {
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles('TENANT', 'ADMIN')
-  findOne(@Request() req, @Param('id') id: string) {
+  findOne(@Request() req: any, @Param('id') id: string) {
     if (req.user.role === 'TENANT') {
       return this.contractsService.findOneForTenant(id, req.user.tenantId);
     }

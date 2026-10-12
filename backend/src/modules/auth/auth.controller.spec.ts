@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import { AuthController } from './auth.controller';
-import { InviteCodeService } from './invite-code.service';
-import { JwtAuthService } from './jwt.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { AuthController } from './auth.controller.js';
+import { InviteCodeService } from './invite-code.service.js';
+import { JwtAuthService } from './jwt.service.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { RegisterDto } from './dto/register.dto.js';
+import { LoginDto } from './dto/login.dto.js';
+import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthController', () => {

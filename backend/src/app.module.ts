@@ -16,6 +16,9 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module.js';
 import { MetersModule } from './modules/meters/meters.module.js';
 import { PrepayModule } from './modules/prepay/prepay.module.js';
 import { CheckoutModule } from './modules/checkout/checkout.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
+import { FilesModule } from './modules/files/files.module.js';
+import { AuditLogModule } from './modules/audit/audit.module.js';
 
 @Module({
   imports: [
@@ -35,6 +38,9 @@ import { CheckoutModule } from './modules/checkout/checkout.module.js';
     MetersModule,
     PrepayModule,
     CheckoutModule,
+    NotificationsModule,
+    FilesModule,
+    AuditLogModule,
   ],
   controllers: [AppController],
   providers: [AppService],
