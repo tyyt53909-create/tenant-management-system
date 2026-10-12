@@ -3,6 +3,7 @@ import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { CreateRoomDto, RoomType } from './create-room.dto.js';
 import { QueryRoomsDto } from './query-rooms.dto.js';
+import { UpdateRoomStatusDto } from './update-room-status.dto.js';
 
 /** 复刻全局 ValidationPipe 配置（main.ts）：whitelist + forbidNonWhitelisted */
 const validateLikeGlobalPipe = (dto: object) =>
@@ -92,5 +93,47 @@ describe('Rooms DTO 校验（回归）', () => {
 
       expect(errors).toHaveLength(0);
     });
+  });
+});
+
+describe('UpdateRoomStatusDto 校验（T139）', () => {
+  it('合法流转请求（status + version）应通过', async () => {
+    const dto = plainToInstance(UpdateRoomStatusDto, { status: 'RESERVED', version: 3 });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('清洁状态流转（cleanStatus）应通过', async () => {
+    const dto = plainToInstance(UpdateRoomStatusDto, { cleanStatus: 'CLEANING', version: 0 });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('缺少 version 应被拒绝（乐观锁必填）', async () => {
+    const dto = plainToInstance(UpdateRoomStatusDto, { status: 'RESERVED' });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors.some((error) => error.property === 'version')).toBe(true);
+  });
+
+  it('非法房态值应被拒绝', async () => {
+    const dto = plainToInstance(UpdateRoomStatusDto, { status: 'FAKE_STATUS', version: 1 });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors.some((error) => error.property === 'status')).toBe(true);
+  });
+
+  it('负数版本号应被拒绝', async () => {
+    const dto = plainToInstance(UpdateRoomStatusDto, { version: -1 });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors.some((error) => error.property === 'version')).toBe(true);
   });
 });

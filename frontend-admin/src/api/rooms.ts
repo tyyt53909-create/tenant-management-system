@@ -25,3 +25,11 @@ export const updateRoom = (id: string, data: Partial<Room>) => {
 export const deleteRoom = (id: string) => {
   return request.delete(`/rooms/${id}`);
 };
+
+// 房态流转（乐观锁：version 必填，冲突返回 409）
+export const updateRoomStatus = (
+  id: string,
+  data: { status?: string; cleanStatus?: string; version: number }
+) => {
+  return request.patch(`/rooms/${id}/status`, data);
+};

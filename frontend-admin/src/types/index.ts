@@ -31,10 +31,10 @@ export interface Room {
   roomType: 'SINGLE' | 'ONE_BED' | 'TWO_BED' | 'THREE_BED' | 'STUDIO';
   area: number;
   facilities: string[];
-  monthlyRent: number;
-  deposit: number;
   status: 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
-  cleanStatus: 'CLEAN' | 'NEEDS_CLEANING' | 'IN_CLEANING';
+  cleanStatus: 'CLEAN' | 'PENDING_CLEAN' | 'CLEANING';
+  /** 乐观锁版本号（房态流转/编辑时回传） */
+  version: number;
   createdAt: string;
   updatedAt: string;
 }

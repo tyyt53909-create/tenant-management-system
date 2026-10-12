@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } f
 import { RoomsService } from './rooms.service.js';
 import { CreateRoomDto } from './dto/create-room.dto.js';
 import { UpdateRoomDto } from './dto/update-room.dto.js';
+import { UpdateRoomStatusDto } from './dto/update-room-status.dto.js';
 import { QueryRoomsDto } from './dto/query-rooms.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -27,6 +28,13 @@ export class RoomsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.roomsService.findOne(id);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateRoomStatusDto) {
+    return this.roomsService.updateStatus(id, dto);
   }
 
   @Patch(':id')

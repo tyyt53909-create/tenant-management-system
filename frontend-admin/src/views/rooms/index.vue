@@ -31,11 +31,6 @@
           </template>
         </el-table-column>
         <el-table-column prop="area" label="面积(㎡)" width="100" />
-        <el-table-column prop="monthlyRent" label="月租金" width="120">
-          <template #default="{ row }">
-            ¥{{ (row.monthlyRent / 100).toFixed(2) }}
-          </template>
-        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="statusTypeMap[row.status]">
@@ -50,8 +45,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
+            <el-button type="primary" link @click="handleStatus(row)">房态</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
@@ -106,12 +102,6 @@
         <el-form-item label="面积(㎡)" prop="area">
           <el-input-number v-model="formData.area" :min="1" :precision="2" />
         </el-form-item>
-        <el-form-item label="月租金(元)" prop="monthlyRent">
-          <el-input-number v-model="formData.monthlyRent" :min="0" :precision="2" />
-        </el-form-item>
-        <el-form-item label="押金(元)" prop="deposit">
-          <el-input-number v-model="formData.deposit" :min="0" :precision="2" />
-        </el-form-item>
         <el-form-item label="设施" prop="facilities">
           <el-checkbox-group v-model="formData.facilities">
             <el-checkbox label="空调">空调</el-checkbox>
@@ -130,6 +120,37 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 房态流转（乐观锁） -->
+    <el-dialog v-model="statusDialogVisible" title="房态流转" width="460px">
+      <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
+        <el-descriptions-item label="房源">{{ statusRow?.roomNumber }}</el-descriptions-item>
+        <el-descriptions-item label="版本号">v{{ statusRow?.version }}</el-descriptions-item>
+        <el-descriptions-item label="当前房态">{{ statusMap[statusRow?.status || ''] }}</el-descriptions-item>
+        <el-descriptions-item label="当前清洁">{{ cleanStatusMap[statusRow?.cleanStatus || ''] }}</el-descriptions-item>
+      </el-descriptions>
+      <el-form label-width="110px">
+        <el-form-item label="目标房态">
+          <el-select v-model="statusForm.status">
+            <el-option label="空置" value="VACANT" />
+            <el-option label="已预订" value="RESERVED" />
+            <el-option label="已租" value="OCCUPIED" />
+            <el-option label="维护中" value="MAINTENANCE" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标清洁状态">
+          <el-select v-model="statusForm.cleanStatus">
+            <el-option label="已清洁" value="CLEAN" />
+            <el-option label="待清洁" value="PENDING_CLEAN" />
+            <el-option label="清洁中" value="CLEANING" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="statusDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="statusSubmitting" @click="handleStatusSubmit">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -137,7 +158,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
-import { getRooms, createRoom, updateRoom, deleteRoom } from '@/api/rooms';
+import { getRooms, createRoom, updateRoom, deleteRoom, updateRoomStatus } from '@/api/rooms';
 import type { Room } from '@/types';
 
 const loading = ref(false);
@@ -147,6 +168,13 @@ const dialogTitle = ref('新增房源');
 const formRef = ref<FormInstance>();
 const tableData = ref<Room[]>([]);
 const currentEditId = ref<string>('');
+const currentVersion = ref(0);
+
+// 房态流转（乐观锁）
+const statusDialogVisible = ref(false);
+const statusSubmitting = ref(false);
+const statusRow = ref<Room | null>(null);
+const statusForm = reactive({ status: '', cleanStatus: '' });
 
 const queryForm = reactive({
   roomNumber: '',
@@ -165,8 +193,6 @@ const formData = reactive({
   floor: 1,
   roomType: '',
   area: 0,
-  monthlyRent: 0,
-  deposit: 0,
   facilities: [] as string[],
 });
 
@@ -176,8 +202,6 @@ const rules: FormRules = {
   floor: [{ required: true, message: '请输入楼层', trigger: 'blur' }],
   roomType: [{ required: true, message: '请选择房型', trigger: 'change' }],
   area: [{ required: true, message: '请输入面积', trigger: 'blur' }],
-  monthlyRent: [{ required: true, message: '请输入月租金', trigger: 'blur' }],
-  deposit: [{ required: true, message: '请输入押金', trigger: 'blur' }],
 };
 
 const roomTypeMap: Record<string, string> = {
@@ -204,14 +228,14 @@ const statusTypeMap: Record<string, any> = {
 
 const cleanStatusMap: Record<string, string> = {
   CLEAN: '已清洁',
-  NEEDS_CLEANING: '待清洁',
-  IN_CLEANING: '清洁中',
+  PENDING_CLEAN: '待清洁',
+  CLEANING: '清洁中',
 };
 
 const cleanStatusTypeMap: Record<string, any> = {
   CLEAN: 'success',
-  NEEDS_CLEANING: 'warning',
-  IN_CLEANING: 'info',
+  PENDING_CLEAN: 'warning',
+  CLEANING: 'info',
 };
 
 const fetchData = async () => {
@@ -252,17 +276,44 @@ const handleCreate = () => {
 const handleEdit = (row: Room) => {
   dialogTitle.value = '编辑房源';
   currentEditId.value = row.id;
+  currentVersion.value = row.version;
   Object.assign(formData, {
     buildingId: row.buildingId,
     roomNumber: row.roomNumber,
     floor: row.floor,
     roomType: row.roomType,
     area: row.area,
-    monthlyRent: row.monthlyRent / 100,
-    deposit: row.deposit / 100,
     facilities: row.facilities || [],
   });
   dialogVisible.value = true;
+};
+
+// 房态流转
+const handleStatus = (row: Room) => {
+  statusRow.value = row;
+  statusForm.status = row.status;
+  statusForm.cleanStatus = row.cleanStatus;
+  statusDialogVisible.value = true;
+};
+
+const handleStatusSubmit = async () => {
+  const row = statusRow.value;
+  if (!row) return;
+  statusSubmitting.value = true;
+  try {
+    await updateRoomStatus(row.id, {
+      status: statusForm.status,
+      cleanStatus: statusForm.cleanStatus,
+      version: row.version,
+    });
+    ElMessage.success('房态已更新');
+    statusDialogVisible.value = false;
+    fetchData();
+  } catch {
+    // 请求拦截器已提示（非法流转 400 / 版本冲突 409）
+  } finally {
+    statusSubmitting.value = false;
+  }
 };
 
 const handleDelete = async (row: Room) => {
@@ -288,14 +339,11 @@ const handleSubmit = async () => {
 
     submitLoading.value = true;
     try {
-      const data: any = {
-        ...formData,
-        monthlyRent: Math.round(formData.monthlyRent * 100),
-        deposit: Math.round(formData.deposit * 100),
-      };
+      const data: any = { ...formData };
 
       if (currentEditId.value) {
-        await updateRoom(currentEditId.value, data);
+        // 乐观锁：携带版本号，冲突时后端返回 409
+        await updateRoom(currentEditId.value, { ...data, version: currentVersion.value });
         ElMessage.success('更新成功');
       } else {
         await createRoom(data);
@@ -320,8 +368,6 @@ const handleDialogClose = () => {
     floor: 1,
     roomType: '',
     area: 0,
-    monthlyRent: 0,
-    deposit: 0,
     facilities: [],
   });
 };
