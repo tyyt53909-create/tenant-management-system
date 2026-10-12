@@ -3,6 +3,7 @@ import { BillsService } from './bills.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
 import { QueryBillsDto } from './dto/query-bills.dto.js';
+import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -55,6 +56,22 @@ export class BillsController {
   @Roles('ADMIN')
   update(@Param('id') id: string, @Body() updateBillDto: UpdateBillDto) {
     return this.billsService.update(id, updateBillDto);
+  }
+
+  // 登记收款（管理者）
+  @Post(':id/payments')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  addPayment(@Request() req: any, @Param('id') id: string, @Body() dto: CreatePaymentDto) {
+    return this.billsService.addPayment(id, dto, req.user.userId);
+  }
+
+  // 账单收款流水（管理者）
+  @Get(':id/payments')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findPayments(@Param('id') id: string) {
+    return this.billsService.findPayments(id);
   }
 
   @Delete(':id')
