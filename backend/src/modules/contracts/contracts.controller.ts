@@ -1,0 +1,63 @@
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { ContractsService } from './contracts.service.js';
+import { CreateContractDto } from './dto/create-contract.dto.js';
+import { UpdateContractDto } from './dto/update-contract.dto.js';
+import { QueryContractsDto } from './dto/query-contracts.dto.js';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
+
+@Controller('contracts')
+@UseGuards(JwtAuthGuard)
+export class ContractsController {
+  constructor(private readonly contractsService: ContractsService) {}
+
+  @Post()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  create(@Body() createContractDto: CreateContractDto) {
+    return this.contractsService.create(createContractDto);
+  }
+
+  @Get()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findAll(@Query() query: QueryContractsDto) {
+    return this.contractsService.findAll(query);
+  }
+
+  // 租客查看自己的合同
+  @Get('my')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findMy(@Request() req: any, @Query() query: QueryContractsDto) {
+    if (req.user.role === 'TENANT') {
+      return this.contractsService.findByTenant(req.user.tenantId, query);
+    }
+    return this.contractsService.findAll(query);
+  }
+
+  @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  findOne(@Request() req: any, @Param('id') id: string) {
+    if (req.user.role === 'TENANT') {
+      return this.contractsService.findOneForTenant(id, req.user.tenantId);
+    }
+    return this.contractsService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  update(@Param('id') id: string, @Body() updateContractDto: UpdateContractDto) {
+    return this.contractsService.update(id, updateContractDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  remove(@Param('id') id: string) {
+    return this.contractsService.remove(id);
+  }
+}

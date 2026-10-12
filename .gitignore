@@ -138,3 +138,6 @@ docs/**/*-temp.md
 *.sql
 *.dump
 backups/
+
+# Prisma 迁移文件必须提交（例外）
+!backend/prisma/migrations/**/*.sql

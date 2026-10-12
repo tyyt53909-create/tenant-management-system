@@ -73,9 +73,11 @@ jobs:
           node-version: '20'
       
       - name: 安装依赖
+        working-directory: backend
         run: npm ci
-      
+
       - name: 运行 npm audit
+        working-directory: backend
         run: |
           echo "扫描依赖漏洞..."
           # 第一版：只检查高危和严重漏洞

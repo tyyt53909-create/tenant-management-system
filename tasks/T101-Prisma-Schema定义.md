@@ -1,10 +1,17 @@
 ---
-status: draft
+status: completed
 task_id: T101
 stage: 阶段1
 priority: P0
 model_tier: 强
 estimated_hours: 6
+actual_hours: 1
+branch: feature/T101-prisma-schema
+worktree: /Users/Admin/ai/租客管理系統-worktrees/T101-prisma-schema
+model: Claude Opus 5.5
+start_time: 2026-10-11
+complete_time: 2026-10-11
+pr: pending
 ---
 
 # T101: Prisma Schema 定义（P0 核心表）
