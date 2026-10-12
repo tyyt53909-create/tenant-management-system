@@ -76,7 +76,7 @@ export interface Contract {
   endDate: string;
   rentAmount: number;
   depositAmount: number;
-  paymentCycle: 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUALLY' | 'ANNUALLY';
+  paymentCycle: 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUAL' | 'ANNUAL';
   paymentDay: number;
   status: 'DRAFT' | 'ACTIVE' | 'EXPIRED' | 'TERMINATED';
   createdAt: string;
@@ -107,7 +107,7 @@ export interface Maintenance {
   description: string;
   category: 'PLUMBING' | 'ELECTRICAL' | 'APPLIANCE' | 'FURNITURE' | 'DOOR_WINDOW' | 'OTHER';
   priority: 'LOW' | 'NORMAL' | 'URGENT';
-  status: 'SUBMITTED' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  status: 'SUBMITTED' | 'ACKNOWLEDGED' | 'ASSIGNED' | 'IN_PROGRESS' | 'PENDING_CONFIRM' | 'COMPLETED' | 'CANCELLED';
   assignedTo?: string;
   resolution?: string;
   createdAt: string;
@@ -135,7 +135,7 @@ export interface CheckoutRecord {
   roomId: string;
   checkoutDate: string;
   totalRefund: number;
-  status: 'DRAFT' | 'PROCESSING' | 'COMPLETED' | 'CANCELLED';
+  status: 'DRAFT' | 'PENDING' | 'COMPLETED' | 'CANCELLED';
   notes?: string;
   processedBy: string;
   createdAt: string;

@@ -5,7 +5,7 @@
         <el-form-item label="状态">
           <el-select v-model="queryForm.status" placeholder="请选择状态" clearable>
             <el-option label="草稿" value="DRAFT" />
-            <el-option label="处理中" value="PROCESSING" />
+            <el-option label="待处理" value="PENDING" />
             <el-option label="已完成" value="COMPLETED" />
             <el-option label="已取消" value="CANCELLED" />
           </el-select>
@@ -83,7 +83,7 @@
         <el-form-item label="状态" prop="status">
           <el-select v-model="formData.status">
             <el-option label="草稿" value="DRAFT" />
-            <el-option label="处理中" value="PROCESSING" />
+            <el-option label="待处理" value="PENDING" />
             <el-option label="已完成" value="COMPLETED" />
             <el-option label="已取消" value="CANCELLED" />
           </el-select>
@@ -137,14 +137,14 @@ const rules = {
 
 const statusMap: Record<string, string> = {
   DRAFT: '草稿',
-  PROCESSING: '处理中',
+  PENDING: '待处理',
   COMPLETED: '已完成',
   CANCELLED: '已取消',
 };
 
 const statusTypeMap: Record<string, any> = {
   DRAFT: 'info',
-  PROCESSING: 'warning',
+  PENDING: 'warning',
   COMPLETED: 'success',
   CANCELLED: 'danger',
 };

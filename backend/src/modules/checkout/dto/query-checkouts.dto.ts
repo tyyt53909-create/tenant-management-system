@@ -3,7 +3,7 @@ import { Type } from 'class-transformer';
 
 enum CheckoutStatus {
   DRAFT = 'DRAFT',
-  PROCESSING = 'PROCESSING',
+  PENDING = 'PENDING',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
 }

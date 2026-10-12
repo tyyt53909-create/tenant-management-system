@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsInt, IsEnum, IsDateString, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsInt, IsEnum, IsDateString, IsOptional, Min } from 'class-validator';
 
 enum BillType {
   RENT = 'RENT',
@@ -25,5 +25,6 @@ export class CreateBillDto {
   @IsDateString()
   dueDate: string;
 
+  @IsOptional()
   snapshot?: any; // JSON 快照（合同信息）
 }
