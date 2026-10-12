@@ -16,13 +16,15 @@ enum MaintenancePriority {
 }
 
 export class CreateMaintenanceDto {
+  /** 管理员指定；租客自助报修时由服务端按其生效合同推导（T138） */
   @IsString()
-  @IsNotEmpty()
-  roomId: string;
+  @IsOptional()
+  roomId?: string;
 
+  /** 管理员指定；租客自助报修时取自登录身份（T138） */
   @IsString()
-  @IsNotEmpty()
-  tenantId: string;
+  @IsOptional()
+  tenantId?: string;
 
   @IsString()
   @IsNotEmpty()
