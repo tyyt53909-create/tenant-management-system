@@ -140,11 +140,17 @@ import { ElMessage } from 'element-plus';
 import { House, User, Document, Tickets, Plus } from '@element-plus/icons-vue';
 import EChart from '@/components/common/EChart.vue';
 import type { EChartsOption } from 'echarts';
+import {
+  getDashboardStats,
+  getRevenueTrend,
+  getRoomStatusDistribution,
+} from '@/api/dashboard';
+import type { RevenueData, RoomStatusData } from '@/api/dashboard';
 
 const router = useRouter();
 const loading = ref(false);
 
-// 模拟统计数据（实际应该从后端获取）
+// 统计数据（来自后端 /dashboard/stats）
 const stats = ref({
   totalRooms: 0,
   totalTenants: 0,
@@ -161,13 +167,26 @@ const occupancyRate = computed(() => {
   return ((stats.value.occupiedRooms / stats.value.totalRooms) * 100).toFixed(1);
 });
 
-// 收入趋势图表配置
+// 收入趋势与房源状态分布数据（来自后端接口）
+const revenueTrend = ref<RevenueData[]>([]);
+const roomStatusData = ref<RoomStatusData[]>([]);
+
+// 房源状态展示映射
+const ROOM_STATUS_META: Record<string, { label: string; color: string }> = {
+  VACANT: { label: '空置', color: '#67C23A' },
+  RESERVED: { label: '已预订', color: '#E6A23C' },
+  OCCUPIED: { label: '已租', color: '#409EFF' },
+  MAINTENANCE: { label: '维护中', color: '#F56C6C' },
+};
+
+// 收入趋势图表配置（金额单位为分，展示换算为元）
 const revenueChartOption = computed<EChartsOption>(() => ({
   tooltip: {
     trigger: 'axis',
     axisPointer: {
       type: 'shadow'
-    }
+    },
+    valueFormatter: (value) => '¥' + Number(value).toLocaleString(),
   },
   grid: {
     left: '3%',
@@ -177,7 +196,7 @@ const revenueChartOption = computed<EChartsOption>(() => ({
   },
   xAxis: {
     type: 'category',
-    data: ['1月', '2月', '3月', '4月', '5月', '6月'],
+    data: revenueTrend.value.map((item) => `${Number(item.month.split('-')[1])}月`),
     axisLine: {
       lineStyle: {
         color: '#999'
@@ -197,7 +216,7 @@ const revenueChartOption = computed<EChartsOption>(() => ({
     {
       name: '收入',
       type: 'bar',
-      data: [45000, 52000, 48000, 61000, 59000, 63000],
+      data: revenueTrend.value.map((item) => Number((item.revenue / 100).toFixed(2))),
       itemStyle: {
         color: '#409EFF'
       },
@@ -205,7 +224,7 @@ const revenueChartOption = computed<EChartsOption>(() => ({
         show: true,
         position: 'top',
         formatter: (params: any) => {
-          return '¥' + (params.value / 1000).toFixed(1) + 'k';
+          return params.value > 0 ? '¥' + Number(params.value).toLocaleString() : '';
         }
       }
     }
@@ -229,12 +248,12 @@ const roomStatusChartOption = computed<EChartsOption>(() => ({
       type: 'pie',
       radius: '70%',
       center: ['60%', '50%'],
-      data: [
-        { value: stats.value.vacantRooms || 15, name: '空置', itemStyle: { color: '#67C23A' } },
-        { value: stats.value.occupiedRooms || 35, name: '已租', itemStyle: { color: '#409EFF' } },
-        { value: 3, name: '维护中', itemStyle: { color: '#F56C6C' } },
-        { value: 2, name: '已预订', itemStyle: { color: '#E6A23C' } }
-      ],
+      data: roomStatusData.value
+        .filter((item) => item.count > 0)
+        .map((item) => {
+          const meta = ROOM_STATUS_META[item.status] ?? { label: item.status, color: '#909399' };
+          return { value: item.count, name: meta.label, itemStyle: { color: meta.color } };
+        }),
       emphasis: {
         itemStyle: {
           shadowBlur: 10,
@@ -246,29 +265,21 @@ const roomStatusChartOption = computed<EChartsOption>(() => ({
   ]
 }));
 
-// 获取统计数据
-const fetchStats = async () => {
+// 获取仪表板数据（统计卡片 + 收入趋势 + 房源状态分布）
+const fetchDashboard = async () => {
   loading.value = true;
   try {
-    // 模拟数据（实际应该调用 API）
-    // const response = await getDashboardStats();
-    // stats.value = response;
-    
-    // 模拟数据
-    setTimeout(() => {
-      stats.value = {
-        totalRooms: 55,
-        totalTenants: 42,
-        activeContracts: 38,
-        pendingBills: 12,
-        vacantRooms: 15,
-        occupiedRooms: 35,
-        maintenanceRequests: 8,
-      };
-      loading.value = false;
-    }, 500);
+    const [statsData, revenueData, roomStatus] = await Promise.all([
+      getDashboardStats(),
+      getRevenueTrend(),
+      getRoomStatusDistribution(),
+    ]);
+    stats.value = statsData;
+    revenueTrend.value = revenueData;
+    roomStatusData.value = roomStatus;
   } catch (error) {
     ElMessage.error('获取统计数据失败');
+  } finally {
     loading.value = false;
   }
 };
@@ -279,7 +290,7 @@ const handleCardClick = (path: string) => {
 };
 
 onMounted(() => {
-  fetchStats();
+  fetchDashboard();
 });
 </script>
 

@@ -19,6 +19,7 @@ import { CheckoutModule } from './modules/checkout/checkout.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { FilesModule } from './modules/files/files.module.js';
 import { AuditLogModule } from './modules/audit/audit.module.js';
+import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AuditLogModule } from './modules/audit/audit.module.js';
     NotificationsModule,
     FilesModule,
     AuditLogModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
