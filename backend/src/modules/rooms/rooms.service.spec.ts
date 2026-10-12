@@ -20,11 +20,31 @@ describe('RoomsService', () => {
             room: {
               findFirst: vi.fn(),
               findUnique: vi.fn(),
+              findUniqueOrThrow: vi.fn(),
               findMany: vi.fn(),
               count: vi.fn(),
               create: vi.fn(),
               update: vi.fn(),
+              updateMany: vi.fn(),
               delete: vi.fn(),
+            },
+            contract: {
+              findFirst: vi.fn(),
+              count: vi.fn(),
+            },
+            maintenanceRequest: {
+              findFirst: vi.fn(),
+              count: vi.fn(),
+            },
+            checkoutRecord: {
+              findFirst: vi.fn(),
+              count: vi.fn(),
+            },
+            meter: {
+              count: vi.fn(),
+            },
+            roomPhoto: {
+              count: vi.fn(),
             },
           },
         },
@@ -33,6 +53,13 @@ describe('RoomsService', () => {
 
     service = module.get<RoomsService>(RoomsService);
     prisma = module.get<PrismaService>(PrismaService);
+
+    // 默认：无关联数据（remove 场景）
+    vi.mocked(prisma.contract.count).mockResolvedValue(0);
+    vi.mocked(prisma.maintenanceRequest.count).mockResolvedValue(0);
+    vi.mocked(prisma.checkoutRecord.count).mockResolvedValue(0);
+    vi.mocked(prisma.meter.count).mockResolvedValue(0);
+    vi.mocked(prisma.roomPhoto.count).mockResolvedValue(0);
   });
 
   describe('create', () => {
@@ -139,16 +166,77 @@ describe('RoomsService', () => {
   describe('update', () => {
     const dto = { status: 'MAINTENANCE' } as any;
 
-    it('应该成功更新房源', async () => {
-      const mockRoom = { id: 'room-123', roomNumber: '101', buildingId: 'building-001', floor: 1 };
-      const updatedRoom = { ...mockRoom, status: 'MAINTENANCE' };
+    it('应该成功更新房源（合法流转 + 无 version 保持兼容，版本递增）', async () => {
+      const mockRoom = {
+        id: 'room-123',
+        roomNumber: '101',
+        buildingId: 'building-001',
+        floor: 1,
+        status: 'VACANT',
+        cleanStatus: 'CLEAN',
+        version: 2,
+      };
+      const updatedRoom = { ...mockRoom, status: 'MAINTENANCE', version: 3 };
 
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
+      vi.spyOn(prisma.maintenanceRequest, 'findFirst').mockResolvedValue({ id: 'mr-1' } as any);
       vi.spyOn(prisma.room, 'update').mockResolvedValue(updatedRoom as any);
 
       const result = await service.update('room-123', dto);
 
       expect(result.status).toBe('MAINTENANCE');
+      expect(prisma.room.update).toHaveBeenCalledWith({
+        where: { id: 'room-123' },
+        data: expect.objectContaining({ status: 'MAINTENANCE', version: { increment: 1 } }),
+      });
+    });
+
+    it('非法房态流转应被拒绝（VACANT+CLEAN → OCCUPIED+CLEAN）', async () => {
+      const mockRoom = { id: 'room-123', status: 'VACANT', cleanStatus: 'CLEAN' };
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
+
+      await expect(service.update('room-123', { status: 'OCCUPIED' } as any)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.room.update).not.toHaveBeenCalled();
+    });
+
+    it('提供 version 时走乐观锁（updateMany + 递增）', async () => {
+      const mockRoom = {
+        id: 'room-123',
+        roomNumber: '101',
+        buildingId: 'building-001',
+        floor: 1,
+        status: 'VACANT',
+        cleanStatus: 'CLEAN',
+        version: 3,
+      };
+      const updated = { ...mockRoom, description: '新描述', version: 4 };
+
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 });
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue(updated as any);
+
+      const result = await service.update('room-123', {
+        description: '新描述',
+        version: 3,
+      } as any);
+
+      expect(prisma.room.updateMany).toHaveBeenCalledWith({
+        where: { id: 'room-123', version: 3 },
+        data: expect.objectContaining({ description: '新描述', version: { increment: 1 } }),
+      });
+      expect(result.version).toBe(4);
+    });
+
+    it('version 冲突应返回 409', async () => {
+      const mockRoom = { id: 'room-123', status: 'VACANT', cleanStatus: 'CLEAN', version: 5 };
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.update('room-123', { description: 'x', version: 4 } as any),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('应该拒绝不存在的房源', async () => {
@@ -158,18 +246,147 @@ describe('RoomsService', () => {
     });
 
     it('应该检查修改后的房号唯一性', async () => {
-      const mockRoom = { id: 'room-123', roomNumber: '101', buildingId: 'building-001', floor: 1 };
+      const mockRoom = {
+        id: 'room-123',
+        roomNumber: '101',
+        buildingId: 'building-001',
+        floor: 1,
+        status: 'VACANT',
+        cleanStatus: 'CLEAN',
+      };
       const existingRoom = { id: 'room-456', roomNumber: '102' };
 
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
       vi.spyOn(prisma.room, 'findFirst').mockResolvedValue(existingRoom as any);
 
-      await expect(service.update('room-123', { roomNumber: '102' })).rejects.toThrow(ConflictException);
+      await expect(service.update('room-123', { roomNumber: '102' })).rejects.toThrow(
+        ConflictException,
+      );
+    });
+  });
+
+  describe('updateStatus', () => {
+    const baseRoom = {
+      id: 'room-123',
+      roomNumber: '101',
+      status: 'VACANT',
+      cleanStatus: 'CLEAN',
+      version: 3,
+    };
+
+    it('合法流转 VACANT+CLEAN → RESERVED+CLEAN（有草稿合同）', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
+      vi.spyOn(prisma.contract, 'findFirst').mockResolvedValue({
+        id: 'contract-1',
+        status: 'DRAFT',
+      } as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 });
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue({
+        ...baseRoom,
+        status: 'RESERVED',
+        version: 4,
+      } as any);
+
+      const result = await service.updateStatus('room-123', {
+        status: 'RESERVED',
+        version: 3,
+      } as any);
+
+      expect(prisma.room.updateMany).toHaveBeenCalledWith({
+        where: { id: 'room-123', version: 3 },
+        data: { status: 'RESERVED', cleanStatus: 'CLEAN', version: { increment: 1 } },
+      });
+      expect(result.status).toBe('RESERVED');
+    });
+
+    it('缺少草稿合同：流转 RESERVED 被拒绝', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
+      vi.spyOn(prisma.contract, 'findFirst').mockResolvedValue(null);
+
+      await expect(
+        service.updateStatus('room-123', { status: 'RESERVED', version: 3 } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.room.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('非法流转 VACANT+CLEAN → OCCUPIED+CLEAN 被拒绝', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
+
+      await expect(
+        service.updateStatus('room-123', { status: 'OCCUPIED', version: 3 } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('退租流转缺少退租记录被拒绝', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue({
+        ...baseRoom,
+        status: 'OCCUPIED',
+      } as any);
+      vi.spyOn(prisma.checkoutRecord, 'findFirst').mockResolvedValue(null);
+
+      await expect(
+        service.updateStatus('room-123', { cleanStatus: 'PENDING_CLEAN', version: 3 } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('转维修缺少报修工单被拒绝', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
+      vi.spyOn(prisma.maintenanceRequest, 'findFirst').mockResolvedValue(null);
+
+      await expect(
+        service.updateStatus('room-123', { status: 'MAINTENANCE', version: 3 } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('保洁流转 CLEANING → CLEAN 合法', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue({
+        ...baseRoom,
+        cleanStatus: 'CLEANING',
+      } as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 });
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue({
+        ...baseRoom,
+        cleanStatus: 'CLEAN',
+        version: 4,
+      } as any);
+
+      const result = await service.updateStatus('room-123', {
+        cleanStatus: 'CLEAN',
+        version: 3,
+      } as any);
+
+      expect(result.cleanStatus).toBe('CLEAN');
+    });
+
+    it('版本冲突返回 409', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
+      vi.spyOn(prisma.contract, 'findFirst').mockResolvedValue({ id: 'c1' } as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.updateStatus('room-123', { status: 'RESERVED', version: 999 } as any),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('未提供 status/cleanStatus：400', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
+
+      await expect(service.updateStatus('room-123', { version: 3 } as any)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('房源不存在：404', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(null);
+
+      await expect(
+        service.updateStatus('room-999', { status: 'RESERVED', version: 1 } as any),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('remove', () => {
-    it('应该成功删除房源', async () => {
+    it('应该成功删除房源（无关联数据）', async () => {
       const mockRoom = { id: 'room-123', roomNumber: '101' };
 
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
@@ -179,6 +396,14 @@ describe('RoomsService', () => {
 
       expect(result.message).toBe('房源已删除');
       expect(prisma.room.delete).toHaveBeenCalledWith({ where: { id: 'room-123' } });
+    });
+
+    it('有关联数据时应拒绝删除（T139）', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue({ id: 'room-123' } as any);
+      vi.spyOn(prisma.contract, 'count').mockResolvedValue(1);
+
+      await expect(service.remove('room-123')).rejects.toThrow(BadRequestException);
+      expect(prisma.room.delete).not.toHaveBeenCalled();
     });
 
     it('应该拒绝不存在的房源', async () => {
