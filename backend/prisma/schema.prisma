@@ -457,6 +457,7 @@ model PaymentRecord {
   
   createdAt         DateTime      @default(now())
 
+  @@unique([billId, transactionNumber])
   @@index([billId])
   @@index([paidAt])
   @@map("payment_records")

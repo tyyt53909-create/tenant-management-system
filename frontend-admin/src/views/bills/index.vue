@@ -55,8 +55,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
+            <el-button type="success" link :disabled="!canReceive(row)" @click="handlePayment(row)">收款</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
@@ -101,14 +102,91 @@
         <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 收款登记对话框 -->
+    <el-dialog v-model="paymentDialogVisible" title="登记收款" width="600px">
+      <el-descriptions :column="3" border size="small" style="margin-bottom: 16px">
+        <el-descriptions-item label="账单编号">{{ currentBill?.billNumber }}</el-descriptions-item>
+        <el-descriptions-item label="应付金额">
+          ¥{{ ((currentBill?.amount || 0) / 100).toFixed(2) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="未缴金额">
+          ¥{{ (((currentBill?.amount || 0) - (currentBill?.paidAmount || 0)) / 100).toFixed(2) }}
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <el-form ref="paymentFormRef" :model="paymentForm" :rules="paymentRules" label-width="90px">
+        <el-form-item label="收款金额" prop="amount">
+          <el-input-number
+            v-model="paymentForm.amount"
+            :min="0.01"
+            :max="remainingYuan"
+            :precision="2"
+            :step="100"
+          />
+          <span class="payment-hint">元（最多可收 ¥{{ remainingYuan.toFixed(2) }}）</span>
+        </el-form-item>
+        <el-form-item label="收款方式" prop="paymentMethod">
+          <el-select v-model="paymentForm.paymentMethod">
+            <el-option
+              v-for="(label, value) in paymentMethodMap"
+              :key="value"
+              :label="label"
+              :value="value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="交易号">
+          <el-input v-model="paymentForm.transactionNumber" placeholder="选填；同一账单内不可重复" />
+        </el-form-item>
+        <el-form-item label="收款时间">
+          <el-date-picker
+            v-model="paymentForm.paidAt"
+            type="datetime"
+            placeholder="缺省为当前时间"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+          />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="paymentForm.notes" placeholder="选填" />
+        </el-form-item>
+      </el-form>
+
+      <el-divider content-position="left">收款记录</el-divider>
+      <el-table :data="paymentRecords" size="small" v-loading="paymentLoading" border>
+        <el-table-column label="收款时间" width="160">
+          <template #default="{ row }">{{ formatDateTime(row.paidAt) }}</template>
+        </el-table-column>
+        <el-table-column label="金额" width="100">
+          <template #default="{ row }">¥{{ (row.amount / 100).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="方式" width="90">
+          <template #default="{ row }">{{ paymentMethodMap[row.paymentMethod] || row.paymentMethod }}</template>
+        </el-table-column>
+        <el-table-column prop="transactionNumber" label="交易号" show-overflow-tooltip />
+      </el-table>
+
+      <template #footer>
+        <el-button @click="paymentDialogVisible = false">关闭</el-button>
+        <el-button
+          type="primary"
+          :loading="paymentSubmitLoading"
+          :disabled="!currentBill || !canReceive(currentBill)"
+          @click="handlePaymentSubmit"
+        >
+          确认收款
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
-import { getBills, createBill, updateBill, deleteBill } from '@/api/bills';
+import { getBills, createBill, updateBill, deleteBill, getPayments, addPayment } from '@/api/bills';
+import type { PaymentRecordItem, PaymentMethod } from '@/api/bills';
 import type { Bill } from '@/types';
 
 const loading = ref(false);
@@ -118,6 +196,27 @@ const dialogTitle = ref('新增账单');
 const formRef = ref<FormInstance>();
 const tableData = ref<Bill[]>([]);
 const currentEditId = ref('');
+
+// ── 收款登记（T135）──
+const paymentDialogVisible = ref(false);
+const paymentLoading = ref(false);
+const paymentSubmitLoading = ref(false);
+const paymentFormRef = ref<FormInstance>();
+const paymentRecords = ref<PaymentRecordItem[]>([]);
+const currentBill = ref<Bill | null>(null);
+
+const paymentForm = reactive({
+  amount: 0,
+  paymentMethod: 'CASH' as PaymentMethod,
+  transactionNumber: '',
+  paidAt: '',
+  notes: '',
+});
+
+const paymentRules = {
+  amount: [{ required: true, message: '请输入收款金额', trigger: 'blur' }],
+  paymentMethod: [{ required: true, message: '请选择收款方式', trigger: 'change' }],
+};
 
 const queryForm = reactive({ status: '', billType: '' });
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
@@ -158,6 +257,24 @@ const statusTypeMap: Record<string, any> = {
   OVERDUE: 'danger',
   CANCELLED: '',
 };
+
+const paymentMethodMap: Record<string, string> = {
+  CASH: '现金',
+  BANK_TRANSFER: '银行转账',
+  WECHAT: '微信',
+  ALIPAY: '支付宝',
+  OTHER: '其他',
+};
+
+// 剩余未缴金额（元）
+const remainingYuan = computed(() => {
+  if (!currentBill.value) return 0;
+  return Math.max(0, (currentBill.value.amount - currentBill.value.paidAmount) / 100);
+});
+
+// 仅 PENDING / PARTIAL / OVERDUE 可收款（docs/04-状态机.md）
+const canReceive = (bill: Bill | null) =>
+  !!bill && ['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status);
 
 const fetchData = async () => {
   loading.value = true;
@@ -240,9 +357,71 @@ const handleSubmit = async () => {
   });
 };
 
+// ── 收款登记（T135）──
+
+const handlePayment = async (row: Bill) => {
+  currentBill.value = row;
+  paymentForm.amount = Math.max(0.01, (row.amount - row.paidAmount) / 100);
+  paymentForm.paymentMethod = 'CASH';
+  paymentForm.transactionNumber = '';
+  paymentForm.paidAt = '';
+  paymentForm.notes = '';
+  paymentRecords.value = [];
+  paymentDialogVisible.value = true;
+  await loadPayments();
+};
+
+const loadPayments = async () => {
+  if (!currentBill.value) return;
+  paymentLoading.value = true;
+  try {
+    paymentRecords.value = await getPayments(currentBill.value.id);
+  } catch {
+    // 请求拦截器已弹出错误提示
+  } finally {
+    paymentLoading.value = false;
+  }
+};
+
+const handlePaymentSubmit = async () => {
+  const bill = currentBill.value;
+  if (!paymentFormRef.value || !bill) return;
+  await paymentFormRef.value.validate(async (valid) => {
+    if (!valid) return;
+    paymentSubmitLoading.value = true;
+    try {
+      await addPayment(bill.id, {
+        amount: Math.round(paymentForm.amount * 100),
+        paymentMethod: paymentForm.paymentMethod,
+        transactionNumber: paymentForm.transactionNumber || undefined,
+        paidAt: paymentForm.paidAt || undefined,
+        notes: paymentForm.notes || undefined,
+      });
+      ElMessage.success('收款登记成功');
+      await fetchData();
+      const latest = tableData.value.find((item) => item.id === bill.id);
+      if (latest) currentBill.value = latest;
+      await loadPayments();
+      paymentForm.amount = Math.max(0.01, remainingYuan.value);
+    } catch {
+      // 请求拦截器已弹出错误提示（含超额、交易号重复等业务信息）
+    } finally {
+      paymentSubmitLoading.value = false;
+    }
+  });
+};
+
+const formatDateTime = (value: string) => (value ? value.replace('T', ' ').slice(0, 19) : '-');
+
 onMounted(fetchData);
 </script>
 
 <style scoped>
 .bills-page { padding: 0; }
+
+.payment-hint {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 12px;
+}
 </style>
