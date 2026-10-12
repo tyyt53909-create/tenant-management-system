@@ -50,6 +50,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '账单管理', icon: 'Tickets' },
       },
       {
+        path: '/prepay',
+        name: 'Prepay',
+        component: () => import('@/views/prepay/index.vue'),
+        meta: { title: '预付账户', icon: 'Wallet' },
+      },
+      {
         path: '/maintenance',
         name: 'Maintenance',
         component: () => import('@/views/maintenance/index.vue'),

@@ -35,6 +35,10 @@
           <el-icon><Tickets /></el-icon>
           <span>账单管理</span>
         </el-menu-item>
+        <el-menu-item index="/prepay">
+          <el-icon><Wallet /></el-icon>
+          <span>预付账户</span>
+        </el-menu-item>
         <el-menu-item index="/maintenance">
           <el-icon><Tools /></el-icon>
           <span>报修管理</span>
@@ -88,6 +92,7 @@ import {
   OfficeBuilding,
   Document,
   Tickets,
+  Wallet,
   Tools,
   Odometer,
   Switch,

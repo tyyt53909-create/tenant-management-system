@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreatePrepayAccountDto } from './dto/create-prepay-account.dto.js';
 import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
 import { QueryPrepayAccountsDto } from './dto/query-prepay-accounts.dto.js';
+import { CreatePrepayTransactionDto } from './dto/create-prepay-transaction.dto.js';
+import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.js';
 
 @Injectable()
 export class PrepayService {
@@ -41,13 +43,26 @@ export class PrepayService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { tenant: { select: { name: true } } },
+        include: { tenant: { select: { name: true, phone: true } } },
       }),
       this.prisma.prepayAccount.count({ where }),
     ]);
 
+    // PrepayAccount 无 room 关联，批量补充房间号
+    const roomIds = [...new Set(data.map((account) => account.roomId))];
+    const rooms = roomIds.length
+      ? await this.prisma.room.findMany({
+          where: { id: { in: roomIds } },
+          select: { id: true, roomNumber: true },
+        })
+      : [];
+    const roomNumberMap = new Map(rooms.map((room) => [room.id, room.roomNumber]));
+
     return {
-      data,
+      data: data.map((account) => ({
+        ...account,
+        roomNumber: roomNumberMap.get(account.roomId) ?? null,
+      })),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -157,5 +172,117 @@ export class PrepayService {
       data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
+  }
+
+  /**
+   * 登记预付流水（T136）
+   * - RECHARGE：+amount；DEDUCTION / REFUND：-amount（不允许透支）
+   * - ADJUSTMENT：按 amount 符号增减（管理员手动修正，可为负，不做余额校验）
+   * - 事务内：更新余额缓存 + 写流水（balanceAfter = 操作后余额）
+   * - 扣费/退款用条件更新（balanceCache >= 扣减额）防止并发透支
+   */
+  async recordTransaction(
+    accountId: string,
+    dto: CreatePrepayTransactionDto,
+    operatorId: string,
+  ) {
+    const signedAmount = this.resolveSignedAmount(dto);
+
+    return this.prisma.$transaction(async (tx) => {
+      const account = await tx.prepayAccount.findUnique({ where: { id: accountId } });
+
+      if (!account) {
+        throw new NotFoundException('预付账户不存在');
+      }
+
+      let updated;
+
+      if (signedAmount > 0) {
+        updated = await tx.prepayAccount.update({
+          where: { id: accountId },
+          data: { balanceCache: { increment: signedAmount } },
+        });
+      } else if (dto.type === 'ADJUSTMENT') {
+        updated = await tx.prepayAccount.update({
+          where: { id: accountId },
+          data: { balanceCache: { decrement: -signedAmount } },
+        });
+      } else {
+        const result = await tx.prepayAccount.updateMany({
+          where: { id: accountId, balanceCache: { gte: -signedAmount } },
+          data: { balanceCache: { decrement: -signedAmount } },
+        });
+
+        if (result.count === 0) {
+          throw new BadRequestException('余额不足，无法扣费/退款');
+        }
+
+        updated = await tx.prepayAccount.findUniqueOrThrow({ where: { id: accountId } });
+      }
+
+      const transaction = await tx.prepayTransaction.create({
+        data: {
+          accountId,
+          type: dto.type as any,
+          amount: signedAmount,
+          balanceAfter: updated.balanceCache,
+          relatedId: dto.relatedId,
+          relatedType: dto.relatedType as any,
+          description: dto.description,
+          operatorId,
+        },
+      });
+
+      return { transaction, account: updated };
+    });
+  }
+
+  /**
+   * 账户流水（分页，按时间倒序）
+   */
+  async findAccountTransactions(accountId: string, query: QueryPrepayTransactionsDto) {
+    const account = await this.prisma.prepayAccount.findUnique({ where: { id: accountId } });
+
+    if (!account) {
+      throw new NotFoundException('预付账户不存在');
+    }
+
+    const { page = 1, limit = 20 } = query;
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.prisma.prepayTransaction.findMany({
+        where: { accountId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.prepayTransaction.count({ where: { accountId } }),
+    ]);
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  /**
+   * 按类型决定流水金额方向
+   * - RECHARGE / DEDUCTION / REFUND：amount 必须 > 0
+   * - ADJUSTMENT：amount ≠ 0（可为负）
+   */
+  private resolveSignedAmount(dto: CreatePrepayTransactionDto): number {
+    if (dto.type === 'ADJUSTMENT') {
+      if (dto.amount === 0) {
+        throw new BadRequestException('调整金额不能为 0');
+      }
+      return dto.amount;
+    }
+
+    if (dto.amount <= 0) {
+      throw new BadRequestException(`${dto.type} 金额必须大于 0`);
+    }
+
+    return dto.type === 'RECHARGE' ? dto.amount : -dto.amount;
   }
 }
