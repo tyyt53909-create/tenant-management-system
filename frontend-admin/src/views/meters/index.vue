@@ -48,8 +48,10 @@
             {{ new Date(row.createdAt).toLocaleString('zh-CN') }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
+            <el-button type="success" link :disabled="!row.isActive" @click="handleReading(row)">读数</el-button>
+            <el-button type="primary" link @click="handleViewReadings(row)">记录</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
@@ -100,6 +102,78 @@
         <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 讀數登記 -->
+    <el-dialog v-model="readingDialogVisible" title="登记读数" width="520px">
+      <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
+        <el-descriptions-item label="表号">{{ currentMeter?.meterNumber }}</el-descriptions-item>
+        <el-descriptions-item label="单价">
+          ¥{{ ((currentMeter?.unitPrice || 0) / 100).toFixed(2) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <el-alert
+        v-if="readingResultText"
+        :title="readingResultText"
+        :type="readingResultType"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+
+      <el-form ref="readingFormRef" :model="readingForm" :rules="readingRules" label-width="100px">
+        <el-form-item label="当前读数" prop="currentReading">
+          <el-input-number v-model="readingForm.currentReading" :min="0" :precision="2" :step="10" />
+        </el-form-item>
+        <el-form-item label="读数时间">
+          <el-date-picker
+            v-model="readingForm.readingTime"
+            type="datetime"
+            placeholder="缺省为当前时间"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+          />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="readingForm.notes" placeholder="选填" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="readingDialogVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="readingSubmitLoading" @click="handleReadingSubmit">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 讀數記錄 -->
+    <el-dialog v-model="readingsDialogVisible" title="读数记录" width="680px">
+      <el-table :data="readings" v-loading="readingsLoading" size="small" border>
+        <el-table-column label="读数时间" width="160">
+          <template #default="{ row }">{{ formatDateTime(row.readingTime) }}</template>
+        </el-table-column>
+        <el-table-column label="上次读数" width="100">
+          <template #default="{ row }">{{ Number(row.previousReading).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="本次读数" width="100">
+          <template #default="{ row }">{{ Number(row.currentReading).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="用量" width="90">
+          <template #default="{ row }">{{ Number(row.usage).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column prop="notes" label="备注" show-overflow-tooltip />
+      </el-table>
+      <div style="margin-top: 16px; text-align: right">
+        <el-pagination
+          v-model:current-page="readingsPagination.page"
+          v-model:page-size="readingsPagination.limit"
+          :total="readingsPagination.total"
+          layout="total, prev, pager, next"
+          @current-change="loadReadings"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="readingsDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -107,7 +181,15 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
-import { getMeters, createMeter, updateMeter, deleteMeter } from '@/api/meters';
+import {
+  getMeters,
+  createMeter,
+  updateMeter,
+  deleteMeter,
+  createMeterReading,
+  getMeterReadings,
+} from '@/api/meters';
+import type { MeterReading } from '@/api/meters';
 import type { Meter } from '@/types';
 
 const loading = ref(false);
@@ -117,6 +199,24 @@ const dialogTitle = ref('新增水电表');
 const formRef = ref<FormInstance>();
 const tableData = ref<Meter[]>([]);
 const currentEditId = ref('');
+
+// ── 讀數登記（T137）──
+const readingDialogVisible = ref(false);
+const readingSubmitLoading = ref(false);
+const readingFormRef = ref<FormInstance>();
+const currentMeter = ref<Meter | null>(null);
+const readingResultText = ref('');
+const readingResultType = ref<'success' | 'warning'>('success');
+const readingForm = reactive({ currentReading: 0, readingTime: '', notes: '' });
+const readingRules = {
+  currentReading: [{ required: true, message: '请输入当前读数', trigger: 'blur' }],
+};
+
+// ── 讀數記錄 ──
+const readingsDialogVisible = ref(false);
+const readingsLoading = ref(false);
+const readings = ref<MeterReading[]>([]);
+const readingsPagination = reactive({ page: 1, limit: 20, total: 0 });
 
 const queryForm = reactive({ meterType: '' });
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
@@ -236,6 +336,79 @@ const handleSubmit = async () => {
       submitLoading.value = false;
     }
   });
+};
+
+const formatDateTime = (value: string) => (value ? value.replace('T', ' ').slice(0, 19) : '-');
+
+// ── 讀數登記 ──
+
+const handleReading = (row: Meter) => {
+  currentMeter.value = row;
+  readingForm.currentReading = 0;
+  readingForm.readingTime = '';
+  readingForm.notes = '';
+  readingResultText.value = '';
+  readingDialogVisible.value = true;
+};
+
+const handleReadingSubmit = async () => {
+  const meter = currentMeter.value;
+  if (!readingFormRef.value || !meter) return;
+  await readingFormRef.value.validate(async (valid) => {
+    if (!valid) return;
+    readingSubmitLoading.value = true;
+    try {
+      const result = await createMeterReading(meter.id, {
+        currentReading: readingForm.currentReading,
+        readingTime: readingForm.readingTime || undefined,
+        notes: readingForm.notes || undefined,
+      });
+      const usage = Number(result.reading.usage).toFixed(2);
+      const deduction = result.deduction;
+      if (!deduction.applied) {
+        readingResultText.value = `用量 ${usage}；未扣费：${deduction.reason}`;
+        readingResultType.value = 'warning';
+      } else if (deduction.shortfall > 0) {
+        readingResultText.value = `用量 ${usage}；已扣费 ¥${(deduction.deducted / 100).toFixed(2)}；余额不足，已生成补缴账单 ¥${(deduction.shortfall / 100).toFixed(2)}`;
+        readingResultType.value = 'warning';
+      } else {
+        readingResultText.value = `用量 ${usage}；已扣费 ¥${(deduction.deducted / 100).toFixed(2)}`;
+        readingResultType.value = 'success';
+      }
+      ElMessage.success('读数登记成功');
+    } catch {
+      // 请求拦截器已弹出错误提示
+    } finally {
+      readingSubmitLoading.value = false;
+    }
+  });
+};
+
+// ── 讀數記錄 ──
+
+const handleViewReadings = (row: Meter) => {
+  currentMeter.value = row;
+  readingsPagination.page = 1;
+  readingsDialogVisible.value = true;
+  loadReadings();
+};
+
+const loadReadings = async () => {
+  const meter = currentMeter.value;
+  if (!meter) return;
+  readingsLoading.value = true;
+  try {
+    const response = await getMeterReadings(meter.id, {
+      page: readingsPagination.page,
+      limit: readingsPagination.limit,
+    });
+    readings.value = response.data;
+    readingsPagination.total = response.meta.total;
+  } catch {
+    // 请求拦截器已弹出错误提示
+  } finally {
+    readingsLoading.value = false;
+  }
 };
 
 onMounted(fetchData);

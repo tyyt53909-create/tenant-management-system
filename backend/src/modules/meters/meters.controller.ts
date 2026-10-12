@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { MetersService } from './meters.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
+import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
+import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -22,6 +24,26 @@ export class MetersController {
   @Get()
   findAll(@Query() query: QueryMetersDto) {
     return this.metersService.findAll(query);
+  }
+
+  // 登記讀數（自動扣費，僅 ADMIN）
+  @Post(':id/readings')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  createReading(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: CreateMeterReadingDto,
+  ) {
+    return this.metersService.createReading(id, dto, req.user.userId);
+  }
+
+  // 讀數歷史（分頁）
+  @Get(':id/readings')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findReadings(@Param('id') id: string, @Query() query: QueryMeterReadingsDto) {
+    return this.metersService.findReadings(id, query);
   }
 
   @Get(':id')
