@@ -44,6 +44,7 @@ jobs:
       
       - name: 运行文档检查（警告模式）
         run: |
+          export NODE_PATH=$(npm root -g)
           node scripts/check-docs.js
         env:
           DOCS_STRICT_MODE: 'false'
