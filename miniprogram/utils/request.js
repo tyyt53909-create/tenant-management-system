@@ -1,5 +1,4 @@
-// API 基础配置（T138：必须带 /api 前缀，否则全部 404）
-const BASE_URL = 'http://localhost:3000/api'
+import { API_BASE_URL } from './api-config.js'
 
 // 请求拦截器
 const request = (options) => {
@@ -8,7 +7,7 @@ const request = (options) => {
     const token = uni.getStorageSync('access_token')
     
     uni.request({
-      url: BASE_URL + options.url,
+      url: API_BASE_URL + options.url,
       method: options.method || 'GET',
       data: options.data || {},
       header: {
