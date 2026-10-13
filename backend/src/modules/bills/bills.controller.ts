@@ -4,6 +4,7 @@ import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
 import { QueryBillsDto } from './dto/query-bills.dto.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
+import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -72,6 +73,22 @@ export class BillsController {
   @Roles('ADMIN')
   findPayments(@Param('id') id: string) {
     return this.billsService.findPayments(id);
+  }
+
+  // 添加/确认滞纳金（管理者）：不带 confirmedAmount 生成建议值，带则确认入账
+  @Post(':id/late-fees')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  addLateFee(@Request() req: any, @Param('id') id: string, @Body() dto: CreateLateFeeDto) {
+    return this.billsService.addLateFee(id, dto, req.user.userId);
+  }
+
+  // 滞纳金记录（管理者，含计算过程）
+  @Get(':id/late-fees')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findLateFees(@Param('id') id: string) {
+    return this.billsService.findLateFees(id);
   }
 
   @Delete(':id')

@@ -26,6 +26,12 @@ describe('BillsService', () => {
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      lateFee: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
@@ -271,6 +277,171 @@ describe('BillsService', () => {
       expect(prisma.paymentRecord.findMany).toHaveBeenCalledWith({
         where: { billId },
         orderBy: { paidAt: 'desc' },
+      });
+    });
+  });
+
+  describe('addLateFee', () => {
+    const rule = { graceDays: 3, dailyRate: 0.003, cap: 50000 };
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
+
+    const overdueBill = (overrides: any = {}) => ({
+      id: billId,
+      amount: 200000,
+      paidAmount: 0,
+      status: 'OVERDUE',
+      dueDate: daysAgo(10),
+      contract: { lateFeeRule: rule },
+      ...overrides,
+    });
+
+    it('账单不存在 → NotFoundException', async () => {
+      prisma.bill.findUnique.mockResolvedValue(null);
+
+      await expect(service.addLateFee(billId, {}, operatorId)).rejects.toThrow(NotFoundException);
+      expect(prisma.lateFee.create).not.toHaveBeenCalled();
+    });
+
+    it('PAID / CANCELLED 状态不可添加滞纳金 → BadRequestException', async () => {
+      for (const status of ['PAID', 'CANCELLED']) {
+        prisma.bill.findUnique.mockResolvedValue(overdueBill({ status }));
+
+        await expect(service.addLateFee(billId, {}, operatorId)).rejects.toThrow(
+          BadRequestException,
+        );
+      }
+      expect(prisma.lateFee.create).not.toHaveBeenCalled();
+    });
+
+    it('未逾期（到期日当天不算）→ BadRequestException', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill({ dueDate: new Date() }));
+
+      await expect(service.addLateFee(billId, {}, operatorId)).rejects.toThrow(
+        '账单尚未逾期，无需计算滞纳金',
+      );
+      expect(prisma.lateFee.create).not.toHaveBeenCalled();
+    });
+
+    it('未缴金额为 0（已缴清）→ BadRequestException', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill({ paidAmount: 200000 }));
+
+      await expect(service.addLateFee(billId, {}, operatorId)).rejects.toThrow(
+        '账单已缴清，无需计算滞纳金',
+      );
+    });
+
+    it('生成建议值：按合同规则计算并写入计算过程', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill());
+      prisma.lateFee.findFirst.mockResolvedValue(null);
+      prisma.lateFee.create.mockResolvedValue({ id: 'lf-1', suggestedAmount: 4200 });
+
+      await service.addLateFee(billId, {}, operatorId);
+
+      // 逾期10天 − 宽限3天 = 7 天 × 200000 × 0.003 = 4200
+      expect(prisma.lateFee.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          billId,
+          suggestedAmount: 4200,
+          overdueDays: 10,
+          calculation: expect.objectContaining({
+            effectiveDays: 7,
+            baseAmount: 200000,
+            capped: false,
+          }),
+        }),
+      });
+      expect(prisma.lateFee.update).not.toHaveBeenCalled();
+    });
+
+    it('重复生成建议：刷新未确认建议，不重复建单', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill());
+      prisma.lateFee.findFirst.mockResolvedValue({ id: 'lf-1', confirmedAmount: null });
+      prisma.lateFee.update.mockResolvedValue({ id: 'lf-1', suggestedAmount: 4200 });
+
+      await service.addLateFee(billId, {}, operatorId);
+
+      expect(prisma.lateFee.update).toHaveBeenCalledWith({
+        where: { id: 'lf-1' },
+        data: expect.objectContaining({ suggestedAmount: 4200, overdueDays: 10 }),
+      });
+      expect(prisma.lateFee.create).not.toHaveBeenCalled();
+    });
+
+    it('确认入账：写入确认金额、确认人与备注（可调整金额）', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill());
+      prisma.lateFee.findFirst.mockResolvedValue({ id: 'lf-1', confirmedAmount: null });
+      prisma.lateFee.update.mockResolvedValue({ id: 'lf-1', confirmedAmount: 3800 });
+
+      await service.addLateFee(billId, { confirmedAmount: 3800, notes: '协商减免' }, operatorId);
+
+      expect(prisma.lateFee.update).toHaveBeenCalledWith({
+        where: { id: 'lf-1' },
+        data: expect.objectContaining({
+          confirmedAmount: 3800,
+          confirmedBy: operatorId,
+          confirmedAt: expect.any(Date),
+          notes: '协商减免',
+        }),
+      });
+    });
+
+    it('无建议直接确认：建单即确认', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill());
+      prisma.lateFee.findFirst.mockResolvedValue(null);
+      prisma.lateFee.create.mockResolvedValue({ id: 'lf-2', confirmedAmount: 4200 });
+
+      await service.addLateFee(billId, { confirmedAmount: 4200 }, operatorId);
+
+      expect(prisma.lateFee.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          billId,
+          suggestedAmount: 4200,
+          confirmedAmount: 4200,
+          confirmedBy: operatorId,
+        }),
+      });
+    });
+
+    it('重复确认 → ConflictException，不写记录', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill());
+      prisma.lateFee.findFirst
+        .mockResolvedValueOnce(null) // 未确认建议不存在
+        .mockResolvedValueOnce({ id: 'lf-done', confirmedAmount: 4200 }); // 已有确认记录
+
+      await expect(
+        service.addLateFee(billId, { confirmedAmount: 4200 }, operatorId),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.lateFee.create).not.toHaveBeenCalled();
+    });
+
+    it('已确认后再生成建议 → ConflictException', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill());
+      prisma.lateFee.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'lf-done', confirmedAmount: 4200 });
+
+      await expect(service.addLateFee(billId, {}, operatorId)).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('findLateFees', () => {
+    it('账单不存在 → NotFoundException', async () => {
+      prisma.bill.findUnique.mockResolvedValue(null);
+
+      await expect(service.findLateFees(billId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('返回滞纳金记录（含计算过程，按创建时间倒序）', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId });
+      const records = [{ id: 'lf-1', suggestedAmount: 4200 }];
+      prisma.lateFee.findMany.mockResolvedValue(records);
+
+      const result = await service.findLateFees(billId);
+
+      expect(result).toEqual(records);
+      expect(prisma.lateFee.findMany).toHaveBeenCalledWith({
+        where: { billId },
+        orderBy: { createdAt: 'desc' },
       });
     });
   });
