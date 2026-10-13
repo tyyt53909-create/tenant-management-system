@@ -19,12 +19,17 @@ export class BuildingsController {
     return this.buildingsService.create(createBuildingDto);
   }
 
+  // 楼栋信息（含地址/房东元数据）：仅管理者（docs/03-权限矩阵.md §3.10 系统配置）
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findAll(@Query() query: QueryBuildingsDto) {
     return this.buildingsService.findAll(query);
   }
 
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findOne(@Param('id') id: string) {
     return this.buildingsService.findOne(id);
   }

@@ -16,6 +16,7 @@ describe('TenantsController', () => {
             create: vi.fn(),
             findAll: vi.fn(),
             findOne: vi.fn(),
+            findOneForTenant: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
           },
@@ -70,7 +71,7 @@ describe('TenantsController', () => {
   });
 
   describe('findOne', () => {
-    it('应该返回租客详情', async () => {
+    it('管理者应该返回任意租客详情', async () => {
       const mockTenant = {
         id: 'tenant-123',
         name: '张三',
@@ -79,10 +80,27 @@ describe('TenantsController', () => {
 
       vi.spyOn(service, 'findOne').mockResolvedValue(mockTenant as any);
 
-      const result = await controller.findOne('tenant-123');
+      const result = await controller.findOne({ user: { role: 'ADMIN' } }, 'tenant-123');
 
       expect(result.id).toBe('tenant-123');
       expect(service.findOne).toHaveBeenCalledWith('tenant-123');
+    });
+
+    it('租客查看详情应走 findOneForTenant（只允许自己）', async () => {
+      const mockTenant = { id: 'tenant-123', name: '张三' };
+      const spyForTenant = vi
+        .spyOn(service, 'findOneForTenant')
+        .mockResolvedValue(mockTenant as any);
+      const spyFindOne = vi.spyOn(service, 'findOne');
+
+      const result = await controller.findOne(
+        { user: { role: 'TENANT', tenantId: 'tenant-123' } },
+        'tenant-123',
+      );
+
+      expect(result.id).toBe('tenant-123');
+      expect(spyForTenant).toHaveBeenCalledWith('tenant-123', 'tenant-123');
+      expect(spyFindOne).not.toHaveBeenCalled();
     });
   });
 

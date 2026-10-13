@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { TenantsService } from './tenants.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
@@ -19,13 +19,22 @@ export class TenantsController {
     return this.tenantsService.create(createTenantDto);
   }
 
+  // 租客列表：仅管理者（docs/03-权限矩阵.md §3.2，保洁/租客均不可见租客列表）
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findAll(@Query() query: QueryTenantsDto) {
     return this.tenantsService.findAll(query);
   }
 
+  // 租客详情：管理者看全部；租客仅可看自己（越权按 404 处理）
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TENANT')
+  findOne(@Request() req: any, @Param('id') id: string) {
+    if (req.user?.role === 'TENANT') {
+      return this.tenantsService.findOneForTenant(id, req.user?.tenantId);
+    }
     return this.tenantsService.findOne(id);
   }
 

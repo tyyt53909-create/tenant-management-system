@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { CheckoutService } from './checkout.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
@@ -19,13 +19,25 @@ export class CheckoutController {
     return this.checkoutService.create(createCheckoutDto);
   }
 
+  // 退租记录列表：管理者看全部，租客仅自己的记录（保洁无权限，docs/03-权限矩阵.md §3.7）
   @Get()
-  findAll(@Query() query: QueryCheckoutsDto) {
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TENANT')
+  findAll(@Request() req: any, @Query() query: QueryCheckoutsDto) {
+    if (req.user?.role === 'TENANT') {
+      return this.checkoutService.findByTenant(req.user?.tenantId, query);
+    }
     return this.checkoutService.findAll(query);
   }
 
+  // 退租记录详情：租客仅自己的记录（越权按 404 处理）
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TENANT')
+  findOne(@Request() req: any, @Param('id') id: string) {
+    if (req.user?.role === 'TENANT') {
+      return this.checkoutService.findOneForTenant(id, req.user?.tenantId);
+    }
     return this.checkoutService.findOne(id);
   }
 

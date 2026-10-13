@@ -21,7 +21,10 @@ export class MetersController {
     return this.metersService.create(createMeterDto);
   }
 
+  // 水电表档案：仅管理者（docs/03-权限矩阵.md §3.5，租客仅可看自己房间读数）
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findAll(@Query() query: QueryMetersDto) {
     return this.metersService.findAll(query);
   }
@@ -47,6 +50,8 @@ export class MetersController {
   }
 
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   findOne(@Param('id') id: string) {
     return this.metersService.findOne(id);
   }

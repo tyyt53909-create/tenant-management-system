@@ -599,4 +599,140 @@ describe('BillsService', () => {
       });
     });
   });
+
+  describe('账单 CRUD（T148 核心业务覆盖率补齐）', () => {
+    it('create：合同不存在 → 400', async () => {
+      prisma.contract.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create({ contractId: 'c-x', billType: 'RENT', period: '2026-11', amount: 100, dueDate: '2026-11-05' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.bill.create).not.toHaveBeenCalled();
+    });
+
+    it('create：成功 → 生成账单编号与应缴日期', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.bill.create.mockResolvedValue({ id: billId });
+
+      await service.create({
+        contractId: 'contract-1',
+        billType: 'RENT',
+        period: '2026-11',
+        amount: 100000,
+        dueDate: '2026-11-05',
+      } as any);
+
+      expect(prisma.bill.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          contractId: 'contract-1',
+          billNumber: expect.stringMatching(/^B\d+[A-Z0-9]+$/),
+          amount: 100000,
+          dueDate: expect.any(Date),
+          snapshot: {},
+        }),
+      });
+    });
+
+    it('findAll：status/billType/contractId 过滤 + 分页', async () => {
+      prisma.bill.findMany.mockResolvedValue([]);
+      prisma.bill.count.mockResolvedValue(0);
+
+      const result = await service.findAll({
+        page: 2,
+        limit: 10,
+        status: 'PENDING',
+        billType: 'RENT',
+        contractId: 'contract-1',
+      } as any);
+
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: 'PENDING', billType: 'RENT', contractId: 'contract-1' },
+          skip: 10,
+          take: 10,
+        }),
+      );
+      expect(result.meta).toEqual({ page: 2, limit: 10, total: 0, totalPages: 0 });
+    });
+
+    it('findOne：不存在 → 404', async () => {
+      prisma.bill.findUnique.mockResolvedValue(null);
+
+      await expect(service.findOne(billId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('update：仅更新传入字段', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId });
+      prisma.bill.update.mockResolvedValue({ id: billId, status: 'CANCELLED' });
+
+      await service.update(billId, { status: 'CANCELLED', dueDate: '2026-12-05' } as any);
+
+      expect(prisma.bill.update).toHaveBeenCalledWith({
+        where: { id: billId },
+        data: { status: 'CANCELLED', dueDate: expect.any(Date) },
+      });
+    });
+
+    it('update：不存在 → 404', async () => {
+      prisma.bill.findUnique.mockResolvedValue(null);
+
+      await expect(service.update(billId, {} as any)).rejects.toThrow(NotFoundException);
+    });
+
+    it('remove：删除账单', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId });
+      prisma.bill.delete.mockResolvedValue({ id: billId });
+
+      await expect(service.remove(billId)).resolves.toEqual({ message: '账单已删除' });
+    });
+
+    it('remove：不存在 → 404', async () => {
+      prisma.bill.findUnique.mockResolvedValue(null);
+
+      await expect(service.remove(billId)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('租客数据隔离（T148）', () => {
+    it('findByTenant：服务端固定按 contract.tenantId 过滤', async () => {
+      prisma.bill.findMany.mockResolvedValue([]);
+      prisma.bill.count.mockResolvedValue(0);
+
+      await service.findByTenant('tenant-1', { page: 1, limit: 20, status: 'PENDING' } as any);
+
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { contract: { tenantId: 'tenant-1' }, status: 'PENDING' },
+        }),
+      );
+    });
+
+    it('findOneForTenant：自己的账单 → 返回，且滞纳金仅含已确认金额', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: billId,
+        contract: { tenantId: 'tenant-1' },
+      });
+
+      const result = await service.findOneForTenant(billId, 'tenant-1');
+
+      expect(result.id).toBe(billId);
+      const args = prisma.bill.findUnique.mock.calls[0][0];
+      expect(args.include.lateFees.where).toEqual({ confirmedAmount: { not: null } });
+    });
+
+    it('findOneForTenant：他人账单 → 404（不暴露存在性）', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: billId,
+        contract: { tenantId: 'tenant-2' },
+      });
+
+      await expect(service.findOneForTenant(billId, 'tenant-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('findOneForTenant：账单不存在 → 404', async () => {
+      prisma.bill.findUnique.mockResolvedValue(null);
+
+      await expect(service.findOneForTenant(billId, 'tenant-1')).rejects.toThrow(NotFoundException);
+    });
+  });
 });

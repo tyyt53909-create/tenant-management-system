@@ -4,6 +4,28 @@ import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
 import { QueryTenantsDto } from './dto/query-tenants.dto.js';
 
+/**
+ * 租客对外字段白名单（T148 脱敏）
+ *
+ * 显式列出可返回字段，避免未来给 Tenant 增加敏感列（证件号、银行卡号等）时被
+ * findMany / findUnique 全字段自动带出。证件号位于 TenantRegistration.idNumber
+ * （docs/02-数据模型.md：字段级加密、仅管理者可见），本模块任何响应都不得包含。
+ */
+export const TENANT_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  phone: true,
+  email: true,
+  emergencyContact: true,
+  emergencyPhone: true,
+  tags: true,
+  notes: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+  userId: true,
+} as const;
+
 @Injectable()
 export class TenantsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -63,6 +85,8 @@ export class TenantsService {
         orderBy: {
           createdAt: 'desc',
         },
+        // 白名单字段：不返回证件号等敏感信息（T148）
+        select: TENANT_PUBLIC_SELECT,
       }),
       this.prisma.tenant.count({ where }),
     ]);
@@ -81,7 +105,9 @@ export class TenantsService {
   async findOne(id: string) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id },
-      include: {
+      // 白名单字段 + 账号信息（不含证件号），T148 脱敏
+      select: {
+        ...TENANT_PUBLIC_SELECT,
         user: {
           select: {
             id: true,
@@ -93,6 +119,20 @@ export class TenantsService {
     });
 
     if (!tenant) {
+      throw new NotFoundException('租客不存在');
+    }
+
+    return tenant;
+  }
+
+  /**
+   * 租客查看自己的档案（docs/03-权限矩阵.md §3.2：租客仅可查看自己）
+   * 非本人（或未绑定租客档案）一律按不存在处理，避免探测他人 ID
+   */
+  async findOneForTenant(id: string, tenantId?: string) {
+    const tenant = await this.findOne(id);
+
+    if (!tenantId || tenant.id !== tenantId) {
       throw new NotFoundException('租客不存在');
     }
 

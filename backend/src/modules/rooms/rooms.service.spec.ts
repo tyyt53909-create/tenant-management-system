@@ -549,4 +549,62 @@ describe('RoomsService', () => {
       expect(notifications.create).not.toHaveBeenCalled();
     });
   });
+
+  describe('租客（TENANT）可见性（T148）', () => {
+    const tenantRoom = { id: 'room-t1', roomNumber: '301', status: 'OCCUPIED', cleanStatus: 'CLEAN' };
+
+    it('列表：租客仅查询自己租住（合同归属）的房间', async () => {
+      vi.spyOn(prisma.room, 'findMany').mockResolvedValue([] as any);
+      vi.spyOn(prisma.room, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 1, limit: 20, status: 'VACANT' } as any, 'TENANT', 'tenant-1');
+
+      expect(prisma.room.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ contracts: { some: { tenantId: 'tenant-1' } } }),
+        }),
+      );
+    });
+
+    it('列表：租客账号未绑定租客档案 → 空结果（不泄漏全部房间）', async () => {
+      vi.spyOn(prisma.room, 'findMany').mockResolvedValue([] as any);
+      vi.spyOn(prisma.room, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 1, limit: 20 } as any, 'TENANT');
+
+      expect(prisma.room.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { in: [] } }),
+        }),
+      );
+    });
+
+    it('详情：租客查看自己租住的房间 → 返回', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(tenantRoom as any);
+      vi.spyOn(prisma.contract, 'findFirst').mockResolvedValue({ id: 'contract-1' } as any);
+
+      const result = await service.findOne('room-t1', 'TENANT', 'tenant-1');
+
+      expect(result.id).toBe('room-t1');
+      expect(prisma.contract.findFirst).toHaveBeenCalledWith({
+        where: { roomId: 'room-t1', tenantId: 'tenant-1' },
+        select: { id: true },
+      });
+    });
+
+    it('详情：租客查看他人房间 → 403', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(tenantRoom as any);
+      vi.spyOn(prisma.contract, 'findFirst').mockResolvedValue(null);
+
+      await expect(service.findOne('room-t1', 'TENANT', 'tenant-other')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('详情：租客账号未绑定租客档案 → 403', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(tenantRoom as any);
+
+      await expect(service.findOne('room-t1', 'TENANT')).rejects.toThrow(ForbiddenException);
+    });
+  });
 });
