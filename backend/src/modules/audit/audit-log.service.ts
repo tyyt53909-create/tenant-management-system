@@ -34,6 +34,11 @@ export class AuditLogService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        // 审计的核心是「谁做的」，必须带出操作者信息；
+        // 此前只存 userId 不 include，前端拿不到可读的操作者
+        include: {
+          user: { select: { id: true, email: true, role: true } },
+        },
       }),
       this.prisma.auditLog.count({ where: where as never }),
     ]);

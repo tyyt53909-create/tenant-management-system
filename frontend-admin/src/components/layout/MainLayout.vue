@@ -73,6 +73,10 @@
           <el-icon><TrendCharts /></el-icon>
           <span>统计报表</span>
         </el-menu-item>
+        <el-menu-item index="/audit">
+          <el-icon><Tickets /></el-icon>
+          <span>审计日志</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 

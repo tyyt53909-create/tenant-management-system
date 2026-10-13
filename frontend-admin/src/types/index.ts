@@ -207,6 +207,24 @@ export interface Maintenance {
   updatedAt: string;
 }
 
+/** 审计日志（后台写操作自动记录，由 AuditLogInterceptor 产生） */
+export interface AuditLog {
+  id: string;
+  userId: string;
+  /** 形如 "POST /api/rooms" */
+  action: string;
+  entityType: string;
+  /** 路径参数 id；列表类操作为 "-" */
+  entityId: string;
+  /** 请求体/参数/查询快照 */
+  changes: Record<string, unknown> | null;
+  ip: string;
+  userAgent: string;
+  createdAt: string;
+  /** 操作者（后端 include 带出） */
+  user?: { id: string; email: string | null; role: string } | null;
+}
+
 /** 通知优先级（与后端 NotificationPriority 枚举一致，docs/09 待确认清单 §12：两级） */
 export type NotificationPriority = 'NORMAL' | 'URGENT';
 
