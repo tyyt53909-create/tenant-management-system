@@ -69,6 +69,10 @@
             />
           </template>
         </el-menu-item>
+        <el-menu-item index="/statistics">
+          <el-icon><TrendCharts /></el-icon>
+          <span>统计报表</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -117,6 +121,7 @@ import {
   Odometer,
   Switch,
   Bell,
+  TrendCharts,
   ArrowDown,
 } from '@element-plus/icons-vue';
 
