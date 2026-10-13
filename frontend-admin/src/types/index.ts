@@ -106,6 +106,61 @@ export interface Bill {
   updatedAt: string;
 }
 
+/** 滞纳金计算规则快照（合同 lateFeeRule 归一化，金额单位：分） */
+export interface LateFeeRuleSnapshot {
+  /** 宽限天数（逾期前 N 天不计收） */
+  graceDays: number;
+  /** 按日比例（与 fixedDaily 二选一，优先本项） */
+  dailyRate: number | null;
+  /** 固定金额（分/天） */
+  fixedDaily: number | null;
+  /** 封顶金额（分），null 表示不封顶 */
+  cap: number | null;
+}
+
+/** 滞纳金计算过程（后端 LateFee.calculation，管理者可见） */
+export interface LateFeeCalculation {
+  rule: LateFeeRuleSnapshot;
+  /** 逾期天数（自然日，到期日当天不计） */
+  overdueDays: number;
+  /** 计费天数（逾期天数 − 宽限天数，最小 0） */
+  effectiveDays: number;
+  /** 计费基数（未缴金额，分） */
+  baseAmount: number;
+  /** 封顶前金额（分） */
+  rawAmount: number;
+  /** 是否触发封顶 */
+  capped: boolean;
+}
+
+/**
+ * 滞纳金记录（GET / POST /bills/:id/late-fees）
+ *
+ * 语义（T140/T141）：
+ * - `confirmedAmount === null`：仅有系统建议值，**尚未入账**，仅供参考；
+ * - `confirmedAmount` 写入：管理者确认入账（可为 0，表示减免）；
+ * - `settledAmount`：收款核销时累加，`settledAmount >= confirmedAmount` 视为已核销。
+ */
+export interface LateFee {
+  id: string;
+  billId: string;
+  /** 系统建议值（分，不自动入账） */
+  suggestedAmount: number;
+  /** 管理者确认金额（分）；null = 尚未确认 */
+  confirmedAmount: number | null;
+  /** 逾期天数（自然日） */
+  overdueDays: number;
+  calculation: LateFeeCalculation | null;
+  notes: string | null;
+  confirmedAt: string | null;
+  confirmedBy: string | null;
+  /** 已核销金额（分，部分核销累加） */
+  settledAmount: number | null;
+  settledAt: string | null;
+  settledBy: string | null;
+  createdAt: string;
+}
+
 // 报修
 export interface Maintenance {
   id: string;
@@ -136,18 +191,70 @@ export interface Meter {
   updatedAt: string;
 }
 
+// 退租结算项类别（与后端 CheckoutItemType 枚举一一对应）
+export type CheckoutItemType =
+  | 'RENT_REFUND' // 租金退还
+  | 'DEPOSIT_REFUND' // 押金退还
+  | 'DEPOSIT_DEDUCTION' // 押金扣除
+  | 'UTILITY_REFUND' // 水电余额退还
+  | 'OTHER_FEE' // 其他费用
+  | 'OTHER_REFUND'; // 其他退款
+
+// 退租结算明细项（接口返回结构，amount 单位为分）
+export interface CheckoutItem {
+  id?: string;
+  checkoutId?: string;
+  itemType: CheckoutItemType;
+  description: string;
+  /** 金额，单位：分 */
+  amount: number;
+  calculation?: unknown;
+  isAdjusted?: boolean;
+  adjustReason?: string;
+  createdAt?: string;
+}
+
+// 退租结算明细项（提交体，不含服务端生成字段；amount 单位为分）
+export interface CheckoutItemPayload {
+  itemType: CheckoutItemType;
+  description: string;
+  /** 金额，单位：分 */
+  amount: number;
+  calculation?: unknown;
+  isAdjusted?: boolean;
+  adjustReason?: string;
+}
+
 // 退租记录
 export interface CheckoutRecord {
   id: string;
   contractId: string;
   roomId: string;
   checkoutDate: string;
+  /** 退款金额，单位：分 */
   totalRefund: number;
   status: 'DRAFT' | 'PENDING' | 'COMPLETED' | 'CANCELLED';
   notes?: string;
   processedBy: string;
+  processedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 结算明细：列表接口不返回，详情接口（GET /checkout/:id）返回 */
+  items?: CheckoutItem[];
+}
+
+// 新增/编辑退租记录提交体（金额单位均为分）
+export interface CheckoutPayload {
+  contractId: string;
+  roomId: string;
+  checkoutDate: string;
+  /** 退款金额，单位：分 */
+  totalRefund: number;
+  processedBy: string;
+  notes?: string;
+  status?: CheckoutRecord['status'];
+  /** 结算明细：一旦提供，后端要求至少 1 项，且每项必须有类别/说明/非负整数金额（分） */
+  items?: CheckoutItemPayload[];
 }
 
 // 分页响应

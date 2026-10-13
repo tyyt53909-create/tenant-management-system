@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import type { Bill, PaginatedResponse, QueryParams } from '@/types';
+import type { Bill, LateFee, PaginatedResponse, QueryParams } from '@/types';
 
 export const getBills = (params: QueryParams): Promise<PaginatedResponse<Bill>> => {
   return request.get('/bills', { params });
@@ -61,4 +61,30 @@ export const addPayment = (billId: string, data: PaymentPayload): Promise<AddPay
 /** 账单收款流水 */
 export const getPayments = (billId: string): Promise<PaymentRecordItem[]> => {
   return request.get(`/bills/${billId}/payments`);
+};
+
+// ── 滞纳金（T151）──
+
+export interface LateFeePayload {
+  /**
+   * 管理者确认金额（单位：分）。
+   * - 不传：仅生成 / 刷新系统建议值（不生效、不入账）
+   * - 传入：确认入账（可调整，0 表示减免）
+   */
+  confirmedAmount?: number;
+  notes?: string;
+}
+
+/** 账单滞纳金记录（含计算过程，管理者可见） */
+export const getLateFees = (billId: string): Promise<LateFee[]> => {
+  return request.get(`/bills/${billId}/late-fees`);
+};
+
+/**
+ * 添加 / 确认滞纳金
+ * - 不传 confirmedAmount：仅生成或刷新系统建议值（不生效）
+ * - 传 confirmedAmount：管理者确认入账（单位：分，可为 0）
+ */
+export const addLateFee = (billId: string, data: LateFeePayload = {}): Promise<LateFee> => {
+  return request.post(`/bills/${billId}/late-fees`, data);
 };
