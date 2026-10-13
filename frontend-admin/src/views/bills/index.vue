@@ -626,41 +626,50 @@ const refreshBillLateFees = async (billId: string): Promise<LateFee[]> => {
   return records;
 };
 
-/** 列表行滞纳金：并发上限 4，避免一次性打爆后端 */
-const LATE_FEE_FETCH_CONCURRENCY = 4;
-const fetchLateFeesForBills = async (bills: Bill[]) => {
-  const targets = bills.filter((bill) => bill.status !== 'CANCELLED');
-  if (!targets.length) return;
-
-  const loadingMap: Record<string, boolean> = {};
-  targets.forEach((bill) => {
-    loadingMap[bill.id] = true;
-  });
-  lateFeeLoadingMap.value = { ...lateFeeLoadingMap.value, ...loadingMap };
-
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < targets.length) {
-      const bill = targets[cursor];
-      cursor += 1;
-      try {
-        const records = await getLateFees(bill.id);
-        lateFeeMap.value = { ...lateFeeMap.value, [bill.id]: records };
-      } catch {
-        // 请求拦截器已提示
-      } finally {
-        lateFeeLoadingMap.value = { ...lateFeeLoadingMap.value, [bill.id]: false };
-      }
-    }
-  };
-
-  await Promise.all(
-    Array.from({ length: Math.min(LATE_FEE_FETCH_CONCURRENCY, targets.length) }, () => worker())
-  );
+/**
+ * 列表行滞纳金：直接使用列表接口随行返回的 lateFeeSummary（T157），
+ * 不再对当前页每行发 GET /bills/:id/late-fees（原为 20 次/页的 N+1）。
+ *
+ * 摘要只含 4 个字段，而列表单元格只需要「金额 + 状态」，
+ * 因此这里把摘要适配成 LateFee 的最小形状喂给既有展示函数，
+ * 打开弹窗时再拉取完整明细覆盖（见 openLateFeeDialog）。
+ */
+const summaryToLateFee = (bill: Bill): LateFee | null => {
+  const s = bill.lateFeeSummary;
+  if (!s || s.status === 'none') return null;
+  const confirmed = s.status !== 'suggested';
+  return {
+    id: 'summary-' + bill.id,
+    billId: bill.id,
+    suggestedAmount: s.suggestedAmount,
+    confirmedAmount: confirmed ? s.amount : null,
+    overdueDays: s.overdueDays,
+    calculation: null,
+    notes: null,
+    confirmedAt: null,
+    confirmedBy: null,
+    settledAmount: s.settledAmount,
+    settledAt: null,
+    settledBy: null,
+    createdAt: '',
+  } as unknown as LateFee;
 };
 
-const fetchData = async (options: { refreshLateFees?: boolean } = {}) => {
-  const { refreshLateFees = true } = options;
+const applySummaries = (bills: Bill[]) => {
+  const next: Record<string, LateFee[]> = { ...lateFeeMap.value };
+  bills.forEach((bill) => {
+    // 已有完整明细（弹窗打开过）时不覆盖，避免把完整数据降级成摘要
+    if (next[bill.id] && next[bill.id].length && !String(next[bill.id][0].id).startsWith('summary-')) {
+      return;
+    }
+    const adapted = summaryToLateFee(bill);
+    if (adapted) next[bill.id] = [adapted];
+    else delete next[bill.id];
+  });
+  lateFeeMap.value = next;
+};
+
+const fetchData = async (_options: { refreshLateFees?: boolean } = {}) => {
   loading.value = true;
   try {
     // 空字符串筛选项会被后端 @IsEnum 校验拒绝（400），仅在选中时才传
@@ -670,13 +679,12 @@ const fetchData = async (options: { refreshLateFees?: boolean } = {}) => {
     const response = await getBills(params);
     tableData.value = response.data;
     pagination.total = response.meta.total;
+    // 列表已带滞纳金摘要，直接适配，无需逐行请求
+    applySummaries(tableData.value);
   } catch (error) {
     ElMessage.error('获取数据失败');
   } finally {
     loading.value = false;
-  }
-  if (refreshLateFees) {
-    await fetchLateFeesForBills(tableData.value);
   }
 };
 

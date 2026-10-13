@@ -153,6 +153,53 @@ describe('RoomsService', () => {
         }),
       );
     });
+
+    it('T157 支持清洁状态服务端筛选', async () => {
+      vi.spyOn(prisma.room, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.room, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 1, limit: 20, cleanStatus: 'PENDING_CLEAN' } as any);
+
+      expect(prisma.room.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { cleanStatus: 'PENDING_CLEAN' },
+        }),
+      );
+    });
+
+    it('T157 清洁状态可与房态、楼栋叠加', async () => {
+      vi.spyOn(prisma.room, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.room, 'count').mockResolvedValue(0);
+
+      await service.findAll({
+        page: 1,
+        limit: 20,
+        status: 'VACANT',
+        cleanStatus: 'CLEAN',
+        buildingId: 'b-1',
+      } as any);
+
+      expect(prisma.room.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { buildingId: 'b-1', status: 'VACANT', cleanStatus: 'CLEAN' },
+        }),
+      );
+    });
+
+    it('T157 保洁角色的清洁状态不被查询参数放宽（仍固定待清洁/清洁中）', async () => {
+      vi.spyOn(prisma.room, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.room, 'count').mockResolvedValue(0);
+
+      // 保洁传入 cleanStatus=CLEAN 企图查看已清洁房间
+      await service.findAll(
+        { page: 1, limit: 20, cleanStatus: 'CLEAN' } as any,
+        'CLEANER',
+      );
+
+      const where = (prisma.room.findMany as any).mock.calls[0][0].where;
+      expect(where.cleanStatus).toEqual({ in: ['PENDING_CLEAN', 'CLEANING'] });
+      expect(where.status).toBe('VACANT');
+    });
   });
 
   describe('findOne', () => {

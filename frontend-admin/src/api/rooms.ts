@@ -1,16 +1,19 @@
 import request from '@/utils/request';
-import type { Room, RoomStatus, PaginatedResponse } from '@/types';
+import type { Room, RoomStatus, CleanStatus, PaginatedResponse } from '@/types';
 
 /**
  * GET /rooms 支持的查询参数（后端 QueryRoomsDto）。
  * 后端启用 ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })：
  * 传入未声明字段或空字符串都会返回 400，因此这里做白名单 + 空值过滤。
- * 注意：cleanStatus 不是后端查询参数，清洁状态筛选需前端本地过滤。
+ * 注意：roomNumber 不是后端查询参数，房号筛选仍需前端本地过滤；
+ * cleanStatus 自 T157 起已支持服务端过滤。
  */
 export interface RoomsQuery {
   page?: number;
   limit?: number;
   status?: RoomStatus;
+  /** 清洁状态服务端过滤（T157 起后端支持） */
+  cleanStatus?: CleanStatus;
   buildingId?: string;
   minRent?: number;
   maxRent?: number;
@@ -20,6 +23,7 @@ const ROOMS_QUERY_KEYS: (keyof RoomsQuery)[] = [
   'page',
   'limit',
   'status',
+  'cleanStatus',
   'buildingId',
   'minRent',
   'maxRent',
@@ -95,7 +99,7 @@ export interface AllRoomsResult {
  * 因此保洁相关视图需先加载全量再本地筛选（数量超过 ALL_ROOMS_LIMIT 时截断并标记）。
  */
 export const fetchAllRooms = async (
-  filter: Pick<RoomsQuery, 'status' | 'buildingId'> = {}
+  filter: Pick<RoomsQuery, 'status' | 'buildingId' | 'cleanStatus'> = {}
 ): Promise<AllRoomsResult> => {
   const collected: Room[] = [];
   let total = 0;

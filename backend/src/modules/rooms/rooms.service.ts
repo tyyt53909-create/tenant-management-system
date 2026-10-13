@@ -73,7 +73,7 @@ export class RoomsService {
   }
 
   async findAll(query: QueryRoomsDto, actorRole?: string, actorTenantId?: string) {
-    const { page = 1, limit = 20, status, buildingId } = query;
+    const { page = 1, limit = 20, status, buildingId, cleanStatus } = query;
     const skip = (page - 1) * limit;
 
     // 构建查询条件
@@ -97,6 +97,12 @@ export class RoomsService {
       }
     } else if (status) {
       where.status = status;
+    }
+
+    // 清洁状态过滤（服务端执行，替代前端全量加载后本地过滤）。
+    // 保洁角色的 cleanStatus 由上方固定条件决定，此处不覆盖，避免越权放宽。
+    if (actorRole !== 'CLEANER' && cleanStatus) {
+      where.cleanStatus = cleanStatus;
     }
 
     // 注意：Prisma Schema 中没有 monthlyRent 字段

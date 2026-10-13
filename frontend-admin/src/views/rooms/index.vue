@@ -245,7 +245,10 @@ const queryForm = reactive<{
 
 /** 是否处于「只看待清洁」快捷筛选 */
 const pendingOnly = computed(() => queryForm.cleanStatus === 'PENDING_CLEAN');
-/** 后端 GET /rooms 不支持 roomNumber / cleanStatus，走本地过滤 */
+/**
+ * 仅「房号」需要本地过滤（后端 QueryRoomsDto 无 roomNumber）；
+ * 清洁状态自 T157 起支持服务端过滤（cleanStatus），不再全量加载。
+ */
 const localFilterActive = ref(false);
 const allRoomsTruncated = ref(false);
 
@@ -256,7 +259,7 @@ const pagination = reactive({
 });
 
 const localFilterTip = computed(() => {
-  const base = `房号 / 清洁状态由前端本地过滤（后端暂不支持这两个查询参数），当前匹配 ${pagination.total} 条`;
+  const base = `房号由前端本地过滤（后端暂不支持该查询参数），当前匹配 ${pagination.total} 条`;
   return allRoomsTruncated.value
     ? `${base}；房源总数超过 ${ALL_ROOMS_LIMIT} 条，仅加载前 ${ALL_ROOMS_LIMIT} 条`
     : base;
@@ -287,22 +290,23 @@ const roomTypeMap: Record<string, string> = {
   STUDIO: '开间',
 };
 
-/** 本地过滤：房号模糊匹配 + 清洁状态精确匹配 */
+/** 本地过滤：仅房号模糊匹配（清洁状态已由服务端 cleanStatus 处理） */
 const applyLocalFilters = (rooms: Room[]) => {
   const keyword = queryForm.roomNumber.trim().toLowerCase();
-  return rooms.filter((room) => {
-    const matchesNumber = !keyword || (room.roomNumber || '').toLowerCase().includes(keyword);
-    const matchesClean = !queryForm.cleanStatus || room.cleanStatus === queryForm.cleanStatus;
-    return matchesNumber && matchesClean;
-  });
+  return rooms.filter(
+    (room) => !keyword || (room.roomNumber || '').toLowerCase().includes(keyword),
+  );
 };
 
 const fetchData = async () => {
   loading.value = true;
   try {
-    if (queryForm.roomNumber.trim() || queryForm.cleanStatus) {
-      // 清洁状态 / 房号后端不支持：分页拉全量后本地筛选 + 本地分页
-      const result = await fetchAllRooms(queryForm.status ? { status: queryForm.status } : {});
+    if (queryForm.roomNumber.trim()) {
+      // 房号后端不支持：分页拉全量后本地筛选 + 本地分页
+      const result = await fetchAllRooms({
+        status: queryForm.status || undefined,
+        cleanStatus: queryForm.cleanStatus || undefined,
+      });
       const matched = applyLocalFilters(result.data);
       localFilterActive.value = true;
       allRoomsTruncated.value = result.truncated;
@@ -315,6 +319,8 @@ const fetchData = async () => {
         page: pagination.page,
         limit: pagination.limit,
         status: queryForm.status || undefined,
+        // 清洁状态服务端过滤（T157），替代原先「加载全量后本地过滤」
+        cleanStatus: queryForm.cleanStatus || undefined,
       });
       localFilterActive.value = false;
       allRoomsTruncated.value = false;

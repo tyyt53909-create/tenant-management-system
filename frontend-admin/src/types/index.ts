@@ -107,8 +107,26 @@ export interface Bill {
   paidAmount: number;
   dueDate: string;
   status: 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+  /**
+   * 列表接口随行返回的滞纳金摘要（T157）。
+   * 用于避免对当前页每行再发一次 GET /bills/:id/late-fees（原 N+1）。
+   * 打开滞纳金弹窗时仍会拉取完整明细。
+   */
+  lateFeeSummary?: LateFeeSummary;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 滞纳金摘要（列表展示用，金额单位：分） */
+export interface LateFeeSummary {
+  count: number;
+  status: 'none' | 'suggested' | 'confirmed' | 'settled';
+  /** 已确认合计；未确认时为 null（此时只展示 suggestedAmount） */
+  amount: number | null;
+  suggestedAmount: number;
+  settledAmount: number;
+  pendingSettled: number;
+  overdueDays: number;
 }
 
 /** 滞纳金计算规则快照（合同 lateFeeRule 归一化，金额单位：分） */
