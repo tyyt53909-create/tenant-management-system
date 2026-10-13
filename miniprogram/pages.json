@@ -50,12 +50,6 @@
       }
     },
     {
-      "path": "pages/theme/theme",
-      "style": {
-        "navigationBarTitleText": "主题设置"
-      }
-    },
-    {
       "path": "pages/notifications/notifications",
       "style": {
         "navigationBarTitleText": "通知提醒"
@@ -64,9 +58,9 @@
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "租客管理",
-    "navigationBarBackgroundColor": "#F8F8F8",
-    "backgroundColor": "#F8F8F8"
+    "navigationBarTitleText": "栖居租客",
+    "navigationBarBackgroundColor": "#fffefa",
+    "backgroundColor": "#f5f2ec"
   },
   "tabBar": {
     "color": "#7A7E83",

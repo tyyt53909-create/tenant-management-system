@@ -398,8 +398,8 @@ export const themes = {
 
 export const darkModeColors = darkMode.colors
 
-// 默认主题
-export const defaultTheme = 'standard'
+// 默认主题（栖居版作为唯一主题）
+export const defaultTheme = 'qiju'
 
 // 主题列表（用于选择器）
 export const themeList = [
