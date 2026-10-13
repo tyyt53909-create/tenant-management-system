@@ -106,7 +106,7 @@
               <image class="upload-image" :src="img" mode="aspectFill"></image>
               <view class="delete-btn" @tap="deleteImage(index)">×</view>
             </view>
-            <view class="upload-btn" v-if="form.images.length < 3" @tap="chooseImage">
+            <view class="upload-btn" v-if="form.images.length < 9" @tap="chooseImage">
               <text class="icon">+</text>
               <text class="text">上传图片</text>
             </view>
@@ -123,7 +123,7 @@
 </template>
 
 <script>
-import { getMyMaintenance, createMaintenance } from '../../api/index.js'
+import { getMyMaintenance, createMaintenance, uploadMaintenancePhoto } from '../../api/index.js'
 import { ensureTenantSession } from '../../utils/session.js'
 
 export default {
@@ -186,8 +186,14 @@ export default {
       this.form.priorityText = this.priorityOptions[index].label
     },
     chooseImage() {
+      // 上限 9 张（docs/09-待确认清单.md「报修最多 9 张」）
+      const remaining = 9 - this.form.images.length
+      if (remaining <= 0) {
+        uni.showToast({ title: '最多上传 9 张照片', icon: 'none' })
+        return
+      }
       uni.chooseImage({
-        count: 3 - this.form.images.length,
+        count: remaining,
         sizeType: ['compressed'],
         sourceType: ['album', 'camera'],
         success: (res) => {
@@ -220,13 +226,32 @@ export default {
       this.submitting = true
       try {
         if (!await ensureTenantSession()) return
-        // TODO: 如果有图片，需要先上传图片
+
+        // 先逐张上传照片，拿到可持久化的 url 再提交工单（T153）。
+        // 上传失败即中止提交，避免出现「报修成功但照片丢失」的静默失败。
+        let photos = []
+        if (this.form.images.length > 0) {
+          uni.showLoading({ title: `上传照片 0/${this.form.images.length}` })
+          try {
+            for (let i = 0; i < this.form.images.length; i += 1) {
+              uni.showLoading({ title: `上传照片 ${i + 1}/${this.form.images.length}` })
+              const res = await uploadMaintenancePhoto(this.form.images[i])
+              photos.push(res.url)
+            }
+          } finally {
+            uni.hideLoading()
+          }
+        }
+
         // 租客身份与房间由服务端根据登录身份和生效合同自动关联（T138）
         const data = {
           title: this.form.title,
           category: this.form.category,
           priority: this.form.priority,
           description: this.form.description
+        }
+        if (photos.length > 0) {
+          data.photos = photos
         }
 
         await createMaintenance(data)

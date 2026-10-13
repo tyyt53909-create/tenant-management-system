@@ -44,6 +44,26 @@ function assert(cond, message) {
   if (!cond) throw new Error('断言失败: ' + message);
 }
 
+/** 最小合法 PNG（1x1），用于真实 multipart 上传验证 */
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+async function uploadFile({ token, filename = 'e2e.png', buffer = PNG_1PX } = {}) {
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: 'image/png' }), filename);
+  const res = await fetch(API_BASE + '/files/upload', {
+    method: 'POST',
+    headers: token ? { Authorization: 'Bearer ' + token } : {},
+    body: form,
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  return { status: res.status, data };
+}
+
 async function api(method, path, { token, body } = {}) {
   const res = await fetch(API_BASE + path, {
     method,
@@ -374,6 +394,60 @@ async function main() {
     }
     assert(res.data.status === 'SUBMITTED', '报修应为 SUBMITTED，实际 ' + res.data.status);
     return { detail: '身份=TENANT ' + res.data.status, value: res.data };
+  });
+
+  // ---------- 步骤 9b：报修多图上传（T153） ----------
+  await step('9b 报修照片上传并落库（≤9 张）', async () => {
+    if (!maintenance) {
+      return { detail: '跳过：步骤 9 未创建报修' };
+    }
+
+    // 真实 multipart 上传 2 张图
+    const urls = [];
+    for (let i = 0; i < 2; i += 1) {
+      const up = await uploadFile({ token: tenantToken, filename: 'e2e-' + i + '.png' });
+      expectStatus(up, [200, 201], '上传第 ' + (i + 1) + ' 张照片');
+      assert(up.data && up.data.url, '上传响应缺少 url');
+      urls.push(up.data.url);
+    }
+
+    // 上传的文件可被读回（GET /files/:key 需登录）
+    const readBack = await fetch(API_BASE + urls[0].replace(/^\/api/, ''), {
+      headers: { Authorization: 'Bearer ' + tenantToken },
+    });
+    assert(readBack.status === 200, '上传后应能读回文件，实际 ' + readBack.status);
+    // 未登录不得读回
+    const readBackAnon = await fetch(API_BASE + urls[0].replace(/^\/api/, ''));
+    assert(readBackAnon.status === 401, '未登录读文件应 401，实际 ' + readBackAnon.status);
+
+    // 带 photos 提交一张新报修，验证 MaintenancePhoto 落库
+    const withPhotos = await api('POST', '/maintenance', {
+      token: tenantToken,
+      body: {
+        roomId: room.id, tenantId: tenant.id,
+        title: 'E2E 带图报修-' + uid, description: '墙面渗水，附照片',
+        category: 'PLUMBING', priority: 'NORMAL',
+        photos: urls,
+      },
+    });
+    expectStatus(withPhotos, [200, 201], '提交带照片报修');
+    const saved = withPhotos.data.photos || [];
+    assert(saved.length === 2, '应落库 2 张照片，实际 ' + saved.length);
+    assert(saved.every((p) => p.fileUrl && urls.includes(p.fileUrl)), '落库照片路径应与上传一致');
+
+    // 超过 9 张应被拒（DTO 校验）
+    const tooMany = await api('POST', '/maintenance', {
+      token: tenantToken,
+      body: {
+        roomId: room.id, tenantId: tenant.id,
+        title: 'E2E 超限报修-' + uid, description: '超过 9 张',
+        category: 'PLUMBING',
+        photos: Array.from({ length: 10 }, (_, i) => '/api/files/f' + i + '.png'),
+      },
+    });
+    assert(tooMany.status === 400, '超过 9 张应返回 400，实际 ' + tooMany.status);
+
+    return { detail: '上传 2 张并落库，第 10 张被 400 拒绝' };
   });
 
   // ---------- 步骤 10：报修流转至 COMPLETED ----------

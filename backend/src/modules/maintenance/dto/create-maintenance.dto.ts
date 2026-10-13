@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, IsEnum, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEnum,
+  IsOptional,
+  IsArray,
+  ArrayMaxSize,
+  MaxLength,
+} from 'class-validator';
 
 enum MaintenanceCategory {
   PLUMBING = 'PLUMBING',
@@ -40,4 +48,15 @@ export class CreateMaintenanceDto {
   @IsEnum(MaintenancePriority)
   @IsOptional()
   priority?: MaintenancePriority;
+
+  /**
+   * 报修照片路径（先 POST /api/files/upload 取得 url 再提交）。
+   * 上限 9 张，与 docs/09-待确认清单.md「报修最多 9 张」一致。
+   */
+  @IsArray()
+  @ArrayMaxSize(9, { message: '报修照片最多 9 张' })
+  @IsString({ each: true })
+  @MaxLength(500, { each: true, message: '照片路径过长' })
+  @IsOptional()
+  photos?: string[];
 }

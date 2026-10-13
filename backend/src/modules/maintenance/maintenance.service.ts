@@ -43,15 +43,39 @@ export class MaintenanceService {
     if (!room) throw new BadRequestException('房源不存在');
     if (!tenant) throw new BadRequestException('租客不存在');
 
-    return this.prisma.maintenanceRequest.create({
-      data: {
-        roomId,
-        tenantId,
-        title: dto.title,
-        description: dto.description,
-        category: dto.category as any,
-        priority: dto.priority as any || 'NORMAL',
-      },
+    // 照片与工单同事务落库，避免「有照片记录但无工单」的中间态。
+    // MaintenancePhoto.fileSize 为必填：优先取上报的大小，取不到以 0 占位
+    // （该字段仅用于展示，不参与业务判断）。
+    // 注意：全局 ValidationPipe 开启了 forbidNonWhitelisted，请求体不得携带
+    // DTO 未声明的字段，因此这里只接受 photos（路径），大小由上传接口自行记录。
+    const photos = (dto.photos ?? []).filter((p) => typeof p === 'string' && p.trim());
+
+    return this.prisma.$transaction(async (tx) => {
+      const request = await tx.maintenanceRequest.create({
+        data: {
+          roomId,
+          tenantId,
+          title: dto.title,
+          description: dto.description,
+          category: dto.category as any,
+          priority: dto.priority as any || 'NORMAL',
+        },
+      });
+
+      if (photos.length > 0) {
+        await tx.maintenancePhoto.createMany({
+          data: photos.map((fileUrl) => ({
+            requestId: request.id,
+            fileUrl,
+            fileSize: 0,
+          })),
+        });
+      }
+
+      return tx.maintenanceRequest.findUniqueOrThrow({
+        where: { id: request.id },
+        include: { photos: true },
+      });
     });
   }
 
