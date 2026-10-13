@@ -139,12 +139,23 @@ async function main() {
     assert(res.data.id, '缺少租客 id');
 
     tenantUserEmail = 'e2e-tenant-' + uid + '@example.com';
+
+    // 优先动态生成邀请码（T148 新增 POST /auth/invite-codes），保证脚本可重复运行；
+    // 生成失败时回退到 INVITE_CODE 环境变量/默认值。
+    let inviteCode = INVITE_CODE;
+    const gen = await api('POST', '/auth/invite-codes', { token: adminToken, body: { expiryDays: 1 } });
+    if ([200, 201].includes(gen.status)) {
+      inviteCode = gen.data.code || gen.data.inviteCode || inviteCode;
+    } else {
+      record('3a 生成邀请码', false, '生成接口返回 ' + gen.status + '，回退到默认邀请码');
+    }
+
     const reg = await api('POST', '/auth/register', {
-      body: { email: tenantUserEmail, password: tenantPassword, inviteCode: INVITE_CODE },
+      body: { email: tenantUserEmail, password: tenantPassword, inviteCode },
     });
     if (![200, 201].includes(reg.status)) {
       record('3b 租客账号注册', false,
-        '注册返回 ' + reg.status + '（邀请码 ' + INVITE_CODE + '）：' + JSON.stringify(reg.data).slice(0, 140));
+        '注册返回 ' + reg.status + '（邀请码 ' + inviteCode + '）：' + JSON.stringify(reg.data).slice(0, 140));
       tenantUserEmail = null;
       return { detail: res.data.name + '（未注册登录账号，后续租客步骤将跳过）', value: res.data };
     }
