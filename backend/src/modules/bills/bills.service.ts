@@ -182,7 +182,7 @@ export class BillsService {
         // 租客仅可见已确认的最终金额（docs/03-权限矩阵.md：不暴露建议值与计算细节）
         lateFees: {
           where: { confirmedAmount: { not: null } },
-          select: { id: true, confirmedAmount: true, confirmedAt: true },
+          select: { id: true, confirmedAmount: true, confirmedAt: true, settledAt: true },
           orderBy: { createdAt: 'desc' },
         },
       },
@@ -201,11 +201,12 @@ export class BillsService {
   }
 
   /**
-   * 登记收款（docs/04-状态机.md §3.4）
+   * 登记收款（docs/04-状态机.md §3.4、T141）
    * - 仅 PENDING / PARTIAL / OVERDUE 可收款（PAID / CANCELLED 不可逆）
-   * - 收款金额不可超过未缴金额
+   * - 收款上限 = 账单未缴金额 + 未核销滞纳金合计（超出 400）
+   * - 分配顺序：先入账单本金，余额按确认时间先后核销滞纳金（支持部分核销）
+   * - 状态：账单全额缴清且滞纳金全部核销才 PAID，否则 PARTIAL
    * - 交易号在同一账单内幂等（应用层 + 数据库唯一索引双重保障）
-   * - 事务内：写收款记录 + 更新账单已缴金额与状态（PENDING → PARTIAL → PAID）
    */
   async addPayment(billId: string, dto: CreatePaymentDto, operatorId: string) {
     return this.prisma.$transaction(async (tx) => {
@@ -219,9 +220,24 @@ export class BillsService {
         throw new BadRequestException(`账单为 ${bill.status} 状态，不可收款`);
       }
 
+      // 已确认未核销的滞纳金（按确认先后核销）
+      const unsettledFees = await tx.lateFee.findMany({
+        where: { billId, confirmedAmount: { not: null } },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const outstandingFees = unsettledFees.reduce(
+        (sum, fee) => sum + this.lateFeeOutstanding(fee),
+        0,
+      );
+
       const remaining = bill.amount - bill.paidAmount;
-      if (dto.amount > remaining) {
-        throw new BadRequestException(`收款金额不能超过未缴金额（未缴 ${remaining} 分）`);
+      const maxCollectable = remaining + outstandingFees;
+
+      if (dto.amount > maxCollectable) {
+        throw new BadRequestException(
+          `收款金额不能超过未缴金额（账单未缴 ${remaining} 分 + 未核销滞纳金 ${outstandingFees} 分）`,
+        );
       }
 
       if (dto.transactionNumber) {
@@ -246,8 +262,39 @@ export class BillsService {
         },
       });
 
-      const newPaidAmount = bill.paidAmount + dto.amount;
-      const newStatus = newPaidAmount >= bill.amount ? 'PAID' : 'PARTIAL';
+      // 先入账单，余额核销滞纳金
+      const billPortion = Math.min(dto.amount, remaining);
+      let feePortion = dto.amount - billPortion;
+      const now = new Date();
+
+      const settledFees: unknown[] = [];
+      for (const fee of unsettledFees) {
+        if (feePortion <= 0) break;
+
+        const feeOutstanding = this.lateFeeOutstanding(fee);
+        if (feeOutstanding <= 0) continue;
+
+        const applied = Math.min(feePortion, feeOutstanding);
+        feePortion -= applied;
+
+        const newSettledAmount = (fee.settledAmount ?? 0) + applied;
+        const fullySettled = newSettledAmount >= (fee.confirmedAmount ?? 0);
+
+        settledFees.push(
+          await tx.lateFee.update({
+            where: { id: fee.id },
+            data: {
+              settledAmount: newSettledAmount,
+              ...(fullySettled ? { settledAt: now, settledBy: operatorId } : {}),
+            },
+          }),
+        );
+      }
+
+      const newPaidAmount = bill.paidAmount + billPortion;
+      const outstandingAfter = outstandingFees - (dto.amount - billPortion);
+      const fullySettledAll = newPaidAmount >= bill.amount && outstandingAfter <= 0;
+      const newStatus = fullySettledAll ? 'PAID' : 'PARTIAL';
 
       const updatedBill = await tx.bill.update({
         where: { id: billId },
@@ -257,8 +304,13 @@ export class BillsService {
         },
       });
 
-      return { payment, bill: updatedBill };
+      return { payment, bill: updatedBill, lateFees: settledFees };
     });
+  }
+
+  /** 滞纳金未核销余额（分） */
+  private lateFeeOutstanding(fee: { confirmedAmount: number | null; settledAmount: number | null }) {
+    return Math.max(0, (fee.confirmedAmount ?? 0) - (fee.settledAmount ?? 0));
   }
 
   /**
@@ -339,13 +391,18 @@ export class BillsService {
           }
         }
 
+        const now = new Date();
         const confirmData = {
           suggestedAmount: result.amount,
           overdueDays: result.overdueDays,
           calculation,
           confirmedAmount: dto.confirmedAmount,
-          confirmedAt: new Date(),
+          confirmedAt: now,
           confirmedBy: operatorId,
+          // 减免为 0：无应收，直接视为结清（不产生未核销余额）
+          ...(dto.confirmedAmount === 0
+            ? { settledAmount: 0, settledAt: now, settledBy: operatorId }
+            : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         };
 
