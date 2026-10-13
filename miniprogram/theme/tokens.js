@@ -273,6 +273,100 @@ const careTheme = {
   },
 }
 
+// 栖居版主题（自然雅致）
+const qijuTheme = {
+  name: 'qiju',
+  label: '栖居版',
+  description: '温暖克制，自然雅致的居住美学',
+
+  colors: {
+    // 主色系 - 橄榄绿
+    primary: '#68715b',        // 橄榄绿主色
+    primaryLight: '#7a8469',   // 浅橄榄绿
+    primaryDark: '#4e5845',    // 深橄榄绿
+    
+    // 辅助色
+    success: '#68715b',        // 沿用主色，自然统一
+    warning: '#ad735a',        // 陶土色，温暖提示
+    error: '#c16f62',          // 砖红色，柔和警告
+    info: '#68715b',
+    
+    // 文字色
+    textPrimary: '#302f2a',    // 深墨色，沉稳雅致
+    textSecondary: '#817e76',  // 柔和灰，次要信息
+    textTertiary: '#a49f95',   // 静谧灰，辅助说明
+    textDisabled: '#c8c5bc',   // 禁用灰
+    
+    // 背景色
+    bgPrimary: '#fffefa',      // 纸质白，温润如玉
+    bgSecondary: '#f5f2ec',    // 米白色，柔和基底
+    bgTertiary: '#eae6de',     // 深米色，层次分明
+    
+    // 边框色
+    border: '#e9e6de',         // 浅边框
+    borderLight: '#f0ede5',    // 极浅边框
+    borderDark: '#d8d2c8',     // 深边框
+    
+    // 功能色背景
+    successBg: '#ecf0e9',      // 浅橄榄绿背景
+    warningBg: '#f8ece5',      // 浅陶土色背景
+    errorBg: '#faeee9',        // 浅砖红色背景
+    infoBg: '#ecf0e9',
+  },
+
+  typography: {
+    fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
+    
+    // 字号（略小于标准版，更精致）
+    fontSizeXL: 38,      // 对应原型 28px (约37.3rpx)
+    fontSizeLG: 32,      // 对应原型 19px
+    fontSizeMD: 26,      // 对应原型 13px
+    fontSizeSM: 24,      // 对应原型 12px
+    fontSizeXS: 22,      // 对应原型 11px
+    
+    // 行高（更紧凑）
+    lineHeightLG: 1.55,
+    lineHeightMD: 1.5,
+    lineHeightSM: 1.4,
+    
+    // 字重（更优雅的变化，iOS支持，Android降级到标准值）
+    fontWeightLight: 400,
+    fontWeightRegular: 550,  // iOS 550，Android fallback to 500/600
+    fontWeightMedium: 650,   // iOS 650，Android fallback to 600/700
+    fontWeightBold: 720,     // iOS 720，Android fallback to 700
+  },
+
+  spacing: {
+    xs: 10,      // 原型：较小间距
+    sm: 14,
+    md: 18,
+    lg: 26,
+    xl: 36,
+    xxl: 52,
+  },
+
+  borderRadius: {
+    sm: 10,      // 原型：更大的圆角，柔和亲切
+    md: 14,
+    lg: 18,
+    xl: 20,
+    circle: '50%',
+  },
+
+  shadows: {
+    // 原型：非常轻柔的阴影，若隐若现
+    sm: '0 4rpx 12rpx rgba(74, 62, 47, 0.055)',
+    md: '0 8rpx 24rpx rgba(74, 62, 47, 0.08)',
+    lg: '0 12rpx 34rpx rgba(74, 62, 47, 0.10)',
+  },
+
+  animation: {
+    fast: 160,      // 原型：--fast
+    normal: 260,    // 原型：--standard
+    slow: 380,      // 原型：--slow
+  },
+}
+
 // 夜间模式（可以叠加到任何主题上）
 const darkMode = {
   name: 'dark',
@@ -299,6 +393,7 @@ export const themes = {
   standard: standardTheme,
   youth: youthTheme,
   care: careTheme,
+  qiju: qijuTheme,
 }
 
 export const darkModeColors = darkMode.colors
@@ -328,5 +423,12 @@ export const themeList = [
     description: '大字体高对比，适合长辈使用',
     icon: '❤️',
     preview: '#1890ff',
+  },
+  {
+    name: 'qiju',
+    label: '栖居版',
+    description: '温暖克制，自然雅致的居住美学',
+    icon: '🏡',
+    preview: '#68715b',
   },
 ]

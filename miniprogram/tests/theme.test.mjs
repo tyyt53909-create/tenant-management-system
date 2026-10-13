@@ -146,3 +146,56 @@ test('themeMixin methods delegate to the module functions', async () => {
   assert.equal(mixin.methods.$toggleDarkMode.call({}), true)
   assert.equal(mod.isDark(), true)
 })
+
+test('qiju theme has correct color palette', () => {
+  const qiju = themes.qiju
+  assert.equal(qiju.name, 'qiju')
+  assert.equal(qiju.label, '栖居版')
+  assert.equal(qiju.colors.primary, '#68715b')  // 橄榄绿
+  assert.equal(qiju.colors.bgPrimary, '#fffefa')  // 纸质白
+  assert.equal(qiju.colors.bgSecondary, '#f5f2ec')  // 米白
+  assert.equal(qiju.colors.warning, '#ad735a')  // 陶土色
+})
+
+test('qiju theme has refined typography', () => {
+  const qiju = themes.qiju
+  // 字号略小，更精致
+  assert.equal(qiju.typography.fontSizeXL, 38)
+  assert.equal(qiju.typography.fontSizeMD, 26)
+  // 字重更优雅
+  assert.equal(qiju.typography.fontWeightRegular, 550)
+  assert.equal(qiju.typography.fontWeightMedium, 650)
+  assert.equal(qiju.typography.fontWeightBold, 720)
+})
+
+test('qiju theme has larger border radius', () => {
+  const qiju = themes.qiju
+  // 栖居版圆角更大，更柔和
+  assert.equal(qiju.borderRadius.sm, 10)
+  assert.equal(qiju.borderRadius.md, 14)
+  assert.equal(qiju.borderRadius.lg, 18)
+  assert.equal(qiju.borderRadius.xl, 20)
+})
+
+test('qiju theme has softer shadows', () => {
+  const qiju = themes.qiju
+  // 阴影更轻柔，使用暖色调
+  assert.ok(qiju.shadows.sm.includes('rgba(74, 62, 47'))
+  assert.ok(qiju.shadows.md.includes('rgba(74, 62, 47'))
+})
+
+test('qiju theme has custom animation timing', () => {
+  const qiju = themes.qiju
+  // 动画时长符合原型
+  assert.equal(qiju.animation.fast, 160)
+  assert.equal(qiju.animation.normal, 260)
+  assert.equal(qiju.animation.slow, 380)
+})
+
+test('setTheme accepts qiju as valid theme', async () => {
+  const mod = await loadTheme()
+  assert.equal(mod.setTheme('qiju'), true)
+  assert.equal(mod.getThemeName(), 'qiju')
+  assert.equal(mod.getTheme().label, '栖居版')
+  assert.equal(storage.get('theme'), 'qiju')
+})
