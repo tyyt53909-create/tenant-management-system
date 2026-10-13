@@ -4,6 +4,8 @@ import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
 import { QueryBillsDto } from './dto/query-bills.dto.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
+import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
+import { LateFeeUtil, LateFeeRule } from './utils/late-fee.util.js';
 
 @Injectable()
 export class BillsService {
@@ -84,6 +86,8 @@ export class BillsService {
           },
         },
         paymentRecords: true,
+        // 管理者可见完整滞纳金记录（含计算过程）
+        lateFees: { orderBy: { createdAt: 'desc' } },
       },
     });
 
@@ -175,6 +179,12 @@ export class BillsService {
           },
         },
         paymentRecords: true,
+        // 租客仅可见已确认的最终金额（docs/03-权限矩阵.md：不暴露建议值与计算细节）
+        lateFees: {
+          where: { confirmedAmount: { not: null } },
+          select: { id: true, confirmedAmount: true, confirmedAt: true },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -264,6 +274,131 @@ export class BillsService {
     return this.prisma.paymentRecord.findMany({
       where: { billId },
       orderBy: { paidAt: 'desc' },
+    });
+  }
+
+  /**
+   * 添加 / 刷新滞纳金（docs/04-状态机.md §3.4、docs/02-数据模型.md §2.9）
+   * - 仅对已逾期（到期日 < 今日）且未缴清的账单生效
+   * - 不带 confirmedAmount：生成或刷新「建议值」（同一账单只保留一条未确认建议，重复调用不重复建单）
+   * - 带 confirmedAmount：管理者确认入账（金额可调整），确认后不可重复确认（409）
+   */
+  async addLateFee(billId: string, dto: CreateLateFeeDto, operatorId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const bill = await tx.bill.findUnique({
+        where: { id: billId },
+        include: { contract: { select: { lateFeeRule: true } } },
+      });
+
+      if (!bill) {
+        throw new NotFoundException('账单不存在');
+      }
+
+      if (bill.status === 'PAID' || bill.status === 'CANCELLED') {
+        throw new BadRequestException(`账单为 ${bill.status} 状态，不可添加滞纳金`);
+      }
+
+      const overdueDays = LateFeeUtil.overdueDays(bill.dueDate);
+      if (overdueDays <= 0) {
+        throw new BadRequestException('账单尚未逾期，无需计算滞纳金');
+      }
+
+      const baseAmount = bill.amount - bill.paidAmount;
+      if (baseAmount <= 0) {
+        throw new BadRequestException('账单已缴清，无需计算滞纳金');
+      }
+
+      const result = LateFeeUtil.calculate(
+        (bill.contract?.lateFeeRule ?? {}) as LateFeeRule,
+        baseAmount,
+        overdueDays,
+      );
+
+      const calculation = {
+        rule: result.rule,
+        overdueDays: result.overdueDays,
+        effectiveDays: result.effectiveDays,
+        baseAmount: result.baseAmount,
+        rawAmount: result.rawAmount,
+        capped: result.capped,
+      };
+
+      const pending = await tx.lateFee.findFirst({
+        where: { billId, confirmedAmount: null },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (dto.confirmedAmount !== undefined) {
+        // 管理者确认（可调整金额）
+        if (!pending) {
+          const alreadyConfirmed = await tx.lateFee.findFirst({
+            where: { billId, confirmedAmount: { not: null } },
+          });
+          if (alreadyConfirmed) {
+            throw new ConflictException('该账单滞纳金已确认，请勿重复操作');
+          }
+        }
+
+        const confirmData = {
+          suggestedAmount: result.amount,
+          overdueDays: result.overdueDays,
+          calculation,
+          confirmedAmount: dto.confirmedAmount,
+          confirmedAt: new Date(),
+          confirmedBy: operatorId,
+          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        };
+
+        return pending
+          ? tx.lateFee.update({ where: { id: pending.id }, data: confirmData })
+          : tx.lateFee.create({ data: { billId, ...confirmData } });
+      }
+
+      // 仅生成 / 刷新建议值
+      if (pending) {
+        return tx.lateFee.update({
+          where: { id: pending.id },
+          data: {
+            suggestedAmount: result.amount,
+            overdueDays: result.overdueDays,
+            calculation,
+            ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+          },
+        });
+      }
+
+      const alreadyConfirmed = await tx.lateFee.findFirst({
+        where: { billId, confirmedAmount: { not: null } },
+      });
+      if (alreadyConfirmed) {
+        throw new ConflictException('该账单滞纳金已确认，请勿重复操作');
+      }
+
+      return tx.lateFee.create({
+        data: {
+          billId,
+          suggestedAmount: result.amount,
+          overdueDays: result.overdueDays,
+          calculation,
+          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        },
+      });
+    });
+  }
+
+  /**
+   * 滞纳金记录（含计算过程，仅管理者）
+   */
+  async findLateFees(billId: string) {
+    const bill = await this.prisma.bill.findUnique({ where: { id: billId } });
+
+    if (!bill) {
+      throw new NotFoundException('账单不存在');
+    }
+
+    return this.prisma.lateFee.findMany({
+      where: { billId },
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

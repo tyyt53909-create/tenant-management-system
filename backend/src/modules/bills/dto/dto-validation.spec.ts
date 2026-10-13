@@ -4,6 +4,7 @@ import { plainToInstance } from 'class-transformer';
 import { CreateBillDto } from './create-bill.dto.js';
 import { UpdateBillDto } from './update-bill.dto.js';
 import { CreatePaymentDto } from './create-payment.dto.js';
+import { CreateLateFeeDto } from './create-late-fee.dto.js';
 
 /** 复刻全局 ValidationPipe 配置（main.ts）：whitelist + forbidNonWhitelisted */
 const validateLikeGlobalPipe = (dto: object) =>
@@ -106,5 +107,47 @@ describe('CreatePaymentDto 校验（收款登记）', () => {
     const errors = await validateLikeGlobalPipe(dto);
 
     expect(errors.some((error) => error.property === 'paidAt')).toBe(true);
+  });
+});
+
+describe('CreateLateFeeDto 校验（滞纳金）', () => {
+  it('空请求（仅生成建议值）应通过', async () => {
+    const dto = plainToInstance(CreateLateFeeDto, {});
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('确认金额 + 备注应通过', async () => {
+    const dto = plainToInstance(CreateLateFeeDto, { confirmedAmount: 4200, notes: '协商减免' });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('确认金额为 0（减免）应通过', async () => {
+    const dto = plainToInstance(CreateLateFeeDto, { confirmedAmount: 0 });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('负数确认金额应被拒绝', async () => {
+    const dto = plainToInstance(CreateLateFeeDto, { confirmedAmount: -1 });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors.some((error) => error.property === 'confirmedAmount')).toBe(true);
+  });
+
+  it('非整数确认金额应被拒绝', async () => {
+    const dto = plainToInstance(CreateLateFeeDto, { confirmedAmount: 12.5 });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors.some((error) => error.property === 'confirmedAmount')).toBe(true);
   });
 });
