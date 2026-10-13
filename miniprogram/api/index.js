@@ -86,3 +86,17 @@ export const startCleaning = (id, version) => request.patch(
 export const completeCleaning = (id, version) => request.patch(
   `/rooms/${encodeURIComponent(id)}/clean`, { version }
 )
+
+/**
+ * 通知（T163）
+ *
+ * 服务端全部按 req.user.userId 硬过滤，不信任客户端传参；
+ * 操作他人通知会被后端拒绝（403）。租客与保洁共用同一组接口。
+ */
+export const getNotifications = (params) => request.get('/notifications', params)
+export const getUnreadCount = () => request.get('/notifications/unread-count')
+export const markNotificationRead = (id) =>
+  request.patch(`/notifications/${encodeURIComponent(id)}/read`)
+export const markAllNotificationsRead = () => request.patch('/notifications/read-all')
+export const deleteNotification = (id) =>
+  request.delete(`/notifications/${encodeURIComponent(id)}`)

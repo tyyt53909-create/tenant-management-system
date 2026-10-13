@@ -11,7 +11,13 @@
 
     <view class="toolbar">
       <text>{{ authorized ? `待处理 ${total} 间` : loading ? '正在确认登录身份' : '任务暂未加载' }}</text>
-      <button class="text-button" :disabled="loading || !!busyId" @tap="refresh">刷新</button>
+      <view class="toolbar-actions">
+        <view class="text-button notify-button" @tap="goToNotifications">
+          <text>通知</text>
+          <text v-if="unreadCount > 0" class="notify-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</text>
+        </view>
+        <button class="text-button" :disabled="loading || !!busyId" @tap="refresh">刷新</button>
+      </view>
     </view>
 
     <view v-if="error" class="notice" role="alert">
@@ -50,18 +56,19 @@
 </template>
 
 <script>
-import { getUserInfo, getCleaningRooms, startCleaning, completeCleaning } from '../../api/index.js'
+import { getUserInfo, getCleaningRooms, startCleaning, completeCleaning, getUnreadCount } from '../../api/index.js'
 import { clearSession, openHome } from '../../utils/session.js'
 
 export default {
   data() {
     return {
       authorized: false, rooms: [], total: 0, page: 0, totalPages: 0,
-      loading: false, busyId: '', error: ''
+      loading: false, busyId: '', error: '', unreadCount: 0
     }
   },
   onShow() {
     this.refresh()
+    this.loadUnreadCount()
   },
   async onPullDownRefresh() {
     try { await this.refresh() } finally { uni.stopPullDownRefresh() }
@@ -70,6 +77,21 @@ export default {
     this.loadMore()
   },
   methods: {
+    async loadUnreadCount() {
+      // 无 token 时不发请求：该方法与 refresh() 并发，
+      // 若在会话确认前发出会拿到 401，被 request 层踢回登录页
+      if (!uni.getStorageSync('access_token')) return
+      try {
+        const res = await getUnreadCount()
+        this.unreadCount = res.unreadCount || 0
+      } catch (error) {
+        // 未读数失败不影响主流程（不弹错、不跳转）
+        console.warn('加载未读数失败:', error)
+      }
+    },
+    goToNotifications() {
+      uni.navigateTo({ url: '/pages/notifications/notifications' })
+    },
     async refresh() {
       if (this.loading || this.busyId) return
       this.loading = true
@@ -188,6 +210,30 @@ export default {
 .eyebrow { font-size: 24rpx; color: var(--accent); margin-bottom: 12rpx; }
 .heading { font-size: 44rpx; font-weight: 700; }
 .subtitle { margin-top: 14rpx; font-size: 25rpx; color: #596b61; line-height: 1.6; }
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.notify-button {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.notify-badge {
+  min-width: 32rpx;
+  height: 32rpx;
+  line-height: 32rpx;
+  padding: 0 8rpx;
+  border-radius: 16rpx;
+  background-color: #ff4d4f;
+  color: #fff;
+  font-size: 20rpx;
+  text-align: center;
+}
+
 .toolbar { font-size: 28rpx; margin-bottom: 20rpx; }
 button { margin: 0; font-size: 28rpx; line-height: 1.5; }
 button::after { border: none; }

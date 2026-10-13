@@ -11,6 +11,14 @@
     </view>
 
     <view class="menu-list">
+      <view class="menu-item" @tap="goToNotifications">
+        <view class="item-left">
+          <text class="icon">🔔</text>
+          <text class="text">通知提醒</text>
+          <text class="menu-badge" v-if="unreadCount > 0">{{ unreadCount > 99 ? '99+' : unreadCount }}</text>
+        </view>
+        <text class="arrow">›</text>
+      </view>
       <view class="menu-item" @tap="goToContract">
         <view class="item-left">
           <text class="icon">📄</text>
@@ -49,17 +57,19 @@
 </template>
 
 <script>
-import { getUserInfo } from '../../api/index.js'
+import { getUserInfo, getUnreadCount } from '../../api/index.js'
 import { clearSession, openHome } from '../../utils/session.js'
 
 export default {
   data() {
     return {
-      userInfo: {}
+      userInfo: {},
+      unreadCount: 0
     }
   },
   onShow() {
     this.loadUserInfo()
+    this.loadUnreadCount()
   },
   methods: {
     async loadUserInfo() {
@@ -74,6 +84,21 @@ export default {
       } catch (error) {
         console.error('加载用户信息失败:', error)
       }
+    },
+    async loadUnreadCount() {
+      // 无 token 时不发请求：该方法与 refresh() 并发，
+      // 若在会话确认前发出会拿到 401，被 request 层踢回登录页
+      if (!uni.getStorageSync('access_token')) return
+      try {
+        const res = await getUnreadCount()
+        this.unreadCount = res.unreadCount || 0
+      } catch (error) {
+        // 未读数失败不影响主流程（不弹错、不跳转）
+        console.warn('加载未读数失败:', error)
+      }
+    },
+    goToNotifications() {
+      uni.navigateTo({ url: '/pages/notifications/notifications' })
     },
     goToContract() {
       uni.navigateTo({ url: '/pages/contract/contract' })
@@ -184,6 +209,19 @@ export default {
 .text {
   font-size: 28rpx;
   color: #333;
+}
+
+.menu-badge {
+  margin-left: 16rpx;
+  min-width: 34rpx;
+  height: 34rpx;
+  line-height: 34rpx;
+  padding: 0 10rpx;
+  border-radius: 17rpx;
+  background-color: #ff4d4f;
+  color: #fff;
+  font-size: 20rpx;
+  text-align: center;
 }
 
 .arrow {
