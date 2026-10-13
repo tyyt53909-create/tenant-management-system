@@ -3,6 +3,7 @@ import { ContractsService } from './contracts.service.js';
 import { CreateContractDto } from './dto/create-contract.dto.js';
 import { UpdateContractDto } from './dto/update-contract.dto.js';
 import { QueryContractsDto } from './dto/query-contracts.dto.js';
+import { RenewContractDto } from './dto/renew-contract.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -45,6 +46,14 @@ export class ContractsController {
       return this.contractsService.findOneForTenant(id, req.user.tenantId);
     }
     return this.contractsService.findOne(id);
+  }
+
+  // 续签：复制原合同生成新草稿并关联 renewedFromId
+  @Post(':id/renew')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  renew(@Param('id') id: string, @Body() renewContractDto: RenewContractDto) {
+    return this.contractsService.renew(id, renewContractDto);
   }
 
   @Patch(':id')
