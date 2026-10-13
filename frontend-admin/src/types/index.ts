@@ -182,6 +182,26 @@ export interface Maintenance {
   updatedAt: string;
 }
 
+/** 通知优先级（与后端 NotificationPriority 枚举一致，docs/09 待确认清单 §12：两级） */
+export type NotificationPriority = 'NORMAL' | 'URGENT';
+
+/** 通知（GET /notifications；服务端已按当前登录用户硬过滤 userId） */
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  /** NORMAL=普通，URGENT=紧急 */
+  priority: NotificationPriority;
+  isRead: boolean;
+  readAt: string | null;
+  /** 附加业务数据（后端 data，Json? 字段） */
+  data?: Record<string, any> | null;
+  createdAt: string;
+  /** 过期时间（保留 180 天相关字段，后端返回 Json 原值） */
+  expiredAt?: string | null;
+}
+
 // 水电表
 export interface Meter {
   id: string;
