@@ -67,6 +67,14 @@ export class AuthController {
       // 缺失时用 userId 生成唯一占位值，避免空串触发唯一约束导致第二个注册 500（T148 / BUG-1）
       const tenantPhone = dto.phone?.trim() ? dto.phone.trim() : `pending-${newUser.id}`;
 
+      // 邀请码一次性：注册成功后立即失效（docs/03-权限矩阵.md §4.1
+      // 「使用后立即失效，48小时后自动过期」）。与建号同事务，避免
+      // 「账号已建但邀请码仍可复用」的中间态。
+      await tx.user.update({
+        where: { id: validation.invitedBy! },
+        data: { inviteCode: null, inviteExpiredAt: null },
+      });
+
       await tx.tenant.create({
         data: {
           userId: newUser.id,

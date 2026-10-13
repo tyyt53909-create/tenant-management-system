@@ -58,9 +58,11 @@ describe('AuthController', () => {
     prisma = module.get<PrismaService>(PrismaService);
   });
 
-  /** 桩事务：返回可断言的 tenant.create（注册路径共用） */
+  /** 桩事务：返回可断言的 tenant.create 与 user.update（注册路径共用） */
   function stubTransaction(userId: string) {
     const tenantCreate = vi.fn().mockResolvedValue({});
+    // 注册成功后会在同事务内清空邀请码（一次性语义，docs/03 §4.1）
+    const invitedByUpdate = vi.fn().mockResolvedValue({});
     vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
       callback({
         user: {
@@ -70,11 +72,12 @@ describe('AuthController', () => {
             role: 'TENANT',
             passwordHash: '$2b$10$stubhashstubhashstubhash',
           }),
+          update: invitedByUpdate,
         },
         tenant: { create: tenantCreate },
       }),
     );
-    return tenantCreate;
+    return { tenantCreate, invitedByUpdate };
   }
 
   it('应该定义控制器', () => {
@@ -104,6 +107,7 @@ describe('AuthController', () => {
         return callback({
           user: {
             create: vi.fn().mockResolvedValue(mockUser),
+            update: vi.fn().mockResolvedValue({}),
           },
           tenant: {
             create: vi.fn().mockResolvedValue({}),
@@ -170,14 +174,14 @@ describe('AuthController', () => {
         refreshToken: 'refresh-token',
       });
 
-      const firstTenantCreate = stubTransaction('user-a');
+      const { tenantCreate: firstTenantCreate } = stubTransaction('user-a');
       const first = await controller.register({
         email: 'a@example.com',
         password: 'password123',
         inviteCode: 'INVITE-1',
       });
 
-      const secondTenantCreate = stubTransaction('user-b');
+      const { tenantCreate: secondTenantCreate } = stubTransaction('user-b');
       const second = await controller.register({
         email: 'b@example.com',
         password: 'password123',
@@ -196,6 +200,26 @@ describe('AuthController', () => {
       expect(firstPhone).not.toBe('');
     });
 
+    it('注册成功后立即清空邀请码（一次性，docs/03 §4.1）', async () => {
+      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+        valid: true,
+        invitedBy: 'admin-123',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
+
+      const { invitedByUpdate } = stubTransaction('user-invite');
+      await controller.register({ ...dto, inviteCode: 'INVITE-ONCE' });
+
+      expect(invitedByUpdate).toHaveBeenCalledTimes(1);
+      const call = invitedByUpdate.mock.calls[0][0];
+      expect(call.where).toEqual({ id: 'admin-123' });
+      expect(call.data).toEqual({ inviteCode: null, inviteExpiredAt: null });
+    });
+
     it('提供 phone 时按用户输入写入租客档案', async () => {
       vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
         valid: true,
@@ -207,7 +231,7 @@ describe('AuthController', () => {
         refreshToken: 'refresh-token',
       });
 
-      const tenantCreate = stubTransaction('user-c');
+      const { tenantCreate } = stubTransaction('user-c');
       await controller.register({ ...dto, phone: '13800138000' });
 
       expect(tenantCreate.mock.calls[0][0].data.phone).toBe('13800138000');
@@ -223,7 +247,7 @@ describe('AuthController', () => {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
-      stubTransaction('user-d');
+      stubTransaction('user-d'); // 仅需桩事务存在
 
       const result = await controller.register(dto);
       const serialized = JSON.stringify(result);
