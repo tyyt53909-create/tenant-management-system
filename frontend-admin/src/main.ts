@@ -1,13 +1,16 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import ElementPlus from 'element-plus';
-import 'element-plus/dist/index.css';
 // 中文语言包：否则分页等组件显示英文（Total / 20 per page），见 docs/09 遗留项
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import App from './App.vue';
 import router from './router';
 import { useUserStore } from './stores/user';
+
+// 导入栖居主题样式
+import './styles/element-plus.scss';
+import './style.css';
 
 const app = createApp(App);
 const pinia = createPinia();
