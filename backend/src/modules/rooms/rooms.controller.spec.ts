@@ -64,10 +64,14 @@ describe('RoomsController', () => {
 
       vi.spyOn(service, 'findAll').mockResolvedValue(mockResult as any);
 
-      const result = await controller.findAll({ page: 1, limit: 20 });
+      const result = await controller.findAll(
+        { user: { role: 'ADMIN' } },
+        { page: 1, limit: 20 } as any,
+      );
 
       expect(result.data).toHaveLength(2);
       expect(result.meta.total).toBe(2);
+      expect(service.findAll).toHaveBeenCalledWith({ page: 1, limit: 20 }, 'ADMIN');
     });
   });
 
@@ -81,10 +85,10 @@ describe('RoomsController', () => {
 
       vi.spyOn(service, 'findOne').mockResolvedValue(mockRoom as any);
 
-      const result = await controller.findOne('room-123');
+      const result = await controller.findOne({ user: { role: 'ADMIN' } }, 'room-123');
 
       expect(result.id).toBe('room-123');
-      expect(service.findOne).toHaveBeenCalledWith('room-123');
+      expect(service.findOne).toHaveBeenCalledWith('room-123', 'ADMIN');
     });
   });
 

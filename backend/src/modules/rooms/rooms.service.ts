@@ -1,8 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationPriority } from '../notifications/dto/create-notification.dto.js';
 import { CreateRoomDto } from './dto/create-room.dto.js';
 import { UpdateRoomDto } from './dto/update-room.dto.js';
 import { UpdateRoomStatusDto } from './dto/update-room-status.dto.js';
+import { MarkCleanDto } from './dto/mark-clean.dto.js';
 import { QueryRoomsDto } from './dto/query-rooms.dto.js';
 
 /** 允许的房态流转（docs/04-状态机.md §1.3，键与值均为 `status+cleanStatus`） */
@@ -19,7 +28,10 @@ const VERSION_CONFLICT_MESSAGE = '房间状态已被其他用户修改，请刷�
 
 @Injectable()
 export class RoomsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async create(dto: CreateRoomDto) {
     // 1. 验证楼栋是否存在
@@ -60,19 +72,23 @@ export class RoomsService {
     });
   }
 
-  async findAll(query: QueryRoomsDto) {
+  async findAll(query: QueryRoomsDto, actorRole?: string) {
     const { page = 1, limit = 20, status, buildingId } = query;
     const skip = (page - 1) * limit;
 
     // 构建查询条件
     const where: any = {};
 
-    if (status) {
-      where.status = status;
-    }
-
     if (buildingId) {
       where.buildingId = buildingId;
+    }
+
+    if (actorRole === 'CLEANER') {
+      // 保洁仅可见待清洁/清洁中房间（docs/03-权限矩阵.md），列表条件服务端固定，不信任查询参数
+      where.status = 'VACANT';
+      where.cleanStatus = { in: ['PENDING_CLEAN', 'CLEANING'] };
+    } else if (status) {
+      where.status = status;
     }
 
     // 注意：Prisma Schema 中没有 monthlyRent 字段
@@ -110,7 +126,7 @@ export class RoomsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, actorRole?: string) {
     const room = await this.prisma.room.findUnique({
       where: { id },
       include: {
@@ -126,6 +142,14 @@ export class RoomsService {
 
     if (!room) {
       throw new NotFoundException('房源不存在');
+    }
+
+    // 保洁仅可查看待清洁房间（docs/03-权限矩阵.md）
+    if (
+      actorRole === 'CLEANER' &&
+      !(room.status === 'VACANT' && ['PENDING_CLEAN', 'CLEANING'].includes(room.cleanStatus))
+    ) {
+      throw new ForbiddenException('保洁仅可查看待清洁房间');
     }
 
     return room;
@@ -191,10 +215,14 @@ export class RoomsService {
         throw new ConflictException(VERSION_CONFLICT_MESSAGE);
       }
 
-      return this.prisma.room.findUniqueOrThrow({ where: { id } });
+      const updated = await this.prisma.room.findUniqueOrThrow({ where: { id } });
+      await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
+      return updated;
     }
 
-    return this.prisma.room.update({ where: { id }, data });
+    const updated = await this.prisma.room.update({ where: { id }, data });
+    await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
+    return updated;
   }
 
   /**
@@ -291,7 +319,91 @@ export class RoomsService {
       throw new ConflictException(VERSION_CONFLICT_MESSAGE);
     }
 
-    return this.prisma.room.findUniqueOrThrow({ where: { id } });
+    const updated = await this.prisma.room.findUniqueOrThrow({ where: { id } });
+    await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
+    return updated;
+  }
+
+  /**
+   * 标记已清洁（docs/05-接口规范.md §8.2、docs/04-状态机.md §1.3）
+   * - 仅「清洁中」房间可标记完成（未接单 400：需先 PENDING_CLEAN → CLEANING）
+   * - version 可选（提供则乐观锁冲突 409）
+   * - 可选清洁照片写入 RoomPhoto
+   */
+  async markClean(id: string, dto: MarkCleanDto) {
+    const room = await this.prisma.room.findUnique({ where: { id } });
+
+    if (!room) {
+      throw new NotFoundException('房源不存在');
+    }
+
+    if (room.status !== 'VACANT' || room.cleanStatus !== 'CLEANING') {
+      throw new BadRequestException(
+        `仅可对清洁中的房间标记完成（当前 ${room.status}+${room.cleanStatus}，请先接单）`,
+      );
+    }
+
+    if (dto.version !== undefined) {
+      const result = await this.prisma.room.updateMany({
+        where: { id, version: dto.version },
+        data: { cleanStatus: 'CLEAN', version: { increment: 1 } },
+      });
+
+      if (result.count === 0) {
+        throw new ConflictException(VERSION_CONFLICT_MESSAGE);
+      }
+    } else {
+      await this.prisma.room.update({
+        where: { id },
+        data: { cleanStatus: 'CLEAN', version: { increment: 1 } },
+      });
+    }
+
+    let photo = null;
+    if (dto.photo) {
+      photo = await this.prisma.roomPhoto.create({
+        data: {
+          roomId: id,
+          fileUrl: dto.photo.fileUrl,
+          thumbnail: dto.photo.thumbnail,
+          fileSize: dto.photo.fileSize ?? 0,
+          sortOrder: 0,
+        },
+      });
+    }
+
+    const updated = await this.prisma.room.findUniqueOrThrow({ where: { id } });
+    return { room: updated, photo };
+  }
+
+  /** 房间流转至待清洁时通知全部在职保洁（docs/03-权限矩阵.md）；失败不阻断 */
+  private async notifyCleanersIfPendingClean(
+    previous: { id: string; status: string; cleanStatus: string; roomNumber: string },
+    targetStatus: string,
+    targetCleanStatus: string,
+  ) {
+    const wasPending = previous.status === 'VACANT' && previous.cleanStatus === 'PENDING_CLEAN';
+    const isPending = targetStatus === 'VACANT' && targetCleanStatus === 'PENDING_CLEAN';
+    if (!isPending || wasPending) return;
+
+    const cleaners = await this.prisma.user.findMany({
+      where: { role: 'CLEANER', isActive: true },
+      select: { id: true },
+    });
+
+    for (const cleaner of cleaners) {
+      try {
+        await this.notificationsService.create({
+          userId: cleaner.id,
+          title: '待清洁提醒',
+          body: `房间 ${previous.roomNumber} 待清洁，请及时处理`,
+          priority: NotificationPriority.NORMAL,
+          data: { roomId: previous.id },
+        });
+      } catch {
+        // 通知失败不阻断房态流转
+      }
+    }
   }
 
   async remove(id: string) {
