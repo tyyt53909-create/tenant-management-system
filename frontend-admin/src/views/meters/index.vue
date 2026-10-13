@@ -16,7 +16,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
         <el-table-column prop="meterNumber" label="表号" width="150" />
         <el-table-column prop="meterType" label="类型" width="100">
           <template #default="{ row }">
@@ -178,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import {
@@ -219,6 +219,11 @@ const readings = ref<MeterReading[]>([]);
 const readingsPagination = reactive({ page: 1, limit: 20, total: 0 });
 
 const queryForm = reactive({ meterType: '' });
+
+/** 区分「系统暂无数据」与「筛选无结果」 */
+const emptyText = computed(() =>
+  queryForm.meterType ? '没有符合条件的水电表，试试调整类型筛选' : '暂无水电表，点击右上角「新增水电表」开始录入',
+);
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
 const formData = reactive({
   buildingId: 'building-001',

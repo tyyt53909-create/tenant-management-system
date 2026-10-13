@@ -21,7 +21,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
         <el-table-column prop="contractNumber" label="合同编号" width="180" />
         <el-table-column prop="startDate" label="开始日期" width="120">
           <template #default="{ row }">
@@ -199,7 +199,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import {
@@ -220,6 +220,13 @@ const tableData = ref<Contract[]>([]);
 const currentEditId = ref('');
 
 const queryForm = reactive({ contractNumber: '', status: '' });
+
+/** 区分「系统暂无数据」与「筛选无结果」 */
+const emptyText = computed(() =>
+  queryForm.contractNumber || queryForm.status
+    ? '没有符合条件的合同，试试调整合同编号或状态'
+    : '暂无合同，点击右上角「新增合同」开始录入',
+);
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
 const formData = reactive({
   buildingId: 'building-001',

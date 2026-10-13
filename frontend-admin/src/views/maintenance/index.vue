@@ -19,7 +19,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
         <el-table-column prop="title" label="标题" width="200" />
         <el-table-column prop="category" label="类别" width="100">
           <template #default="{ row }">
@@ -93,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getMaintenanceList, updateMaintenance, deleteMaintenance } from '@/api/maintenance';
 import type { Maintenance } from '@/types';
@@ -105,6 +105,11 @@ const tableData = ref<Maintenance[]>([]);
 const currentEditId = ref('');
 
 const queryForm = reactive({ status: '' });
+
+/** 区分「系统暂无数据」与「筛选无结果」 */
+const emptyText = computed(() =>
+  queryForm.status ? '没有符合条件的报修，试试调整状态筛选' : '暂无报修记录',
+);
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
 const formData = reactive({
   status: '',

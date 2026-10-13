@@ -57,7 +57,7 @@
         v-loading="loading"
         border
         stripe
-        empty-text="暂无符合条件的房源"
+        :empty-text="emptyText"
       >
         <el-table-column prop="roomNumber" label="房间号" width="120" />
         <el-table-column prop="floor" label="楼层" width="80" />
@@ -257,6 +257,13 @@ const pagination = reactive({
   limit: 20,
   total: 0,
 });
+
+/** 区分「系统暂无房源」与「筛选无结果」 */
+const emptyText = computed(() =>
+  queryForm.roomNumber || queryForm.status || queryForm.cleanStatus
+    ? '没有符合条件的房源，试试调整房号、房态或清洁状态'
+    : '暂无房源，点击右上角「新增房源」开始录入',
+);
 
 const localFilterTip = computed(() => {
   const base = `房号由前端本地过滤（后端暂不支持该查询参数），当前匹配 ${pagination.total} 条`;

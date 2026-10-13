@@ -8,7 +8,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe empty-text="暂无预付账户，点击右上角「新增账户」开始录入">
         <el-table-column label="租客" min-width="120">
           <template #default="{ row }">{{ row.tenant?.name || row.tenantId }}</template>
         </el-table-column>

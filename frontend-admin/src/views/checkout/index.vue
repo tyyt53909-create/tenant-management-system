@@ -24,6 +24,7 @@
         border
         stripe
         row-key="id"
+        :empty-text="emptyText"
         @expand-change="handleExpandChange"
       >
         <!-- 展开行：查看该退租记录的结算明细（明细由详情接口返回） -->
@@ -360,6 +361,11 @@ const detailMap = ref<Record<string, CheckoutRecord>>({});
 const detailLoading = ref<Record<string, boolean>>({});
 
 const queryForm = reactive({ status: '' });
+
+/** 区分「系统暂无数据」与「筛选无结果」 */
+const emptyText = computed(() =>
+  queryForm.status ? '没有符合条件的退租记录，试试调整状态筛选' : '暂无退租记录',
+);
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
 const formData = reactive({
   contractId: '',

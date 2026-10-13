@@ -25,7 +25,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
         <el-table-column prop="billNumber" label="账单编号" width="170" />
         <el-table-column prop="billType" label="类型" width="80">
           <template #default="{ row }">
@@ -401,6 +401,13 @@ const paymentRules = {
 };
 
 const queryForm = reactive({ status: '', billType: '' });
+
+/** 区分「系统暂无数据」与「筛选无结果」 */
+const emptyText = computed(() =>
+  queryForm.status || queryForm.billType
+    ? '没有符合条件的账单，试试调整状态或类型'
+    : '暂无账单，点击右上角「新增账单」开始录入',
+);
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
 const formData = reactive({
   contractId: '',

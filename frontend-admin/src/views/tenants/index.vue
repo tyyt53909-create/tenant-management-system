@@ -17,7 +17,7 @@
       </el-form>
 
       <!-- 表格 -->
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
         <el-table-column prop="name" label="姓名" width="120" />
         <el-table-column prop="phone" label="手机号" width="140" />
         <el-table-column prop="email" label="邮箱" width="200" />
@@ -99,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
 import { getTenants, createTenant, updateTenant, deleteTenant } from '@/api/tenants';
@@ -117,6 +117,13 @@ const queryForm = reactive({
   name: '',
   phone: '',
 });
+
+/** 区分「系统暂无数据」与「筛选无结果」，避免用户误以为数据丢失 */
+const emptyText = computed(() =>
+  queryForm.name || queryForm.phone
+    ? '没有符合条件的租客，试试调整姓名或手机号'
+    : '暂无租客，点击右上角「新增租客」开始录入',
+);
 
 const pagination = reactive({
   page: 1,
