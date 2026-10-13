@@ -48,6 +48,12 @@
       "style": {
         "navigationBarTitleText": "个人中心"
       }
+    },
+    {
+      "path": "pages/theme/theme",
+      "style": {
+        "navigationBarTitleText": "主题设置"
+      }
     }
   ],
   "globalStyle": {
