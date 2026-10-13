@@ -7,11 +7,17 @@ export interface User {
   createdAt: string;
 }
 
-// 登录表单
+// 登录表单（后端 LoginDto 字段名为 identifier，支持邮箱或手机号）
 export interface LoginForm {
-  account: string; // email 或 phone
+  identifier: string; // email 或 phone
   password: string;
 }
+
+/** 房态（与后端 RoomStatus 枚举一致） */
+export type RoomStatus = 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
+
+/** 清洁状态（与后端 CleanStatus 枚举一致） */
+export type CleanStatus = 'CLEAN' | 'PENDING_CLEAN' | 'CLEANING';
 
 // 注册表单
 export interface RegisterForm {
@@ -31,10 +37,12 @@ export interface Room {
   roomType: 'SINGLE' | 'ONE_BED' | 'TWO_BED' | 'THREE_BED' | 'STUDIO';
   area: number;
   facilities: string[];
-  status: 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
-  cleanStatus: 'CLEAN' | 'PENDING_CLEAN' | 'CLEANING';
+  status: RoomStatus;
+  cleanStatus: CleanStatus;
   /** 乐观锁版本号（房态流转/编辑时回传） */
   version: number;
+  /** 列表接口附带楼栋信息（GET /rooms 返回值） */
+  building?: { id: string; name: string };
   createdAt: string;
   updatedAt: string;
 }

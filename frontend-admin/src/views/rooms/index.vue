@@ -6,23 +6,54 @@
         <el-form-item label="房间号">
           <el-input v-model="queryForm.roomNumber" placeholder="请输入房间号" clearable />
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="queryForm.status" placeholder="请选择状态" clearable>
-            <el-option label="空置" value="VACANT" />
-            <el-option label="已租" value="OCCUPIED" />
-            <el-option label="维护中" value="MAINTENANCE" />
-            <el-option label="已预订" value="RESERVED" />
+        <el-form-item label="房态">
+          <el-select v-model="queryForm.status" placeholder="请选择房态" clearable>
+            <el-option
+              v-for="item in ROOM_STATUS_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="清洁状态">
+          <el-select v-model="queryForm.cleanStatus" placeholder="请选择清洁状态" clearable>
+            <el-option
+              v-for="item in CLEAN_STATUS_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleQuery">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
+          <el-button :type="pendingOnly ? 'warning' : 'default'" @click="handleTogglePendingOnly">
+            只看待清洁
+          </el-button>
+          <el-button @click="goCleaning">保洁工作台</el-button>
           <el-button type="primary" @click="handleCreate">新增房源</el-button>
         </el-form-item>
       </el-form>
 
+      <el-alert
+        v-if="localFilterActive"
+        class="filter-tip"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="localFilterTip"
+      />
+
       <!-- 表格 -->
-      <el-table :data="tableData" v-loading="loading" border stripe>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        empty-text="暂无符合条件的房源"
+      >
         <el-table-column prop="roomNumber" label="房间号" width="120" />
         <el-table-column prop="floor" label="楼层" width="80" />
         <el-table-column prop="roomType" label="房型" width="120">
@@ -31,17 +62,17 @@
           </template>
         </el-table-column>
         <el-table-column prop="area" label="面积(㎡)" width="100" />
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" label="房态" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusTypeMap[row.status]">
-              {{ statusMap[row.status] }}
+            <el-tag :type="roomStatusTagType(row.status)">
+              {{ roomStatusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="cleanStatus" label="清洁状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="cleanStatusTypeMap[row.cleanStatus]">
-              {{ cleanStatusMap[row.cleanStatus] }}
+            <el-tag :type="cleanStatusTagType(row.cleanStatus)" effect="light">
+              {{ cleanStatusLabel(row.cleanStatus) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -62,8 +93,7 @@
           :total="pagination.total"
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleQuery"
-          @current-change="handleQuery"
+          @size-change="handleSizeChange"
         />
       </div>
     </el-card>
@@ -126,8 +156,8 @@
       <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
         <el-descriptions-item label="房源">{{ statusRow?.roomNumber }}</el-descriptions-item>
         <el-descriptions-item label="版本号">v{{ statusRow?.version }}</el-descriptions-item>
-        <el-descriptions-item label="当前房态">{{ statusMap[statusRow?.status || ''] }}</el-descriptions-item>
-        <el-descriptions-item label="当前清洁">{{ cleanStatusMap[statusRow?.cleanStatus || ''] }}</el-descriptions-item>
+        <el-descriptions-item label="当前房态">{{ roomStatusLabel(statusRow?.status) }}</el-descriptions-item>
+        <el-descriptions-item label="当前清洁">{{ cleanStatusLabel(statusRow?.cleanStatus) }}</el-descriptions-item>
       </el-descriptions>
       <el-form label-width="110px">
         <el-form-item label="目标房态">
@@ -155,11 +185,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { computed, ref, reactive, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
-import { getRooms, createRoom, updateRoom, deleteRoom, updateRoomStatus } from '@/api/rooms';
-import type { Room } from '@/types';
+import {
+  ALL_ROOMS_LIMIT,
+  createRoom,
+  deleteRoom,
+  fetchAllRooms,
+  getRooms,
+  updateRoom,
+  updateRoomStatus,
+} from '@/api/rooms';
+import type { CleanStatus, Room, RoomStatus } from '@/types';
+import {
+  CLEAN_STATUS_OPTIONS,
+  ROOM_STATUS_OPTIONS,
+  cleanStatusLabel,
+  cleanStatusTagType,
+  roomStatusLabel,
+  roomStatusTagType,
+} from '@/utils/roomStatus';
+
+const router = useRouter();
 
 const loading = ref(false);
 const submitLoading = ref(false);
@@ -174,17 +223,38 @@ const currentVersion = ref(0);
 const statusDialogVisible = ref(false);
 const statusSubmitting = ref(false);
 const statusRow = ref<Room | null>(null);
-const statusForm = reactive({ status: '', cleanStatus: '' });
+const statusForm = reactive<{ status: '' | RoomStatus; cleanStatus: '' | CleanStatus }>({
+  status: '',
+  cleanStatus: '',
+});
 
-const queryForm = reactive({
+const queryForm = reactive<{
+  roomNumber: string;
+  status: '' | RoomStatus;
+  cleanStatus: '' | CleanStatus;
+}>({
   roomNumber: '',
   status: '',
+  cleanStatus: '',
 });
+
+/** 是否处于「只看待清洁」快捷筛选 */
+const pendingOnly = computed(() => queryForm.cleanStatus === 'PENDING_CLEAN');
+/** 后端 GET /rooms 不支持 roomNumber / cleanStatus，走本地过滤 */
+const localFilterActive = ref(false);
+const allRoomsTruncated = ref(false);
 
 const pagination = reactive({
   page: 1,
   limit: 20,
   total: 0,
+});
+
+const localFilterTip = computed(() => {
+  const base = `房号 / 清洁状态由前端本地过滤（后端暂不支持这两个查询参数），当前匹配 ${pagination.total} 条`;
+  return allRoomsTruncated.value
+    ? `${base}；房源总数超过 ${ALL_ROOMS_LIMIT} 条，仅加载前 ${ALL_ROOMS_LIMIT} 条`
+    : base;
 });
 
 const formData = reactive({
@@ -212,43 +282,40 @@ const roomTypeMap: Record<string, string> = {
   STUDIO: '开间',
 };
 
-const statusMap: Record<string, string> = {
-  VACANT: '空置',
-  OCCUPIED: '已租',
-  MAINTENANCE: '维护中',
-  RESERVED: '已预订',
-};
-
-const statusTypeMap: Record<string, any> = {
-  VACANT: 'success',
-  OCCUPIED: 'warning',
-  MAINTENANCE: 'danger',
-  RESERVED: 'info',
-};
-
-const cleanStatusMap: Record<string, string> = {
-  CLEAN: '已清洁',
-  PENDING_CLEAN: '待清洁',
-  CLEANING: '清洁中',
-};
-
-const cleanStatusTypeMap: Record<string, any> = {
-  CLEAN: 'success',
-  PENDING_CLEAN: 'warning',
-  CLEANING: 'info',
+/** 本地过滤：房号模糊匹配 + 清洁状态精确匹配 */
+const applyLocalFilters = (rooms: Room[]) => {
+  const keyword = queryForm.roomNumber.trim().toLowerCase();
+  return rooms.filter((room) => {
+    const matchesNumber = !keyword || (room.roomNumber || '').toLowerCase().includes(keyword);
+    const matchesClean = !queryForm.cleanStatus || room.cleanStatus === queryForm.cleanStatus;
+    return matchesNumber && matchesClean;
+  });
 };
 
 const fetchData = async () => {
   loading.value = true;
   try {
-    const params = {
-      page: pagination.page,
-      limit: pagination.limit,
-      ...queryForm,
-    };
-    const response = await getRooms(params);
-    tableData.value = response.data;
-    pagination.total = response.meta.total;
+    if (queryForm.roomNumber.trim() || queryForm.cleanStatus) {
+      // 清洁状态 / 房号后端不支持：分页拉全量后本地筛选 + 本地分页
+      const result = await fetchAllRooms(queryForm.status ? { status: queryForm.status } : {});
+      const matched = applyLocalFilters(result.data);
+      localFilterActive.value = true;
+      allRoomsTruncated.value = result.truncated;
+      pagination.total = matched.length;
+      const start = (pagination.page - 1) * pagination.limit;
+      tableData.value = matched.slice(start, start + pagination.limit);
+    } else {
+      // 服务端分页：只发送 QueryRoomsDto 白名单且非空的参数（避免 400）
+      const response = await getRooms({
+        page: pagination.page,
+        limit: pagination.limit,
+        status: queryForm.status || undefined,
+      });
+      localFilterActive.value = false;
+      allRoomsTruncated.value = false;
+      tableData.value = response.data;
+      pagination.total = response.meta.total;
+    }
   } catch (error) {
     ElMessage.error('获取数据失败');
   } finally {
@@ -261,10 +328,27 @@ const handleQuery = () => {
   fetchData();
 };
 
+const handleSizeChange = () => {
+  pagination.page = 1;
+  fetchData();
+};
+
 const handleReset = () => {
   queryForm.roomNumber = '';
   queryForm.status = '';
+  queryForm.cleanStatus = '';
   handleQuery();
+};
+
+/** 「只看待清洁」快捷筛选开关 */
+const handleTogglePendingOnly = () => {
+  queryForm.cleanStatus = pendingOnly.value ? '' : 'PENDING_CLEAN';
+  handleQuery();
+};
+
+/** 跳转保洁工作台 */
+const goCleaning = () => {
+  router.push('/cleaning');
 };
 
 const handleCreate = () => {
@@ -302,8 +386,8 @@ const handleStatusSubmit = async () => {
   statusSubmitting.value = true;
   try {
     await updateRoomStatus(row.id, {
-      status: statusForm.status,
-      cleanStatus: statusForm.cleanStatus,
+      status: statusForm.status || undefined,
+      cleanStatus: statusForm.cleanStatus || undefined,
       version: row.version,
     });
     ElMessage.success('房态已更新');
@@ -380,5 +464,9 @@ onMounted(() => {
 <style scoped>
 .rooms-page {
   padding: 0;
+}
+
+.filter-tip {
+  margin-bottom: 12px;
 }
 </style>

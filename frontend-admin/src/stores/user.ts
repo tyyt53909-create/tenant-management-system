@@ -8,8 +8,8 @@ export const useUserStore = defineStore('user', () => {
   const token = ref<string | null>(localStorage.getItem('access_token'));
 
   // 登录
-  const login = async (account: string, password: string) => {
-    const response: any = await loginApi({ account, password });
+  const login = async (identifier: string, password: string) => {
+    const response: any = await loginApi({ identifier, password });
     token.value = response.accessToken;
     localStorage.setItem('access_token', response.accessToken);
     localStorage.setItem('refresh_token', response.refreshToken);

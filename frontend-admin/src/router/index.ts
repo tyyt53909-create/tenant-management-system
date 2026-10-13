@@ -26,6 +26,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '房源管理', icon: 'House' },
       },
       {
+        path: '/cleaning',
+        name: 'Cleaning',
+        component: () => import('@/views/cleaning/index.vue'),
+        meta: { title: '保洁管理', icon: 'Brush' },
+      },
+      {
         path: '/tenants',
         name: 'Tenants',
         component: () => import('@/views/tenants/index.vue'),

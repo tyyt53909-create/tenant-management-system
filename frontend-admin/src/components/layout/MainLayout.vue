@@ -19,6 +19,10 @@
           <el-icon><House /></el-icon>
           <span>房源管理</span>
         </el-menu-item>
+        <el-menu-item index="/cleaning">
+          <el-icon><Brush /></el-icon>
+          <span>保洁管理</span>
+        </el-menu-item>
         <el-menu-item index="/tenants">
           <el-icon><User /></el-icon>
           <span>租客管理</span>
@@ -86,6 +90,7 @@ import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import {
+  Brush,
   DataLine,
   House,
   User,
