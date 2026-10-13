@@ -42,6 +42,8 @@ describe('BillsService', () => {
 
     service = module.get<BillsService>(BillsService);
     prisma = prismaMock;
+    // 默认无滞纳金（收款用例回归不受影响）
+    prisma.lateFee.findMany.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -254,6 +256,140 @@ describe('BillsService', () => {
       expect(prisma.paymentRecord.findFirst).not.toHaveBeenCalled();
       expect(prisma.paymentRecord.create).toHaveBeenCalled();
     });
+
+    it('收款上限含未核销滞纳金：超出 → 400', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: billId,
+        amount: 100000,
+        paidAmount: 0,
+        status: 'OVERDUE',
+      });
+      prisma.lateFee.findMany.mockResolvedValue([
+        { id: 'lf-1', confirmedAmount: 4200, settledAmount: null },
+      ]);
+
+      await expect(
+        service.addPayment(billId, { amount: 104300, paymentMethod: 'CASH' } as any, operatorId),
+      ).rejects.toThrow('收款金额不能超过未缴金额');
+      expect(prisma.paymentRecord.create).not.toHaveBeenCalled();
+    });
+
+    it('全额收款（含滞纳金）：账单 PAID + 滞纳金结清', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: billId,
+        amount: 100000,
+        paidAmount: 0,
+        status: 'OVERDUE',
+      });
+      prisma.lateFee.findMany.mockResolvedValue([
+        { id: 'lf-1', confirmedAmount: 4200, settledAmount: null },
+      ]);
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'pay-6', amount: 104200 });
+      prisma.lateFee.update.mockResolvedValue({ id: 'lf-1', settledAmount: 4200 });
+      prisma.bill.update.mockResolvedValue({ id: billId, paidAmount: 100000, status: 'PAID' });
+
+      const result = await service.addPayment(
+        billId,
+        { amount: 104200, paymentMethod: 'WECHAT' } as any,
+        operatorId,
+      );
+
+      expect(prisma.lateFee.update).toHaveBeenCalledWith({
+        where: { id: 'lf-1' },
+        data: expect.objectContaining({
+          settledAmount: 4200,
+          settledBy: operatorId,
+          settledAt: expect.any(Date),
+        }),
+      });
+      expect(prisma.bill.update).toHaveBeenCalledWith({
+        where: { id: billId },
+        data: { paidAmount: 100000, status: 'PAID' },
+      });
+      expect(result.bill.status).toBe('PAID');
+    });
+
+    it('账单已满但滞纳金未清：PARTIAL，滞纳金不动', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: billId,
+        amount: 100000,
+        paidAmount: 0,
+        status: 'OVERDUE',
+      });
+      prisma.lateFee.findMany.mockResolvedValue([
+        { id: 'lf-1', confirmedAmount: 4200, settledAmount: null },
+      ]);
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'pay-7' });
+      prisma.bill.update.mockResolvedValue({ id: billId, paidAmount: 100000, status: 'PARTIAL' });
+
+      const result = await service.addPayment(
+        billId,
+        { amount: 100000, paymentMethod: 'CASH' } as any,
+        operatorId,
+      );
+
+      expect(prisma.lateFee.update).not.toHaveBeenCalled();
+      expect(prisma.bill.update).toHaveBeenCalledWith({
+        where: { id: billId },
+        data: { paidAmount: 100000, status: 'PARTIAL' },
+      });
+      expect(result.bill.status).toBe('PARTIAL');
+    });
+
+    it('两笔滞纳金按确认先后核销（本金优先，部分核销不写结清）', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: billId,
+        amount: 100000,
+        paidAmount: 0,
+        status: 'OVERDUE',
+      });
+      prisma.lateFee.findMany.mockResolvedValue([
+        { id: 'lf-1', confirmedAmount: 4200, settledAmount: null },
+        { id: 'lf-2', confirmedAmount: 3000, settledAmount: null },
+      ]);
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'pay-8' });
+      prisma.lateFee.update.mockImplementation(async (args: any) => args.data);
+      prisma.bill.update.mockResolvedValue({ id: billId, paidAmount: 100000, status: 'PARTIAL' });
+
+      await service.addPayment(billId, { amount: 103000, paymentMethod: 'CASH' } as any, operatorId);
+
+      // 103000 = 本金 100000 + 核销 lf-1 的 3000（部分）
+      expect(prisma.lateFee.update).toHaveBeenCalledTimes(1);
+      expect(prisma.lateFee.update).toHaveBeenCalledWith({
+        where: { id: 'lf-1' },
+        data: { settledAmount: 3000 },
+      });
+    });
+
+    it('部分核销累计：补缴后结清 → PAID', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: billId,
+        amount: 100000,
+        paidAmount: 100000,
+        status: 'PARTIAL',
+      });
+      prisma.lateFee.findMany.mockResolvedValue([
+        { id: 'lf-1', confirmedAmount: 4200, settledAmount: 3000 },
+      ]);
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'pay-9' });
+      prisma.lateFee.update.mockResolvedValue({ id: 'lf-1', settledAmount: 4200 });
+      prisma.bill.update.mockResolvedValue({ id: billId, paidAmount: 100000, status: 'PAID' });
+
+      await service.addPayment(billId, { amount: 1200, paymentMethod: 'CASH' } as any, operatorId);
+
+      expect(prisma.lateFee.update).toHaveBeenCalledWith({
+        where: { id: 'lf-1' },
+        data: expect.objectContaining({
+          settledAmount: 4200,
+          settledBy: operatorId,
+          settledAt: expect.any(Date),
+        }),
+      });
+      expect(prisma.bill.update).toHaveBeenCalledWith({
+        where: { id: billId },
+        data: { paidAmount: 100000, status: 'PAID' },
+      });
+    });
   });
 
   describe('findPayments', () => {
@@ -398,6 +534,24 @@ describe('BillsService', () => {
           suggestedAmount: 4200,
           confirmedAmount: 4200,
           confirmedBy: operatorId,
+        }),
+      });
+    });
+
+    it('确认金额 0（减免）：直接标记结清，不产生应收', async () => {
+      prisma.bill.findUnique.mockResolvedValue(overdueBill());
+      prisma.lateFee.findFirst.mockResolvedValue({ id: 'lf-1', confirmedAmount: null });
+      prisma.lateFee.update.mockResolvedValue({ id: 'lf-1', confirmedAmount: 0 });
+
+      await service.addLateFee(billId, { confirmedAmount: 0 }, operatorId);
+
+      expect(prisma.lateFee.update).toHaveBeenCalledWith({
+        where: { id: 'lf-1' },
+        data: expect.objectContaining({
+          confirmedAmount: 0,
+          settledAmount: 0,
+          settledAt: expect.any(Date),
+          settledBy: operatorId,
         }),
       });
     });

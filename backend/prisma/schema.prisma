@@ -478,7 +478,11 @@ model LateFee {
   
   confirmedAt      DateTime?
   confirmedBy      String?
-  
+
+  settledAmount    Int?      // 已核销金额（分，部分核销累加）
+  settledAt        DateTime? // 结清时间
+  settledBy        String?   // 结清操作人（userId）
+
   createdAt        DateTime  @default(now())
 
   @@index([billId])
