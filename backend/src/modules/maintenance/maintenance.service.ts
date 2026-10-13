@@ -84,6 +84,11 @@ export class MaintenanceService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
+    // 防御：tenantId 缺失时返回空列表，绝不退化为全库查询
+    if (!tenantId) {
+      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    }
+
     const where: any = { tenantId };
     if (status) where.status = status;
 

@@ -188,6 +188,11 @@ export class ContractsService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
+    // 防御：tenantId 缺失时返回空列表，绝不退化为全库查询
+    if (!tenantId) {
+      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    }
+
     const where: any = { tenantId };
     if (status) where.status = status;
 
@@ -218,6 +223,10 @@ export class ContractsService {
 
   // 租客查看单个合同（需验证归属）
   async findOneForTenant(id: string, tenantId: string) {
+    if (!tenantId) {
+      throw new NotFoundException('合同不存在');
+    }
+
     const contract = await this.prisma.contract.findUnique({
       where: { id },
       include: {

@@ -36,7 +36,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         where: { userId: user.id },
         select: { id: true },
       });
-      tenantId = tenant?.id;
+
+      // 安全红线：TENANT 账号必须有租客档案。
+      //
+      // 若此处放行 tenantId=undefined，下游 `where: { tenantId: undefined }`
+      // 会被 Prisma 当作「不加过滤」，导致租客可读取全库账单/合同/预付账户
+      // （2026-10-13 实测：越权读到 49 张账单、35 份合同）。
+      // 因此在鉴权阶段直接拒绝，确保 tenantId 永不为 undefined。
+      if (!tenant) {
+        throw new UnauthorizedException('租客档案不存在或已解绑，请联系管理员');
+      }
+      tenantId = tenant.id;
     }
 
     // 返回用户信息，会被附加到 request.user

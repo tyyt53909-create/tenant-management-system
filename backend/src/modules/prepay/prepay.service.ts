@@ -95,6 +95,11 @@ export class PrepayService {
 
   // 租客查看自己的账户
   async findByTenant(tenantId: string) {
+    // 防御：tenantId 缺失时按不存在处理，绝不退化为「取第一个账户」
+    if (!tenantId) {
+      throw new NotFoundException('预付账户不存在');
+    }
+
     const account = await this.prisma.prepayAccount.findFirst({
       where: { tenantId },
       include: {
@@ -117,8 +122,13 @@ export class PrepayService {
 
   // 租客查看自己的交易记录
   async findTransactionsByTenant(tenantId: string, query: any) {
-    const { page = 1, limit = 20 } = query;
+    const { page = 1, limit = 20 } = query ?? {};
     const skip = (page - 1) * limit;
+
+    // 防御：tenantId 缺失时返回空列表（此前会因 findFirst 拿到任意账户而越权）
+    if (!tenantId) {
+      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    }
 
     // 先获取租客的账户
     const account = await this.prisma.prepayAccount.findFirst({
