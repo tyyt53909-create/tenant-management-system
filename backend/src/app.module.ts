@@ -20,6 +20,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { FilesModule } from './modules/files/files.module.js';
 import { AuditLogModule } from './modules/audit/audit.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
     FilesModule,
     AuditLogModule,
     DashboardModule,
+    SchedulerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,11 +1,10 @@
 import { IsString, IsNotEmpty, IsInt, IsEnum, IsDateString, IsOptional, Min } from 'class-validator';
 
-enum BillType {
+export enum BillType {
   RENT = 'RENT',
   UTILITY = 'UTILITY',
   OTHER = 'OTHER',
 }
-
 export class CreateBillDto {
   @IsString()
   @IsNotEmpty()
