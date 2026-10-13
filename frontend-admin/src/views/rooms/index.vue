@@ -7,7 +7,7 @@
           <el-input v-model="queryForm.roomNumber" placeholder="请输入房间号" clearable />
         </el-form-item>
         <el-form-item label="房态">
-          <el-select v-model="queryForm.status" placeholder="请选择房态" clearable>
+          <el-select v-model="queryForm.status" placeholder="请选择房态" clearable style="width: 140px">
             <el-option
               v-for="item in ROOM_STATUS_OPTIONS"
               :key="item.value"
@@ -17,7 +17,12 @@
           </el-select>
         </el-form-item>
         <el-form-item label="清洁状态">
-          <el-select v-model="queryForm.cleanStatus" placeholder="请选择清洁状态" clearable>
+          <el-select
+            v-model="queryForm.cleanStatus"
+            placeholder="请选择清洁状态"
+            clearable
+            style="width: 150px"
+          >
             <el-option
               v-for="item in CLEAN_STATUS_OPTIONS"
               :key="item.value"

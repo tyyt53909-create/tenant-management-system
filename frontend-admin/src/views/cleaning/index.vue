@@ -25,7 +25,12 @@
     <el-card>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="清洁状态">
-          <el-select v-model="queryForm.cleanStatus" placeholder="请选择清洁状态" clearable>
+          <el-select
+            v-model="queryForm.cleanStatus"
+            placeholder="请选择清洁状态"
+            clearable
+            style="width: 220px"
+          >
             <el-option label="待处理（待清洁 + 清洁中）" value="NEEDS_CLEANING" />
             <el-option
               v-for="item in CLEAN_STATUS_OPTIONS"
@@ -36,7 +41,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="楼栋">
-          <el-select v-model="queryForm.buildingId" placeholder="全部楼栋" clearable>
+          <el-select v-model="queryForm.buildingId" placeholder="全部楼栋" clearable style="width: 180px">
             <el-option
               v-for="item in buildingOptions"
               :key="item.id"
@@ -143,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ALL_ROOMS_LIMIT, fetchAllRooms, updateRoomStatus } from '@/api/rooms';
 import type { CleanStatus, Room } from '@/types';
@@ -228,6 +233,14 @@ const fetchData = async () => {
     loading.value = false;
   }
 };
+
+/** 筛选条件变化后回到第一页，避免停留在超出范围的页码 */
+watch(
+  () => [queryForm.cleanStatus, queryForm.buildingId, queryForm.roomNumber],
+  () => {
+    pagination.page = 1;
+  }
+);
 
 const handleQuery = () => {
   pagination.page = 1;
