@@ -20,12 +20,17 @@ describe('CheckoutService', () => {
         update: vi.fn(),
         delete: vi.fn(),
       },
-      checkoutItem: { createMany: vi.fn() },
+      checkoutItem: { createMany: vi.fn(), deleteMany: vi.fn() },
       contract: { findUnique: vi.fn() },
       room: { findUnique: vi.fn() },
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    // 事务末尾回读主记录（含 items）
+    prismaMock.checkoutRecord.findUniqueOrThrow = vi.fn(async ({ where }: any) => ({
+      id: where.id,
+      items: [],
+    }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [CheckoutService, { provide: PrismaService, useValue: prismaMock }],
@@ -238,6 +243,50 @@ describe('CheckoutService', () => {
       prisma.checkoutRecord.findUnique.mockResolvedValue(null);
 
       await expect(service.update(recordId, {} as any)).rejects.toThrow(NotFoundException);
+    });
+
+    it('提供 items → 同事务内全量替换明细（先删后建）', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId });
+      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId });
+      prisma.checkoutItem.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.checkoutItem.createMany.mockResolvedValue({ count: 2 });
+
+      await service.update(recordId, {
+        items: [
+          { itemType: 'DEPOSIT_REFUND', description: '押金退还', amount: 500000 },
+          { itemType: 'DEPOSIT_DEDUCTION', description: '墙面修补', amount: 30050 },
+        ],
+      } as any);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.checkoutItem.deleteMany).toHaveBeenCalledWith({ where: { checkoutId: recordId } });
+      expect(prisma.checkoutItem.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ checkoutId: recordId, itemType: 'DEPOSIT_REFUND', amount: 500000 }),
+          expect.objectContaining({ checkoutId: recordId, itemType: 'DEPOSIT_DEDUCTION', amount: 30050 }),
+        ],
+      });
+    });
+
+    it('未提供 items → 不触碰明细表', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId });
+      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId });
+
+      await service.update(recordId, { notes: '仅备注' } as any);
+
+      expect(prisma.checkoutItem.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.checkoutItem.createMany).not.toHaveBeenCalled();
+    });
+
+    it('提供空数组 → 清空全部明细', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId });
+      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId });
+      prisma.checkoutItem.deleteMany.mockResolvedValue({ count: 3 });
+
+      await service.update(recordId, { items: [] } as any);
+
+      expect(prisma.checkoutItem.deleteMany).toHaveBeenCalledWith({ where: { checkoutId: recordId } });
+      expect(prisma.checkoutItem.createMany).not.toHaveBeenCalled();
     });
   });
 

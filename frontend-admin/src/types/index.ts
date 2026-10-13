@@ -86,7 +86,12 @@ export interface Contract {
   depositAmount: number;
   paymentCycle: 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUAL' | 'ANNUAL';
   paymentDay: number;
-  status: 'DRAFT' | 'ACTIVE' | 'EXPIRED' | 'TERMINATED';
+  /** RENEWED 表示本合同已被新合同替代（见后端 ContractStatus） */
+  status: 'DRAFT' | 'ACTIVE' | 'EXPIRED' | 'TERMINATED' | 'RENEWED';
+  /** 续签来源：本合同的上一份合同 id（T154）；为空表示非续签生成 */
+  renewedFromId?: string | null;
+  /** 本合同的续签结果（后端 renewedTo 反向关系） */
+  renewedTo?: { id: string; contractNumber: string } | null;
   createdAt: string;
   updatedAt: string;
 }

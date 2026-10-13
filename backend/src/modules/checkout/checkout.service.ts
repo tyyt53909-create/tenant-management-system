@@ -145,8 +145,37 @@ export class CheckoutService {
     }
     if (dto.totalRefund !== undefined) updateData.totalRefund = dto.totalRefund;
     if (dto.notes) updateData.notes = dto.notes;
+    if (dto.checkoutDate) updateData.checkoutDate = new Date(dto.checkoutDate);
+    if (dto.processedBy) updateData.processedBy = dto.processedBy;
 
-    return this.prisma.checkoutRecord.update({ where: { id }, data: updateData });
+    // 结算明细采用「提供即全量替换」语义，并与主记录同事务，
+    // 避免出现「主记录已改但明细还是旧的」不一致状态（T152 反馈的后端缺口）。
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.checkoutRecord.update({ where: { id }, data: updateData });
+
+      if (dto.items !== undefined) {
+        await tx.checkoutItem.deleteMany({ where: { checkoutId: id } });
+
+        if (dto.items.length > 0) {
+          await tx.checkoutItem.createMany({
+            data: dto.items.map((item) => ({
+              checkoutId: id,
+              itemType: item.itemType as any,
+              description: item.description,
+              amount: item.amount,
+              calculation: item.calculation ?? undefined,
+              isAdjusted: item.isAdjusted ?? false,
+              adjustReason: item.adjustReason,
+            })),
+          });
+        }
+      }
+
+      return tx.checkoutRecord.findUniqueOrThrow({
+        where: { id: updated.id },
+        include: { items: true },
+      });
+    });
   }
 
   async remove(id: string) {
