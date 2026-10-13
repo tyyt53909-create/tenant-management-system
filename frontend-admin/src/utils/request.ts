@@ -13,6 +13,25 @@ const request: AxiosInstance = axios.create({
   },
 });
 
+/**
+ * 剔除查询参数中的空值（undefined / null / 空串）。
+ *
+ * 后端全局 ValidationPipe 开启了 forbidNonWhitelisted，且枚举字段不接受空串，
+ * 因此前端把表单原样展开（如 ?status=&billType=）会导致整个列表接口 400。
+ * 在请求层统一收敛，避免每个视图各自处理。
+ */
+function pruneEmptyParams(params: unknown): unknown {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return params;
+  }
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+    if (value === undefined || value === null || value === '') continue;
+    cleaned[key] = value;
+  }
+  return cleaned;
+}
+
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
@@ -20,6 +39,7 @@ request.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.params = pruneEmptyParams(config.params);
     return config;
   },
   (error) => {
