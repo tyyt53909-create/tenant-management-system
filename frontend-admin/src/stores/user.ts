@@ -25,6 +25,16 @@ export const useUserStore = defineStore('user', () => {
     }
   };
 
+  /**
+   * 应用启动时恢复登录态（T157）。
+   * 原先仅 login() 会拉取用户信息，导致刷新页面后 store 为空、
+   * 头部显示兜底文案「管理员」而不是真实邮箱。
+   */
+  const init = async () => {
+    if (!token.value) return;
+    await fetchUserInfo();
+  };
+
   // 登出
   const logout = () => {
     user.value = null;
@@ -39,5 +49,6 @@ export const useUserStore = defineStore('user', () => {
     login,
     logout,
     fetchUserInfo,
+    init,
   };
 });
