@@ -9,6 +9,13 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '登录' },
   },
   {
+    // 公开看房页（P1 / T155）：无需登录，只展示可租房源，不含任何租客信息
+    path: '/viewing',
+    name: 'PublicViewing',
+    component: () => import('@/views/public/index.vue'),
+    meta: { title: '在租房源', public: true },
+  },
+  {
     path: '/',
     component: () => import('@/components/layout/MainLayout.vue'),
     redirect: '/dashboard',
@@ -24,6 +31,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Rooms',
         component: () => import('@/views/rooms/index.vue'),
         meta: { title: '房源管理', icon: 'House' },
+      },
+      {
+        path: '/cleaning',
+        name: 'Cleaning',
+        component: () => import('@/views/cleaning/index.vue'),
+        meta: { title: '保洁管理', icon: 'Brush' },
       },
       {
         path: '/tenants',
@@ -73,6 +86,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/checkout/index.vue'),
         meta: { title: '退租管理', icon: 'Switch' },
       },
+      {
+        path: '/notifications',
+        name: 'Notifications',
+        component: () => import('@/views/notifications/index.vue'),
+        meta: { title: '通知提醒', icon: 'Bell' },
+      },
+      {
+        path: '/statistics',
+        name: 'Statistics',
+        component: () => import('@/views/statistics/index.vue'),
+        meta: { title: '统计报表', icon: 'TrendCharts' },
+      },
     ],
   },
 ];
@@ -86,7 +111,8 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('access_token');
 
-  if (to.path === '/login') {
+  // 公开路由（登录页、公开看房页）无需鉴权
+  if (to.path === '/login' || to.meta?.public) {
     next();
   } else if (!token) {
     next('/login');

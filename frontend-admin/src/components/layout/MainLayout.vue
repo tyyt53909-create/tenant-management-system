@@ -19,6 +19,10 @@
           <el-icon><House /></el-icon>
           <span>房源管理</span>
         </el-menu-item>
+        <el-menu-item index="/cleaning">
+          <el-icon><Brush /></el-icon>
+          <span>保洁管理</span>
+        </el-menu-item>
         <el-menu-item index="/tenants">
           <el-icon><User /></el-icon>
           <span>租客管理</span>
@@ -51,6 +55,24 @@
           <el-icon><Switch /></el-icon>
           <span>退租管理</span>
         </el-menu-item>
+        <el-menu-item index="/notifications">
+          <el-icon><Bell /></el-icon>
+          <template #title>
+            <span>通知提醒</span>
+            <el-badge
+              v-if="notificationStore.unreadCount > 0"
+              :value="notificationStore.unreadCount"
+              :max="99"
+              type="danger"
+              class="menu-badge"
+              data-test="menu-unread-badge"
+            />
+          </template>
+        </el-menu-item>
+        <el-menu-item index="/statistics">
+          <el-icon><TrendCharts /></el-icon>
+          <span>统计报表</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -82,10 +104,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
+import { useNotificationStore } from '@/stores/notification';
 import {
+  Brush,
   DataLine,
   House,
   User,
@@ -96,15 +120,30 @@ import {
   Tools,
   Odometer,
   Switch,
+  Bell,
+  TrendCharts,
   ArrowDown,
 } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
+const notificationStore = useNotificationStore();
 
 const activeMenu = computed(() => route.path);
 const currentTitle = computed(() => route.meta?.title || '');
+
+// 侧边栏未读数：进入后台时拉一次，切换页面时刷新（通知页内操作由 store 同步）
+onMounted(() => {
+  notificationStore.fetchUnreadCount();
+});
+
+watch(
+  () => route.path,
+  () => {
+    notificationStore.fetchUnreadCount();
+  }
+);
 
 const handleCommand = (command: string) => {
   if (command === 'logout') {
@@ -175,5 +214,15 @@ const handleCommand = (command: string) => {
 .main-content {
   background-color: #f0f2f5;
   padding: 20px;
+}
+
+/* 菜单项内的未读数角标：靠右对齐，避免挤压文字 */
+.menu-badge {
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.menu-badge :deep(.el-badge__content) {
+  border: none;
 }
 </style>

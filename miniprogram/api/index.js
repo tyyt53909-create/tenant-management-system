@@ -1,4 +1,5 @@
 import request from '../utils/request.js'
+import { API_BASE_URL } from '../utils/api-config.js'
 
 // 用户登录
 export const login = (data) => {
@@ -28,6 +29,38 @@ export const getMyMaintenance = (params) => {
 // 创建报修
 export const createMaintenance = (data) => {
   return request.post('/maintenance', data)
+}
+
+/**
+ * 上传单张报修照片（multipart/form-data，字段名 file）。
+ * 返回 { key, url, fileName, fileSize, mimeType }；url 形如 /api/files/<key>，
+ * 提交报修时把 url 放入 photos 数组。
+ */
+export const uploadMaintenancePhoto = (filePath) => {
+  return new Promise((resolve, reject) => {
+    const token = uni.getStorageSync('access_token')
+    uni.uploadFile({
+      url: API_BASE_URL + '/files/upload',
+      filePath,
+      name: 'file',
+      header: token ? { Authorization: `Bearer ${token}` } : {},
+      success: (res) => {
+        let data = res.data
+        try {
+          data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+        } catch (error) {
+          reject(new Error('上传响应解析失败'))
+          return
+        }
+        if (res.statusCode >= 200 && res.statusCode < 300 && data && data.url) {
+          resolve(data)
+        } else {
+          reject(new Error((data && data.message) || `上传失败(${res.statusCode})`))
+        }
+      },
+      fail: () => reject(new Error('上传失败，请检查网络')),
+    })
+  })
 }
 
 // 获取我的账户余额

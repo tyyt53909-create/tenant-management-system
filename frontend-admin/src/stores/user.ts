@@ -8,8 +8,8 @@ export const useUserStore = defineStore('user', () => {
   const token = ref<string | null>(localStorage.getItem('access_token'));
 
   // 登录
-  const login = async (account: string, password: string) => {
-    const response: any = await loginApi({ account, password });
+  const login = async (identifier: string, password: string) => {
+    const response: any = await loginApi({ identifier, password });
     token.value = response.accessToken;
     localStorage.setItem('access_token', response.accessToken);
     localStorage.setItem('refresh_token', response.refreshToken);
@@ -23,6 +23,16 @@ export const useUserStore = defineStore('user', () => {
     } catch (error) {
       console.error('Failed to fetch user info:', error);
     }
+  };
+
+  /**
+   * 应用启动时恢复登录态（T157）。
+   * 原先仅 login() 会拉取用户信息，导致刷新页面后 store 为空、
+   * 头部显示兜底文案「管理员」而不是真实邮箱。
+   */
+  const init = async () => {
+    if (!token.value) return;
+    await fetchUserInfo();
   };
 
   // 登出
@@ -39,5 +49,6 @@ export const useUserStore = defineStore('user', () => {
     login,
     logout,
     fetchUserInfo,
+    init,
   };
 });

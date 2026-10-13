@@ -19,14 +19,30 @@ describe('MaintenanceService', () => {
         findUnique: vi.fn(),
         findMany: vi.fn(),
         count: vi.fn(),
-        create: vi.fn(),
+        // 记录最近一次写入，供事务末尾的 findUniqueOrThrow 回读（贴近真实行为）
+        create: vi.fn(async ({ data }: any) => {
+          prismaMock.maintenanceRequest.__created = data;
+          return { id: 'mr-auto', ...data };
+        }),
         update: vi.fn(),
         delete: vi.fn(),
       },
       room: { findUnique: vi.fn() },
       tenant: { findUnique: vi.fn() },
       contract: { findFirst: vi.fn() },
+      maintenancePhoto: { createMany: vi.fn() },
     };
+    // create() 现为事务写入（工单 + 照片同事务）。
+    // 把 prismaMock 自身作为事务客户端传入，使既有断言（prisma.maintenanceRequest.create）
+    // 仍然有效，同时可断言 maintenancePhoto.createMany。
+    prismaMock.$transaction = vi.fn(async (callback: any) => callback(prismaMock));
+    // 事务末尾用 findUniqueOrThrow 回读（含 photos），桩按 create 落库的数据返回
+    prismaMock.maintenanceRequest.findUniqueOrThrow = vi.fn(async ({ where }: any) => ({
+      ...(prismaMock.maintenanceRequest.__created ?? {}),
+      id: where.id,
+      photos: [],
+    }));
+    prismaMock.maintenanceRequest.__created = undefined;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [MaintenanceService, { provide: PrismaService, useValue: prismaMock }],
@@ -45,10 +61,10 @@ describe('MaintenanceService', () => {
       prisma.contract.findFirst.mockResolvedValue({ id: 'contract-1', roomId: 'room-from-contract' });
       prisma.room.findUnique.mockResolvedValue({ id: 'room-from-contract' });
       prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
-      prisma.maintenanceRequest.create.mockImplementation(async ({ data }: any) => ({
-        id: 'mr-1',
-        ...data,
-      }));
+      prisma.maintenanceRequest.create.mockImplementation(async ({ data }: any) => {
+        prisma.maintenanceRequest.__created = data;
+        return { id: 'mr-1', ...data };
+      });
 
       const result = await service.create(
         { ...baseDto, roomId: 'fake-room', tenantId: 'fake-tenant' } as any,
@@ -82,6 +98,55 @@ describe('MaintenanceService', () => {
         service.create({ ...baseDto } as any, { userId: 'u-1', role: 'ADMIN' }),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.maintenanceRequest.create).not.toHaveBeenCalled();
+    });
+
+    it('T153 带照片：工单与 MaintenancePhoto 同事务落库', async () => {
+      prisma.contract.findFirst.mockResolvedValue({ id: 'contract-1', roomId: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.maintenanceRequest.create.mockImplementation(async ({ data }: any) => ({ id: 'mr-9', ...data }));
+      prisma.maintenancePhoto.createMany.mockResolvedValue({ count: 2 });
+
+      await service.create(
+        { ...baseDto, photos: ['/api/files/a.jpg', '/api/files/b.png'] } as any,
+        { userId: 'u-1', role: 'TENANT', tenantId: 'tenant-1' },
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.maintenancePhoto.createMany).toHaveBeenCalledWith({
+        data: [
+          { requestId: 'mr-9', fileUrl: '/api/files/a.jpg', fileSize: 0 },
+          { requestId: 'mr-9', fileUrl: '/api/files/b.png', fileSize: 0 },
+        ],
+      });
+    });
+
+    it('T153 无照片：不写 MaintenancePhoto', async () => {
+      prisma.contract.findFirst.mockResolvedValue({ id: 'contract-1', roomId: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.maintenanceRequest.create.mockImplementation(async ({ data }: any) => ({ id: 'mr-10', ...data }));
+
+      await service.create(
+        { ...baseDto } as any,
+        { userId: 'u-1', role: 'TENANT', tenantId: 'tenant-1' },
+      );
+
+      expect(prisma.maintenancePhoto.createMany).not.toHaveBeenCalled();
+    });
+
+    it('T153 空字符串路径被过滤，不产生空照片记录', async () => {
+      prisma.contract.findFirst.mockResolvedValue({ id: 'contract-1', roomId: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.maintenanceRequest.create.mockImplementation(async ({ data }: any) => ({ id: 'mr-11', ...data }));
+
+      await service.create(
+        { ...baseDto, photos: ['', '   '] } as any,
+        { userId: 'u-1', role: 'TENANT', tenantId: 'tenant-1' },
+      );
+
+      expect(prisma.maintenancePhoto.createMany).not.toHaveBeenCalled();
     });
 
     it('管理员指定 IDs：正常创建（默认优先级 NORMAL）', async () => {

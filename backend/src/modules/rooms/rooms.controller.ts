@@ -34,13 +34,13 @@ export class RoomsController {
 
   @Get()
   findAll(@Request() req: any, @Query() query: QueryRoomsDto) {
-    // 保洁仅可见待清洁房间（服务端固定过滤，docs/03-权限矩阵.md）
-    return this.roomsService.findAll(query, req.user?.role);
+    // 保洁仅可见待清洁房间、租客仅可见自己租住的房间（服务端固定过滤，docs/03-权限矩阵.md）
+    return this.roomsService.findAll(query, req.user?.role, req.user?.tenantId);
   }
 
   @Get(':id')
   findOne(@Request() req: any, @Param('id') id: string) {
-    return this.roomsService.findOne(id, req.user?.role);
+    return this.roomsService.findOne(id, req.user?.role, req.user?.tenantId);
   }
 
   @Patch(':id/status')

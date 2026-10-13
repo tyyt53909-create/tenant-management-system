@@ -21,6 +21,8 @@ import { FilesModule } from './modules/files/files.module.js';
 import { AuditLogModule } from './modules/audit/audit.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
+import { PublicModule } from './modules/public/public.module.js';
+import { StatisticsModule } from './modules/statistics/statistics.module.js';
 
 @Module({
   imports: [
@@ -45,6 +47,10 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
     AuditLogModule,
     DashboardModule,
     SchedulerModule,
+    // 公开看房：无鉴权，只暴露可租房源白名单字段（P1 / T155）
+    PublicModule,
+    // 统计：时间维度（月/季/年/自定义）× 空间维度（整楼/楼层），仅 ADMIN
+    StatisticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

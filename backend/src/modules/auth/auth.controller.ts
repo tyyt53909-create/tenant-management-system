@@ -4,8 +4,11 @@ import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto.js';
 import { InviteCodeService } from './invite-code.service.js';
 import { JwtAuthService } from './jwt.service.js';
+import { GenerateInviteCodeDto } from './dto/generate-invite-code.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
 import * as bcrypt from 'bcrypt';
 
 @Controller('auth')
@@ -60,11 +63,23 @@ export class AuthController {
       });
 
       // 创建 Tenant
+      // Tenant.phone 必填且唯一（docs/02-数据模型.md）：注册时手机号可选，
+      // 缺失时用 userId 生成唯一占位值，避免空串触发唯一约束导致第二个注册 500（T148 / BUG-1）
+      const tenantPhone = dto.phone?.trim() ? dto.phone.trim() : `pending-${newUser.id}`;
+
+      // 邀请码一次性：注册成功后立即失效（docs/03-权限矩阵.md §4.1
+      // 「使用后立即失效，48小时后自动过期」）。与建号同事务，避免
+      // 「账号已建但邀请码仍可复用」的中间态。
+      await tx.user.update({
+        where: { id: validation.invitedBy! },
+        data: { inviteCode: null, inviteExpiredAt: null },
+      });
+
       await tx.tenant.create({
         data: {
           userId: newUser.id,
           name: dto.email.split('@')[0], // 使用邮箱前缀作为初始名称
-          phone: dto.phone || '',
+          phone: tenantPhone,
           email: dto.email,
           emergencyContact: dto.phone || '',
           emergencyPhone: dto.phone || '',
@@ -148,6 +163,28 @@ export class AuthController {
         phone: user.phone,
         role: user.role,
       },
+    };
+  }
+
+  /**
+   * 生成邀请码（管理员专用）
+   * 生产环境管理员为租客发放邀请码的唯一 HTTP 入口（T148 / BUG-2）
+   */
+  @Post('invite-codes')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async generateInviteCode(@Request() req: any, @Body() dto: GenerateInviteCodeDto) {
+    const expiryDays = dto?.expiryDays ?? 365;
+    const inviteCode = await this.inviteCodeService.generateInviteCode(
+      req.user.userId,
+      expiryDays,
+    );
+
+    return {
+      inviteCode,
+      expiryDays,
+      expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
+      invitedBy: req.user.userId,
     };
   }
 

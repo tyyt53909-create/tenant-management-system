@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateContractDto } from './dto/create-contract.dto.js';
 import { UpdateContractDto } from './dto/update-contract.dto.js';
 import { QueryContractsDto } from './dto/query-contracts.dto.js';
+import { RenewContractDto } from './dto/renew-contract.dto.js';
 
 @Injectable()
 export class ContractsService {
@@ -37,6 +43,58 @@ export class ContractsService {
         endDate: new Date(dto.endDate),
         lateFeeRule: dto.lateFeeRule || {},
       },
+    });
+  }
+
+  /**
+   * 合同续签：复制原合同生成新草稿，并建立 renewedFromId 关联。
+   * - 原合同不得已终止/已续签（避免同一合同被重复续签）
+   * - 新合同为 DRAFT，待管理者确认后另行置为 ACTIVE
+   * - 原合同状态在本步不变，待新合同生效时由管理者处理
+   */
+  async renew(id: string, dto: RenewContractDto) {
+    const original = await this.prisma.contract.findUnique({
+      where: { id },
+      include: { renewedTo: { select: { id: true } } },
+    });
+
+    if (!original) throw new NotFoundException('合同不存在');
+
+    if (original.status === 'TERMINATED') {
+      throw new BadRequestException('已终止的合同不能续签');
+    }
+    if (original.status === 'RENEWED' || original.renewedTo) {
+      throw new ConflictException('该合同已续签，请勿重复操作');
+    }
+
+    const startDate = dto.startDate
+      ? new Date(dto.startDate)
+      : new Date(new Date(original.endDate).getTime() + 24 * 60 * 60 * 1000);
+    const endDate = new Date(dto.endDate);
+
+    if (endDate <= startDate) {
+      throw new BadRequestException('新合同到期日必须晚于起始日');
+    }
+
+    const contractNumber = `C${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+    return this.prisma.contract.create({
+      data: {
+        buildingId: original.buildingId,
+        roomId: original.roomId,
+        tenantId: original.tenantId,
+        contractNumber,
+        rentAmount: dto.rentAmount ?? original.rentAmount,
+        depositAmount: dto.depositAmount ?? original.depositAmount,
+        paymentCycle: (dto.paymentCycle ?? original.paymentCycle) as any,
+        paymentDay: dto.paymentDay ?? original.paymentDay,
+        startDate,
+        endDate,
+        lateFeeRule: dto.lateFeeRule ?? original.lateFeeRule ?? {},
+        status: 'DRAFT',
+        renewedFromId: original.id,
+      },
+      include: { renewedFrom: { select: { id: true, contractNumber: true } } },
     });
   }
 

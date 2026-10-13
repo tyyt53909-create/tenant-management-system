@@ -8,6 +8,12 @@ export enum RoomStatus {
   RESERVED = 'RESERVED',
 }
 
+export enum CleanStatus {
+  CLEAN = 'CLEAN',
+  PENDING_CLEAN = 'PENDING_CLEAN',
+  CLEANING = 'CLEANING',
+}
+
 export class QueryRoomsDto {
   @IsInt()
   @Min(1)
@@ -25,6 +31,10 @@ export class QueryRoomsDto {
   @IsEnum(RoomStatus, { message: '房态必须为 VACANT, OCCUPIED, MAINTENANCE 或 RESERVED' })
   @IsOptional()
   status?: RoomStatus;
+
+  @IsEnum(CleanStatus, { message: '清洁状态必须为 CLEAN, PENDING_CLEAN 或 CLEANING' })
+  @IsOptional()
+  cleanStatus?: CleanStatus;
 
   @IsString({ message: '楼栋ID格式错误' })
   @IsOptional()

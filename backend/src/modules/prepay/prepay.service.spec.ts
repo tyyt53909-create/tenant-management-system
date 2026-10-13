@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrepayService } from './prepay.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -15,6 +15,7 @@ describe('PrepayService', () => {
       prepayAccount: {
         findUnique: vi.fn(),
         findUniqueOrThrow: vi.fn(),
+        findFirst: vi.fn(),
         findMany: vi.fn(),
         count: vi.fn(),
         create: vi.fn(),
@@ -222,6 +223,163 @@ describe('PrepayService', () => {
         take: 20,
         orderBy: { createdAt: 'desc' },
       });
+    });
+  });
+
+  describe('账户管理（T148 核心业务覆盖率补齐）', () => {
+    it('create：租客不存在 → 400', async () => {
+      prisma.tenant.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create({ tenantId: 'tenant-x', roomId: 'room-1' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.prepayAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('create：同一租客同一房间已有账户 → 409', async () => {
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId });
+
+      await expect(
+        service.create({ tenantId: 'tenant-1', roomId: 'room-1' } as any),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('create：成功 → 未指定时低余额阈值为 10000 分', async () => {
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.prepayAccount.findUnique.mockResolvedValue(null);
+      prisma.prepayAccount.create.mockResolvedValue({ id: accountId });
+
+      await service.create({ tenantId: 'tenant-1', roomId: 'room-1' } as any);
+
+      expect(prisma.prepayAccount.create).toHaveBeenCalledWith({
+        data: { tenantId: 'tenant-1', roomId: 'room-1', lowBalanceThreshold: 10000 },
+      });
+    });
+
+    it('findAll：tenantId 过滤 + 分页 + 补充房间号', async () => {
+      prisma.prepayAccount.findMany.mockResolvedValue([
+        { id: accountId, roomId: 'room-1' },
+        { id: 'account-2', roomId: 'room-2' },
+      ]);
+      prisma.prepayAccount.count.mockResolvedValue(2);
+      prisma.room.findMany.mockResolvedValue([{ id: 'room-1', roomNumber: '101' }]);
+
+      const result = await service.findAll({ page: 1, limit: 20, tenantId: 'tenant-1' } as any);
+
+      expect(prisma.prepayAccount.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: 'tenant-1' } }),
+      );
+      expect(prisma.room.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['room-1', 'room-2'] } },
+        select: { id: true, roomNumber: true },
+      });
+      expect(result.data[0].roomNumber).toBe('101');
+      expect(result.data[1].roomNumber).toBeNull();
+      expect(result.meta.totalPages).toBe(1);
+    });
+
+    it('findOne：存在 → 返回最近 20 条流水', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId, transactions: [] });
+
+      const result = await service.findOne(accountId);
+
+      expect(result.id).toBe(accountId);
+      expect(prisma.prepayAccount.findUnique).toHaveBeenCalledWith({
+        where: { id: accountId },
+        include: { tenant: true, transactions: { take: 20, orderBy: { createdAt: 'desc' } } },
+      });
+    });
+
+    it('findOne：不存在 → 404', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue(null);
+
+      await expect(service.findOne(accountId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('update：修改低余额阈值', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId });
+      prisma.prepayAccount.update.mockResolvedValue({ id: accountId, lowBalanceThreshold: 5000 });
+
+      const result = await service.update(accountId, { lowBalanceThreshold: 5000 } as any);
+
+      expect(result.lowBalanceThreshold).toBe(5000);
+      expect(prisma.prepayAccount.update).toHaveBeenCalledWith({
+        where: { id: accountId },
+        data: { lowBalanceThreshold: 5000 },
+      });
+    });
+
+    it('update：不存在 → 404', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue(null);
+
+      await expect(service.update(accountId, {} as any)).rejects.toThrow(NotFoundException);
+    });
+
+    it('remove：删除账户', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId });
+      prisma.prepayAccount.delete.mockResolvedValue({ id: accountId });
+
+      await expect(service.remove(accountId)).resolves.toEqual({ message: '预付账户已删除' });
+    });
+
+    it('remove：不存在 → 404', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue(null);
+
+      await expect(service.remove(accountId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('findByTenant：返回账户并补房间号', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue({ id: accountId, roomId: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', roomNumber: '101' });
+
+      const result = await service.findByTenant('tenant-1');
+
+      expect(result.room?.roomNumber).toBe('101');
+      expect(prisma.prepayAccount.findFirst).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1' },
+        include: { tenant: { select: { id: true, name: true } } },
+      });
+    });
+
+    it('findByTenant：无账户 → 404', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue(null);
+
+      await expect(service.findByTenant('tenant-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('findTransactionsByTenant：无账户 → 空结果（不泄漏他人流水）', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue(null);
+
+      const result = await service.findTransactionsByTenant('tenant-1', { page: 1, limit: 20 });
+
+      expect(result.data).toEqual([]);
+      expect(prisma.prepayTransaction.findMany).not.toHaveBeenCalled();
+    });
+
+    it('findTransactionsByTenant：有账户 → 仅查该账户流水', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue({ id: accountId });
+      prisma.prepayTransaction.findMany.mockResolvedValue([{ id: 'tx-1' }]);
+      prisma.prepayTransaction.count.mockResolvedValue(1);
+
+      const result = await service.findTransactionsByTenant('tenant-1', { page: 1, limit: 20 });
+
+      expect(result.meta.total).toBe(1);
+      expect(prisma.prepayTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { accountId } }),
+      );
+    });
+
+    it('findAllTransactions：管理员分页（含租客名）', async () => {
+      prisma.prepayTransaction.findMany.mockResolvedValue([{ id: 'tx-1' }]);
+      prisma.prepayTransaction.count.mockResolvedValue(1);
+
+      const result = await service.findAllTransactions({ page: 2, limit: 5 });
+
+      expect(prisma.prepayTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 5, take: 5 }),
+      );
+      expect(result.meta).toEqual({ page: 2, limit: 5, total: 1, totalPages: 1 });
     });
   });
 });

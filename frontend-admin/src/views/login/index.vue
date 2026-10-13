@@ -11,9 +11,9 @@
         :rules="rules"
         label-width="80px"
       >
-        <el-form-item label="账号" prop="account">
+        <el-form-item label="账号" prop="identifier">
           <el-input
-            v-model="loginForm.account"
+            v-model="loginForm.identifier"
             placeholder="请输入邮箱或手机号"
             clearable
           />
@@ -58,12 +58,12 @@ const loginFormRef = ref<FormInstance>();
 const loading = ref(false);
 
 const loginForm = reactive({
-  account: 'admin@example.com',
+  identifier: 'admin@example.com',
   password: 'Admin@123',
 });
 
 const rules: FormRules = {
-  account: [{ required: true, message: '请输入账号', trigger: 'blur' }],
+  identifier: [{ required: true, message: '请输入账号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 };
 
@@ -75,7 +75,7 @@ const handleLogin = async () => {
 
     loading.value = true;
     try {
-      await userStore.login(loginForm.account, loginForm.password);
+      await userStore.login(loginForm.identifier, loginForm.password);
       ElMessage.success('登录成功');
       router.push('/dashboard');
     } catch (error: any) {

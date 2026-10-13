@@ -7,6 +7,63 @@ import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { LateFeeUtil, LateFeeRule } from './utils/late-fee.util.js';
 
+/**
+ * 由账单的滞纳金记录汇总出列表展示所需的摘要（导出以便单测）。
+ *
+ * 口径与前端原「逐行拉取明细」的展示保持一致：
+ * - amount：已确认合计；未确认时为 null（前端据此只展示建议值）
+ * - suggestedAmount：最新一条的系统建议值
+ * - settledAmount / pendingSettled：已核销 / 确认额减去已核销
+ * - status：none（无记录）/ suggested（未确认）/ confirmed（已确认未结清）/ settled（已结清）
+ */
+export function summarizeLateFees(
+  fees: Array<{
+    suggestedAmount: number;
+    confirmedAmount: number | null;
+    settledAmount: number | null;
+    overdueDays: number;
+    confirmedAt: Date | null;
+    settledAt: Date | null;
+  }>,
+) {
+  if (!fees || fees.length === 0) {
+    return {
+      count: 0,
+      status: 'none' as const,
+      amount: null,
+      suggestedAmount: 0,
+      settledAmount: 0,
+      pendingSettled: 0,
+      overdueDays: 0,
+    };
+  }
+
+  const latest = fees[0];
+  const confirmed = fees.filter((f) => f.confirmedAmount !== null);
+  const confirmedTotal = confirmed.reduce((sum, f) => sum + (f.confirmedAmount ?? 0), 0);
+  const settledTotal = confirmed.reduce((sum, f) => sum + (f.settledAmount ?? 0), 0);
+
+  const allSettled =
+    confirmed.length > 0 &&
+    confirmed.every((f) => f.settledAt !== null) &&
+    settledTotal >= confirmedTotal;
+
+  let status: 'suggested' | 'confirmed' | 'settled';
+  if (allSettled) status = 'settled';
+  else if (confirmed.length > 0) status = 'confirmed';
+  else status = 'suggested';
+
+  return {
+    count: fees.length,
+    status,
+    amount: confirmed.length > 0 ? confirmedTotal : null,
+    suggestedAmount: latest.suggestedAmount,
+    settledAmount: settledTotal,
+    pendingSettled: Math.max(confirmedTotal - settledTotal, 0),
+    overdueDays: latest.overdueDays,
+  };
+}
+
 @Injectable()
 export class BillsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -59,13 +116,30 @@ export class BillsService {
               room: { select: { roomNumber: true } },
             },
           },
+          // 列表直接带上滞纳金摘要，避免前端对当前页每行再发一次
+          // GET /bills/:id/late-fees（原为 20 次/页的 N+1，见 docs/09 第 24 条）
+          lateFees: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              suggestedAmount: true,
+              confirmedAmount: true,
+              settledAmount: true,
+              overdueDays: true,
+              confirmedAt: true,
+              settledAt: true,
+            },
+          },
         },
       }),
       this.prisma.bill.count({ where }),
     ]);
 
     return {
-      data,
+      data: data.map((bill) => {
+        const { lateFees, ...rest } = bill as typeof bill & { lateFees: any[] };
+        return { ...rest, lateFeeSummary: summarizeLateFees(lateFees) };
+      }),
       meta: {
         page,
         limit,

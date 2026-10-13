@@ -11,6 +11,7 @@
             <el-option label="生效中" value="ACTIVE" />
             <el-option label="已过期" value="EXPIRED" />
             <el-option label="已终止" value="TERMINATED" />
+            <el-option label="已续签" value="RENEWED" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -54,8 +55,22 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="续签" width="110">
           <template #default="{ row }">
+            <el-tag v-if="row.renewedFromId" type="info" size="small">已续签他人</el-tag>
+            <el-tag v-else-if="row.status === 'RENEWED'" type="info" size="small">已续签</el-tag>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="240" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              type="success"
+              link
+              :disabled="!canRenew(row)"
+              :title="canRenew(row) ? '基于本合同生成续签草稿' : '仅生效中或已过期的合同可续签'"
+              @click="handleRenew(row)"
+            >续签</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
@@ -113,6 +128,73 @@
         <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 续签（T154）：复制原合同生成续签草稿，保留全部历史 -->
+    <el-dialog v-model="renewVisible" title="合同续签" width="620px">
+      <el-alert
+        v-if="renewSource"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      >
+        <template #title>
+          原合同 {{ renewSource.contractNumber }}（{{ renewSource.startDate.split('T')[0] }} ~
+          {{ renewSource.endDate.split('T')[0] }}）
+        </template>
+        <div style="margin-top: 6px; line-height: 1.7">
+          原租金 ¥{{ (renewSource.rentAmount / 100).toFixed(2) }} · 原押金 ¥{{
+            (renewSource.depositAmount / 100).toFixed(2)
+          }}<br />
+          续签将新建一份<b>草稿</b>合同并关联本份合同，原合同记录完整保留。
+        </div>
+      </el-alert>
+
+      <el-form ref="renewFormRef" :model="renewForm" :rules="renewRules" label-width="110px">
+        <el-form-item label="新起始日" prop="startDate">
+          <el-date-picker
+            v-model="renewForm.startDate"
+            type="date"
+            placeholder="默认取原到期日次日"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+        <el-form-item label="新到期日" prop="endDate">
+          <el-date-picker
+            v-model="renewForm.endDate"
+            type="date"
+            placeholder="必填"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+        <el-form-item label="新租金(元)" prop="rentAmount">
+          <el-input-number v-model="renewForm.rentAmount" :min="0" :precision="2" />
+          <span class="hint">默认沿用原租金</span>
+        </el-form-item>
+        <el-form-item label="新押金(元)" prop="depositAmount">
+          <el-input-number v-model="renewForm.depositAmount" :min="0" :precision="2" />
+          <span class="hint">默认沿用原押金</span>
+        </el-form-item>
+        <el-form-item label="付款周期" prop="paymentCycle">
+          <el-select v-model="renewForm.paymentCycle">
+            <el-option label="月付" value="MONTHLY" />
+            <el-option label="季付" value="QUARTERLY" />
+            <el-option label="半年付" value="SEMI_ANNUAL" />
+            <el-option label="年付" value="ANNUAL" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="付款日" prop="paymentDay">
+          <el-input-number v-model="renewForm.paymentDay" :min="1" :max="31" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="renewVisible = false">取消</el-button>
+        <el-button type="primary" :loading="renewLoading" @click="handleRenewSubmit">
+          生成续签草稿
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -120,7 +202,13 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
-import { getContracts, createContract, updateContract, deleteContract } from '@/api/contracts';
+import {
+  getContracts,
+  createContract,
+  updateContract,
+  deleteContract,
+  renewContract,
+} from '@/api/contracts';
 import type { Contract } from '@/types';
 
 const loading = ref(false);
@@ -167,6 +255,7 @@ const statusMap: Record<string, string> = {
   ACTIVE: '生效中',
   EXPIRED: '已过期',
   TERMINATED: '已终止',
+  RENEWED: '已续签',
 };
 
 const statusTypeMap: Record<string, any> = {
@@ -174,7 +263,12 @@ const statusTypeMap: Record<string, any> = {
   ACTIVE: 'success',
   EXPIRED: 'warning',
   TERMINATED: 'danger',
+  RENEWED: 'info',
 };
+
+/** 续签可用性：已终止 / 已被续签的合同不可再续（后端亦会 400/409 拦截） */
+const canRenew = (row: Contract) =>
+  !row.renewedFromId && row.status !== 'RENEWED' && row.status !== 'TERMINATED';
 
 const fetchData = async () => {
   loading.value = true;
@@ -262,9 +356,83 @@ const handleSubmit = async () => {
   });
 };
 
+/* ---------------- 续签（T154） ---------------- */
+const renewVisible = ref(false);
+const renewLoading = ref(false);
+const renewFormRef = ref<FormInstance>();
+const renewSource = ref<Contract | null>(null);
+const renewForm = reactive({
+  startDate: '',
+  endDate: '',
+  rentAmount: 0,
+  depositAmount: 0,
+  paymentCycle: 'MONTHLY' as Contract['paymentCycle'],
+  paymentDay: 1,
+});
+
+const renewRules = {
+  endDate: [{ required: true, message: '请选择新到期日', trigger: 'change' }],
+};
+
+/** 原到期日次日（YYYY-MM-DD） */
+const dayAfter = (dateStr: string) => {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
+const handleRenew = (row: Contract) => {
+  renewSource.value = row;
+  renewForm.startDate = dayAfter(row.endDate);
+  // 默认续一年，便于管理者微调
+  const end = new Date(renewForm.startDate);
+  end.setFullYear(end.getFullYear() + 1);
+  end.setDate(end.getDate() - 1);
+  renewForm.endDate = end.toISOString().slice(0, 10);
+  renewForm.rentAmount = row.rentAmount / 100;
+  renewForm.depositAmount = row.depositAmount / 100;
+  renewForm.paymentCycle = row.paymentCycle;
+  renewForm.paymentDay = row.paymentDay;
+  renewVisible.value = true;
+};
+
+const handleRenewSubmit = async () => {
+  if (!renewFormRef.value || !renewSource.value) return;
+
+  // 前端先拦一次日期顺序，避免无谓请求（后端亦会 400）
+  if (renewForm.startDate && renewForm.endDate <= renewForm.startDate) {
+    ElMessage.error('新到期日必须晚于起始日');
+    return;
+  }
+
+  await renewFormRef.value.validate(async (valid) => {
+    if (!valid) return;
+    renewLoading.value = true;
+    try {
+      const created = await renewContract(renewSource.value!.id, {
+        startDate: renewForm.startDate || undefined,
+        endDate: renewForm.endDate,
+        rentAmount: Math.round(renewForm.rentAmount * 100),
+        depositAmount: Math.round(renewForm.depositAmount * 100),
+        paymentCycle: renewForm.paymentCycle,
+        paymentDay: renewForm.paymentDay,
+      });
+      ElMessage.success(`续签草稿已生成：${(created as any).contractNumber || ''}`);
+      renewVisible.value = false;
+      fetchData();
+    } catch (error: any) {
+      // 409（已续签）/ 400（已终止、日期非法）由拦截器统一提示
+    } finally {
+      renewLoading.value = false;
+    }
+  });
+};
+
 onMounted(fetchData);
 </script>
 
 <style scoped>
 .contracts-page { padding: 0; }
+.muted { color: #c0c4cc; }
+.hint { margin-left: 8px; color: #909399; font-size: 12px; }
 </style>

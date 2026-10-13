@@ -43,8 +43,9 @@ export class InviteCodeService {
       },
     });
 
-    // 邀请码不存在
-    if (!user) {
+    // 邀请码不存在；或已被使用（一次性语义：注册事务会清空 inviteCode，
+    // 见 auth.controller 注册流程与 docs/03-权限矩阵.md §4.1「使用后立即失效」）
+    if (!user || !user.inviteCode) {
       return { valid: false };
     }
 

@@ -72,8 +72,8 @@ export class RoomsService {
     });
   }
 
-  async findAll(query: QueryRoomsDto, actorRole?: string) {
-    const { page = 1, limit = 20, status, buildingId } = query;
+  async findAll(query: QueryRoomsDto, actorRole?: string, actorTenantId?: string) {
+    const { page = 1, limit = 20, status, buildingId, cleanStatus } = query;
     const skip = (page - 1) * limit;
 
     // 构建查询条件
@@ -87,8 +87,22 @@ export class RoomsService {
       // 保洁仅可见待清洁/清洁中房间（docs/03-权限矩阵.md），列表条件服务端固定，不信任查询参数
       where.status = 'VACANT';
       where.cleanStatus = { in: ['PENDING_CLEAN', 'CLEANING'] };
+    } else if (actorRole === 'TENANT') {
+      // 租客仅可见自己租住的房间（docs/03-权限矩阵.md），按合同归属过滤，不信任查询参数
+      if (actorTenantId) {
+        where.contracts = { some: { tenantId: actorTenantId } };
+      } else {
+        // 未绑定租客档案：无任何可见房源
+        where.id = { in: [] };
+      }
     } else if (status) {
       where.status = status;
+    }
+
+    // 清洁状态过滤（服务端执行，替代前端全量加载后本地过滤）。
+    // 保洁角色的 cleanStatus 由上方固定条件决定，此处不覆盖，避免越权放宽。
+    if (actorRole !== 'CLEANER' && cleanStatus) {
+      where.cleanStatus = cleanStatus;
     }
 
     // 注意：Prisma Schema 中没有 monthlyRent 字段
@@ -126,7 +140,7 @@ export class RoomsService {
     };
   }
 
-  async findOne(id: string, actorRole?: string) {
+  async findOne(id: string, actorRole?: string, actorTenantId?: string) {
     const room = await this.prisma.room.findUnique({
       where: { id },
       include: {
@@ -150,6 +164,20 @@ export class RoomsService {
       !(room.status === 'VACANT' && ['PENDING_CLEAN', 'CLEANING'].includes(room.cleanStatus))
     ) {
       throw new ForbiddenException('保洁仅可查看待清洁房间');
+    }
+
+    // 租客仅可查看自己租住的房间（docs/03-权限矩阵.md）
+    if (actorRole === 'TENANT') {
+      const ownedContract = actorTenantId
+        ? await this.prisma.contract.findFirst({
+            where: { roomId: id, tenantId: actorTenantId },
+            select: { id: true },
+          })
+        : null;
+
+      if (!ownedContract) {
+        throw new ForbiddenException('租客仅可查看自己租住的房间');
+      }
     }
 
     return room;
