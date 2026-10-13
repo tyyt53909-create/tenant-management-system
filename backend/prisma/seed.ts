@@ -56,6 +56,25 @@ async function main() {
   console.log('✅ 管理员账号已创建:', { email: adminEmail });
   console.log('⚠️  请记住密码:', adminPassword);
 
+  // 2.1 创建保洁账号（T143：保洁登录小程序使用）
+  const cleanerEmail = process.env.CLEANER_EMAIL || 'cleaner@example.com';
+  const cleanerPassword = process.env.CLEANER_PASSWORD || 'Cleaner@123';
+  const cleanerPasswordHash = await bcrypt.hash(cleanerPassword, 10);
+
+  await prisma.user.upsert({
+    where: { email: cleanerEmail },
+    update: {},
+    create: {
+      email: cleanerEmail,
+      passwordHash: cleanerPasswordHash,
+      role: 'CLEANER',
+      isActive: true,
+    },
+  });
+
+  console.log('✅ 保洁账号已创建:', { email: cleanerEmail });
+  console.log('⚠️  请记住密码:', cleanerPassword);
+
   // 3. 生成测试用邀请码
   const testInviteCode = `INVITE-${Date.now()}`;
   const inviteExpiredAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1年后过期
@@ -77,6 +96,8 @@ async function main() {
   console.log('   - 楼栋ID:', DEFAULT_BUILDING_ID);
   console.log('   - 管理员邮箱:', adminEmail);
   console.log('   - 管理员密码:', adminPassword);
+  console.log('   - 保洁邮箱:', cleanerEmail);
+  console.log('   - 保洁密码:', cleanerPassword);
   console.log('   - 邀请码:', testInviteCode);
 }
 

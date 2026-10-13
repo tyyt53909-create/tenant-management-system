@@ -1,13 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { RoomsService } from './rooms.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 describe('RoomsService', () => {
   let service: RoomsService;
   let prisma: PrismaService;
+  let notifications: any;
 
   beforeEach(async () => {
+    notifications = { create: vi.fn() };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RoomsService,
@@ -45,9 +54,14 @@ describe('RoomsService', () => {
             },
             roomPhoto: {
               count: vi.fn(),
+              create: vi.fn(),
+            },
+            user: {
+              findMany: vi.fn(),
             },
           },
         },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
 
@@ -60,6 +74,7 @@ describe('RoomsService', () => {
     vi.mocked(prisma.checkoutRecord.count).mockResolvedValue(0);
     vi.mocked(prisma.meter.count).mockResolvedValue(0);
     vi.mocked(prisma.roomPhoto.count).mockResolvedValue(0);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([]);
   });
 
   describe('create', () => {
@@ -410,6 +425,128 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(null);
 
       await expect(service.remove('room-999')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('保洁（CLEANER）可见性与操作（T143）', () => {
+    const pendingRoom = {
+      id: 'room-c1',
+      roomNumber: '201',
+      status: 'VACANT',
+      cleanStatus: 'PENDING_CLEAN',
+      version: 2,
+    };
+    const cleaningRoom = { ...pendingRoom, cleanStatus: 'CLEANING', version: 3 };
+    const occupiedRoom = {
+      id: 'room-o1',
+      roomNumber: '101',
+      status: 'OCCUPIED',
+      cleanStatus: 'CLEAN',
+      version: 1,
+    };
+
+    it('列表：保洁仅查询待清洁/清洁中房间（服务端固定条件，忽略 status 参数）', async () => {
+      vi.spyOn(prisma.room, 'findMany').mockResolvedValue([] as any);
+      vi.spyOn(prisma.room, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 1, limit: 20, status: 'OCCUPIED' } as any, 'CLEANER');
+
+      expect(prisma.room.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'VACANT',
+            cleanStatus: { in: ['PENDING_CLEAN', 'CLEANING'] },
+          }),
+        }),
+      );
+    });
+
+    it('详情：保洁访问非待清洁房间 → 403', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(occupiedRoom as any);
+
+      await expect(service.findOne('room-o1', 'CLEANER')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('标记完成：清洁中 → 已清洁（含照片落库）', async () => {
+      vi.spyOn(prisma.room, 'findUnique')
+        .mockResolvedValueOnce(cleaningRoom as any)
+        .mockResolvedValueOnce({ ...cleaningRoom, cleanStatus: 'CLEAN', version: 4 } as any);
+      vi.spyOn(prisma.room, 'update').mockResolvedValue({} as any);
+      vi.spyOn(prisma.roomPhoto, 'create').mockResolvedValue({ id: 'photo-1' } as any);
+
+      const result = await service.markClean('room-c1', {
+        photo: { fileUrl: 'https://oss.example.com/clean.jpg', fileSize: 12345 },
+      });
+
+      expect(prisma.room.update).toHaveBeenCalledWith({
+        where: { id: 'room-c1' },
+        data: { cleanStatus: 'CLEAN', version: { increment: 1 } },
+      });
+      expect(prisma.roomPhoto.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          roomId: 'room-c1',
+          fileUrl: 'https://oss.example.com/clean.jpg',
+          fileSize: 12345,
+        }),
+      });
+      expect(result.photo).toBeTruthy();
+    });
+
+    it('标记完成：未接单（PENDING_CLEAN）→ 400（提示先接单）', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(pendingRoom as any);
+
+      await expect(service.markClean('room-c1', {})).rejects.toThrow('请先接单');
+    });
+
+    it('标记完成：version 冲突 → 409', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(cleaningRoom as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 0 } as any);
+
+      await expect(service.markClean('room-c1', { version: 1 })).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('流转至待清洁：通知全部在职保洁', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(occupiedRoom as any);
+      vi.spyOn(prisma.checkoutRecord, 'findFirst').mockResolvedValue({ id: 'co-1' } as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 } as any);
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue({
+        ...occupiedRoom,
+        status: 'VACANT',
+        cleanStatus: 'PENDING_CLEAN',
+      } as any);
+      vi.mocked(prisma.user.findMany).mockResolvedValue([
+        { id: 'cleaner-1' },
+        { id: 'cleaner-2' },
+      ] as any);
+
+      await service.updateStatus('room-o1', {
+        status: 'VACANT',
+        cleanStatus: 'PENDING_CLEAN',
+        version: 1,
+      } as any);
+
+      expect(notifications.create).toHaveBeenCalledTimes(2);
+      expect(notifications.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'cleaner-1', title: '待清洁提醒' }),
+      );
+    });
+
+    it('流转至待清洁：无保洁账号时不报错、不发通知', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(occupiedRoom as any);
+      vi.spyOn(prisma.checkoutRecord, 'findFirst').mockResolvedValue({ id: 'co-1' } as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 } as any);
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue({} as any);
+
+      await expect(
+        service.updateStatus('room-o1', {
+          status: 'VACANT',
+          cleanStatus: 'PENDING_CLEAN',
+          version: 1,
+        } as any),
+      ).resolves.toBeDefined();
+      expect(notifications.create).not.toHaveBeenCalled();
     });
   });
 });
