@@ -33,6 +33,7 @@
 | [11-小程序构建与配置.md](./11-小程序构建与配置.md) | 小程序构建与配置 | 事实来源类 | active | medium | miniprogram/\*\* | 2026-10-13 | 安装、开发/生产 API 配置、产物位置与风险界线 |
 | [10-主题系统架构.md](./10-主题系统架构.md) | 主题系统架构 | 事实来源类 | draft | medium | miniprogram/theme/\*\*、miniprogram/utils/theme.js | 2026-10-13 | ⚠️ 仍描述 Vuex 版架构，T146 后需人工复核更新 |
 | [主题系统-完成总结.md](./主题系统-完成总结.md) | 主题系统完成总结 | 过程类 | draft | medium | miniprogram/\*\* | 2026-10-13 | ⚠️ T146 前的历史记录，含已废弃的 Vuex 说明 |
+| [12-部署与运维.md](./12-部署与运维.md) | 部署与运维 | 事实来源类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\*、docker-compose.yml | 2026-10-13 | 环境变量清单、生产 compose 要求、备份恢复步骤、上线前置 |
 
 ---
 
