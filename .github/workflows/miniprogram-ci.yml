@@ -1,0 +1,26 @@
+name: Miniprogram Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'miniprogram/**'
+      - '.github/workflows/miniprogram-ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'miniprogram/**'
+      - '.github/workflows/miniprogram-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Node 内置测试不依赖尚待整理的 uni-app 构建工具链。
+      - name: Test request, role routing and cleaning workflow
+        working-directory: miniprogram
+        run: npm test

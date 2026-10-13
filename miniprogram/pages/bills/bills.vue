@@ -70,6 +70,7 @@
 
 <script>
 import { getMyBills } from '../../api/index.js'
+import { ensureTenantSession } from '../../utils/session.js'
 
 export default {
   data() {
@@ -81,7 +82,7 @@ export default {
       loading: false
     }
   },
-  onLoad() {
+  onShow() {
     this.loadBills()
   },
   methods: {
@@ -96,6 +97,7 @@ export default {
 
       this.loading = true
       try {
+        if (!await ensureTenantSession()) return
         const params = {
           page: this.page,
           limit: 20

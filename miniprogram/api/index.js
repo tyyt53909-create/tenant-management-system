@@ -44,3 +44,12 @@ export const getRechargeRecords = (params) => {
 export const getUserInfo = () => {
   return request.get('/auth/me')
 }
+
+// 列表范围由服务端按 CLEANER 角色限制，不依赖客户端筛选权限。
+export const getCleaningRooms = (params) => request.get('/rooms', params)
+export const startCleaning = (id, version) => request.patch(
+  `/rooms/${encodeURIComponent(id)}/status`, { cleanStatus: 'CLEANING', version }
+)
+export const completeCleaning = (id, version) => request.patch(
+  `/rooms/${encodeURIComponent(id)}/clean`, { version }
+)

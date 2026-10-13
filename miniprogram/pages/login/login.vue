@@ -28,7 +28,7 @@
           />
         </view>
 
-        <button class="btn-login" :loading="loading" @tap="handleLogin">
+        <button class="btn-login" :loading="loading" :disabled="loading" @tap="handleLogin">
           登录
         </button>
 
@@ -43,6 +43,7 @@
 
 <script>
 import { login } from '../../api/index.js'
+import { openHome } from '../../utils/session.js'
 
 export default {
   data() {
@@ -56,6 +57,7 @@ export default {
   },
   methods: {
     async handleLogin() {
+      if (this.loading) return
       // 验证表单
       if (!this.form.account) {
         uni.showToast({
@@ -82,6 +84,7 @@ export default {
         // 保存 token
         uni.setStorageSync('access_token', res.accessToken)
         uni.setStorageSync('refresh_token', res.refreshToken)
+        uni.setStorageSync('user_role', res.user.role)
         
         uni.showToast({
           title: '登录成功',
@@ -89,9 +92,7 @@ export default {
         })
         
         // 跳转到首页
-        setTimeout(() => {
-          uni.switchTab({ url: '/pages/index/index' })
-        }, 1000)
+        openHome(res.user.role)
       } catch (error) {
         console.error('登录失败:', error)
       } finally {

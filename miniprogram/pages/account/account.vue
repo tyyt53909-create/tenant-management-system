@@ -34,6 +34,7 @@
 
 <script>
 import { getMyAccount, getRechargeRecords } from '../../api/index.js'
+import { ensureTenantSession } from '../../utils/session.js'
 
 export default {
   data() {
@@ -48,6 +49,7 @@ export default {
   methods: {
     async loadData() {
       try {
+        if (!await ensureTenantSession()) return
         const accountRes = await getMyAccount()
         this.balance = accountRes.balanceCache || 0
 
