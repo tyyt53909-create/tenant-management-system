@@ -116,7 +116,11 @@ const handleEdit = (row: Building) => {
 
 const handleDelete = async (row: Building) => {
   try {
-    await ElMessageBox.confirm('确定要删除吗？', '提示', { type: 'warning' });
+    await ElMessageBox.confirm(
+      `确定删除楼栋「${row.name || row.id}」吗？删除后不可恢复。\n若该楼栋下仍有房源，删除会被后端拒绝。`,
+      '删除楼栋',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消' },
+    );
     await deleteBuilding(row.id);
     ElMessage.success('删除成功');
     fetchData();

@@ -97,6 +97,62 @@ describe('TenantsService', () => {
         }),
       );
     });
+
+    it('T160 支持姓名模糊查询（大小写不敏感）', async () => {
+      vi.spyOn(prisma.tenant, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.tenant, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 1, limit: 20, name: '张' });
+
+      expect(prisma.tenant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { name: { contains: '张', mode: 'insensitive' } },
+        }),
+      );
+    });
+
+    it('T160 支持手机号模糊查询（可只输后几位）', async () => {
+      vi.spyOn(prisma.tenant, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.tenant, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 1, limit: 20, phone: '8000' });
+
+      expect(prisma.tenant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { phone: { contains: '8000' } },
+        }),
+      );
+    });
+
+    it('T160 空串/纯空格视为不筛选（避免查不到任何数据）', async () => {
+      vi.spyOn(prisma.tenant, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.tenant, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 1, limit: 20, name: '   ', phone: '' });
+
+      expect(prisma.tenant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+    });
+
+    it('T160 多个条件叠加', async () => {
+      vi.spyOn(prisma.tenant, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.tenant, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 2, limit: 10, name: '李', phone: '139', isActive: false });
+
+      expect(prisma.tenant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            isActive: false,
+            name: { contains: '李', mode: 'insensitive' },
+            phone: { contains: '139' },
+          },
+          skip: 10,
+          take: 10,
+        }),
+      );
+    });
   });
 
   describe('findOne', () => {

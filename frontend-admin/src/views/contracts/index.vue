@@ -3,7 +3,7 @@
     <el-card>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="合同编号">
-          <el-input v-model="queryForm.contractNumber" placeholder="请输入合同编号" clearable />
+          <el-input v-model="queryForm.contractNumber" placeholder="请输入合同编号" clearable @keyup.enter="handleQuery" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="queryForm.status" placeholder="请选择状态" clearable>
@@ -83,7 +83,7 @@
           v-model:page-size="pagination.limit"
           :total="pagination.total"
           layout="total, prev, pager, next"
-          @current-change="handleQuery"
+          @current-change="fetchData"
         />
       </div>
     </el-card>
@@ -319,7 +319,11 @@ const handleEdit = (row: Contract) => {
 
 const handleDelete = async (row: Contract) => {
   try {
-    await ElMessageBox.confirm('确定要删除吗？', '提示', { type: 'warning' });
+    await ElMessageBox.confirm(
+      `确定删除合同「${row.contractNumber || row.id}」吗？删除后不可恢复。`,
+      '删除合同',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消' },
+    );
     await deleteContract(row.id);
     ElMessage.success('删除成功');
     fetchData();

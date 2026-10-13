@@ -66,7 +66,7 @@ export class TenantsService {
   }
 
   async findAll(query: QueryTenantsDto) {
-    const { page = 1, limit = 20, isActive } = query;
+    const { page = 1, limit = 20, isActive, name, phone } = query;
     const skip = (page - 1) * limit;
 
     // 构建查询条件
@@ -75,6 +75,10 @@ export class TenantsService {
     if (isActive !== undefined) {
       where.isActive = isActive;
     }
+
+    // 姓名/手机号模糊查询（大小写不敏感）；空串视为不筛选
+    if (name?.trim()) where.name = { contains: name.trim(), mode: 'insensitive' };
+    if (phone?.trim()) where.phone = { contains: phone.trim() };
 
     // 查询数据和总数
     const [data, total] = await Promise.all([

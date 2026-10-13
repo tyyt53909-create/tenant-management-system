@@ -64,7 +64,7 @@
           v-model:page-size="pagination.limit"
           :total="pagination.total"
           layout="total, prev, pager, next"
-          @current-change="handleQuery"
+          @current-change="fetchData"
         />
       </div>
     </el-card>
@@ -302,7 +302,11 @@ const handleEdit = (row: Meter) => {
 
 const handleDelete = async (row: Meter) => {
   try {
-    await ElMessageBox.confirm('确定要删除吗？', '提示', { type: 'warning' });
+    await ElMessageBox.confirm(
+      `确定删除水电表「${row.meterNumber || row.id}」吗？其历史读数将一并删除，不可恢复。`,
+      '删除水电表',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消' },
+    );
     await deleteMeter(row.id);
     ElMessage.success('删除成功');
     fetchData();

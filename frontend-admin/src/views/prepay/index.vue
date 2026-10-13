@@ -357,7 +357,11 @@ const handleThresholdSubmit = async () => {
 
 const handleDelete = async (row: PrepayAccount) => {
   try {
-    await ElMessageBox.confirm('确定要删除该预付账户吗？', '提示', { type: 'warning' });
+    await ElMessageBox.confirm(
+      '确定删除该预付账户吗？其流水记录将一并删除，不可恢复。',
+      '删除预付账户',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消' },
+    );
     await deletePrepayAccount(row.id);
     ElMessage.success('删除成功');
     fetchData();

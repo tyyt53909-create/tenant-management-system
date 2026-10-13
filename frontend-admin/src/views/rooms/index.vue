@@ -4,7 +4,7 @@
       <!-- 搜索区域 -->
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="房间号">
-          <el-input v-model="queryForm.roomNumber" placeholder="请输入房间号" clearable />
+          <el-input v-model="queryForm.roomNumber" placeholder="请输入房间号" clearable @keyup.enter="handleQuery" />
         </el-form-item>
         <el-form-item label="房态">
           <el-select v-model="queryForm.status" placeholder="请选择房态" clearable style="width: 140px">
@@ -413,9 +413,11 @@ const handleStatusSubmit = async () => {
 
 const handleDelete = async (row: Room) => {
   try {
-    await ElMessageBox.confirm('确定要删除这个房源吗？', '提示', {
-      type: 'warning',
-    });
+    await ElMessageBox.confirm(
+      `确定删除房源「${row.roomNumber || row.id}」吗？\n若该房源已出租或存在历史记录，删除会被后端拒绝。`,
+      '删除房源',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消' },
+    );
     await deleteRoom(row.id);
     ElMessage.success('删除成功');
     fetchData();

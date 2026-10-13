@@ -111,7 +111,7 @@
           v-model:page-size="pagination.limit"
           :total="pagination.total"
           layout="total, prev, pager, next"
-          @current-change="handleQuery"
+          @current-change="fetchData"
         />
       </div>
     </el-card>

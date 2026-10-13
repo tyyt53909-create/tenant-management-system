@@ -51,7 +51,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="房间号">
-          <el-input v-model="queryForm.roomNumber" placeholder="请输入房间号" clearable />
+          <el-input v-model="queryForm.roomNumber" placeholder="请输入房间号" clearable @keyup.enter="handleQuery" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleQuery">查询</el-button>

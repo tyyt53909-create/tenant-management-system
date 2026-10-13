@@ -60,7 +60,7 @@
           v-model:page-size="pagination.limit"
           :total="pagination.total"
           layout="total, prev, pager, next"
-          @current-change="handleQuery"
+          @current-change="fetchData"
         />
       </div>
     </el-card>
@@ -186,7 +186,11 @@ const handleEdit = (row: Maintenance) => {
 
 const handleDelete = async (row: Maintenance) => {
   try {
-    await ElMessageBox.confirm('确定要删除吗？', '提示', { type: 'warning' });
+    await ElMessageBox.confirm(
+      `确定删除报修「${row.title || row.id}」吗？删除后不可恢复。`,
+      '删除报修',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消' },
+    );
     await deleteMaintenance(row.id);
     ElMessage.success('删除成功');
     fetchData();

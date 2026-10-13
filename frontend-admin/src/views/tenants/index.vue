@@ -4,10 +4,10 @@
       <!-- 搜索区域 -->
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="姓名">
-          <el-input v-model="queryForm.name" placeholder="请输入姓名" clearable />
+          <el-input v-model="queryForm.name" placeholder="请输入姓名" clearable @keyup.enter="handleQuery" />
         </el-form-item>
         <el-form-item label="手机号">
-          <el-input v-model="queryForm.phone" placeholder="请输入手机号" clearable />
+          <el-input v-model="queryForm.phone" placeholder="请输入手机号" clearable @keyup.enter="handleQuery" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleQuery">查询</el-button>
@@ -49,8 +49,8 @@
           :total="pagination.total"
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleQuery"
-          @current-change="handleQuery"
+          @size-change="handleSizeChange"
+          @current-change="fetchData"
         />
       </div>
     </el-card>
@@ -181,6 +181,12 @@ const handleQuery = () => {
   fetchData();
 };
 
+/** 每页条数变化：回到第 1 页再拉取（页码变化不走这里，避免翻页被重置） */
+const handleSizeChange = () => {
+  pagination.page = 1;
+  fetchData();
+};
+
 const handleReset = () => {
   queryForm.name = '';
   queryForm.phone = '';
@@ -209,9 +215,11 @@ const handleEdit = (row: Tenant) => {
 
 const handleDelete = async (row: Tenant) => {
   try {
-    await ElMessageBox.confirm('确定要删除这个租客吗？', '提示', {
-      type: 'warning',
-    });
+    await ElMessageBox.confirm(
+      `确定删除租客「${row.name || row.id}」吗？\n若其名下仍有合同或账单，删除会被后端拒绝。`,
+      '删除租客',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消' },
+    );
     await deleteTenant(row.id);
     ElMessage.success('删除成功');
     fetchData();
