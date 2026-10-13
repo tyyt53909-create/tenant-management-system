@@ -8,8 +8,9 @@ import App from './App.vue';
 import router from './router';
 import { useUserStore } from './stores/user';
 
-// 导入栖居主题样式
-import './styles/element-plus.scss';
+// 导入栖居主题样式（Element Plus 主题必须在基础样式之前导入）
+import './styles/element-variables.css';
+import 'element-plus/dist/index.css';
 import './style.css';
 
 const app = createApp(App);
