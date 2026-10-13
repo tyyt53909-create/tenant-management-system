@@ -7,6 +7,13 @@
       }
     },
     {
+      "path": "pages/cleaning/cleaning",
+      "style": {
+        "navigationBarTitleText": "保洁工作台",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationBarTitleText": "登录"

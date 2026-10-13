@@ -50,15 +50,13 @@
 
 <script>
 import { getUserInfo } from '../../api/index.js'
+import { clearSession, openHome } from '../../utils/session.js'
 
 export default {
   data() {
     return {
       userInfo: {}
     }
-  },
-  onLoad() {
-    this.loadUserInfo()
   },
   onShow() {
     this.loadUserInfo()
@@ -67,6 +65,11 @@ export default {
     async loadUserInfo() {
       try {
         const res = await getUserInfo()
+        uni.setStorageSync('user_role', res.role)
+        if (res.role === 'CLEANER') {
+          openHome(res.role)
+          return
+        }
         this.userInfo = res.tenant || {}
       } catch (error) {
         console.error('加载用户信息失败:', error)
@@ -98,8 +101,7 @@ export default {
         content: '确定要退出登录吗？',
         success: (res) => {
           if (res.confirm) {
-            uni.removeStorageSync('access_token')
-            uni.removeStorageSync('refresh_token')
+            clearSession()
             uni.reLaunch({ url: '/pages/login/login' })
           }
         }

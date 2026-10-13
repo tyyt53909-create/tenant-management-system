@@ -63,6 +63,7 @@
 
 <script>
 import { getMyContracts } from '../../api/index.js'
+import { ensureTenantSession } from '../../utils/session.js'
 
 export default {
   data() {
@@ -76,6 +77,7 @@ export default {
   methods: {
     async loadContract() {
       try {
+        if (!await ensureTenantSession()) return
         const res = await getMyContracts()
         // 获取最新的活跃合同
         if (res.data && res.data.length > 0) {

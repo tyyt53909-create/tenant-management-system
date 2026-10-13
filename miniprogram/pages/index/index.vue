@@ -86,6 +86,7 @@
 
 <script>
 import { getUserInfo, getMyBills, getMyMaintenance } from '../../api/index.js'
+import { openHome } from '../../utils/session.js'
 
 export default {
   data() {
@@ -97,9 +98,6 @@ export default {
       recentBills: []
     }
   },
-  onLoad() {
-    this.loadData()
-  },
   onShow() {
     // 每次显示页面时刷新数据
     this.loadData()
@@ -109,6 +107,11 @@ export default {
       try {
         // 获取用户信息
         const userInfo = await getUserInfo()
+        uni.setStorageSync('user_role', userInfo.role)
+        if (userInfo.role === 'CLEANER') {
+          openHome(userInfo.role)
+          return
+        }
         this.userName = userInfo.tenant?.name || '租客'
         
         // 获取账单

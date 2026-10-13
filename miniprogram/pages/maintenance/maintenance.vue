@@ -124,6 +124,7 @@
 
 <script>
 import { getMyMaintenance, createMaintenance } from '../../api/index.js'
+import { ensureTenantSession } from '../../utils/session.js'
 
 export default {
   data() {
@@ -155,12 +156,13 @@ export default {
       submitting: false
     }
   },
-  onLoad() {
+  onShow() {
     this.loadMaintenanceList()
   },
   methods: {
     async loadMaintenanceList() {
       try {
+        if (!await ensureTenantSession()) return
         const res = await getMyMaintenance({ page: 1, limit: 50 })
         this.maintenanceList = res.data || []
       } catch (error) {
@@ -217,6 +219,7 @@ export default {
 
       this.submitting = true
       try {
+        if (!await ensureTenantSession()) return
         // TODO: 如果有图片，需要先上传图片
         // 租客身份与房间由服务端根据登录身份和生效合同自动关联（T138）
         const data = {

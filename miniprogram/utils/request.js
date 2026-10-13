@@ -1,5 +1,4 @@
-// API 基础配置（T138：必须带 /api 前缀，否则全部 404）
-const BASE_URL = 'http://localhost:3000/api'
+import { API_BASE_URL } from './api-config.js'
 
 // 请求拦截器
 const request = (options) => {
@@ -8,7 +7,7 @@ const request = (options) => {
     const token = uni.getStorageSync('access_token')
     
     uni.request({
-      url: BASE_URL + options.url,
+      url: API_BASE_URL + options.url,
       method: options.method || 'GET',
       data: options.data || {},
       header: {
@@ -16,20 +15,25 @@ const request = (options) => {
         'Authorization': token ? `Bearer ${token}` : ''
       },
       success: (res) => {
-        if (res.statusCode === 200) {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data)
         } else if (res.statusCode === 401) {
           // Token 过期，跳转登录
           uni.removeStorageSync('access_token')
           uni.removeStorageSync('refresh_token')
+          uni.removeStorageSync('user_role')
           uni.reLaunch({ url: '/pages/login/login' })
           reject(new Error('登录已过期'))
         } else {
+          const message = Array.isArray(res.data?.message)
+            ? res.data.message.join('；') : res.data?.message || '请求失败'
           uni.showToast({
-            title: res.data.message || '请求失败',
+            title: message,
             icon: 'none'
           })
-          reject(res.data)
+          const error = new Error(message)
+          error.statusCode = res.statusCode
+          reject(error)
         }
       },
       fail: (err) => {
@@ -48,5 +52,6 @@ export default {
   get: (url, data) => request({ url, method: 'GET', data }),
   post: (url, data) => request({ url, method: 'POST', data }),
   put: (url, data) => request({ url, method: 'PUT', data }),
+  patch: (url, data) => request({ url, method: 'PATCH', data }),
   delete: (url, data) => request({ url, method: 'DELETE', data })
 }
