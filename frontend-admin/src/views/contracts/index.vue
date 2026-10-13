@@ -21,26 +21,33 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
-        <el-table-column prop="contractNumber" label="合同编号" width="180" />
-        <el-table-column prop="startDate" label="开始日期" width="120">
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        :empty-text="emptyText"
+        :default-sort="{ prop: 'endDate', order: 'descending' }"
+      >
+        <el-table-column prop="contractNumber" label="合同编号" width="200" sortable show-overflow-tooltip />
+        <el-table-column prop="startDate" sort-by="startDateOnly" label="开始日期" width="120" sortable>
           <template #default="{ row }">
-            {{ row.startDate.split('T')[0] }}
+            {{ formatDateOnly(row.startDate) }}
           </template>
         </el-table-column>
-        <el-table-column prop="endDate" label="结束日期" width="120">
+        <el-table-column prop="endDate" sort-by="endDateOnly" label="结束日期" width="120" sortable>
           <template #default="{ row }">
-            {{ row.endDate.split('T')[0] }}
+            {{ formatDateOnly(row.endDate) }}
           </template>
         </el-table-column>
-        <el-table-column prop="rentAmount" label="租金" width="120">
+        <el-table-column prop="rentAmount" sort-by="rentAmount" label="租金" width="120" sortable>
           <template #default="{ row }">
-            ¥{{ (row.rentAmount / 100).toFixed(2) }}
+            {{ formatMoney(row.rentAmount) }}
           </template>
         </el-table-column>
-        <el-table-column prop="depositAmount" label="押金" width="120">
+        <el-table-column prop="depositAmount" sort-by="depositAmount" label="押金" width="120" sortable>
           <template #default="{ row }">
-            ¥{{ (row.depositAmount / 100).toFixed(2) }}
+            {{ formatMoney(row.depositAmount) }}
           </template>
         </el-table-column>
         <el-table-column prop="paymentCycle" label="付款周期" width="100">
@@ -48,18 +55,21 @@
             {{ paymentCycleMap[row.paymentCycle] }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <!-- 续签关系合并进状态列：原先单列「续签」多为「—」，占位无信息 -->
+        <el-table-column prop="status" label="状态" width="150">
           <template #default="{ row }">
             <el-tag :type="statusTypeMap[row.status]">
               {{ statusMap[row.status] }}
             </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="续签" width="110">
-          <template #default="{ row }">
-            <el-tag v-if="row.renewedFromId" type="info" size="small">已续签他人</el-tag>
-            <el-tag v-else-if="row.status === 'RENEWED'" type="info" size="small">已续签</el-tag>
-            <span v-else class="muted">—</span>
+            <el-tooltip
+              v-if="row.status === 'RENEWED' || row.renewedFromId"
+              placement="top"
+              :content="row.status === 'RENEWED' ? '本合同已被新合同替代，可用「续签」查看链路' : '本合同由上一份合同续签而来'"
+            >
+              <el-tag type="info" size="small" effect="plain" style="margin-left: 4px">
+                {{ row.status === 'RENEWED' ? '已续签' : '续签而来' }}
+              </el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
@@ -200,6 +210,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+import { formatMoney, formatDateOnly } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import {
@@ -281,7 +292,12 @@ const fetchData = async () => {
   loading.value = true;
   try {
     const response = await getContracts({ page: pagination.page, limit: pagination.limit, ...queryForm });
-    tableData.value = response.data;
+    // 派生「仅日期」字段用于排序（与表头显示值一致）
+    tableData.value = (response.data as Contract[]).map((c) => ({
+      ...c,
+      startDateOnly: c.startDate ? String(c.startDate).split('T')[0] : '',
+      endDateOnly: c.endDate ? String(c.endDate).split('T')[0] : '',
+    })) as Contract[];
     pagination.total = response.meta.total;
   } catch (error) {
     ElMessage.error('获取数据失败');

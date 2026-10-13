@@ -59,6 +59,8 @@ export interface Tenant {
   emergencyPhone?: string;
   createdAt: string;
   updatedAt: string;
+  /** 派生：与表格显示一致的时间串，供排序用 */
+  createdAtSort?: string;
 }
 
 // 楼栋
@@ -92,6 +94,9 @@ export interface Contract {
   renewedFromId?: string | null;
   /** 本合同的续签结果（后端 renewedTo 反向关系） */
   renewedTo?: { id: string; contractNumber: string } | null;
+  /** 派生：仅日期部分，供表头排序用（与显示值一致） */
+  startDateOnly?: string;
+  endDateOnly?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +118,8 @@ export interface Bill {
    * 打开滞纳金弹窗时仍会拉取完整明细。
    */
   lateFeeSummary?: LateFeeSummary;
+  /** 派生：仅日期部分，供表头排序用（与显示值一致） */
+  dueDateOnly?: string;
   createdAt: string;
   updatedAt: string;
 }

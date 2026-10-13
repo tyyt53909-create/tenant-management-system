@@ -17,10 +17,17 @@
       </el-form>
 
       <!-- 表格 -->
-      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
-        <el-table-column prop="name" label="姓名" width="120" />
-        <el-table-column prop="phone" label="手机号" width="140" />
-        <el-table-column prop="email" label="邮箱" width="200" />
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        :empty-text="emptyText"
+        :default-sort="{ prop: 'createdAt', order: 'descending' }"
+      >
+        <el-table-column prop="name" label="姓名" width="120" sortable />
+        <el-table-column prop="phone" label="手机号" width="140" sortable />
+        <el-table-column prop="email" label="邮箱" width="200" show-overflow-tooltip />
         <el-table-column prop="idNumber" label="身份证号" width="180">
           <template #default="{ row }">
             {{ maskIdNumber(row.idNumber) }}
@@ -28,7 +35,7 @@
         </el-table-column>
         <el-table-column prop="emergencyContact" label="紧急联系人" width="120" />
         <el-table-column prop="emergencyPhone" label="紧急联系电话" width="140" />
-        <el-table-column prop="createdAt" label="创建时间" width="180">
+        <el-table-column prop="createdAt" sort-by="createdAtSort" label="创建时间" width="180" sortable>
           <template #default="{ row }">
             {{ formatDate(row.createdAt) }}
           </template>
@@ -174,7 +181,11 @@ const fetchData = async () => {
       ...queryForm,
     };
     const response = await getTenants(params);
-    tableData.value = response.data;
+    // 派生可排序的时间串（与表格显示格式一致，避免与 ISO 原值不一致）
+    tableData.value = (response.data as Tenant[]).map((t) => ({
+      ...t,
+      createdAtSort: t.createdAt ? String(t.createdAt).replace('T', ' ').slice(0, 19) : '',
+    })) as Tenant[];
     pagination.total = response.meta.total;
   } catch (error) {
     ElMessage.error('获取数据失败');

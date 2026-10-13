@@ -25,30 +25,37 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
-        <el-table-column prop="billNumber" label="账单编号" width="170" />
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        stripe
+        :empty-text="emptyText"
+        :default-sort="{ prop: 'dueDate', order: 'descending' }"
+      >
+        <el-table-column prop="billNumber" label="账单编号" width="200" sortable show-overflow-tooltip />
         <el-table-column prop="billType" label="类型" width="80">
           <template #default="{ row }">
             <el-tag>{{ billTypeMap[row.billType] }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="period" label="账期" width="90" />
-        <el-table-column prop="amount" label="应付金额" width="105">
+        <el-table-column prop="period" label="账期" width="95" sortable />
+        <el-table-column prop="amount" sort-by="amount" label="应付金额" width="115" sortable>
           <template #default="{ row }">
-            ¥{{ (row.amount / 100).toFixed(2) }}
+            {{ formatMoney(row.amount) }}
           </template>
         </el-table-column>
-        <el-table-column prop="paidAmount" label="已付金额" width="105">
+        <el-table-column prop="paidAmount" sort-by="paidAmount" label="已付金额" width="115" sortable>
           <template #default="{ row }">
-            ¥{{ (row.paidAmount / 100).toFixed(2) }}
+            {{ formatMoney(row.paidAmount) }}
           </template>
         </el-table-column>
-        <el-table-column prop="dueDate" label="到期日期" width="110">
+        <el-table-column prop="dueDate" sort-by="dueDateOnly" label="到期日期" width="115" sortable>
           <template #default="{ row }">
-            {{ row.dueDate.split('T')[0] }}
+            {{ formatDateOnly(row.dueDate) }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="90">
+        <el-table-column prop="status" label="状态" width="105">
           <template #default="{ row }">
             <el-tag :type="statusTypeMap[row.status]">
               {{ statusMap[row.status] }}
@@ -355,6 +362,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+import { formatMoney, formatDateOnly } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import {
@@ -684,7 +692,12 @@ const fetchData = async (_options: { refreshLateFees?: boolean } = {}) => {
     if (queryForm.status) params.status = queryForm.status;
     if (queryForm.billType) params.billType = queryForm.billType;
     const response = await getBills(params);
-    tableData.value = response.data;
+    // 派生「仅日期」字段用于排序：表头显示到日，sort-by 若用完整 ISO 串
+    // 会与显示值不一致，导致看起来「没排对」
+    tableData.value = (response.data as Bill[]).map((b) => ({
+      ...b,
+      dueDateOnly: b.dueDate ? String(b.dueDate).split('T')[0] : '',
+    })) as Bill[];
     pagination.total = response.meta.total;
     // 列表已带滞纳金摘要，直接适配，无需逐行请求
     applySummaries(tableData.value);

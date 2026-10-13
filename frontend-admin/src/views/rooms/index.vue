@@ -59,14 +59,14 @@
         stripe
         :empty-text="emptyText"
       >
-        <el-table-column prop="roomNumber" label="房间号" width="120" />
-        <el-table-column prop="floor" label="楼层" width="80" />
+        <el-table-column prop="roomNumber" label="房间号" width="120" sortable />
+        <el-table-column prop="floor" label="楼层" width="80" sortable />
         <el-table-column prop="roomType" label="房型" width="120">
           <template #default="{ row }">
             <el-tag>{{ roomTypeMap[row.roomType] }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="area" label="面积(㎡)" width="100" />
+        <el-table-column prop="area" label="面积(㎡)" width="110" sortable />
         <el-table-column prop="status" label="房态" width="100">
           <template #default="{ row }">
             <el-tag :type="roomStatusTagType(row.status)">
