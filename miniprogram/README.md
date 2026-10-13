@@ -74,12 +74,29 @@ npm install
 npm run dev:mp-weixin
 ```
 
-然后使用微信开发者工具打开 `dist/dev/mp-weixin` 目录
+然后使用微信开发者工具打开 **`dist/dev/mp-weixin`**（开发模式产物）。
 
-#### H5
+> ⚠️ 注意区分两种产物目录，此前 README 只写了一个，容易打开错目录：
+> - `dist/dev/mp-weixin` —— `npm run dev:mp-weixin` 的**开发**产物（热更新用）
+> - `dist/build/mp-weixin` —— `npm run build:mp-weixin` 的**生产**产物
+>   （`npm run check:artifacts` 校验的是这个目录）
+>
+> 若打开后是空白或旧界面，先确认目录是否正确、产物是否为最新构建。
+
+#### H5（在浏览器里快速预览租户端）
 ```bash
 npm run dev:h5
 ```
+
+默认 5173 端口，与后台管理（frontend-admin）冲突，建议显式指定：
+
+```bash
+npm run dev:h5 -- --port 5174
+```
+
+> 本机后端在 **3100**（3000 被其他服务占用），`.env` 的 `VITE_API_BASE_URL`
+> 需指向 `http://127.0.0.1:3100/api`，并确保后端 `CORS_ORIGINS` 包含该来源。
+> 注意 `localhost` 与 `127.0.0.1` 属不同 origin，两者都要配。
 
 ### 生产构建
 

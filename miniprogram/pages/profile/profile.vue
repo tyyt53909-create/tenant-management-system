@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page page-with-tabbar">
     <view class="header">
       <view class="user-info">
         <image class="avatar" src="/static/avatar-default.png" mode="aspectFill"></image>

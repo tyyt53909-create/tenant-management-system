@@ -22,7 +22,7 @@
     </view>
 
     <scroll-view 
-      class="bill-list" 
+      class="bill-list page-with-tabbar" 
       scroll-y 
       @scrolltolower="loadMore"
       :lower-threshold="50"
@@ -295,11 +295,17 @@ export default {
 .bill-info .label {
   font-size: 26rpx;
   color: #888;
+  flex-shrink: 0;
 }
 
 .bill-info .value {
   font-size: 26rpx;
   color: #333;
+  /* 长编号需要能收缩+断行，否则撑破卡片（T162） */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  text-align: right;
 }
 
 .bill-footer {

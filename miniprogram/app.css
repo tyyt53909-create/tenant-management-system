@@ -86,6 +86,16 @@ page {
   --duration-fast: 150ms;
   --duration-normal: 250ms;
   --duration-slow: 350ms;
+
+  /* 底部安全区（T162）
+   * tabBar 页面若不给滚动容器留底部空间，最后一张卡片会被原生 tabbar 压住
+   * （实测账单页第 4 张卡完全被遮挡，滚到底也露不出来）。
+   * H5 下原生 tabbar 约 50px；微信端约 100rpx；再加 iPhone 底部安全区。 */
+  --tabbar-height: 100rpx;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-space: calc(var(--tabbar-height) + var(--safe-area-bottom) + 20rpx);
+  /* 非 tabBar 页面（详情类）只需避开底部安全区 */
+  --safe-bottom-space: calc(var(--safe-area-bottom) + 32rpx);
 }
 
 /* ==================== 通用工具类 ==================== */
@@ -362,6 +372,53 @@ page {
 .text-left { text-align: left; }
 .text-center { text-align: center; }
 .text-right { text-align: right; }
+
+/* ==================== 布局：底部留白（T162） ==================== */
+
+/* tabBar 页面的滚动容器：避免内容被原生 tabbar 遮挡 */
+.page-with-tabbar {
+  padding-bottom: var(--tabbar-space) !important;
+}
+
+/* 非 tabBar 页面：只避开底部安全区 */
+.page-safe-bottom {
+  padding-bottom: var(--safe-bottom-space) !important;
+}
+
+/* ==================== 长文本处理（T162） ==================== */
+
+/**
+ * 给 flex 子项内的文本加此配合类：
+ * flex 子项默认 min-width: auto，长串（如账单编号 B1791852043686QFUSFV）
+ * 不会收缩也不换行，会撑破容器顶到边缘。min-width:0 让其可收缩，
+ * overflow-wrap 让无空格长串能够断行。
+ */
+.text-break {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* 左标签不参与收缩，右值可收缩换行 */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+}
+
+.info-row .info-label {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.info-row .info-value {
+  min-width: 0;
+  flex: 1;
+  text-align: right;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
 
 /* 文本截断 */
 .text-ellipsis {

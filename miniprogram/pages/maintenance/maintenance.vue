@@ -16,7 +16,7 @@
     </view>
 
     <!-- 报修列表 -->
-    <scroll-view v-if="currentTab === 'list'" class="list-container" scroll-y>
+    <scroll-view v-if="currentTab === 'list'" class="list-container page-with-tabbar" scroll-y>
       <view class="maintenance-item" v-for="item in maintenanceList" :key="item.id">
         <view class="item-header">
           <text class="title">{{ item.title }}</text>
@@ -49,7 +49,7 @@
     </scroll-view>
 
     <!-- 创建报修 -->
-    <scroll-view v-if="currentTab === 'create'" class="form-container" scroll-y>
+    <scroll-view v-if="currentTab === 'create'" class="form-container page-with-tabbar" scroll-y>
       <view class="form-section">
         <view class="form-item">
           <text class="label required">标题</text>

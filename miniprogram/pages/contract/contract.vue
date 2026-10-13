@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page page-safe-bottom">
     <view class="contract-card" v-if="contract">
       <view class="card-header">
         <text class="contract-number">{{ contract.contractNumber }}</text>
@@ -13,15 +13,15 @@
           <text class="section-title">房间信息</text>
           <view class="info-item">
             <text class="label">房间号</text>
-            <text class="value">{{ contract.room?.roomNumber || '-' }}</text>
+            <text class="value">{{ orDash(contract.room?.roomNumber) }}</text>
           </view>
           <view class="info-item">
             <text class="label">楼层</text>
-            <text class="value">{{ contract.room?.floor || '-' }}楼</text>
+            <text class="value">{{ withUnit(contract.room?.floor, '楼') }}</text>
           </view>
           <view class="info-item">
             <text class="label">面积</text>
-            <text class="value">{{ contract.room?.area || '-' }}㎡</text>
+            <text class="value">{{ withUnit(contract.room?.area, '㎡') }}</text>
           </view>
         </view>
 
@@ -37,11 +37,11 @@
           </view>
           <view class="info-item">
             <text class="label">租金</text>
-            <text class="value price">¥{{ (contract.rentAmount / 100).toFixed(2) }}/月</text>
+            <text class="value price">{{ money(contract.rentAmount) }}/月</text>
           </view>
           <view class="info-item">
             <text class="label">押金</text>
-            <text class="value">¥{{ (contract.depositAmount / 100).toFixed(2) }}</text>
+            <text class="value">{{ money(contract.depositAmount) }}</text>
           </view>
           <view class="info-item">
             <text class="label">付款周期</text>
@@ -64,6 +64,7 @@
 <script>
 import { getMyContracts } from '../../api/index.js'
 import { ensureTenantSession } from '../../utils/session.js'
+import { orDash, withUnit, money } from '../../utils/format.js'
 
 export default {
   data() {
@@ -75,6 +76,9 @@ export default {
     this.loadContract()
   },
   methods: {
+    orDash,
+    withUnit,
+    money,
     async loadContract() {
       try {
         if (!await ensureTenantSession()) return

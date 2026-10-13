@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page page-safe-bottom">
     <view class="balance-card">
       <view class="balance-header">
         <text class="title">账户余额</text>
@@ -21,12 +21,15 @@
         </view>
         <view class="item-right">
           <text :class="['amount', item.amount >= 0 ? 'income' : 'expense']">
-            {{ item.amount >= 0 ? '+' : '-' }}¥{{ (Math.abs(item.amount) / 100).toFixed(2) }}
+            <!-- amount 本身带符号（扣费为负），正数补 + 号即可，
+                 不能再拼 '-'，否则负数会渲染成 -¥150.00 -->
+            {{ item.amount >= 0 ? '+' : '' }}{{ money(item.amount) }}
           </text>
         </view>
       </view>
       <view class="empty" v-if="transactions.length === 0">
-        <text>暂无交易记录</text>
+        <text class="empty-title">暂无交易记录</text>
+        <text class="empty-hint">充值或水电扣费后，这里会显示每笔明细</text>
       </view>
     </view>
   </view>
@@ -35,6 +38,7 @@
 <script>
 import { getMyAccount, getRechargeRecords } from '../../api/index.js'
 import { ensureTenantSession } from '../../utils/session.js'
+import { money } from '../../utils/format.js'
 
 export default {
   data() {
@@ -47,6 +51,7 @@ export default {
     this.loadData()
   },
   methods: {
+    money,
     async loadData() {
       try {
         if (!await ensureTenantSession()) return
@@ -178,8 +183,20 @@ export default {
 
 .empty {
   text-align: center;
-  padding: 80rpx 0;
+  padding: 80rpx 24rpx;
   color: #999;
   font-size: 26rpx;
+}
+
+.empty-title {
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.empty-hint {
+  display: block;
+  font-size: 24rpx;
+  color: #bbb;
+  line-height: 1.6;
 }
 </style>

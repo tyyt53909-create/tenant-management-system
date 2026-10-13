@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page page-with-tabbar">
     <!-- 顶部用户信息 -->
     <view class="header">
       <view class="user-info">
