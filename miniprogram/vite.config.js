@@ -11,6 +11,6 @@ export default defineConfig(({ command, mode }) => {
   return {
     plugins: [uni()],
     define: { __API_BASE_URL__: JSON.stringify(apiBaseUrl) },
-    server: { host: '127.0.0.1' }
+    server: { host: '127.0.0.1', port: 5174 }
   }
 })
