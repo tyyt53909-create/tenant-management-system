@@ -7,12 +7,14 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
+import { GoogleAuthService } from './google-auth.service.js';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let inviteCodeService: InviteCodeService;
   let jwtService: JwtAuthService;
+  let googleAuthService: GoogleAuthService;
   let prisma: PrismaService;
 
   beforeEach(async () => {
@@ -32,6 +34,13 @@ describe('AuthController', () => {
             generateTokens: vi.fn(),
             verifyToken: vi.fn(),
             refreshAccessToken: vi.fn(),
+          },
+        },
+        {
+          provide: GoogleAuthService,
+          useValue: {
+            getClientId: vi.fn().mockReturnValue('test-google-client-id'),
+            verifyIdToken: vi.fn(),
           },
         },
         {
@@ -55,6 +64,7 @@ describe('AuthController', () => {
     controller = module.get<AuthController>(AuthController);
     inviteCodeService = module.get<InviteCodeService>(InviteCodeService);
     jwtService = module.get<JwtAuthService>(JwtAuthService);
+    googleAuthService = module.get<GoogleAuthService>(GoogleAuthService);
     prisma = module.get<PrismaService>(PrismaService);
   });
 
@@ -463,6 +473,137 @@ describe('AuthController', () => {
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
 
       await expect(controller.refresh(dto)).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('googleAuth & google/client-id', () => {
+    it('应该能正常获取 Google Client ID', () => {
+      expect(controller.getGoogleClientId()).toEqual({ clientId: 'test-google-client-id' });
+    });
+
+    it('已有用户使用 Google 登录：匹配邮箱并自动关联 googleId', async () => {
+      const mockUser = {
+        id: 'user-google-1',
+        email: 'tenant_existing@gmail.com',
+        phone: '13800000000',
+        role: 'TENANT',
+        googleId: null,
+        avatarUrl: null,
+        isActive: true,
+      };
+
+      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
+        googleId: 'google-sub-12345',
+        email: 'tenant_existing@gmail.com',
+        name: 'Existing Tenant',
+        avatarUrl: 'https://avatar.com/photo.jpg',
+        emailVerified: true,
+      });
+
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+      vi.spyOn(prisma.user, 'update').mockResolvedValue({
+        ...mockUser,
+        googleId: 'google-sub-12345',
+        avatarUrl: 'https://avatar.com/photo.jpg',
+      } as any);
+
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'google-jwt-access',
+        refreshToken: 'google-jwt-refresh',
+      });
+
+      const res = await controller.googleAuth({ idToken: 'valid-google-id-token' });
+
+      expect(res.accessToken).toBe('google-jwt-access');
+      expect(res.user.email).toBe('tenant_existing@gmail.com');
+      expect(prisma.user.update).toHaveBeenCalled();
+      expect(res.isNewUser).toBe(false);
+    });
+
+    it('禁用账号使用 Google 登录应该抛出 ForbiddenException', async () => {
+      const mockUser = {
+        id: 'user-google-banned',
+        email: 'banned@gmail.com',
+        role: 'TENANT',
+        isActive: false,
+      };
+
+      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
+        googleId: 'google-sub-banned',
+        email: 'banned@gmail.com',
+        emailVerified: true,
+      });
+
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+
+      await expect(controller.googleAuth({ idToken: 'banned-token' })).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('新用户首次 Google 登录未提供邀请码应抛出 BadRequestException 提示', async () => {
+      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
+        googleId: 'google-sub-new',
+        email: 'newuser@gmail.com',
+        emailVerified: true,
+      });
+
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+
+      await expect(controller.googleAuth({ idToken: 'new-user-token' })).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('新用户首次 Google 登录携带有效邀请码成功注册并关联', async () => {
+      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
+        googleId: 'google-sub-new',
+        email: 'newuser@gmail.com',
+        name: 'New Tenant',
+        avatarUrl: 'https://avatar.com/new.jpg',
+        emailVerified: true,
+      });
+
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+        valid: true,
+        invitedBy: 'admin-id',
+      });
+
+      const mockCreatedUser = {
+        id: 'user-new-created',
+        email: 'newuser@gmail.com',
+        phone: null,
+        role: 'TENANT',
+        avatarUrl: 'https://avatar.com/new.jpg',
+        isActive: true,
+      };
+
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+        return callback({
+          user: {
+            create: vi.fn().mockResolvedValue(mockCreatedUser),
+            update: vi.fn().mockResolvedValue({}),
+          },
+          tenant: {
+            create: vi.fn().mockResolvedValue({}),
+          },
+        });
+      });
+
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'new-jwt-access',
+        refreshToken: 'new-jwt-refresh',
+      });
+
+      const res = await controller.googleAuth({
+        idToken: 'new-user-token',
+        inviteCode: 'INVITE-VALID-123',
+      });
+
+      expect(res.accessToken).toBe('new-jwt-access');
+      expect(res.isNewUser).toBe(true);
+      expect(res.user.email).toBe('newuser@gmail.com');
     });
   });
 });
