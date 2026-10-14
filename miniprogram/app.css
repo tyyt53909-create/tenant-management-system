@@ -434,3 +434,36 @@ page {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ==================== PC 桌面端大屏自适应手机画幅 ==================== */
+@media screen and (min-width: 500px) {
+  body {
+    background-color: #1e1d1a !important;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  
+  #app, uni-app {
+    width: 100% !important;
+    max-width: 430px !important;
+    min-height: 100vh;
+    margin: 0 auto !important;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.45);
+    background-color: #f5f2ec;
+    position: relative;
+  }
+
+  uni-page-head .uni-page-head {
+    max-width: 430px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+  }
+
+  uni-tabbar, .uni-tabbar {
+    max-width: 430px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+  }
+}
+

@@ -3,7 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>租客管理</title>
+    <title>栖居租客</title>
+    <style>
+      @media screen and (min-width: 500px) {
+        body {
+          background-color: #1e1d1a !important;
+          margin: 0;
+          display: flex;
+          justify-content: center;
+        }
+        #app, uni-app {
+          width: 100% !important;
+          max-width: 430px !important;
+          min-height: 100vh;
+          margin: 0 auto !important;
+          box-shadow: 0 0 60px rgba(0, 0, 0, 0.45);
+          background-color: #f5f2ec;
+          position: relative;
+        }
+        uni-page-head .uni-page-head {
+          max-width: 430px !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+        }
+        uni-tabbar, .uni-tabbar {
+          max-width: 430px !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
