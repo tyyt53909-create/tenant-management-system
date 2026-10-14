@@ -43,6 +43,7 @@ export interface Room {
   version: number;
   /** 列表接口附带楼栋信息（GET /rooms 返回值） */
   building?: { id: string; name: string };
+  contracts?: {id:string;contractNumber:string;status:string;rentAmount:number;startDate:string;endDate:string;tenant?:{name:string};bills?:{dueDate:string}[]}[];
   createdAt: string;
   updatedAt: string;
 }
@@ -57,6 +58,9 @@ export interface Tenant {
   idNumber: string;
   emergencyContact?: string;
   emergencyPhone?: string;
+  isActive?:boolean;
+  contracts?:{id:string;contractNumber:string;startDate:string;endDate:string;status:string;rentAmount:number;room?:{roomNumber:string}}[];
+  prepayAccounts?:{balanceCache:number}[];
   createdAt: string;
   updatedAt: string;
   /** 派生：与表格显示一致的时间串，供排序用 */
@@ -82,6 +86,8 @@ export interface Contract {
   buildingId: string;
   roomId: string;
   tenantId: string;
+  room?: { id: string; roomNumber: string; building?: { name:string } };
+  tenant?: { id: string; name: string; phone?:string };
   startDate: string;
   endDate: string;
   rentAmount: number;
@@ -105,6 +111,7 @@ export interface Contract {
 export interface Bill {
   id: string;
   contractId: string;
+  contract?: { contractNumber?:string; room?:{roomNumber:string}; tenant?:{name:string} };
   billNumber: string;
   billType: 'RENT' | 'UTILITY' | 'OTHER';
   period: string;
@@ -194,6 +201,10 @@ export interface LateFee {
 // 报修
 export interface Maintenance {
   id: string;
+  photos?: { id:string;fileUrl:string }[];
+  _count?: { photos:number };
+  room?: { roomNumber:string };
+  tenant?: { name:string };
   roomId: string;
   tenantId: string;
   title: string;
@@ -248,6 +259,7 @@ export interface Notification {
 // 水电表
 export interface Meter {
   id: string;
+  room?: { roomNumber:string };
   buildingId: string;
   roomId?: string;
   meterType: 'ELECTRICITY' | 'WATER' | 'GAS';

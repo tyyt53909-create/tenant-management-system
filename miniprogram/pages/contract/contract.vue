@@ -1,5 +1,8 @@
 <template>
-  <view class="page page-safe-bottom">
+  <view class="page q-page page-safe-bottom">
+    <text class="q-eyebrow">MY CONTRACT / 我的合同</text><text class="q-title">安心居住，有约在先。</text><text class="q-description">每一个关于居所的约定，都清楚留存。</text>
+    <view v-if="error" class="q-error" @tap="loadContract">{{ error }} · 点此重试</view>
+    <view v-if="loading" class="q-skeleton" aria-label="正在加载合同"><view/><view/><view/></view>
     <view class="contract-card" v-if="contract">
       <view class="card-header">
         <text class="contract-number">{{ contract.contractNumber }}</text>
@@ -55,7 +58,16 @@
       </view>
     </view>
 
-    <view class="empty" v-else>
+    <view v-if="contract" class="contract-images q-surface">
+      <view class="q-section-heading"><text>合同扫描图片</text><text class="q-link" @tap="loadAttachments">刷新</text></view>
+      <view v-if="attachmentsLoading" class="q-empty">正在加载合同图片…</view>
+      <view v-else-if="attachmentsError" class="q-error" @tap="loadAttachments">{{ attachmentsError }} · 点此重试</view>
+      <view v-else-if="attachments.length" class="contract-images-grid"><view v-for="(item,index) in attachments" :key="item.id"><ProtectedPhoto :url="item.downloadUrl" mode="aspectFit" /><text class="contract-page-label">第 {{ index+1 }} 页 · {{ item.fileName }}</text></view></view>
+      <view v-else class="q-empty">管理者尚未上传合同扫描图片。</view>
+      <text v-if="attachments.length" class="q-note">点击图片可放大查看。仅展示与你的合同关联的文件。</text>
+    </view>
+
+    <view class="empty" v-else-if="!loading && !error">
       <text>暂无合同信息</text>
     </view>
   </view>
@@ -65,30 +77,38 @@
 import { getMyContracts } from '../../api/index.js'
 import { ensureTenantSession } from '../../utils/session.js'
 import { orDash, withUnit, money } from '../../utils/format.js'
+import request from '../../utils/request.js'
+import ProtectedPhoto from '../../components/ProtectedPhoto.vue'
 
 export default {
+  components: { ProtectedPhoto },
   data() {
     return {
-      contract: null
+      contract: null, loading:false, error:'', attachments:[],attachmentsLoading:false,attachmentsError:'', attachmentsGeneration:0
     }
   },
   onLoad() {
     this.loadContract()
   },
+  onUnload() { this.attachmentsGeneration++ },
   methods: {
     orDash,
     withUnit,
     money,
     async loadContract() {
+      this.loading=true;this.error='';this.contract=null;this.attachments=[];this.attachmentsError='';this.attachmentsGeneration++;
       try {
         if (!await ensureTenantSession()) return
         const res = await getMyContracts()
         // 获取最新的活跃合同
         if (res.data && res.data.length > 0) {
-          this.contract = res.data[0]
+          this.contract = res.data.find(item => item.status === 'ACTIVE') || res.data[0]
+          await this.loadAttachments()
         }
       } catch (error) {
-        console.error('加载合同失败:', error)
+        this.error='合同未能加载，请检查连接后重试'
+      } finally {
+        this.loading=false
       }
     },
     getStatusText(status) {
@@ -99,6 +119,17 @@ export default {
         TERMINATED: '已终止'
       }
       return map[status] || status
+    },
+    async loadAttachments(){
+      if(!this.contract)return;
+      const current=++this.attachmentsGeneration;const id=this.contract.id;
+      this.attachmentsLoading=true;this.attachmentsError='';
+      try{
+        const items=await request.get(`/contracts/${encodeURIComponent(id)}/attachments`)
+        if(!Array.isArray(items))throw new Error('附件响应格式不正确')
+        if(current===this.attachmentsGeneration && this.contract?.id===id)this.attachments=items
+      }catch{if(current===this.attachmentsGeneration)this.attachmentsError='合同图片未能加载'}
+      finally{if(current===this.attachmentsGeneration)this.attachmentsLoading=false}
     },
     getStatusClass(status) {
       const map = {
@@ -127,20 +158,22 @@ export default {
 </script>
 
 <style scoped>
+.contract-images{margin-top:28rpx}.contract-images .q-section-heading{margin:0 0 26rpx}.contract-images-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22rpx}.contract-page-label{display:block;font-size:21rpx;color:#716b60;line-height:1.8;margin-top:12rpx;overflow-wrap:anywhere}.contract-images-grid :deep(.photo-frame){aspect-ratio:3/4}
 .page {
   min-height: 100vh;
-  background-color: #f5f5f5;
-  padding: 20rpx;
+  background-color: #f5f2ec;
+  padding: 36rpx;
 }
 
 .contract-card {
-  background-color: #fff;
-  border-radius: 16rpx;
+  background-color: #fffefa;
+  border: 1rpx solid #e9e6de;
+  border-radius: 36rpx;
   overflow: hidden;
 }
 
 .card-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #ecf0e9;
   padding: 40rpx 30rpx;
   display: flex;
   justify-content: space-between;
@@ -150,15 +183,15 @@ export default {
 .contract-number {
   font-size: 32rpx;
   font-weight: bold;
-  color: #fff;
+  color: #4e5845;
 }
 
 .contract-status {
   font-size: 24rpx;
   padding: 8rpx 20rpx;
   border-radius: 20rpx;
-  background-color: rgba(255, 255, 255, 0.3);
-  color: #fff;
+  background-color: #fffefa;
+  color: #68715b;
 }
 
 .card-body {
@@ -204,7 +237,7 @@ export default {
 
 .value.price {
   font-weight: bold;
-  color: #f44336;
+  color: #68715b;
 }
 
 .empty {

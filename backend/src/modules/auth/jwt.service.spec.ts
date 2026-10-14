@@ -3,11 +3,14 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthService, JwtPayload } from './jwt.service.js';
 import jwtConfig from '../../config/jwt.config.js';
+import { vi } from 'vitest';
 
 describe('JwtAuthService', () => {
   let service: JwtAuthService;
 
   beforeEach(async () => {
+    // 单元测试不依赖未跟踪的 .env，也不读取真实运行密钥。
+    vi.stubEnv('JWT_SECRET', 'unit-test-only-jwt-secret-not-for-runtime');
     const module: TestingModule = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -23,6 +26,8 @@ describe('JwtAuthService', () => {
 
     service = module.get<JwtAuthService>(JwtAuthService);
   });
+
+  afterEach(() => vi.unstubAllEnvs());
 
   it('应该定义服务', () => {
     expect(service).toBeDefined();

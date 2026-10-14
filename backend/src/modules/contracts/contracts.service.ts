@@ -138,9 +138,10 @@ export class ContractsService {
     const contract = await this.prisma.contract.findUnique({
       where: { id },
       include: {
-        room: true,
+        room: { include: { photos: { select: { id: true, fileUrl: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], take: 20 } } },
         tenant: true,
         building: true,
+        renewedTo: { select: { id: true, contractNumber: true } },
       },
     });
 

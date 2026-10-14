@@ -2,7 +2,9 @@
   <div class="login-container">
     <el-card class="login-card">
       <template #header>
-        <h2>租客管理系统 - 登录</h2>
+        <div class="login-brand">栖居 <span>PROPERTY CONSOLE</span></div>
+        <h2>欢迎回来</h2>
+        <p class="login-subtitle">每一处居所，都在有序运转。</p>
       </template>
 
       <el-form
@@ -36,7 +38,7 @@
             style="width: 100%"
             @click="handleLogin"
           >
-            登录
+              进入运营中心
           </el-button>
         </el-form-item>
       </el-form>
@@ -93,17 +95,24 @@ const handleLogin = async () => {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #f7f5f0;
 }
 
 .login-card {
-  width: 450px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  width: min(450px, calc(100vw - 32px));
+  border-radius: 18px;
+  padding: 16px;
+  background: #fffefa;
+  box-shadow: 0 15px 55px rgba(54, 45, 26, .06);
 }
 
 .login-card h2 {
-  text-align: center;
-  margin: 0;
-  color: #303133;
+  margin: 25px 0 10px;
+  font-size: 26px;
+  font-weight: 550;
+  color: #302f2a;
 }
+.login-brand { font-size: 18px; color: #535b43; letter-spacing: .1em; }
+.login-brand span { font-size: 9px; margin-left: 10px; color: #a39a8c; }
+.login-subtitle { color: #8b897f; font-size: 12px; margin-bottom: 10px; }
 </style>

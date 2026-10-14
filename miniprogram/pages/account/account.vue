@@ -1,6 +1,10 @@
 <template>
-  <view class="page page-safe-bottom">
-    <view class="balance-card">
+  <view class="page q-page page-safe-bottom">
+    <text class="q-eyebrow">MY BALANCE / 预付账户</text><text class="q-title">收支清楚，生活从容。</text><text class="q-description">余额与每笔流水，随时可以核对。</text>
+    <view v-if="error" class="q-error" @tap="loadData">{{ error }} · 点此重试</view>
+    <view v-if="noAccount" class="q-surface q-empty"><text class="q-empty-title">尚未开通预付账户</text><text>请联系管理者开通账户；开通后可在这里核对余额与流水。</text></view>
+    <view v-if="loading" class="q-skeleton" aria-label="正在加载账户"><view/><view/><view/></view>
+    <view class="balance-card" v-if="loaded">
       <view class="balance-header">
         <text class="title">账户余额</text>
       </view>
@@ -10,9 +14,9 @@
       </view>
     </view>
 
-    <view class="transaction-list">
+    <view class="transaction-list" v-if="loaded">
       <view class="list-header">
-        <text class="title">充值记录</text>
+        <text class="title">账户流水</text>
       </view>
       <view class="transaction-item" v-for="item in transactions" :key="item.id">
         <view class="item-left">
@@ -44,6 +48,10 @@ export default {
   data() {
     return {
       balance: 0,
+      loaded: false,
+      noAccount: false,
+      loading: false,
+      error: '',
       transactions: []
     }
   },
@@ -53,6 +61,7 @@ export default {
   methods: {
     money,
     async loadData() {
+      this.loading=true;this.error='';this.noAccount=false;
       try {
         if (!await ensureTenantSession()) return
         const accountRes = await getMyAccount()
@@ -60,13 +69,17 @@ export default {
 
         const transactionsRes = await getRechargeRecords({ page: 1, limit: 50 })
         this.transactions = transactionsRes.data || []
+        this.loaded=true
       } catch (error) {
-        console.error('加载数据失败:', error)
+        if(error.statusCode===404){this.noAccount=true;this.loaded=false}
+        else this.error='账户信息未能加载，请检查连接后重试'
+      } finally {
+        this.loading=false
       }
     },
     recharge() {
       uni.showToast({
-        title: '充值功能开发中',
+        title: '请联系管理者办理充值',
         icon: 'none'
       })
     },
@@ -90,13 +103,13 @@ export default {
 <style scoped>
 .page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #f5f2ec;
 }
 
 .balance-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  margin: 20rpx;
-  border-radius: 16rpx;
+  background: #68715b;
+  margin: 0 0 28rpx;
+  border-radius: 36rpx;
   padding: 40rpx 30rpx;
   color: #fff;
 }
@@ -125,9 +138,9 @@ export default {
 }
 
 .transaction-list {
-  background-color: #fff;
-  margin: 20rpx;
-  border-radius: 16rpx;
+  background-color: #fffefa;
+  margin: 0;
+  border-radius: 36rpx;
   padding: 30rpx;
 }
 
@@ -174,7 +187,7 @@ export default {
 }
 
 .amount.income {
-  color: #4caf50;
+  color: #68715b;
 }
 
 .amount.expense {

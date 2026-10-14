@@ -3,23 +3,17 @@ import { createPinia } from 'pinia';
 import ElementPlus from 'element-plus';
 // 中文语言包：否则分页等组件显示英文（Total / 20 per page），见 docs/09 遗留项
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import App from './App.vue';
 import router from './router';
 import { useUserStore } from './stores/user';
 
-// 导入栖居主题样式（Element Plus 主题必须在基础样式之前导入）
-import './styles/element-variables.css';
+// 先加载基础样式，再覆盖 CSS 变量，避免默认蓝色覆盖栖居主题。
 import 'element-plus/dist/index.css';
+import './styles/element-variables.css';
 import './style.css';
 
 const app = createApp(App);
 const pinia = createPinia();
-
-// 注册所有图标
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component);
-}
 
 app.use(pinia);
 app.use(router);

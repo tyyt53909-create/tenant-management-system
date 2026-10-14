@@ -3,7 +3,8 @@
     <view class="login-container">
       <view class="logo-section">
         <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
-        <text class="app-name">租客管理系统</text>
+        <text class="app-name">栖居</text>
+        <text class="login-subtitle">让每一件小事，都有清楚的回应。</text>
       </view>
 
       <view class="form-section">
@@ -23,6 +24,8 @@
             class="input" 
             v-model="form.password" 
             password
+            confirm-type="go"
+            @confirm="handleLogin"
             placeholder="请输入密码"
             placeholder-class="placeholder"
           />
@@ -110,9 +113,11 @@ export default {
 </script>
 
 <style scoped>
+.app-name { display: block; letter-spacing: 8rpx; }
+.login-subtitle { display: block; font-size: 23rpx; color: #817e76; margin-top: 18rpx; }
 .page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #f5f2ec;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -136,13 +141,14 @@ export default {
 
 .app-name {
   font-size: 48rpx;
-  color: #fff;
+  color: #4e5845;
   font-weight: bold;
 }
 
 .form-section {
-  background-color: #fff;
-  border-radius: 20rpx;
+  background-color: #fffefa;
+  border: 1rpx solid #e9e6de;
+  border-radius: 36rpx;
   padding: 60rpx 40rpx;
 }
 
@@ -160,7 +166,7 @@ export default {
 .input {
   width: 100%;
   height: 88rpx;
-  background-color: #f5f5f5;
+  background-color: #f5f2ec;
   border-radius: 12rpx;
   padding: 0 24rpx;
   font-size: 28rpx;
@@ -173,7 +179,7 @@ export default {
 .btn-login {
   width: 100%;
   height: 88rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #68715b;
   color: #fff;
   border-radius: 12rpx;
   font-size: 32rpx;
@@ -190,7 +196,7 @@ export default {
 }
 
 .link {
-  color: #667eea;
+  color: #68715b;
   margin-left: 10rpx;
 }
 </style>

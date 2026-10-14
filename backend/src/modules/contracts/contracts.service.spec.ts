@@ -29,6 +29,15 @@ describe('ContractsService（租客隔离，T148）', () => {
     prisma = prismaMock;
   });
 
+  it('管理合同详情包含房源封面与续签关系，不把扫描件当作房源照片',async()=>{
+    prisma.contract.findUnique.mockResolvedValue({id:'c1'});
+    await service.findOne('c1');
+    expect(prisma.contract.findUnique).toHaveBeenCalledWith(expect.objectContaining({include:expect.objectContaining({
+      room:{include:{photos:{select:{id:true,fileUrl:true},orderBy:[{sortOrder:'asc'},{createdAt:'asc'}],take:20}}},
+      renewedTo:{select:{id:true,contractNumber:true}},
+    })}));
+  });
+
   describe('findByTenant', () => {
     it('服务端固定按 tenantId 过滤', async () => {
       prisma.contract.findMany.mockResolvedValue([]);

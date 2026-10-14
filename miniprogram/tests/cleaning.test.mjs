@@ -10,6 +10,8 @@ async function loadPage(path) {
   const url = new URL(path, import.meta.url)
   const source = await readFile(url, 'utf8')
   const script = source.match(/<script>([\s\S]*?)<\/script>/)[1]
+    // 业务脚本测试只替换展示组件；组件模板由 H5/微信构建校验。
+    .replace(/import (\w+) from '[^']+\.vue'/g, (_, name) => `const ${name} = {}`)
     .replace(/from '([^']+)'/g, (_, specifier) => `from '${new URL(specifier, url).href}'`)
   return (await import(`data:text/javascript;base64,${Buffer.from(script).toString('base64')}`)).default
 }

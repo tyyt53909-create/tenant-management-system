@@ -1,242 +1,29 @@
 <template>
-  <view class="page page-with-tabbar">
-    <view class="header">
-      <view class="user-info">
-        <image class="avatar" src="/static/avatar-default.png" mode="aspectFill"></image>
-        <view class="info">
-          <text class="name">{{ userInfo.name || '租客' }}</text>
-          <text class="phone">{{ userInfo.phone || '' }}</text>
-        </view>
-      </view>
-    </view>
-
-    <view class="menu-list">
-      <view class="menu-item" @tap="goToNotifications">
-        <view class="item-left">
-          <text class="icon">🔔</text>
-          <text class="text">通知提醒</text>
-          <text class="menu-badge" v-if="unreadCount > 0">{{ unreadCount > 99 ? '99+' : unreadCount }}</text>
-        </view>
-        <text class="arrow">›</text>
-      </view>
-      <view class="menu-item" @tap="goToContract">
-        <view class="item-left">
-          <text class="icon">📄</text>
-          <text class="text">我的合同</text>
-        </view>
-        <text class="arrow">›</text>
-      </view>
-      <view class="menu-item" @tap="goToAccount">
-        <view class="item-left">
-          <text class="icon">💰</text>
-          <text class="text">账户余额</text>
-        </view>
-        <text class="arrow">›</text>
-      </view>
-    </view>
-
-    <view class="menu-list">
-      <view class="menu-item" @tap="showAbout">
-        <view class="item-left">
-          <text class="icon">ℹ️</text>
-          <text class="text">关于我们</text>
-        </view>
-        <text class="arrow">›</text>
-      </view>
-      <view class="menu-item" @tap="showContact">
-        <view class="item-left">
-          <text class="icon">📞</text>
-          <text class="text">联系客服</text>
-        </view>
-        <text class="arrow">›</text>
-      </view>
-    </view>
-
-    <button class="btn-logout" @tap="logout">退出登录</button>
+  <view class="q-page page-with-tabbar">
+    <text class="q-eyebrow">MY SPACE / 我的生活</text><text class="q-title">居住的小事，都在这里。</text>
+    <view class="profile-card q-surface"><view class="profile-avatar">{{ userInfo.name?.slice(0, 1) || '栖' }}</view><view><text class="profile-name">{{ userInfo.name || '租客' }}</text><text class="profile-phone">{{ maskedPhone || '欢迎来到栖居' }}</text></view><text class="q-pill">租客</text></view>
+    <view class="q-section-heading"><text>居住服务</text></view>
+    <view class="q-surface profile-menu"><view v-for="item in menu" :key="item.label" class="profile-menu-item" @tap="open(item.path)"><QIcon :name="item.icon" :size="36" /><text>{{ item.label }}</text><text v-if="item.icon === 'bell' && unreadCount" class="profile-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</text><text class="profile-arrow">›</text></view></view>
+    <view class="q-section-heading"><text>帮助与账户</text></view>
+    <view class="q-surface profile-menu"><view class="profile-menu-item" @tap="showContact"><QIcon name="user" :size="36" /><text>联系管理者</text><text class="profile-arrow">›</text></view><view class="profile-menu-item" @tap="showAbout"><QIcon name="home" :size="36" /><text>关于栖居</text><text class="profile-arrow">›</text></view></view>
+    <button class="q-outline profile-logout" @tap="logout">退出登录</button><text class="q-note">栖居 · 让每一件小事，都有清楚的回应</text>
   </view>
 </template>
-
 <script>
+import QIcon from '../../components/QIcon.vue'
 import { getUserInfo, getUnreadCount } from '../../api/index.js'
 import { clearSession, openHome } from '../../utils/session.js'
-
 export default {
-  data() {
-    return {
-      userInfo: {},
-      unreadCount: 0
-    }
-  },
-  onShow() {
-    this.loadUserInfo()
-    this.loadUnreadCount()
-  },
+  components: { QIcon }, data() { return { userInfo: {}, unreadCount: 0, menu: [{ label: '通知提醒', icon: 'bell', path: '/pages/notifications/notifications' }, { label: '我的合同', icon: 'contract', path: '/pages/contract/contract' }, { label: '账户余额', icon: 'wallet', path: '/pages/account/account' }] } },
+  computed: { maskedPhone() { const p = this.userInfo.phone || ''; return /^\d{11}$/.test(p) ? `${p.slice(0, 3)}****${p.slice(-4)}` : p } },
+  onShow() { this.loadUserInfo() },
   methods: {
-    async loadUserInfo() {
-      try {
-        const res = await getUserInfo()
-        uni.setStorageSync('user_role', res.role)
-        if (res.role === 'CLEANER') {
-          openHome(res.role)
-          return
-        }
-        this.userInfo = res.tenant || {}
-      } catch (error) {
-        console.error('加载用户信息失败:', error)
-      }
-    },
-    async loadUnreadCount() {
-      // 无 token 时不发请求：该方法与 refresh() 并发，
-      // 若在会话确认前发出会拿到 401，被 request 层踢回登录页
-      if (!uni.getStorageSync('access_token')) return
-      try {
-        const res = await getUnreadCount()
-        this.unreadCount = res.unreadCount || 0
-      } catch (error) {
-        // 未读数失败不影响主流程（不弹错、不跳转）
-        console.warn('加载未读数失败:', error)
-      }
-    },
-    goToNotifications() {
-      uni.navigateTo({ url: '/pages/notifications/notifications' })
-    },
-    goToContract() {
-      uni.navigateTo({ url: '/pages/contract/contract' })
-    },
-    goToAccount() {
-      uni.navigateTo({ url: '/pages/account/account' })
-    },
-    showAbout() {
-      uni.showModal({
-        title: '关于我们',
-        content: '租客管理系统 v1.0.0\n\n为租客提供便捷的租房管理服务',
-        showCancel: false
-      })
-    },
-    showContact() {
-      uni.showModal({
-        title: '联系客服',
-        content: '客服电话：400-xxx-xxxx\n工作时间：9:00-18:00',
-        showCancel: false
-      })
-    },
-    logout() {
-      uni.showModal({
-        title: '确认退出',
-        content: '确定要退出登录吗？',
-        success: (res) => {
-          if (res.confirm) {
-            clearSession()
-            uni.reLaunch({ url: '/pages/login/login' })
-          }
-        }
-      })
-    }
+    async loadUserInfo() { if (!uni.getStorageSync('access_token')) { uni.reLaunch({ url: '/pages/login/login' }); return }; try { const user = await getUserInfo(); uni.setStorageSync('user_role', user.role); if (user.role === 'CLEANER') { openHome(user.role); return }; this.userInfo = user.tenant || {}; const res = await getUnreadCount(); this.unreadCount = res.unreadCount || 0 } catch (error) { console.error('个人信息加载失败', error) } },
+    open(path) { uni.navigateTo({ url: path }) },
+    showContact() { uni.showModal({ title: '联系管理者', content: '请通过签约时约定的联系方式联系管理者。居住设施问题也可以通过报修页面提交。', showCancel: false }) },
+    showAbout() { uni.showModal({ title: '关于栖居', content: '栖居 · 租客生活服务\n账单、合同、报修与通知，妥善照顾居住中的每一件小事。', showCancel: false }) },
+    logout() { uni.showModal({ title: '退出登录', content: '确认退出当前账户吗？', success: res => { if (res.confirm) { clearSession(); uni.reLaunch({ url: '/pages/login/login' }) } } }) },
   }
 }
 </script>
-
-<style scoped>
-.page {
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
-.header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 60rpx 30rpx;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-}
-
-.avatar {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 50%;
-  margin-right: 30rpx;
-  background-color: #fff;
-}
-
-.info {
-  display: flex;
-  flex-direction: column;
-  color: #fff;
-}
-
-.name {
-  font-size: 36rpx;
-  font-weight: bold;
-  margin-bottom: 12rpx;
-}
-
-.phone {
-  font-size: 26rpx;
-  opacity: 0.9;
-}
-
-.menu-list {
-  background-color: #fff;
-  margin: 20rpx;
-  border-radius: 16rpx;
-  overflow: hidden;
-}
-
-.menu-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 30rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-}
-
-.menu-item:last-child {
-  border-bottom: none;
-}
-
-.item-left {
-  display: flex;
-  align-items: center;
-}
-
-.icon {
-  font-size: 40rpx;
-  margin-right: 20rpx;
-}
-
-.text {
-  font-size: 28rpx;
-  color: #333;
-}
-
-.menu-badge {
-  margin-left: 16rpx;
-  min-width: 34rpx;
-  height: 34rpx;
-  line-height: 34rpx;
-  padding: 0 10rpx;
-  border-radius: 17rpx;
-  background-color: #ff4d4f;
-  color: #fff;
-  font-size: 20rpx;
-  text-align: center;
-}
-
-.arrow {
-  font-size: 40rpx;
-  color: #ccc;
-}
-
-.btn-logout {
-  width: calc(100% - 40rpx);
-  margin: 40rpx 20rpx;
-  height: 88rpx;
-  background-color: #fff;
-  color: #f44336;
-  border: 1rpx solid #f0f0f0;
-  border-radius: 12rpx;
-  font-size: 28rpx;
-}
-</style>
+<style scoped>.profile-card{display:flex;align-items:center;gap:24rpx;margin-top:38rpx}.profile-avatar{height:92rpx;width:92rpx;background:#e8e5da;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34rpx;color:#68715b;flex-shrink:0}.profile-card>view:nth-child(2){flex:1;min-width:0}.profile-name{font-size:30rpx;font-weight:550;display:block;overflow-wrap:anywhere}.profile-phone{display:block;color:#a49f95;font-size:22rpx;margin-top:12rpx}.profile-menu{padding:8rpx 32rpx}.profile-menu-item{display:flex;align-items:center;gap:22rpx;padding:28rpx 0;border-bottom:1rpx solid #e9e6de;font-size:25rpx}.profile-menu-item:last-child{border:0}.profile-arrow{margin-left:auto;color:#a49f95;font-size:34rpx}.profile-badge{background:#ad735a;color:white;font-size:20rpx;padding:3rpx 12rpx;border-radius:10rpx}.profile-logout{margin-top:40rpx;color:#ad735a;border-color:#e2cfc2}</style>

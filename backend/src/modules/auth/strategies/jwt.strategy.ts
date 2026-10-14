@@ -52,7 +52,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // 返回用户信息，会被附加到 request.user
     return {
       userId: payload.sub,
-      role: payload.role,
+      // 权限以当前数据库角色为准；旧 ADMIN token 在降权后不得继续读合同附件或管理摘要。
+      role: user.role,
       buildingId: payload.buildingId,
       tenantId,
     };

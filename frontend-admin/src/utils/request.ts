@@ -1,8 +1,12 @@
 import axios from 'axios';
-import type { AxiosInstance, AxiosResponse } from 'axios';
+import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { ElMessage } from 'element-plus';
 
-// 统一 API 前缀：本地开发走 Vite 代理（/api → http://localhost:3000/api）
+declare module 'axios' {
+  interface AxiosRequestConfig { silentError?: boolean }
+}
+
+// 统一 API 前缀：本地开发走 Vite 代理（默认 /api → http://127.0.0.1:3100/api）
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const request: AxiosInstance = axios.create({
@@ -12,6 +16,33 @@ const request: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+type RetryConfig = InternalAxiosRequestConfig & { _authRetried?: boolean };
+let refreshPromise: Promise<string> | null = null;
+
+function expireSession() {
+  // 不删除主题等与认证无关的本地设置。
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+    ElMessage.error('登录已过期，请重新登录');
+  }
+}
+
+function refreshAccessToken(refreshToken: string): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken }, { timeout: 15000 })
+      .then((response) => {
+        const token = response.data.accessToken;
+        if (typeof token !== 'string' || !token) throw new Error('刷新响应缺少 accessToken');
+        localStorage.setItem('access_token', token);
+        return token;
+      })
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
 
 /**
  * 剔除查询参数中的空值（undefined / null / 空串）。
@@ -50,6 +81,7 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response: AxiosResponse) => {
+    if(['post','patch','put','delete'].includes(response.config.method || '') && !/\/auth\//.test(response.config.url || '') && typeof window.dispatchEvent==='function')window.dispatchEvent(new Event('qiju:data-updated'));
     return response.data;
   },
   async (error) => {
@@ -58,33 +90,29 @@ request.interceptors.response.use(
 
       // Token 过期，尝试刷新
       if (status === 401) {
+        const config = error.config as RetryConfig | undefined;
+        // 登录/注册失败是凭据错误，不可刷新旧会话后重放密码请求。
+        const authRequest = /\/auth\/(login|register|refresh)\/?$/.test(config?.url?.split('?')[0] || '');
+        if (authRequest) return Promise.reject(error);
+
         const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
+        if (refreshToken && config && !config._authRetried) {
+          config._authRetried = true;
           try {
-            const response: any = await axios.post(
-              `${API_BASE_URL}/auth/refresh`,
-              { refreshToken }
-            );
-            localStorage.setItem('access_token', response.data.accessToken);
-            // 重试原请求
-            return request(error.config);
+            await refreshAccessToken(refreshToken);
           } catch (refreshError) {
-            // 刷新失败，跳转登录
-            localStorage.clear();
-            window.location.href = '/login';
-            ElMessage.error('登录已过期，请重新登录');
+            expireSession();
             return Promise.reject(refreshError);
           }
-        } else {
-          localStorage.clear();
-          window.location.href = '/login';
-          ElMessage.error('请先登录');
+          // 最多重试一次；并发请求共用同一次刷新。
+          return request(config);
         }
+        expireSession();
       } else {
-        ElMessage.error(data?.message || '请求失败');
+        if (!error.config?.silentError) ElMessage.error(data?.message || '请求失败');
       }
     } else {
-      ElMessage.error('网络错误，请检查网络连接');
+      if (!error.config?.silentError) ElMessage.error('网络错误，请检查网络连接');
     }
 
     return Promise.reject(error);

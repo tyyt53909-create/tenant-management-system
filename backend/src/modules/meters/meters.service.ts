@@ -58,6 +58,8 @@ export class MetersService {
         include: {
           room: { select: { roomNumber: true } },
           building: { select: { name: true } },
+          readings: { orderBy: [{readingTime:'desc'}, {createdAt:'desc'}], take: 1,
+            select: { currentReading:true,previousReading:true,usage:true,readingTime:true } },
         },
       }),
       this.prisma.meter.count({ where }),

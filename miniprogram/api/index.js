@@ -26,6 +26,9 @@ export const getMyMaintenance = (params) => {
   return request.get('/maintenance/my', params)
 }
 
+// 服务端按租客身份校验工单归属，只展示本人记录。
+export const getMaintenanceDetail = (id) => request.get(`/maintenance/${encodeURIComponent(id)}`)
+
 // 创建报修
 export const createMaintenance = (data) => {
   return request.post('/maintenance', data)

@@ -1,6 +1,8 @@
 <template>
   <div class="maintenance-page">
-    <el-card>
+    <ManagementMetrics resource="maintenance" />
+    <ResourcePanel title="报修工单" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="maintenance" :rows="tableData" /><el-button :loading="loading" @click="fetchData">刷新工单</el-button></template>
+      <div class="resource-tabs"><button v-for="tab in [{value:'',label:'全部工单'},{value:'SUBMITTED',label:'待受理'},{value:'IN_PROGRESS',label:'处理中'},{value:'PENDING_CONFIRM',label:'待确认'},{value:'COMPLETED',label:'已完成'}]" :key="tab.value" :class="{active:queryForm.status===tab.value}" @click="queryForm.status=tab.value;handleQuery()">{{ tab.label }}</button></div>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="状态">
           <el-select v-model="queryForm.status" placeholder="请选择状态" clearable>
@@ -19,40 +21,20 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
-        <el-table-column prop="title" label="标题" width="200" />
-        <el-table-column prop="category" label="类别" width="100">
-          <template #default="{ row }">
-            {{ categoryMap[row.category] }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="priority" label="优先级" width="100">
-          <template #default="{ row }">
-            <el-tag :type="priorityTypeMap[row.priority]">
-              {{ priorityMap[row.priority] }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="statusTypeMap[row.status]">
-              {{ statusMap[row.status] }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="createdAt" label="创建时间" width="180">
-          <template #default="{ row }">
-            {{ new Date(row.createdAt).toLocaleString('zh-CN') }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">处理</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="repair-grid"><article v-for="row in tableData" :key="row.id" :class="['repair-work-card',{'repair-with-photo':row.photos?.length}]">
+        <div v-if="row.photos?.length" class="repair-card-photo"><ProtectedImage :url="row.photos[0].fileUrl" /><span class="repair-photo-count">{{ row._count?.photos ?? row.photos.length }} 张照片</span></div>
+        <div class="repair-card-content">
+          <div class="repair-work-top"><span class="record-glyph"><el-icon><Tools /></el-icon></span><span>{{ categoryMap[row.category] }}问题</span><el-tag :type="priorityTypeMap[row.priority]">{{ priorityMap[row.priority] }}</el-tag></div>
+          <button class="repair-title" @click="openDetail(row)">{{ row.title }}</button>
+          <p class="repair-work-description">{{ row.description }}</p>
+          <div class="repair-work-meta"><span>{{ row.room?.roomNumber || '未关联房源' }} · {{ row.tenant?.name || '物业记录' }}</span><time>{{ formatDateTime(row.createdAt) }}</time></div>
+        </div>
+        <div class="repair-work-footer">
+          <el-tag :type="statusTypeMap[row.status]">{{ statusMap[row.status] }}</el-tag>
+          <div><el-button text @click="openDetail(row)">查看详情</el-button><el-button type="primary" plain @click="handleEdit(row)">处理工单</el-button><el-dropdown><el-button text aria-label="更多工单操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleDelete(row)">删除工单</el-dropdown-item></el-dropdown-menu></template></el-dropdown></div>
+        </div>
+      </article></div>
+      <el-empty v-if="!tableData.length && !loading && !loadError" :description="emptyText" :image-size="64"><p class="empty-guide">新工单提交后会显示在这里，可以按处理阶段筛选。</p></el-empty>
 
       <div style="margin-top: 20px; text-align: right">
         <el-pagination
@@ -63,7 +45,8 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
+    <ResourceDrawer v-model="detailVisible" resource="maintenance" :id="detailId" @edit="handleEdit($event as any)" />
 
     <el-dialog v-model="dialogVisible" title="处理报修" width="500px">
       <el-form :model="formData" label-width="100px">
@@ -78,7 +61,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="处理人">
-          <el-input v-model="formData.assignedTo" placeholder="请输入处理人ID" />
+          <el-select v-model="formData.assignedTo" clearable placeholder="选择跟进方式"><el-option v-if="formData.assignedTo && formData.assignedTo !== userStore.user?.id" :value="formData.assignedTo" label="保持已指派人员" /><el-option v-if="userStore.user" :value="userStore.user.id" :label="`由我跟进 · ${userStore.user.email}`" /></el-select>
         </el-form-item>
         <el-form-item label="解决方案">
           <el-input v-model="formData.resolution" type="textarea" :rows="4" placeholder="请输入解决方案" />
@@ -93,12 +76,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted,watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Tools } from '@element-plus/icons-vue';
+import { formatDateTime } from '@/utils/table';
+import { useUserStore } from '@/stores/user';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
+import ResourceDrawer from '@/components/common/ResourceDrawer.vue';
+import ProtectedImage from '@/components/common/ProtectedImage.vue';
 import { getMaintenanceList, updateMaintenance, deleteMaintenance } from '@/api/maintenance';
 import type { Maintenance } from '@/types';
 
 const loading = ref(false);
+const route=useRoute();
+const userStore=useUserStore();const loadError=ref('');const detailVisible=ref(false);const detailId=ref('');
+function openDetail(row:Maintenance){detailId.value=row.id;detailVisible.value=true;}
 const submitLoading = ref(false);
 const dialogVisible = ref(false);
 const tableData = ref<Maintenance[]>([]);
@@ -134,7 +129,7 @@ const priorityMap: Record<string, string> = {
 
 const priorityTypeMap: Record<string, any> = {
   LOW: 'info',
-  NORMAL: '',
+  NORMAL: 'primary',
   URGENT: 'danger',
 };
 
@@ -152,7 +147,7 @@ const statusTypeMap: Record<string, any> = {
   SUBMITTED: 'warning',
   ACKNOWLEDGED: 'info',
   ASSIGNED: 'info',
-  IN_PROGRESS: '',
+  IN_PROGRESS: 'primary',
   PENDING_CONFIRM: 'warning',
   COMPLETED: 'success',
   CANCELLED: 'info',
@@ -160,12 +155,13 @@ const statusTypeMap: Record<string, any> = {
 
 const fetchData = async () => {
   loading.value = true;
+  loadError.value='';
   try {
     const response = await getMaintenanceList({ page: pagination.page, limit: pagination.limit, ...queryForm });
     tableData.value = response.data;
     pagination.total = response.meta.total;
   } catch (error) {
-    ElMessage.error('获取数据失败');
+    loadError.value='工单列表未能加载，已保留上一次记录。请重试。';
   } finally {
     loading.value = false;
   }
@@ -219,7 +215,8 @@ const handleSubmit = async () => {
   }
 };
 
-onMounted(fetchData);
+onMounted(()=>{void fetchData();if(typeof route.query.detail==='string'){detailId.value=route.query.detail;detailVisible.value=true;}});
+watch(()=>route.query.detail,id=>{if(typeof id==='string'){detailId.value=id;detailVisible.value=true;}});
 </script>
 
 <style scoped>
