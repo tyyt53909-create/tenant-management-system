@@ -3,7 +3,8 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "首页"
+        "navigationBarTitleText": "首页",
+        "navigationStyle": "custom"
       }
     },
     {
@@ -16,7 +17,8 @@
     {
       "path": "pages/login/login",
       "style": {
-        "navigationBarTitleText": "登录"
+        "navigationBarTitleText": "登录",
+        "navigationStyle": "custom"
       }
     },
     {
@@ -28,13 +30,15 @@
     {
       "path": "pages/bills/bills",
       "style": {
-        "navigationBarTitleText": "我的账单"
+        "navigationBarTitleText": "我的账单",
+        "navigationStyle": "custom"
       }
     },
     {
       "path": "pages/maintenance/maintenance",
       "style": {
-        "navigationBarTitleText": "报修"
+        "navigationBarTitleText": "报修",
+        "navigationStyle": "custom"
       }
     },
     {
@@ -46,7 +50,14 @@
     {
       "path": "pages/profile/profile",
       "style": {
-        "navigationBarTitleText": "个人中心"
+        "navigationBarTitleText": "个人中心",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/theme/theme",
+      "style": {
+        "navigationBarTitleText": "主题设置"
       }
     },
     {
@@ -54,19 +65,27 @@
       "style": {
         "navigationBarTitleText": "通知提醒"
       }
+    },
+    {
+      "path": "pages/bill-detail/bill-detail",
+      "style": { "navigationBarTitleText": "账单详情" }
+    },
+    {
+      "path": "pages/maintenance/detail",
+      "style": { "navigationBarTitleText": "报修进度" }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "栖居租客",
-    "navigationBarBackgroundColor": "#fffefa",
+    "navigationBarTitleText": "栖居",
+    "navigationBarBackgroundColor": "#f5f2ec",
     "backgroundColor": "#f5f2ec"
   },
   "tabBar": {
-    "color": "#7A7E83",
-    "selectedColor": "#3cc51f",
-    "borderStyle": "black",
-    "backgroundColor": "#ffffff",
+    "color": "#8e8a80",
+    "selectedColor": "#4e5845",
+    "borderStyle": "white",
+    "backgroundColor": "#fffefa",
     "list": [
       {
         "pagePath": "pages/index/index",

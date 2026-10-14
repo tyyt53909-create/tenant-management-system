@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, Min, Max, IsBoolean } from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsBoolean,IsIn,IsString,MaxLength } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
 export class QueryNotificationsDto {
@@ -27,4 +27,13 @@ export class QueryNotificationsDto {
   @IsOptional()
   @Transform(({ value }) => value === true || value === 'true')
   unreadOnly?: boolean;
+
+  @IsOptional()
+  @IsIn(['READ','UNREAD'])
+  readState?:'READ'|'UNREAD';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  q?:string;
 }

@@ -1,28 +1,8 @@
 <template>
   <div class="cleaning-page">
-    <!-- 保洁概览 -->
-    <el-row :gutter="16" class="cleaning-stats">
-      <el-col :span="8">
-        <el-card shadow="never" class="stat-card stat-card--pending">
-          <div class="stat-label">待清洁</div>
-          <div class="stat-value">{{ stats.PENDING_CLEAN }}</div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
-        <el-card shadow="never" class="stat-card stat-card--cleaning">
-          <div class="stat-label">清洁中</div>
-          <div class="stat-value">{{ stats.CLEANING }}</div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
-        <el-card shadow="never" class="stat-card stat-card--clean">
-          <div class="stat-label">已清洁</div>
-          <div class="stat-value">{{ stats.CLEAN }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <ManagementMetrics resource="cleaning" />
 
-    <el-card>
+    <ResourcePanel title="保洁工作队列" :count="filteredRooms.length" :loading="loading" @retry="fetchData"><template #actions><ExportCurrent resource="cleaning" :rows="pagedRooms" /><el-button :loading="loading" @click="fetchData">刷新队列</el-button></template>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="清洁状态">
           <el-select
@@ -68,20 +48,10 @@
         show-icon
         :title="`房源总数超过 ${ALL_ROOMS_LIMIT} 条，仅加载前 ${ALL_ROOMS_LIMIT} 条，统计与列表可能不完整`"
       />
-      <el-alert
-        v-else
-        class="cleaning-tip"
-        type="info"
-        :closable="false"
-        show-icon
-        title="后端 GET /rooms 暂不支持 cleanStatus 查询参数，本页已加载全部房源并在前端过滤"
-      />
 
       <el-table
         :data="pagedRooms"
         v-loading="loading"
-        border
-        stripe
         empty-text="暂无符合条件的房源"
       >
         <el-table-column label="楼栋" width="150">
@@ -143,13 +113,16 @@
           @size-change="handleSizeChange"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import { ALL_ROOMS_LIMIT, fetchAllRooms, updateRoomStatus } from '@/api/rooms';
 import type { CleanStatus, Room } from '@/types';
 import {
@@ -182,15 +155,6 @@ const queryForm = reactive<{
 const pagination = reactive({
   page: 1,
   limit: 20,
-});
-
-/** 清洁状态统计（后端无聚合接口，基于全量房源本地统计） */
-const stats = computed<Record<CleanStatus, number>>(() => {
-  const result: Record<CleanStatus, number> = { CLEAN: 0, PENDING_CLEAN: 0, CLEANING: 0 };
-  for (const room of allRooms.value) {
-    if (room.cleanStatus) result[room.cleanStatus] += 1;
-  }
-  return result;
 });
 
 /** 楼栋下拉：从已加载房源中提取（避免额外接口依赖） */

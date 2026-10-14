@@ -90,7 +90,10 @@ export class TenantsService {
           createdAt: 'desc',
         },
         // 白名单字段：不返回证件号等敏感信息（T148）
-        select: TENANT_PUBLIC_SELECT,
+        select: { ...TENANT_PUBLIC_SELECT,
+          contracts:{where:{status:'ACTIVE'},orderBy:{startDate:'desc'},take:1,select:{id:true,contractNumber:true,startDate:true,endDate:true,status:true,rentAmount:true,room:{select:{roomNumber:true}}}},
+          prepayAccounts:{select:{balanceCache:true}},
+        },
       }),
       this.prisma.tenant.count({ where }),
     ]);

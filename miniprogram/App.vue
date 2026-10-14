@@ -26,4 +26,5 @@ export default {
 
 <style>
 @import './app.css';
+@import './qiju.css';
 </style>

@@ -1,6 +1,7 @@
 <template>
   <div class="checkout-page">
-    <el-card>
+    <ManagementMetrics resource="checkout" />
+    <ResourcePanel title="退租与结算" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="checkout" :rows="tableData" /><el-button type="primary" @click="handleCreate">＋ 新增退租记录</el-button></template>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="状态">
           <el-select v-model="queryForm.status" placeholder="请选择状态" clearable>
@@ -22,8 +23,6 @@
         ref="tableRef"
         :data="tableData"
         v-loading="loading"
-        border
-        stripe
         row-key="id"
         :empty-text="emptyText"
         @expand-change="handleExpandChange"
@@ -73,8 +72,8 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="contractId" label="合同ID" width="180" show-overflow-tooltip />
-        <el-table-column prop="roomId" label="房间ID" width="180" show-overflow-tooltip />
+        <el-table-column label="关联合同" min-width="190"><template #default="{row}">{{ row.contract?.contractNumber || '未关联' }}<small class="table-subline">{{ row.contract?.tenant?.name || '—' }}</small></template></el-table-column>
+        <el-table-column label="房源" width="140"><template #default="{row}">{{ row.room?.roomNumber || '未关联' }}</template></el-table-column>
         <el-table-column prop="checkoutDate" label="退租日期" width="120">
           <template #default="{ row }">
             {{ row.checkoutDate.split('T')[0] }}
@@ -92,7 +91,6 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="processedBy" label="处理人ID" width="180" show-overflow-tooltip />
         <el-table-column prop="notes" label="备注" min-width="180" show-overflow-tooltip />
         <el-table-column label="结算明细" width="100" align="center">
           <template #default="{ row }">
@@ -117,7 +115,7 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
 
     <el-dialog
       v-model="dialogVisible"
@@ -129,13 +127,13 @@
       <el-form ref="formRef" :model="formData" :rules="rules" label-width="110px">
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="合同ID" prop="contractId">
-              <el-input v-model="formData.contractId" placeholder="请输入合同ID" />
+            <el-form-item label="关联合同" prop="contractId">
+              <EntitySelect v-model="formData.contractId" resource="contracts" @selected="row=>{if(row)formData.roomId=row.roomId}" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="房间ID" prop="roomId">
-              <el-input v-model="formData.roomId" placeholder="请输入房间ID" />
+            <el-form-item label="退租房源" prop="roomId">
+              <EntitySelect v-model="formData.roomId" resource="rooms" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -163,8 +161,8 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="处理人ID" prop="processedBy">
-              <el-input v-model="formData.processedBy" placeholder="默认为当前登录管理员" />
+            <el-form-item label="处理人" prop="processedBy">
+              <el-input :model-value="userStore.user?.email || '当前登录管理者'" disabled />
             </el-form-item>
           </el-col>
           <el-col v-if="currentEditId" :span="12">
@@ -186,14 +184,6 @@
 
         <el-divider content-position="left">结算明细（押金扣除依据）</el-divider>
 
-        <el-alert
-          v-if="currentEditId"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="items-editor__warn"
-          title="当前后端更新接口不会保存结算明细变更：如需调整明细，请删除该记录后重新录入。"
-        />
 
         <div class="items-editor">
           <div class="items-editor__toolbar">
@@ -308,6 +298,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
+import EntitySelect from '@/components/common/EntitySelect.vue';
 import type { FormInstance, TableInstance } from 'element-plus';
 import { createCheckout, deleteCheckout, getCheckoutById, getCheckoutRecords, updateCheckout } from '@/api/checkout';
 import SettlementVoucherModal from '@/components/common/SettlementVoucherModal.vue';
@@ -359,6 +353,7 @@ const createEmptyItem = (itemType: CheckoutItemType | '' = ''): CheckoutItemForm
 const userStore = useUserStore();
 
 const loading = ref(false);
+const loadError=ref('');
 const submitLoading = ref(false);
 const exporting = ref(false);
 const voucherVisible = ref(false);
@@ -491,6 +486,7 @@ const resetForm = () => {
 
 const fetchData = async () => {
   loading.value = true;
+  loadError.value='';
   try {
     // 状态为空时必须省略该参数：后端 status 校验为 @IsEnum，传空串会 400
     const response = await getCheckoutRecords({
@@ -501,7 +497,7 @@ const fetchData = async () => {
     tableData.value = response.data;
     pagination.total = response.meta.total;
   } catch (error) {
-    ElMessage.error('获取数据失败');
+    loadError.value='退租记录未能加载，请检查连接后重试。';
   } finally {
     loading.value = false;
   }

@@ -181,6 +181,18 @@ describe('MaintenanceService', () => {
     });
   });
 
+  describe('findAll', () => {
+    it('管理列表提供首张照片及真实照片数，不加载全部原图记录', async () => {
+      prisma.maintenanceRequest.findMany.mockResolvedValue([{id:'mr-1',photos:[{id:'p1',fileUrl:'/api/files/a.png'}],_count:{photos:9}}]);
+      prisma.maintenanceRequest.count.mockResolvedValue(1);
+      const result=await service.findAll({});
+      expect(prisma.maintenanceRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({include:expect.objectContaining({
+        photos:{select:{id:true,fileUrl:true},orderBy:{createdAt:'asc'},take:1},_count:{select:{photos:true}},
+      })}));
+      expect(result.data[0]._count.photos).toBe(9);
+    });
+  });
+
   describe('findByTenant', () => {
     it('按租客过滤并分页倒序', async () => {
       const records = [{ id: 'mr-1' }];
@@ -224,11 +236,13 @@ describe('MaintenanceService', () => {
     });
 
     it('本人工单：正常返回', async () => {
-      prisma.maintenanceRequest.findUnique.mockResolvedValue({ id: 'mr-1', tenantId: 'tenant-1' });
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({ id: 'mr-1', tenantId: 'tenant-1', photos:[{id:'photo-1',fileUrl:'/api/files/photo.png'}] });
 
       const result = await service.findOneForTenant('mr-1', 'tenant-1');
 
       expect(result.id).toBe('mr-1');
+      expect(prisma.maintenanceRequest.findUnique).toHaveBeenCalledWith({where:{id:'mr-1'},include:{photos:true}});
+      expect(result.photos).toHaveLength(1);
     });
   });
 });

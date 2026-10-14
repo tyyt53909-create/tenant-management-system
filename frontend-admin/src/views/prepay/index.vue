@@ -1,15 +1,9 @@
 <template>
   <div class="prepay-page">
-    <el-card>
-      <el-form :inline="true">
-        <el-form-item>
-          <el-button type="primary" @click="handleCreate">新增预付账户</el-button>
-          <el-button @click="fetchData">刷新</el-button>
-          <el-button :loading="exporting" @click="handleExportCsv">导出全量流水 CSV</el-button>
-        </el-form-item>
-      </el-form>
+    <ManagementMetrics resource="prepay" />
+    <ResourcePanel title="预付账户" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="prepay" :rows="tableData" /><el-button :loading="exporting" @click="handleExportCsv">导出全量流水 CSV</el-button><el-button @click="fetchData">刷新</el-button><el-button type="primary" @click="handleCreate">＋ 新增账户</el-button></template>
 
-      <el-table :data="tableData" v-loading="loading" border stripe empty-text="暂无预付账户，点击右上角「新增账户」开始录入">
+      <el-table :data="tableData" v-loading="loading" empty-text="暂无预付账户，点击右上角「新增账户」开始录入">
         <el-table-column label="租客" min-width="120">
           <template #default="{ row }">{{ row.tenant?.name || row.tenantId }}</template>
         </el-table-column>
@@ -53,16 +47,16 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
 
     <!-- 新增账户 -->
     <el-dialog v-model="createDialogVisible" title="新增预付账户" width="480px">
       <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="110px">
-        <el-form-item label="租客ID" prop="tenantId">
-          <el-input v-model="createForm.tenantId" placeholder="请输入租客ID" />
+        <el-form-item label="租客" prop="tenantId">
+          <EntitySelect v-model="createForm.tenantId" resource="tenants" />
         </el-form-item>
-        <el-form-item label="房间ID" prop="roomId">
-          <el-input v-model="createForm.roomId" placeholder="请输入房间ID" />
+        <el-form-item label="房源" prop="roomId">
+          <EntitySelect v-model="createForm.roomId" resource="rooms" />
         </el-form-item>
         <el-form-item label="低余额阈值(元)">
           <el-input-number v-model="createForm.thresholdYuan" :min="0" :precision="2" :step="50" />
@@ -169,6 +163,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
+import EntitySelect from '@/components/common/EntitySelect.vue';
 import type { FormInstance } from 'element-plus';
 import {
   getPrepayAccounts,
@@ -182,6 +180,7 @@ import type { PrepayAccount, PrepayTransaction, PrepayTransactionType } from '@/
 import { downloadCsv } from '@/utils/export';
 
 const loading = ref(false);
+const loadError=ref('');
 const submitLoading = ref(false);
 const exporting = ref(false);
 const tableData = ref<PrepayAccount[]>([]);
@@ -239,12 +238,13 @@ const formatDateTime = (value: string) => (value ? value.replace('T', ' ').slice
 
 const fetchData = async () => {
   loading.value = true;
+  loadError.value='';
   try {
     const response = await getPrepayAccounts({ page: pagination.page, limit: pagination.limit });
     tableData.value = response.data;
     pagination.total = response.meta.total;
   } catch {
-    // 请求拦截器已弹出错误提示
+    loadError.value='账户列表未能更新，请检查连接后重试。';
   } finally {
     loading.value = false;
   }

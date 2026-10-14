@@ -104,6 +104,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/statistics/index.vue'),
         meta: { title: '统计报表', icon: 'TrendCharts' },
       },
+      {
+        path: '/settings',
+        name: 'Settings',
+        component: () => import('@/views/settings/index.vue'),
+        meta: { title: '系统设置' },
+      },
     ],
   },
 ];
@@ -114,16 +120,16 @@ const router = createRouter({
 });
 
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to) => {
   const token = localStorage.getItem('access_token');
 
   // 公开路由（登录页、公开看房页）无需鉴权
   if (to.path === '/login' || to.meta?.public) {
-    next();
+    return true;
   } else if (!token) {
-    next('/login');
+    return '/login';
   } else {
-    next();
+    return true;
   }
 });
 

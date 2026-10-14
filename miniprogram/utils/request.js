@@ -9,6 +9,7 @@ const request = (options) => {
     uni.request({
       url: API_BASE_URL + options.url,
       method: options.method || 'GET',
+      timeout: 15000,
       data: options.data || {},
       header: {
         'Content-Type': 'application/json',
@@ -18,6 +19,12 @@ const request = (options) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data)
         } else if (res.statusCode === 401) {
+          if (options.url === '/auth/login') {
+            const message = res.data?.message || '账号或密码不正确'
+            uni.showToast({ title: message, icon: 'none' })
+            reject(new Error(message))
+            return
+          }
           // Token 过期，跳转登录
           uni.removeStorageSync('access_token')
           uni.removeStorageSync('refresh_token')

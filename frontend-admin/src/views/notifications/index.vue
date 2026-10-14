@@ -1,6 +1,9 @@
 <template>
   <div class="notifications-page">
-    <el-card>
+    <ManagementMetrics resource="notifications" />
+    <ResourcePanel title="我的通知列表" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="notifications" :rows="displayData" /><el-button :loading="loading" @click="fetchData">刷新</el-button><el-button type="primary" :disabled="unreadCount===0 || loading" data-test="mark-all-read" @click="handleMarkAllRead">全部标记已读</el-button></template>
+      <div class="resource-tabs"><button v-for="tab in [{value:'',label:'全部通知'},{value:'UNREAD',label:'未读'},{value:'READ',label:'已读'}]" :key="tab.value" :class="{active:readState===tab.value}" @click="readState=tab.value;handleFilterChange()">{{ tab.label }}</button></div>
+      <el-form :inline="true"><el-form-item label="搜索"><el-input v-model="search" placeholder="通知标题或正文…" :maxlength="100" clearable @keyup.enter="handleFilterChange" /></el-form-item><el-form-item><el-button type="primary" @click="handleFilterChange">查询</el-button><el-button @click="search='';readState='';handleFilterChange()">重置</el-button></el-form-item></el-form>
       <div class="toolbar">
         <div class="toolbar-left">
           <span class="toolbar-label">未读</span>
@@ -21,56 +24,10 @@
             @change="handleFilterChange"
           />
         </div>
-        <div class="toolbar-right">
-          <el-button :loading="loading" @click="fetchData">刷新</el-button>
-          <el-button
-            type="primary"
-            :disabled="unreadCount === 0 || loading"
-            data-test="mark-all-read"
-            @click="handleMarkAllRead"
-          >
-            全部标记已读
-          </el-button>
-        </div>
+        <span class="small text-muted">通知只属于当前登录账号</span>
       </div>
 
-      <el-table
-        :data="displayData"
-        v-loading="loading"
-        border
-        stripe
-        :row-class-name="rowClassName"
-        :empty-text="unreadOnly ? '暂无未读通知' : '暂无通知'"
-        data-test="notification-table"
-      >
-        <el-table-column label="状态" width="90" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="!row.isRead" type="danger" effect="dark" size="small">未读</el-tag>
-            <el-tag v-else type="info" size="small">已读</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="优先级" width="90" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.priority === 'URGENT' ? 'danger' : 'info'" size="small">
-              {{ priorityMap[row.priority] || row.priority }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="body" label="正文" min-width="300" show-overflow-tooltip />
-        <el-table-column label="时间" width="180">
-          <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="handleDetail(row)">查看</el-button>
-            <el-button link type="primary" :disabled="row.isRead" @click="handleMarkRead(row)">
-              标记已读
-            </el-button>
-            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <section class="notice-board" data-test="notification-table"><article v-for="row in displayData" :key="row.id" :class="['v3-notice-item',{read:row.isRead}]"><span class="v3-notice-icon"><el-icon><Bell /></el-icon></span><div class="v3-notice-body"><div class="v3-notice-heading"><button @click="handleDetail(row)">{{ row.title }}</button><el-tag :type="row.priority==='URGENT'?'danger':row.isRead?'info':'warning'">{{ row.priority==='URGENT'?'紧急':row.isRead?'已读':'未读' }}</el-tag></div><p>{{ row.body }}</p><time>{{ formatTime(row.createdAt) }}</time></div><div class="v3-notice-actions"><el-button size="small" @click="handleDetail(row)">查看</el-button><el-button v-if="!row.isRead" size="small" plain @click="handleMarkRead(row)">标记已读</el-button><el-dropdown><el-button text aria-label="更多通知操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleDelete(row)">删除通知</el-dropdown-item></el-dropdown-menu></template></el-dropdown></div></article><el-empty v-if="!displayData.length && !loading && !loadError" :description="search || readState ? '没有符合条件的通知' : '暂无通知'" :image-size="50" /></section>
 
       <div class="pagination">
         <el-pagination
@@ -83,7 +40,7 @@
           @size-change="handleSizeChange"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
 
     <el-dialog v-model="detailVisible" title="通知详情" width="560px">
       <div v-if="current" class="detail">
@@ -118,6 +75,9 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Bell } from '@element-plus/icons-vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import {
   deleteNotification,
   getNotifications,
@@ -130,7 +90,8 @@ import type { Notification } from '@/types';
 const notificationStore = useNotificationStore();
 
 const loading = ref(false);
-const unreadOnly = ref(false);
+const readState=ref('');const search=ref('');const loadError=ref('');
+const unreadOnly=computed({get:()=>readState.value==='UNREAD',set:value=>{readState.value=value?'UNREAD':'';}});
 const tableData = ref<Notification[]>([]);
 const detailVisible = ref(false);
 const current = ref<Notification | null>(null);
@@ -151,22 +112,21 @@ const displayData = computed(() =>
 const formatTime = (value?: string | null) =>
   value ? new Date(value).toLocaleString('zh-CN') : '-';
 
-const rowClassName = ({ row }: { row: Notification }) => (row.isRead ? '' : 'row-unread');
-
 const fetchData = async () => {
   loading.value = true;
+  loadError.value='';
   try {
     const response = await getNotifications({
       page: pagination.page,
       limit: pagination.limit,
-      // 后端 unreadOnly 为 @Type(() => Boolean)：取消筛选时必须省略参数（传 false 会被当成 true）
-      unreadOnly: unreadOnly.value ? true : undefined,
+      readState:readState.value || undefined,
+      q:search.value.trim() || undefined,
     });
     tableData.value = response.data ?? [];
     pagination.total = response.meta?.total ?? 0;
     notificationStore.setUnreadCount(response.meta?.unreadCount ?? 0);
   } catch {
-    // HTTP 错误提示由 request 拦截器统一弹出，这里只保证 loading 归位
+    loadError.value='通知未能更新，已保留上次记录。请检查连接后重试。';
   } finally {
     loading.value = false;
   }

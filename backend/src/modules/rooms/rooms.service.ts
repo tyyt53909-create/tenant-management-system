@@ -118,6 +118,12 @@ export class RoomsService {
           createdAt: 'desc',
         },
         include: {
+          ...(actorRole === 'ADMIN' ? { contracts: {
+            where: { OR: [{ status: 'ACTIVE' as const }, { status: 'DRAFT' as const, room: { status: 'RESERVED' as const } }] },
+            orderBy: { createdAt: 'desc' as const }, take: 2,
+            select: { id:true,contractNumber:true,status:true,rentAmount:true,startDate:true,endDate:true,
+              tenant:{select:{name:true}}, bills:{where:{status:{in:['PENDING' as const,'PARTIAL' as const,'OVERDUE' as const]}},orderBy:{dueDate:'asc' as const},take:1,select:{dueDate:true}} },
+          } } : {}),
           building: {
             select: {
               id: true,
@@ -144,6 +150,9 @@ export class RoomsService {
     const room = await this.prisma.room.findUnique({
       where: { id },
       include: {
+        ...(actorRole === 'ADMIN' ? { photos: {
+          select: { id: true, fileUrl: true }, orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }], take: 20,
+        } } : {}),
         building: {
           select: {
             id: true,

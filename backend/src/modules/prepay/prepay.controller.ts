@@ -55,7 +55,7 @@ export class PrepayController {
   @Get('transactions')
   @UseGuards(RolesGuard)
   @Roles('TENANT', 'ADMIN')
-  findTransactions(@Request() req: any, @Query() query: any) {
+  findTransactions(@Request() req: any, @Query() query: QueryPrepayTransactionsDto) {
     if (req.user.role === 'TENANT') {
       return this.prepayService.findTransactionsByTenant(req.user.tenantId, query);
     }

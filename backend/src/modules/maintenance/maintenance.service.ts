@@ -110,7 +110,7 @@ export class MaintenanceService {
 
   /** 租客查询单条工单（仅限自己的） */
   async findOneForTenant(id: string, tenantId: string) {
-    const request = await this.prisma.maintenanceRequest.findUnique({ where: { id } });
+    const request = await this.prisma.maintenanceRequest.findUnique({ where: { id }, include: { photos: true } });
 
     if (!request || request.tenantId !== tenantId) {
       throw new NotFoundException('报修工单不存在');
@@ -137,6 +137,8 @@ export class MaintenanceService {
         include: {
           room: { select: { roomNumber: true } },
           tenant: { select: { name: true } },
+          photos: { select: { id: true, fileUrl: true }, orderBy: { createdAt: 'asc' }, take: 1 },
+          _count: { select: { photos: true } },
         },
       }),
       this.prisma.maintenanceRequest.count({ where }),

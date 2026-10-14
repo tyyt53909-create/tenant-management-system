@@ -1,6 +1,8 @@
 <template>
   <div class="bills-page">
-    <el-card>
+    <ManagementMetrics resource="bills" />
+    <ResourcePanel title="账单与收款" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="bills" :rows="tableData" /><el-button type="primary" @click="handleCreate">＋ 新增账单</el-button></template>
+      <div class="resource-tabs"><button v-for="tab in [{value:'',label:'全部账单'},{value:'PENDING',label:'待缴付'},{value:'PARTIAL',label:'部分缴纳'},{value:'OVERDUE',label:'逾期'},{value:'PAID',label:'已缴清'}]" :key="tab.value" :class="{active:queryForm.status===tab.value}" @click="queryForm.status=tab.value;handleQuery()">{{ tab.label }}</button></div>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="状态">
           <el-select v-model="queryForm.status" placeholder="请选择状态" clearable>
@@ -29,12 +31,11 @@
       <el-table
         :data="tableData"
         v-loading="loading"
-        border
-        stripe
+        @row-dblclick="openDetail"
         :empty-text="emptyText"
         :default-sort="{ prop: 'dueDate', order: 'descending' }"
       >
-        <el-table-column prop="billNumber" label="账单编号" width="200" sortable show-overflow-tooltip />
+        <el-table-column prop="billNumber" label="账单 / 房源" min-width="250" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row)"><span class="record-glyph"><el-icon><Wallet /></el-icon></span><span><strong>{{ row.contract?.room?.roomNumber || billTypeMap[row.billType] }} · {{ row.period }}</strong><small>{{ row.contract?.tenant?.name || '未关联租客' }} · {{ row.billNumber }}</small></span></button></template></el-table-column>
         <el-table-column prop="billType" label="类型" width="80">
           <template #default="{ row }">
             <el-tag>{{ billTypeMap[row.billType] }}</el-tag>
@@ -95,9 +96,9 @@
             <span v-else class="late-fee-cell late-fee-empty">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link :disabled="!canReceive(row)" @click="handlePayment(row)">收款</el-button>
+            <el-button type="primary" link @click="openDetail(row)">详情</el-button><el-button type="success" link :disabled="!canReceive(row)" @click="handlePayment(row)">收款</el-button>
             <el-tooltip placement="top" :disabled="canOpenLateFee(row)" :content="lateFeeDisabledReason(row)">
               <span class="op-wrap">
                 <el-button type="warning" link :disabled="!canOpenLateFee(row)" @click="handleLateFee(row)">
@@ -121,12 +122,13 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
+    <ResourceDrawer v-model="detailVisible" resource="bills" :id="detailId" @edit="handleEdit($event as any)" />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
       <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
-        <el-form-item label="合同ID" prop="contractId">
-          <el-input v-model="formData.contractId" placeholder="请输入合同ID" />
+        <el-form-item label="关联合同" prop="contractId">
+          <EntitySelect v-model="formData.contractId" resource="contracts" />
         </el-form-item>
         <el-form-item label="账单类型" prop="billType">
           <el-select v-model="formData.billType">
@@ -369,6 +371,12 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { formatMoney, formatDateOnly } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Wallet, QuestionFilled, Loading } from '@element-plus/icons-vue';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
+import ResourceDrawer from '@/components/common/ResourceDrawer.vue';
+import EntitySelect from '@/components/common/EntitySelect.vue';
 import type { FormInstance } from 'element-plus';
 import ReceiptModal from '@/components/common/ReceiptModal.vue';
 import { downloadCsv } from '@/utils/export';
@@ -386,6 +394,8 @@ import type { PaymentRecordItem, PaymentMethod } from '@/api/bills';
 import type { Bill, LateFee } from '@/types';
 
 const loading = ref(false);
+const loadError=ref('');const detailVisible=ref(false);const detailId=ref('');
+function openDetail(row:Bill){detailId.value=row.id;detailVisible.value=true;}
 const submitLoading = ref(false);
 const dialogVisible = ref(false);
 const dialogTitle = ref('新增账单');
@@ -477,7 +487,7 @@ const statusTypeMap: Record<string, any> = {
   PARTIAL: 'info',
   PAID: 'success',
   OVERDUE: 'danger',
-  CANCELLED: '',
+  CANCELLED: 'info',
 };
 
 const paymentMethodMap: Record<string, string> = {
@@ -711,6 +721,7 @@ const applySummaries = (bills: Bill[]) => {
 
 const fetchData = async (_options: { refreshLateFees?: boolean } = {}) => {
   loading.value = true;
+  loadError.value='';
   try {
     // 空字符串筛选项会被后端 @IsEnum 校验拒绝（400），仅在选中时才传
     const params: Record<string, any> = { page: pagination.page, limit: pagination.limit };
@@ -727,7 +738,7 @@ const fetchData = async (_options: { refreshLateFees?: boolean } = {}) => {
     // 列表已带滞纳金摘要，直接适配，无需逐行请求
     applySummaries(tableData.value);
   } catch (error) {
-    ElMessage.error('获取数据失败');
+    loadError.value='账单列表未能更新，已保留上一次记录。请重试。';
   } finally {
     loading.value = false;
   }
@@ -745,6 +756,8 @@ const handleReset = () => {
 };
 
 const handleCreate = () => {
+  Object.assign(formData,{contractId:'',billType:'RENT',period:'',amount:0,dueDate:''});
+  formRef.value?.clearValidate();
   dialogTitle.value = '新增账单';
   currentEditId.value = '';
   dialogVisible.value = true;
@@ -782,6 +795,7 @@ const handleSubmit = async () => {
   if (!formRef.value) return;
   await formRef.value.validate(async (valid) => {
     if (!valid) return;
+    if(submitLoading.value)return;
     submitLoading.value = true;
     try {
       const data: any = {

@@ -1,6 +1,7 @@
 <template>
   <div class="contracts-page">
-    <el-card>
+    <ManagementMetrics resource="contracts" />
+    <ResourcePanel title="合同档案" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="contracts" :rows="tableData" /><el-button type="primary" @click="handleCreate">＋ 新增合同</el-button></template>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="合同编号">
           <el-input v-model="queryForm.contractNumber" placeholder="请输入合同编号" clearable @keyup.enter="handleQuery" />
@@ -17,46 +18,47 @@
         <el-form-item>
           <el-button type="primary" @click="handleQuery">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
-          <el-button type="primary" @click="handleCreate">新增合同</el-button>
         </el-form-item>
       </el-form>
 
       <el-table
         :data="tableData"
         v-loading="loading"
-        border
-        stripe
+        @row-dblclick="openDetail"
+        :row-class-name="({row}:any)=>detailVisible && row.id===detailId ? 'detail-selected-row' : ''"
         :empty-text="emptyText"
         :default-sort="{ prop: 'endDate', order: 'descending' }"
       >
-        <el-table-column prop="contractNumber" label="合同编号" width="200" sortable show-overflow-tooltip />
-        <el-table-column prop="startDate" sort-by="startDateOnly" label="开始日期" width="120" sortable>
+        <el-table-column prop="contractNumber" label="合同 / 签约人" :min-width="detailVisible ? 200 : 250" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row)"><span class="record-glyph"><el-icon><Document /></el-icon></span><span><strong>{{ row.contractNumber }}</strong><small>{{ row.room?.roomNumber || '未关联房源' }} · {{ row.tenant?.name || '未关联租客' }}</small></span></button></template></el-table-column>
+        <el-table-column v-if="detailVisible" prop="endDate" sort-by="endDateOnly" label="合同期限" width="130" sortable><template #default="{row}">{{ formatDateOnly(row.startDate) }}<span class="table-subline">{{ formatDateOnly(row.endDate) }}</span></template></el-table-column>
+        <el-table-column v-if="!detailVisible" prop="startDate" sort-by="startDateOnly" label="开始日期" width="120" sortable>
           <template #default="{ row }">
             {{ formatDateOnly(row.startDate) }}
           </template>
         </el-table-column>
-        <el-table-column prop="endDate" sort-by="endDateOnly" label="结束日期" width="120" sortable>
+        <el-table-column v-if="!detailVisible" prop="endDate" sort-by="endDateOnly" label="结束日期" width="120" sortable>
           <template #default="{ row }">
             {{ formatDateOnly(row.endDate) }}
           </template>
         </el-table-column>
-        <el-table-column prop="rentAmount" sort-by="rentAmount" label="租金" width="120" sortable>
+        <el-table-column v-if="detailVisible" prop="rentAmount" label="租金 / 押金" width="125" sortable><template #default="{row}">{{ formatMoney(row.rentAmount) }}<span class="table-subline">押金 {{ formatMoney(row.depositAmount) }}</span></template></el-table-column>
+        <el-table-column v-if="!detailVisible" prop="rentAmount" sort-by="rentAmount" label="租金" width="120" sortable>
           <template #default="{ row }">
             {{ formatMoney(row.rentAmount) }}
           </template>
         </el-table-column>
-        <el-table-column prop="depositAmount" sort-by="depositAmount" label="押金" width="120" sortable>
+        <el-table-column v-if="!detailVisible" prop="depositAmount" sort-by="depositAmount" label="押金" width="120" sortable>
           <template #default="{ row }">
             {{ formatMoney(row.depositAmount) }}
           </template>
         </el-table-column>
-        <el-table-column prop="paymentCycle" label="付款周期" width="100">
+        <el-table-column prop="paymentCycle" label="付款周期" :width="detailVisible ? 75 : 100">
           <template #default="{ row }">
             {{ paymentCycleMap[row.paymentCycle] }}
           </template>
         </el-table-column>
         <!-- 续签关系合并进状态列：原先单列「续签」多为「—」，占位无信息 -->
-        <el-table-column prop="status" label="状态" width="150">
+        <el-table-column prop="status" label="状态" :width="detailVisible ? 85 : 150">
           <template #default="{ row }">
             <el-tag :type="statusTypeMap[row.status]">
               {{ statusMap[row.status] }}
@@ -72,17 +74,10 @@
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button
-              type="success"
-              link
-              :disabled="!canRenew(row)"
-              :title="canRenew(row) ? '基于本合同生成续签草稿' : '仅生效中或已过期的合同可续签'"
-              @click="handleRenew(row)"
-            >续签</el-button>
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="primary" link @click="openDetail(row)">详情</el-button>
+            <el-dropdown><el-button text aria-label="更多合同操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!canRenew(row)" @click="handleRenew(row)">发起续签</el-dropdown-item><el-dropdown-item @click="handleEdit(row)">编辑合同</el-dropdown-item><el-dropdown-item @click="handleDelete(row)">删除合同</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -96,18 +91,19 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
+    <PropertyDetailPanel ref="detailPanel" v-model="detailVisible" kind="contracts" :id="detailId" :can-renew="row=>canRenew(row as Contract)" @edit="handleEdit($event as any)" @renew="handleRenew($event as any)" />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
-        <el-form-item label="楼栋ID" prop="buildingId">
-          <el-input v-model="formData.buildingId" placeholder="building-001" />
+        <el-form-item label="楼栋" prop="buildingId">
+          <EntitySelect v-model="formData.buildingId" resource="buildings" />
         </el-form-item>
-        <el-form-item label="房间ID" prop="roomId">
-          <el-input v-model="formData.roomId" placeholder="请输入房间ID" />
+        <el-form-item label="房源" prop="roomId">
+          <EntitySelect v-model="formData.roomId" resource="rooms" @selected="row => {if(row) formData.buildingId=row.buildingId}" />
         </el-form-item>
-        <el-form-item label="租客ID" prop="tenantId">
-          <el-input v-model="formData.tenantId" placeholder="请输入租客ID" />
+        <el-form-item label="租客" prop="tenantId">
+          <EntitySelect v-model="formData.tenantId" resource="tenants" />
         </el-form-item>
         <el-form-item label="开始日期" prop="startDate">
           <el-date-picker v-model="formData.startDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
@@ -209,9 +205,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { formatMoney, formatDateOnly } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Document } from '@element-plus/icons-vue';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
+import PropertyDetailPanel from '@/components/common/PropertyDetailPanel.vue';
+import EntitySelect from '@/components/common/EntitySelect.vue';
 import type { FormInstance } from 'element-plus';
 import {
   getContracts,
@@ -223,6 +226,11 @@ import {
 import type { Contract } from '@/types';
 
 const loading = ref(false);
+const loadError=ref('');const detailVisible=ref(false);const detailId=ref('');
+const detailPanel=ref<InstanceType<typeof PropertyDetailPanel>>();
+const route=useRoute();
+const router=useRouter();
+function openDetail(row:{id:string}){detailId.value=row.id;detailVisible.value=true;if(route.query.detail!==row.id)void router.replace({query:{...route.query,detail:row.id}});}
 const submitLoading = ref(false);
 const dialogVisible = ref(false);
 const dialogTitle = ref('新增合同');
@@ -252,9 +260,9 @@ const formData = reactive({
 });
 
 const rules = {
-  buildingId: [{ required: true, message: '请输入楼栋ID', trigger: 'blur' }],
-  roomId: [{ required: true, message: '请输入房间ID', trigger: 'blur' }],
-  tenantId: [{ required: true, message: '请输入租客ID', trigger: 'blur' }],
+  buildingId: [{ required: true, message: '请选择楼栋', trigger: 'change' }],
+  roomId: [{ required: true, message: '请选择房源', trigger: 'change' }],
+  tenantId: [{ required: true, message: '请选择租客', trigger: 'change' }],
   startDate: [{ required: true, message: '请选择开始日期', trigger: 'change' }],
   endDate: [{ required: true, message: '请选择结束日期', trigger: 'change' }],
   rentAmount: [{ required: true, message: '请输入租金', trigger: 'blur' }],
@@ -290,6 +298,7 @@ const canRenew = (row: Contract) =>
 
 const fetchData = async () => {
   loading.value = true;
+  loadError.value='';
   try {
     const response = await getContracts({ page: pagination.page, limit: pagination.limit, ...queryForm });
     // 派生「仅日期」字段用于排序（与表头显示值一致）
@@ -300,7 +309,7 @@ const fetchData = async () => {
     })) as Contract[];
     pagination.total = response.meta.total;
   } catch (error) {
-    ElMessage.error('获取数据失败');
+    loadError.value='合同列表未能更新，请检查连接后重试。';
   } finally {
     loading.value = false;
   }
@@ -318,6 +327,8 @@ const handleReset = () => {
 };
 
 const handleCreate = () => {
+  Object.assign(formData,{buildingId:'',roomId:'',tenantId:'',startDate:'',endDate:'',rentAmount:0,depositAmount:0,paymentCycle:'MONTHLY',paymentDay:1});
+  formRef.value?.clearValidate();
   dialogTitle.value = '新增合同';
   currentEditId.value = '';
   dialogVisible.value = true;
@@ -359,6 +370,7 @@ const handleSubmit = async () => {
   if (!formRef.value) return;
   await formRef.value.validate(async (valid) => {
     if (!valid) return;
+    if(submitLoading.value)return;
     submitLoading.value = true;
     try {
       const data: any = {
@@ -375,6 +387,7 @@ const handleSubmit = async () => {
       }
       dialogVisible.value = false;
       fetchData();
+      void detailPanel.value?.reload();
     } catch (error) {
       ElMessage.error('操作失败');
     } finally {
@@ -447,6 +460,7 @@ const handleRenewSubmit = async () => {
       ElMessage.success(`续签草稿已生成：${(created as any).contractNumber || ''}`);
       renewVisible.value = false;
       fetchData();
+      void detailPanel.value?.reload();
     } catch (error: any) {
       // 409（已续签）/ 400（已终止、日期非法）由拦截器统一提示
     } finally {
@@ -455,7 +469,9 @@ const handleRenewSubmit = async () => {
   });
 };
 
-onMounted(fetchData);
+onMounted(()=>{void fetchData();if(typeof route.query.detail==='string')openDetail({id:route.query.detail});});
+watch(()=>route.query.detail,id=>{if(typeof id==='string')openDetail({id});else detailVisible.value=false;});
+watch(detailVisible,open=>{if(!open&&route.query.detail===detailId.value)void router.replace({query:{...route.query,detail:undefined}});});
 </script>
 
 <style scoped>

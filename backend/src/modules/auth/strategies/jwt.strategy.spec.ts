@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { JwtStrategy } from './jwt.strategy.js';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -69,5 +69,16 @@ describe('JwtStrategy 租客档案强制校验（T158 安全回归）', () => {
     await expect(strategy.validate({ sub: 'u-3', role: 'TENANT' } as any)).rejects.toThrow(
       UnauthorizedException,
     );
+  });
+  it('管理员降权后，旧 ADMIN token 不再获得管理员权限',async()=>{
+    prisma.user.findUnique.mockResolvedValue({id:'u-1',role:'TENANT',isActive:true});
+    prisma.tenant.findUnique.mockResolvedValue({id:'tenant-1'});
+    const actor=await strategy.validate({sub:'u-1',role:'ADMIN'} as any);
+    expect(actor.role).toBe('TENANT');expect(actor.tenantId).toBe('tenant-1');
+  });
+  it('角色改为 CLEANER 后不沿用 token 中的租客角色',async()=>{
+    prisma.user.findUnique.mockResolvedValue({id:'u-1',role:'CLEANER',isActive:true});
+    const actor=await strategy.validate({sub:'u-1',role:'TENANT'} as any);
+    expect(actor.role).toBe('CLEANER');expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
   });
 });

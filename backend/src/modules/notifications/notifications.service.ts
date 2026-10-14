@@ -24,11 +24,13 @@ export class NotificationsService {
   }
 
   async findAll(userId: string, query: QueryNotificationsDto) {
-    const { page = 1, limit = 20, unreadOnly } = query;
+    const { page = 1, limit = 20, unreadOnly,readState,q } = query;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = { userId };
     if (unreadOnly) where.isRead = false;
+    if(readState)where.isRead=readState==='READ';
+    if(q?.trim())where.OR=[{title:{contains:q.trim(),mode:'insensitive'}},{body:{contains:q.trim(),mode:'insensitive'}}];
 
     const [data, total, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({

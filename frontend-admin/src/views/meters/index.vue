@@ -1,6 +1,7 @@
 <template>
   <div class="meters-page">
-    <el-card>
+    <ManagementMetrics resource="meters" />
+    <ResourcePanel title="水电表档案" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="meters" :rows="tableData" /><el-button type="primary" @click="handleCreate">＋ 新增水电表</el-button></template>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="类型">
           <el-select v-model="queryForm.meterType" placeholder="请选择类型" clearable>
@@ -18,7 +19,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="tableData" v-loading="loading" border stripe :empty-text="emptyText">
+      <el-table :data="tableData" v-loading="loading" :empty-text="emptyText">
         <el-table-column prop="meterNumber" label="表号" width="150" />
         <el-table-column prop="meterType" label="类型" width="100">
           <template #default="{ row }">
@@ -27,7 +28,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="roomId" label="房间ID" width="180" show-overflow-tooltip />
+        <el-table-column label="房源" min-width="160"><template #default="{row}">{{ row.room?.roomNumber || '公共区域' }}</template></el-table-column>
         <el-table-column prop="unitPrice" label="单价" width="120">
           <template #default="{ row }">
             ¥{{ (row.unitPrice / 100).toFixed(2) }}/{{ unitMap[row.meterType] }}
@@ -69,15 +70,15 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
       <el-form ref="formRef" :model="formData" :rules="rules" label-width="120px">
-        <el-form-item label="楼栋ID" prop="buildingId">
-          <el-input v-model="formData.buildingId" placeholder="building-001" />
+        <el-form-item label="楼栋" prop="buildingId">
+          <EntitySelect v-model="formData.buildingId" resource="buildings" />
         </el-form-item>
-        <el-form-item label="房间ID" prop="roomId">
-          <el-input v-model="formData.roomId" placeholder="可选，公共区域可不填" />
+        <el-form-item label="房源" prop="roomId">
+          <EntitySelect v-model="formData.roomId" resource="rooms" placeholder="可选，公共区域留空" @selected="row=>{if(row)formData.buildingId=row.buildingId}" />
         </el-form-item>
         <el-form-item label="表类型" prop="meterType">
           <el-select v-model="formData.meterType">
@@ -185,6 +186,10 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
+import EntitySelect from '@/components/common/EntitySelect.vue';
 import type { FormInstance } from 'element-plus';
 import BatchReadingDialog from './BatchReadingDialog.vue';
 import { downloadCsv } from '@/utils/export';
@@ -200,6 +205,7 @@ import type { MeterReading } from '@/api/meters';
 import type { Meter } from '@/types';
 
 const loading = ref(false);
+const loadError=ref('');
 const submitLoading = ref(false);
 const dialogVisible = ref(false);
 const dialogTitle = ref('新增水电表');
@@ -282,12 +288,13 @@ const unitMap: Record<string, string> = {
 
 const fetchData = async () => {
   loading.value = true;
+  loadError.value='';
   try {
     const response = await getMeters({ page: pagination.page, limit: pagination.limit, ...queryForm });
     tableData.value = response.data;
     pagination.total = response.meta.total;
   } catch (error) {
-    ElMessage.error('获取数据失败');
+    loadError.value='水电表列表未能加载，请重试。';
   } finally {
     loading.value = false;
   }
@@ -304,6 +311,8 @@ const handleReset = () => {
 };
 
 const handleCreate = () => {
+  Object.assign(formData,{buildingId:'',roomId:'',meterType:'ELECTRICITY',meterNumber:'',unitPrice:0,priceEffectiveDate:'',isActive:true});
+  formRef.value?.clearValidate();
   dialogTitle.value = '新增水电表';
   currentEditId.value = '';
   dialogVisible.value = true;

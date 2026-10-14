@@ -42,10 +42,14 @@ export class FilesController {
 
     await this.filesService.assertCanRead(key, req.user);
 
-    try {
-      return res.sendFile(this.filesService.filePath(key));
-    } catch {
-      throw new NotFoundException('文件不存在');
-    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // sendFile 的磁盘错误发生在回调中，不能用同步 try/catch 捕获。
+    await new Promise<void>((resolve, reject) => {
+      res.sendFile(this.filesService.filePath(key), error => {
+        if (error) reject(new NotFoundException('文件不存在'));
+        else resolve();
+      });
+    });
   }
 }

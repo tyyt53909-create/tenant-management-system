@@ -1,20 +1,13 @@
 <template>
   <div class="rooms-page">
-    <el-card>
+    <ManagementMetrics resource="rooms" />
+    <ResourcePanel title="房源档案" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData">
+      <template #actions><ExportCurrent resource="rooms" :rows="tableData" /><el-button @click="goCleaning">保洁工作台</el-button><el-button type="primary" @click="handleCreate">＋ 新增房源</el-button></template>
+      <div class="resource-tabs"><button :class="{active:!queryForm.status}" @click="queryForm.status='';handleQuery()">全部房源</button><button v-for="option in ROOM_STATUS_OPTIONS" :key="option.value" :class="{active:queryForm.status===option.value}" @click="queryForm.status=option.value;handleQuery()">{{ option.label }}</button></div>
       <!-- 搜索区域 -->
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="房间号">
           <el-input v-model="queryForm.roomNumber" placeholder="请输入房间号" clearable @keyup.enter="handleQuery" />
-        </el-form-item>
-        <el-form-item label="房态">
-          <el-select v-model="queryForm.status" placeholder="请选择房态" clearable style="width: 140px">
-            <el-option
-              v-for="item in ROOM_STATUS_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
         </el-form-item>
         <el-form-item label="清洁状态">
           <el-select
@@ -37,8 +30,6 @@
           <el-button :type="pendingOnly ? 'warning' : 'default'" @click="handleTogglePendingOnly">
             只看待清洁
           </el-button>
-          <el-button @click="goCleaning">保洁工作台</el-button>
-          <el-button type="primary" @click="handleCreate">新增房源</el-button>
         </el-form-item>
       </el-form>
 
@@ -55,37 +46,32 @@
       <el-table
         :data="tableData"
         v-loading="loading"
-        border
-        stripe
+        @row-dblclick="openDetail"
+        :row-class-name="({row}:any)=>detailVisible && row.id===detailId ? 'detail-selected-row' : ''"
         :empty-text="emptyText"
       >
-        <el-table-column prop="roomNumber" label="房间号" width="120" sortable />
-        <el-table-column prop="floor" label="楼层" width="80" sortable />
-        <el-table-column prop="roomType" label="房型" width="120">
-          <template #default="{ row }">
-            <el-tag>{{ roomTypeMap[row.roomType] }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="area" label="面积(㎡)" width="110" sortable />
-        <el-table-column prop="status" label="房态" width="100">
+        <el-table-column prop="roomNumber" label="房源与户型" min-width="225" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row)"><span class="record-glyph"><el-icon><House /></el-icon></span><span><strong>{{ row.roomNumber }}</strong><small>{{ roomTypeMap[row.roomType] }} · {{ row.area == null ? '面积未记录' : `${row.area} m²` }} · {{ row.building?.name || '未关联楼栋' }} / {{ row.floor }} 楼</small></span></button></template></el-table-column>
+        <el-table-column label="租约月租" width="125"><template #default="{row}"><strong>{{ leaseOf(row) ? formatMoney(leaseOf(row)!.rentAmount) : '—' }}</strong><small class="table-subline">{{ leaseOf(row)?.status==='DRAFT' ? '预订关联草稿' : leaseOf(row) ? '元 / 月' : '未关联生效租约' }}</small></template></el-table-column>
+        <el-table-column label="入住关联" min-width="150"><template #default="{row}"><strong>{{ leaseOf(row)?.tenant?.name || '暂无当前租客' }}</strong><small class="table-subline">{{ leaseOf(row) ? leaseOf(row)!.contractNumber : '请核对房态与租约' }}</small></template></el-table-column>
+        <el-table-column prop="status" label="房态" width="90">
           <template #default="{ row }">
             <el-tag :type="roomStatusTagType(row.status)">
               {{ roomStatusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="cleanStatus" label="清洁状态" width="120">
+        <el-table-column label="最近待收日期" width="130"><template #default="{row}">{{ leaseOf(row)?.bills?.[0]?.dueDate?.slice(0,10) || '—' }}<small v-if="leaseOf(row) && !leaseOf(row)?.bills?.length" class="table-subline">无未缴清账单</small></template></el-table-column>
+        <el-table-column prop="cleanStatus" label="清洁状态" width="105">
           <template #default="{ row }">
             <el-tag :type="cleanStatusTagType(row.cleanStatus)" effect="light">
               {{ cleanStatusLabel(row.cleanStatus) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleStatus(row)">房态</el-button>
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="primary" link @click="openDetail(row)">详情</el-button>
+            <el-dropdown><el-button text aria-label="更多房源操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleStatus(row)">房态变更</el-dropdown-item><el-dropdown-item @click="handleEdit(row)">编辑房源</el-dropdown-item><el-dropdown-item @click="handleDelete(row)">删除房源</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -99,9 +85,11 @@
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="handleSizeChange"
+          @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
+    <PropertyDetailPanel ref="detailPanel" v-model="detailVisible" kind="rooms" :id="detailId" @edit="handleEdit($event as any)" @status="handleStatus($event as any)" />
 
     <!-- 新增/编辑对话框 -->
     <el-dialog
@@ -117,7 +105,7 @@
         label-width="100px"
       >
         <el-form-item label="楼栋" prop="buildingId">
-          <el-input v-model="formData.buildingId" placeholder="请输入楼栋ID" />
+          <EntitySelect v-model="formData.buildingId" resource="buildings" />
         </el-form-item>
         <el-form-item label="房间号" prop="roomNumber">
           <el-input v-model="formData.roomNumber" placeholder="请输入房间号" />
@@ -190,9 +178,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, ref, reactive, onMounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { House } from '@element-plus/icons-vue';
+import { formatMoney } from '@/utils/table';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
+import ExportCurrent from '@/components/common/ExportCurrent.vue';
+import PropertyDetailPanel from '@/components/common/PropertyDetailPanel.vue';
+import EntitySelect from '@/components/common/EntitySelect.vue';
 import type { FormInstance, FormRules } from 'element-plus';
 import {
   ALL_ROOMS_LIMIT,
@@ -214,8 +209,13 @@ import {
 } from '@/utils/roomStatus';
 
 const router = useRouter();
+const route = useRoute();
 
 const loading = ref(false);
+const loadError = ref('');
+const detailVisible=ref(false);const detailId=ref('');
+const detailPanel=ref<InstanceType<typeof PropertyDetailPanel>>();
+function openDetail(row:Room){detailId.value=row.id;detailVisible.value=true;if(route.query.detail!==row.id)void router.replace({query:{...route.query,detail:row.id}});}
 const submitLoading = ref(false);
 const dialogVisible = ref(false);
 const dialogTitle = ref('新增房源');
@@ -296,6 +296,7 @@ const roomTypeMap: Record<string, string> = {
   THREE_BED: '三室一厅',
   STUDIO: '开间',
 };
+function leaseOf(row:Room){return row.contracts?.find(contract=>contract.status===(row.status==='RESERVED'?'DRAFT':'ACTIVE'));}
 
 /** 本地过滤：仅房号模糊匹配（清洁状态已由服务端 cleanStatus 处理） */
 const applyLocalFilters = (rooms: Room[]) => {
@@ -307,6 +308,7 @@ const applyLocalFilters = (rooms: Room[]) => {
 
 const fetchData = async () => {
   loading.value = true;
+  loadError.value='';
   try {
     if (queryForm.roomNumber.trim()) {
       // 房号后端不支持：分页拉全量后本地筛选 + 本地分页
@@ -335,7 +337,7 @@ const fetchData = async () => {
       pagination.total = response.meta.total;
     }
   } catch (error) {
-    ElMessage.error('获取数据失败');
+    loadError.value='房源列表未能更新，已保留上一次记录。请重试。';
   } finally {
     loading.value = false;
   }
@@ -370,6 +372,7 @@ const goCleaning = () => {
 };
 
 const handleCreate = () => {
+  handleDialogClose();
   dialogTitle.value = '新增房源';
   currentEditId.value = '';
   dialogVisible.value = true;
@@ -384,7 +387,7 @@ const handleEdit = (row: Room) => {
     roomNumber: row.roomNumber,
     floor: row.floor,
     roomType: row.roomType,
-    area: row.area,
+    area: Number(row.area || 0),
     facilities: row.facilities || [],
   });
   dialogVisible.value = true;
@@ -411,6 +414,7 @@ const handleStatusSubmit = async () => {
     ElMessage.success('房态已更新');
     statusDialogVisible.value = false;
     fetchData();
+    void detailPanel.value?.reload();
   } catch {
     // 请求拦截器已提示（非法流转 400 / 版本冲突 409）
   } finally {
@@ -456,6 +460,7 @@ const handleSubmit = async () => {
 
       dialogVisible.value = false;
       fetchData();
+      void detailPanel.value?.reload();
     } catch (error) {
       ElMessage.error('操作失败');
     } finally {
@@ -478,7 +483,13 @@ const handleDialogClose = () => {
 
 onMounted(() => {
   fetchData();
+  if (route.query.action === 'create') handleCreate();
+  if(typeof route.query.detail==='string')openDetail({id:route.query.detail} as Room);
 });
+
+watch(() => route.query.action, (action) => { if (action === 'create') handleCreate(); });
+watch(()=>route.query.detail,id=>{if(typeof id==='string')openDetail({id} as Room);else detailVisible.value=false;});
+watch(detailVisible,open=>{if(!open&&route.query.detail===detailId.value)void router.replace({query:{...route.query,detail:undefined}});});
 </script>
 
 <style scoped>

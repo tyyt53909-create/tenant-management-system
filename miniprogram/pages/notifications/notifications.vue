@@ -1,5 +1,6 @@
 <template>
-  <view class="page">
+  <view class="page q-page">
+    <text class="q-eyebrow">INBOX / 通知中心</text><text class="q-title">重要的事，不会错过。</text><text class="q-description">居住提醒与服务进展，汇集在这里。</text>
     <view class="tabs">
       <view
         :class="['tab-item', filter === 'all' ? 'active' : '']"
@@ -203,7 +204,8 @@ export default {
 
 <style scoped>
 .page {
-  height: 100vh;
+  height: calc(100vh - var(--window-top, 0px));
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background-color: var(--color-bg-secondary, #f5f5f5);
@@ -211,16 +213,17 @@ export default {
 
 .tabs {
   display: flex;
-  background-color: var(--color-bg-primary, #fff);
-  padding: 20rpx 0;
+  background-color: transparent;
+  padding: 0;
+  margin-bottom: 24rpx;
 }
 
 .tab-item {
   flex: 1;
   text-align: center;
-  font-size: 28rpx;
+  font-size: 24rpx;
   color: var(--color-text-secondary, #666);
-  padding: 20rpx 0;
+  padding: 18rpx 0;
   position: relative;
 }
 
@@ -270,12 +273,15 @@ export default {
 
 .list-container {
   flex: 1;
-  padding: 20rpx;
+  min-height: 0;
+  height: 0;
+  padding: 0;
 }
 
 .notice-item {
   background-color: var(--color-bg-primary, #fff);
-  border-radius: 16rpx;
+  border: 1rpx solid #e9e6de;
+  border-radius: 30rpx;
   padding: 28rpx;
   margin-bottom: 20rpx;
 }
