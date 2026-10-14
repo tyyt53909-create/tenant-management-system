@@ -6,6 +6,7 @@ import { QueryMetersDto } from './dto/query-meters.dto.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
+import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -48,6 +49,14 @@ export class MetersController {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="meter-readings-${dateStr}.csv"`);
     return csv;
+  }
+
+  // 工作台水电使用概览（ADMIN）
+  @Get('usage-overview')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  getUsageOverview(@Query() query: QueryUsageOverviewDto) {
+    return this.metersService.getUsageOverview(query);
   }
 
   // 水电表档案：仅管理者（docs/03-权限矩阵.md §3.5，租客仅可看自己房间读数）

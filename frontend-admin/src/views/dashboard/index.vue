@@ -42,6 +42,9 @@
         </section>
       </div>
     </div>
+    <!-- 水电使用概览（T171） -->
+    <UtilitiesOverviewCard />
+
     <section class="dashboard-card revenue-card"><div class="section-heading"><h2>收入趋势</h2><router-link to="/statistics">查看统计<el-icon><ArrowRight /></el-icon></router-link></div><p class="chart-caption">近六个月 · 实收金额（元）</p><EChart :option="revenueOption" height="230px" /></section>
   </div>
 </template>
@@ -51,6 +54,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { House, User, Wallet, Tools, Calendar, Plus, ArrowRight, ArrowLeft, Bell } from '@element-plus/icons-vue';
 import EChart from '@/components/common/EChart.vue';
+import UtilitiesOverviewCard from '@/components/dashboard/UtilitiesOverviewCard.vue';
 import type { EChartsOption } from 'echarts';
 import { getDashboardStats, getRevenueTrend, getRoomStatusDistribution } from '@/api/dashboard';
 import type { DashboardStats, RevenueData, RoomStatusData } from '@/api/dashboard';

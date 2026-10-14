@@ -135,3 +135,44 @@ export const submitBatchReadings = (
   return request.post('/meters/batch-readings', { readings });
 };
 
+export interface UtilitiesOverviewData {
+  month: string;
+  isDemo: boolean;
+  water: {
+    usage: number;
+    momRate: number;
+    count: number;
+  };
+  electricity: {
+    usage: number;
+    momRate: number;
+    count: number;
+  };
+  cost: {
+    total: number;
+    waterCost: number;
+    electricityCost: number;
+  };
+  completion: {
+    completedMeters: number;
+    totalMeters: number;
+    pendingMeters: number;
+    status: 'FOLLOW_UP' | 'DONE';
+  };
+  trend: Array<{
+    month: string;
+    label: string;
+    electricityUsage: number;
+    waterUsage: number;
+    electricityCost: number;
+    waterCost: number;
+  }>;
+}
+
+export const getUtilitiesOverview = (params?: {
+  buildingId?: string;
+  month?: string;
+}): Promise<UtilitiesOverviewData> => {
+  return request.get('/meters/usage-overview', { params });
+};
+

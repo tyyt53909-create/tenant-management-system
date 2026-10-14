@@ -23,6 +23,7 @@ describe('MetersController', () => {
             getBatchSheet: vi.fn(),
             createBatchReadings: vi.fn(),
             exportReadings: vi.fn(),
+            getUsageOverview: vi.fn(),
           },
         },
       ],
@@ -126,5 +127,24 @@ describe('MetersController', () => {
       'Content-Disposition',
       expect.stringContaining('attachment; filename="meter-readings-'),
     );
+  });
+
+  it('getUsageOverview：透传查询参数并返回能耗概览', async () => {
+    const mockOverview = {
+      month: '2026-10',
+      isDemo: true,
+      water: { usage: 32.6, momRate: 7.9, count: 18 },
+      electricity: { usage: 827, momRate: 7.7, count: 22 },
+      cost: { total: 88122, waterCost: 13692, electricityCost: 74430 },
+      completion: { completedMeters: 28, totalMeters: 36, pendingMeters: 8, status: 'FOLLOW_UP' },
+      trend: [],
+    };
+    vi.spyOn(service, 'getUsageOverview').mockResolvedValue(mockOverview as any);
+    const query = { buildingId: 'b-1', month: '2026-10' };
+
+    const result = await controller.getUsageOverview(query as any);
+
+    expect(result).toEqual(mockOverview);
+    expect(service.getUsageOverview).toHaveBeenCalledWith(query);
   });
 });
