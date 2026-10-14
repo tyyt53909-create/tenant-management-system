@@ -20,10 +20,10 @@ function loadTheme() {
   return import(`../utils/theme.js?case=${version}`)
 }
 
-test('defaults to the standard theme with dark mode off', async () => {
+test('defaults to the default theme (qiju) with dark mode off', async () => {
   const mod = await loadTheme()
   assert.equal(mod.getThemeName(), defaultTheme)
-  assert.equal(mod.getThemeName(), 'standard')
+  assert.equal(mod.getThemeName(), 'qiju')
   assert.equal(mod.isDark(), false)
   assert.deepEqual(mod.getTheme(), themes[defaultTheme])
 })
