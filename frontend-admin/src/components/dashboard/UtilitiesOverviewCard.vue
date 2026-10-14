@@ -143,13 +143,15 @@
         </div>
       </div>
 
-      <div class="trend-stat">
-        <span class="stat-number">{{ currentStat.value }}</span>
-        <span class="stat-label">{{ currentStat.unit }} · {{ currentStat.monthLabel }}</span>
-        <span :class="['stat-mom', currentStat.isUp ? 'up' : 'down']">
-          {{ currentStat.isUp ? '↑' : '↓' }} {{ Math.abs(currentStat.rate) }}%
-        </span>
-      </div>
+      <transition name="stat-fade" mode="out-in">
+        <div :key="activeType" class="trend-stat">
+          <span class="stat-number">{{ currentStat.value }}</span>
+          <span class="stat-label">{{ currentStat.unit }} · {{ currentStat.monthLabel }}</span>
+          <span :class="['stat-mom', currentStat.isUp ? 'up' : 'down']">
+            {{ currentStat.isUp ? '↑' : '↓' }} {{ Math.abs(currentStat.rate) }}%
+          </span>
+        </div>
+      </transition>
 
       <div class="trend-chart">
         <EChart :option="chartOption" height="220px" />
@@ -226,16 +228,35 @@ const chartOption = computed<EChartsOption>(() => {
   const unitStr = isElec ? '度 (kWh)' : '噸 (m³)';
 
   return {
+    animation: true,
+    animationDuration: 750,
+    animationEasing: 'cubicOut',
+    animationDurationUpdate: 550,
+    animationEasingUpdate: 'cubicInOut',
     color: [mainColor],
     tooltip: {
       trigger: 'axis',
+      axisPointer: {
+        type: 'line',
+        lineStyle: {
+          color: '#d6cfc2',
+          width: 1,
+          type: 'dashed',
+        },
+      },
+      backgroundColor: 'rgba(255, 254, 250, 0.96)',
+      borderColor: '#e8e3d8',
+      borderWidth: 1,
+      padding: [8, 12],
+      textStyle: { color: '#2c2a29' },
+      extraCssText: 'box-shadow: 0 8px 24px rgba(54, 45, 26, 0.08); border-radius: 8px;',
       formatter: (params: any) => {
         if (!params || !params[0]) return '';
         const p = params[0];
         const item = trend[p.dataIndex];
         const costStr = item ? (isElec ? (item.electricityCost / 100).toFixed(2) : (item.waterCost / 100).toFixed(2)) : '0.00';
         return `
-          <div style="font-size:12px;padding:3px;">
+          <div style="font-size:12px;padding:2px;">
             <div style="font-weight:600;margin-bottom:4px;color:#2c2a29;">${p.name} · 用量</div>
             <div style="color:#555;">${isElec ? '用電量' : '用水量'}：<b>${p.value}</b> ${unitStr}</div>
             <div style="color:#888;margin-top:2px;">估算費用：¥${costStr}</div>
@@ -270,6 +291,13 @@ const chartOption = computed<EChartsOption>(() => {
         smooth: true,
         showSymbol: true,
         symbolSize: 6,
+        emphasis: {
+          scale: 1.5,
+          itemStyle: {
+            shadowBlur: 8,
+            shadowColor: 'rgba(0,0,0,0.18)',
+          },
+        },
         data: seriesData,
         lineStyle: {
           width: 2.5,
@@ -419,13 +447,28 @@ onMounted(() => {
   padding: 8px 14px;
   display: inline-flex;
   align-items: center;
-  transition: all 0.18s;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 2px rgba(54, 45, 26, 0.02);
+}
+
+.action-btn .el-icon--right {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .action-btn:hover {
   background: #f6f3eb;
   border-color: #b5ad9e;
   color: #1a1918;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(54, 45, 26, 0.06);
+}
+
+.action-btn:hover .el-icon--right {
+  transform: translateX(4px);
+}
+
+.action-btn:active {
+  transform: translateY(0);
 }
 
 /* 四大 KPI 卡片网格 (2x2) */
@@ -447,6 +490,16 @@ onMounted(() => {
   box-shadow: 0 4px 18px rgba(54, 45, 26, 0.015);
   position: relative;
   overflow: hidden;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease;
+  cursor: default;
+}
+
+.kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(54, 45, 26, 0.06);
+  border-color: #ded8cb;
 }
 
 /* 顶部各颜色高光线条 */
@@ -477,6 +530,12 @@ onMounted(() => {
 .kpi-icon {
   font-size: 16px;
   color: #9d988d;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
+}
+
+.kpi-card:hover .kpi-icon {
+  transform: scale(1.15);
+  color: #4f4b42;
 }
 
 .kpi-value {
@@ -583,14 +642,39 @@ onMounted(() => {
   font-size: 12px;
   color: #767066;
   cursor: pointer;
-  transition: all 0.18s;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.tab-btn:hover:not(.active) {
+  color: #2c2a29;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.tab-btn:active {
+  transform: scale(0.96);
 }
 
 .tab-btn.active {
   background: #ffffff;
   color: #2c2a29;
   font-weight: 600;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.stat-fade-enter-active,
+.stat-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stat-fade-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.stat-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .trend-stat {
