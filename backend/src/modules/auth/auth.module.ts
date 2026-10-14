@@ -8,6 +8,7 @@ import { JwtStrategy } from './strategies/jwt.strategy.js';
 import { InviteCodeService } from './invite-code.service.js';
 import { AuthController } from './auth.controller.js';
 import { GoogleAuthService } from './google-auth.service.js';
+import { EmailOtpService } from './email-otp.service.js';
 import jwtConfig from '../../config/jwt.config.js';
 
 @Module({
@@ -27,7 +28,7 @@ import jwtConfig from '../../config/jwt.config.js';
     PrismaModule,
   ],
   controllers: [AuthController],
-  providers: [JwtAuthService, JwtStrategy, InviteCodeService, GoogleAuthService],
-  exports: [JwtAuthService, InviteCodeService, GoogleAuthService, PassportModule],
+  providers: [JwtAuthService, JwtStrategy, InviteCodeService, GoogleAuthService, EmailOtpService],
+  exports: [JwtAuthService, InviteCodeService, GoogleAuthService, EmailOtpService, PassportModule],
 })
 export class AuthModule {}

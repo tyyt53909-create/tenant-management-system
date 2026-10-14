@@ -8,6 +8,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { GoogleAuthService } from './google-auth.service.js';
+import { EmailOtpService } from './email-otp.service.js';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthController', () => {
@@ -15,6 +16,7 @@ describe('AuthController', () => {
   let inviteCodeService: InviteCodeService;
   let jwtService: JwtAuthService;
   let googleAuthService: GoogleAuthService;
+  let emailOtpService: EmailOtpService;
   let prisma: PrismaService;
 
   beforeEach(async () => {
@@ -44,6 +46,13 @@ describe('AuthController', () => {
           },
         },
         {
+          provide: EmailOtpService,
+          useValue: {
+            sendCode: vi.fn(),
+            verifyCode: vi.fn(),
+          },
+        },
+        {
           provide: PrismaService,
           useValue: {
             user: {
@@ -54,6 +63,8 @@ describe('AuthController', () => {
             },
             tenant: {
               create: vi.fn(),
+              findFirst: vi.fn(),
+              update: vi.fn(),
             },
             $transaction: vi.fn(),
           },
@@ -65,6 +76,7 @@ describe('AuthController', () => {
     inviteCodeService = module.get<InviteCodeService>(InviteCodeService);
     jwtService = module.get<JwtAuthService>(JwtAuthService);
     googleAuthService = module.get<GoogleAuthService>(GoogleAuthService);
+    emailOtpService = module.get<EmailOtpService>(EmailOtpService);
     prisma = module.get<PrismaService>(PrismaService);
   });
 
@@ -541,18 +553,49 @@ describe('AuthController', () => {
       );
     });
 
-    it('新用户首次 Google 登录未提供邀请码应抛出 BadRequestException 提示', async () => {
+    it('新用户首次 Google 登录未提供邀请码亦可零门槛自动注册并登录', async () => {
       vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
         googleId: 'google-sub-new',
         email: 'newuser@gmail.com',
+        name: 'New Tenant',
+        avatarUrl: 'https://avatar.com/new.jpg',
         emailVerified: true,
       });
 
       vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
 
-      await expect(controller.googleAuth({ idToken: 'new-user-token' })).rejects.toThrow(
-        BadRequestException,
-      );
+      const mockCreatedUser = {
+        id: 'user-new-created',
+        email: 'newuser@gmail.com',
+        phone: null,
+        role: 'TENANT',
+        avatarUrl: 'https://avatar.com/new.jpg',
+        isActive: true,
+      };
+
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+        return callback({
+          user: {
+            create: vi.fn().mockResolvedValue(mockCreatedUser),
+            update: vi.fn().mockResolvedValue({}),
+          },
+          tenant: {
+            findFirst: vi.fn().mockResolvedValue(null),
+            create: vi.fn().mockResolvedValue({}),
+          },
+        });
+      });
+
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'new-jwt-access',
+        refreshToken: 'new-jwt-refresh',
+      });
+
+      const res = await controller.googleAuth({ idToken: 'new-user-token' });
+
+      expect(res.accessToken).toBe('new-jwt-access');
+      expect(res.isNewUser).toBe(true);
+      expect(res.user.email).toBe('newuser@gmail.com');
     });
 
     it('新用户首次 Google 登录携带有效邀请码成功注册并关联', async () => {
@@ -586,6 +629,7 @@ describe('AuthController', () => {
             update: vi.fn().mockResolvedValue({}),
           },
           tenant: {
+            findFirst: vi.fn().mockResolvedValue(null),
             create: vi.fn().mockResolvedValue({}),
           },
         });
@@ -606,4 +650,156 @@ describe('AuthController', () => {
       expect(res.user.email).toBe('newuser@gmail.com');
     });
   });
+
+  describe('Email OTP & Delayed Binding (T170)', () => {
+    describe('sendEmailCode', () => {
+      it('发送邮箱验证码成功应返回冷却时间', async () => {
+        vi.spyOn(emailOtpService, 'sendCode').mockResolvedValue({ cooldown: 60 });
+
+        const res = await controller.sendEmailCode({ email: 'tenant@example.com' });
+        expect(res.cooldown).toBe(60);
+        expect(res.message).toContain('验证码已发送');
+        expect(emailOtpService.sendCode).toHaveBeenCalledWith('tenant@example.com');
+      });
+    });
+
+    describe('loginWithEmailCode', () => {
+      it('验证码错误应抛出 BadRequestException', async () => {
+        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(false);
+
+        await expect(
+          controller.loginWithEmailCode({ email: 'test@example.com', code: '000000' }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('账号被禁用应抛出 ForbiddenException', async () => {
+        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({
+          id: 'user-banned',
+          email: 'banned@example.com',
+          isActive: false,
+        } as any);
+
+        await expect(
+          controller.loginWithEmailCode({ email: 'banned@example.com', code: '123456' }),
+        ).rejects.toThrow(ForbiddenException);
+      });
+
+      it('已有正常用户验证码登录成功', async () => {
+        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        const mockUser = {
+          id: 'user-existing',
+          email: 'exist@example.com',
+          phone: '13900000000',
+          role: 'TENANT',
+          isActive: true,
+          avatarUrl: null,
+        };
+        vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+        vi.spyOn(prisma.user, 'update').mockResolvedValue(mockUser as any);
+        vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+          accessToken: 'otp-access-token',
+          refreshToken: 'otp-refresh-token',
+        });
+
+        const res = await controller.loginWithEmailCode({
+          email: 'exist@example.com',
+          code: '123456',
+        });
+
+        expect(res.accessToken).toBe('otp-access-token');
+        expect(res.isNewUser).toBe(false);
+        expect(res.user.email).toBe('exist@example.com');
+        expect(prisma.user.update).toHaveBeenCalledWith({
+          where: { id: 'user-existing' },
+          data: { lastLoginAt: expect.any(Date) },
+        });
+      });
+
+      it('新用户验证码登录应自动创建账户与租客记录', async () => {
+        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+
+        const mockNewUser = {
+          id: 'user-otp-new',
+          email: 'newotp@example.com',
+          phone: null,
+          role: 'TENANT',
+          isActive: true,
+          avatarUrl: null,
+        };
+
+        vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+          return callback({
+            user: {
+              create: vi.fn().mockResolvedValue(mockNewUser),
+            },
+            tenant: {
+              findFirst: vi.fn().mockResolvedValue(null),
+              create: vi.fn().mockResolvedValue({}),
+            },
+          });
+        });
+
+        vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+          accessToken: 'new-otp-access',
+          refreshToken: 'new-otp-refresh',
+        });
+
+        const res = await controller.loginWithEmailCode({
+          email: 'newotp@example.com',
+          code: '123456',
+        });
+
+        expect(res.accessToken).toBe('new-otp-access');
+        expect(res.isNewUser).toBe(true);
+        expect(res.user.email).toBe('newotp@example.com');
+      });
+    });
+
+    describe('bindInviteCode', () => {
+      it('邀请码无效应抛出 BadRequestException', async () => {
+        vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({ valid: false });
+
+        await expect(
+          controller.bindInviteCode({ user: { userId: 'u1' } }, { inviteCode: 'BADCODE' }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('邀请码有效应在事务中清空码并更新 user.invitedBy', async () => {
+        vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+          valid: true,
+          invitedBy: 'admin-inviter',
+        });
+
+        const userUpdate = vi.fn().mockResolvedValue({});
+        vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
+          return callback({
+            user: {
+              update: userUpdate,
+            },
+          });
+        });
+
+        const res = await controller.bindInviteCode(
+          { user: { userId: 'tenant-user-1' } },
+          { inviteCode: 'GOODCODE' },
+        );
+
+        expect(res.success).toBe(true);
+        expect(userUpdate).toHaveBeenCalledTimes(2);
+        // 第一调用：使邀请码失效
+        expect(userUpdate).toHaveBeenNthCalledWith(1, {
+          where: { id: 'admin-inviter' },
+          data: { inviteCode: null, inviteExpiredAt: null },
+        });
+        // 第二调用：关联用户
+        expect(userUpdate).toHaveBeenNthCalledWith(2, {
+          where: { id: 'tenant-user-1' },
+          data: { invitedBy: 'admin-inviter' },
+        });
+      });
+    });
+  });
 });
+
