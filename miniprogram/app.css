@@ -455,14 +455,18 @@ page {
   }
 
   uni-page-head .uni-page-head {
+    width: 100% !important;
     max-width: 430px !important;
     left: 50% !important;
+    right: auto !important;
     transform: translateX(-50%) !important;
   }
 
-  uni-tabbar, .uni-tabbar {
+  uni-tabbar .uni-tabbar {
+    width: 100% !important;
     max-width: 430px !important;
     left: 50% !important;
+    right: auto !important;
     transform: translateX(-50%) !important;
   }
 }

@@ -76,6 +76,8 @@
     }
   ],
   "globalStyle": {
+    "rpxCalcMaxDeviceWidth": 430,
+    "rpxCalcBaseDeviceWidth": 375,
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "栖居",
     "navigationBarBackgroundColor": "#f5f2ec",
