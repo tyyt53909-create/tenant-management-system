@@ -1,9 +1,24 @@
 import request from '../utils/request.js'
 import { API_BASE_URL } from '../utils/api-config.js'
 
-// 用户登录
+// 用户登录（密码模式）
 export const login = (data) => {
   return request.post('/auth/login', data)
+}
+
+// 发送邮箱验证码 (OTP)
+export const sendEmailCode = (data) => {
+  return request.post('/auth/send-email-code', data)
+}
+
+// 邮箱验证码登录 / 自动注册
+export const loginWithEmailCode = (data) => {
+  return request.post('/auth/login-email-code', data)
+}
+
+// 绑定/兑换邀请码
+export const bindInviteCode = (data) => {
+  return request.post('/auth/bind-invite-code', data)
 }
 
 // 获取 Google Client ID

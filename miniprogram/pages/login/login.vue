@@ -8,35 +8,95 @@
       </view>
 
       <view class="form-section">
-        <view class="input-group">
-          <text class="label">账号</text>
-          <input 
-            class="input" 
-            v-model="form.account" 
-            placeholder="请输入邮箱或手机号"
-            placeholder-class="placeholder"
-          />
+        <!-- 登录方式切换 Tab -->
+        <view class="login-tabs">
+          <view 
+            class="login-tab" 
+            :class="{ active: loginType === 'email' }" 
+            @tap="loginType = 'email'"
+          >
+            <text class="tab-text">验证码免密</text>
+          </view>
+          <view 
+            class="login-tab" 
+            :class="{ active: loginType === 'password' }" 
+            @tap="loginType = 'password'"
+          >
+            <text class="tab-text">密码登录</text>
+          </view>
         </view>
 
-        <view class="input-group">
-          <text class="label">密码</text>
-          <input 
-            class="input" 
-            v-model="form.password" 
-            password
-            confirm-type="go"
-            @confirm="handleLogin"
-            placeholder="请输入密码"
-            placeholder-class="placeholder"
-          />
+        <!-- 1. 邮箱验证码登录 (默认首选) -->
+        <view v-if="loginType === 'email'" class="tab-content">
+          <view class="input-group">
+            <text class="label">登录邮箱</text>
+            <input 
+              class="input" 
+              v-model="emailForm.email" 
+              placeholder="请输入您的邮箱"
+              placeholder-class="placeholder"
+            />
+          </view>
+
+          <view class="input-group">
+            <text class="label">验证码</text>
+            <view class="otp-input-row">
+              <input 
+                class="input otp-input" 
+                v-model="emailForm.code" 
+                type="number"
+                maxlength="6"
+                placeholder="6 位数字验证码"
+                placeholder-class="placeholder"
+              />
+              <button 
+                class="btn-send-otp" 
+                :disabled="otpCooldown > 0 || sendingCode" 
+                @tap="handleSendOtp"
+              >
+                {{ sendingCode ? '发送中…' : (otpCooldown > 0 ? `${otpCooldown}s 后重发` : '获取验证码') }}
+              </button>
+            </view>
+          </view>
+
+          <button class="btn-login" :loading="emailLoading" :disabled="emailLoading" @tap="handleEmailLogin">
+            登录 / 免密进入
+          </button>
         </view>
 
-        <button class="btn-login" :loading="loading" :disabled="loading" @tap="handleLogin">
-          登录
-        </button>
+        <!-- 2. 账号密码登录 -->
+        <view v-else class="tab-content">
+          <view class="input-group">
+            <text class="label">账号</text>
+            <input 
+              class="input" 
+              v-model="form.account" 
+              placeholder="请输入邮箱或手机号"
+              placeholder-class="placeholder"
+            />
+          </view>
 
+          <view class="input-group">
+            <text class="label">密码</text>
+            <input 
+              class="input" 
+              v-model="form.password" 
+              password
+              confirm-type="go"
+              @confirm="handlePasswordLogin"
+              placeholder="请输入密码"
+              placeholder-class="placeholder"
+            />
+          </view>
+
+          <button class="btn-login" :loading="loading" :disabled="loading" @tap="handlePasswordLogin">
+            登录
+          </button>
+        </view>
+
+        <!-- 第三方账号登录 -->
         <view class="oauth-divider">
-          <text class="oauth-divider-text">或使用第三方账号</text>
+          <text class="oauth-divider-text">或使用第三方账号快捷登录</text>
         </view>
 
         <view class="oauth-btn-wrap">
@@ -46,9 +106,9 @@
           </button>
         </view>
 
+        <!-- 贴心指引 -->
         <view class="tips">
-          <text>还没有账号？</text>
-          <text class="link" @tap="goToRegister">立即注册</text>
+          <text class="tips-hint">✨ 首次登录自动创建租客账户；已有房源邀请码可于登录后在个人中心随时绑定关联。</text>
         </view>
       </view>
     </view>
@@ -56,16 +116,31 @@
 </template>
 
 <script>
-import { login, loginWithGoogle, getGoogleClientId } from '../../api/index.js'
+import { 
+  login, 
+  sendEmailCode, 
+  loginWithEmailCode, 
+  loginWithGoogle, 
+  getGoogleClientId 
+} from '../../api/index.js'
 import { openHome } from '../../utils/session.js'
 
 export default {
   data() {
     return {
+      loginType: 'email', // 'email' | 'password'
+      emailForm: {
+        email: '',
+        code: ''
+      },
       form: {
         account: '',
         password: ''
       },
+      sendingCode: false,
+      otpCooldown: 0,
+      timer: null,
+      emailLoading: false,
       loading: false,
       googleLoading: false,
       googleClientId: ''
@@ -76,7 +151,85 @@ export default {
     this.initGoogleGis()
     // #endif
   },
+  beforeUnmount() {
+    if (this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
+  },
   methods: {
+    async handleSendOtp() {
+      if (this.otpCooldown > 0 || this.sendingCode) return
+      const email = (this.emailForm.email || '').trim()
+      if (!email) {
+        uni.showToast({ title: '请输入邮箱', icon: 'none' })
+        return
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        uni.showToast({ title: '邮箱格式不正确', icon: 'none' })
+        return
+      }
+
+      this.sendingCode = true
+      try {
+        const res = await sendEmailCode({ email })
+        uni.showToast({ title: '验证码已发送', icon: 'success' })
+        this.startOtpTimer(res.cooldown || 60)
+      } catch (error) {
+        const msg = error.message || (error.data && error.data.message) || '发送验证码失败'
+        uni.showToast({ title: msg, icon: 'none' })
+      } finally {
+        this.sendingCode = false
+      }
+    },
+    startOtpTimer(seconds) {
+      this.otpCooldown = seconds
+      if (this.timer) clearInterval(this.timer)
+      this.timer = setInterval(() => {
+        if (this.otpCooldown <= 1) {
+          clearInterval(this.timer)
+          this.timer = null
+          this.otpCooldown = 0
+        } else {
+          this.otpCooldown--
+        }
+      }, 1000)
+    },
+    async handleEmailLogin() {
+      if (this.emailLoading) return
+      const email = (this.emailForm.email || '').trim()
+      const code = (this.emailForm.code || '').trim()
+      if (!email) {
+        uni.showToast({ title: '请输入邮箱', icon: 'none' })
+        return
+      }
+      if (!code) {
+        uni.showToast({ title: '请输入验证码', icon: 'none' })
+        return
+      }
+      if (code.length !== 6) {
+        uni.showToast({ title: '请输入6位验证码', icon: 'none' })
+        return
+      }
+
+      this.emailLoading = true
+      try {
+        const res = await loginWithEmailCode({ email, code })
+        uni.setStorageSync('access_token', res.accessToken)
+        uni.setStorageSync('refresh_token', res.refreshToken)
+        uni.setStorageSync('user_role', res.user.role)
+        uni.showToast({
+          title: res.isNewUser ? '欢迎加入栖居！' : '登录成功',
+          icon: 'success'
+        })
+        openHome(res.user.role)
+      } catch (error) {
+        const msg = error.message || (error.data && error.data.message) || '登录失败'
+        uni.showToast({ title: msg, icon: 'none' })
+      } finally {
+        this.emailLoading = false
+      }
+    },
     async initGoogleGis() {
       try {
         const res = await getGoogleClientId()
@@ -138,29 +291,20 @@ export default {
       this.submitGoogleToken(`mock-google-token:${email.trim()}`)
       // #endif
     },
-    async submitGoogleToken(idToken, inviteCode) {
+    async submitGoogleToken(idToken) {
       this.googleLoading = true
       try {
-        const res = await loginWithGoogle({ idToken, inviteCode })
+        const res = await loginWithGoogle({ idToken })
         uni.setStorageSync('access_token', res.accessToken)
         uni.setStorageSync('refresh_token', res.refreshToken)
         uni.setStorageSync('user_role', res.user.role)
         uni.showToast({
-          title: 'Google 登录成功',
+          title: res.isNewUser ? '欢迎使用 Google 登录！' : '登录成功',
           icon: 'success'
         })
         openHome(res.user.role)
       } catch (error) {
         const msg = error.message || (error.data && error.data.message) || '登录失败'
-        // #ifdef H5
-        if (msg.includes('邀请码') && !inviteCode) {
-          const code = window.prompt(msg + '\n\n请输入管理员提供的邀请码完成绑定：', '')
-          if (code && code.trim()) {
-            await this.submitGoogleToken(idToken, code.trim())
-            return
-          }
-        }
-        // #endif
         uni.showToast({
           title: msg,
           icon: 'none'
@@ -169,9 +313,8 @@ export default {
         this.googleLoading = false
       }
     },
-    async handleLogin() {
+    async handlePasswordLogin() {
       if (this.loading) return
-      // 验证表单
       if (!this.form.account) {
         uni.showToast({
           title: '请输入账号',
@@ -194,7 +337,6 @@ export default {
           password: this.form.password
         })
         
-        // 保存 token
         uni.setStorageSync('access_token', res.accessToken)
         uni.setStorageSync('refresh_token', res.refreshToken)
         uni.setStorageSync('user_role', res.user.role)
@@ -204,7 +346,6 @@ export default {
           icon: 'success'
         })
         
-        // 跳转到首页
         openHome(res.user.role)
       } catch (error) {
         console.error('登录失败:', error)
@@ -212,19 +353,14 @@ export default {
         this.loading = false
       }
     },
-    goToRegister() {
-      uni.showToast({
-        title: '请联系管理员注册',
-        icon: 'none'
-      })
+    handleLogin() {
+      return this.handlePasswordLogin()
     }
   }
 }
 </script>
 
 <style scoped>
-.app-name { display: block; letter-spacing: 8rpx; }
-.login-subtitle { display: block; font-size: 23rpx; color: #817e76; margin-top: 18rpx; }
 .page {
   min-height: 100vh;
   background: #f5f2ec;
@@ -240,83 +376,164 @@ export default {
 
 .logo-section {
   text-align: center;
-  margin-bottom: 80rpx;
+  margin-bottom: 50rpx;
 }
 
 .logo {
   width: 160rpx;
   height: 160rpx;
-  margin-bottom: 30rpx;
+  margin-bottom: 24rpx;
 }
 
 .app-name {
+  display: block;
   font-size: 48rpx;
   color: #4e5845;
   font-weight: bold;
+  letter-spacing: 8rpx;
+}
+
+.login-subtitle {
+  display: block;
+  font-size: 23rpx;
+  color: #817e76;
+  margin-top: 14rpx;
 }
 
 .form-section {
   background-color: #fffefa;
   border: 1rpx solid #e9e6de;
   border-radius: 36rpx;
-  padding: 60rpx 40rpx;
+  padding: 50rpx 40rpx;
+  box-shadow: 0 4rpx 20rpx rgba(78, 88, 69, 0.05);
+}
+
+.login-tabs {
+  display: flex;
+  background: #f0ece3;
+  border-radius: 16rpx;
+  padding: 6rpx;
+  margin-bottom: 36rpx;
+}
+
+.login-tab {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  border-radius: 12rpx;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-tab.active {
+  background: #fffefa;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+}
+
+.tab-text {
+  font-size: 26rpx;
+  font-weight: 550;
+  color: #817e76;
+}
+
+.login-tab.active .tab-text {
+  color: #4e5845;
+}
+
+.tab-content {
+  width: 100%;
 }
 
 .input-group {
-  margin-bottom: 40rpx;
+  margin-bottom: 32rpx;
 }
 
 .label {
   display: block;
-  font-size: 28rpx;
-  color: #333;
-  margin-bottom: 16rpx;
+  font-size: 26rpx;
+  color: #555;
+  margin-bottom: 12rpx;
 }
 
 .input {
   width: 100%;
-  height: 88rpx;
-  background-color: #f5f2ec;
+  height: 84rpx;
+  background-color: #f7f5f0;
+  border: 1rpx solid #e5e0d8;
   border-radius: 12rpx;
   padding: 0 24rpx;
   font-size: 28rpx;
+  color: #302f2a;
+  box-sizing: border-box;
 }
 
 .placeholder {
-  color: #999;
+  color: #a8a39b;
+}
+
+.otp-input-row {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.otp-input {
+  flex: 1;
+}
+
+.btn-send-otp {
+  height: 84rpx;
+  line-height: 84rpx;
+  padding: 0 24rpx;
+  background: #eae5d9;
+  color: #4e5845;
+  font-size: 24rpx;
+  font-weight: 500;
+  border-radius: 12rpx;
+  border: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.btn-send-otp::after {
+  border: none;
+}
+
+.btn-send-otp[disabled] {
+  background: #f1eee7;
+  color: #b5b0a6;
 }
 
 .btn-login {
   width: 100%;
   height: 88rpx;
+  line-height: 88rpx;
   background: #68715b;
   color: #fff;
   border-radius: 12rpx;
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: bold;
   border: none;
-  margin-top: 20rpx;
+  margin-top: 16rpx;
 }
 
-.tips {
-  text-align: center;
-  margin-top: 40rpx;
-  font-size: 26rpx;
-  color: #666;
+.btn-login::after {
+  border: none;
 }
 
-.link {
-  color: #68715b;
-  margin-left: 10rpx;
+.btn-login[disabled] {
+  opacity: 0.7;
 }
 
 .oauth-divider {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 36rpx 0 24rpx;
+  margin: 40rpx 0 24rpx;
   position: relative;
 }
+
 .oauth-divider::before {
   content: '';
   position: absolute;
@@ -327,6 +544,7 @@ export default {
   background: #e9e6de;
   z-index: 1;
 }
+
 .oauth-divider-text {
   position: relative;
   z-index: 2;
@@ -347,6 +565,7 @@ export default {
   gap: 16rpx;
   width: 100%;
   height: 84rpx;
+  line-height: 84rpx;
   background: #ffffff;
   border: 1rpx solid #d8d2c8;
   border-radius: 12rpx;
@@ -354,15 +573,30 @@ export default {
   font-weight: 500;
   color: #302f2a;
 }
+
 .btn-google::after {
   border: none;
 }
+
 .btn-google:active {
   background: #f5f2ec;
 }
+
 .google-icon-img {
   width: 36rpx;
   height: 36rpx;
   flex-shrink: 0;
+}
+
+.tips {
+  text-align: center;
+  margin-top: 24rpx;
+}
+
+.tips-hint {
+  font-size: 22rpx;
+  color: #8c887f;
+  line-height: 1.5;
+  display: block;
 }
 </style>

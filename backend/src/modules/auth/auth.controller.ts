@@ -11,6 +11,8 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
+import { EmailOtpService } from './email-otp.service.js';
+import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import * as bcrypt from 'bcrypt';
 
 @Controller('auth')
@@ -20,6 +22,7 @@ export class AuthController {
     private readonly jwtService: JwtAuthService,
     private readonly prisma: PrismaService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly emailOtpService: EmailOtpService,
   ) {}
 
   @Post('register')
@@ -248,6 +251,7 @@ export class AuthController {
         phone: true,
         role: true,
         isActive: true,
+        invitedBy: true,
         tenant: {
           select: {
             id: true,
@@ -256,6 +260,24 @@ export class AuthController {
             email: true,
             emergencyContact: true,
             emergencyPhone: true,
+            contracts: {
+              where: { status: 'ACTIVE' },
+              select: {
+                id: true,
+                contractNumber: true,
+                room: {
+                  select: {
+                    id: true,
+                    roomNumber: true,
+                    building: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         createdAt: true,
@@ -332,15 +354,13 @@ export class AuthController {
         authenticatedUser = user;
       }
     } else {
-      // 用户不存在：首次使用 Google 登录
-      if (!dto.inviteCode) {
-        throw new BadRequestException('该 Google 账号尚未关联租客档案，首次登录请输入管理员提供的邀请码');
-      }
-
-      // 校验邀请码
-      const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
-      if (!validation.valid) {
-        throw new BadRequestException('邀请码无效或已过期');
+      // 用户不存在：首次使用 Google 登录，零门槛自动创建账户
+      let invitedBy: string | null = null;
+      if (dto.inviteCode) {
+        const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
+        if (validation.valid) {
+          invitedBy = validation.invitedBy || null;
+        }
       }
 
       // 事务创建 User 和 Tenant
@@ -351,7 +371,7 @@ export class AuthController {
             googleId: googleUser.googleId,
             avatarUrl: googleUser.avatarUrl,
             role: 'TENANT',
-            invitedBy: validation.invitedBy,
+            invitedBy,
             isActive: true,
             lastLoginAt: new Date(),
           },
@@ -359,22 +379,35 @@ export class AuthController {
 
         const tenantPhone = `pending-${newUser.id}`;
 
-        // 邀请码一次性失效
-        await tx.user.update({
-          where: { id: validation.invitedBy! },
-          data: { inviteCode: null, inviteExpiredAt: null },
+        if (invitedBy) {
+          await tx.user.update({
+            where: { id: invitedBy },
+            data: { inviteCode: null, inviteExpiredAt: null },
+          });
+        }
+
+        // 检查是否有管理员预创建的租客档案（userId 为空）
+        const preCreatedTenant = await tx.tenant.findFirst({
+          where: { email: googleUser.email, userId: null },
         });
 
-        await tx.tenant.create({
-          data: {
-            userId: newUser.id,
-            name: googleUser.name || googleUser.email.split('@')[0],
-            phone: tenantPhone,
-            email: googleUser.email,
-            emergencyContact: '',
-            emergencyPhone: '',
-          },
-        });
+        if (preCreatedTenant) {
+          await tx.tenant.update({
+            where: { id: preCreatedTenant.id },
+            data: { userId: newUser.id },
+          });
+        } else {
+          await tx.tenant.create({
+            data: {
+              userId: newUser.id,
+              name: googleUser.name || googleUser.email.split('@')[0],
+              phone: tenantPhone,
+              email: googleUser.email,
+              emergencyContact: '',
+              emergencyPhone: '',
+            },
+          });
+        }
 
         return newUser;
       });
@@ -398,6 +431,145 @@ export class AuthController {
         avatarUrl: authenticatedUser.avatarUrl,
       },
       isNewUser,
+    };
+  }
+
+  /**
+   * 发送邮箱验证码 (OTP)
+   */
+  @Post('send-email-code')
+  async sendEmailCode(@Body() dto: SendEmailCodeDto) {
+    const result = await this.emailOtpService.sendCode(dto.email);
+    return {
+      message: '验证码已发送至您的邮箱，5分钟内有效',
+      cooldown: result.cooldown,
+    };
+  }
+
+  /**
+   * 邮箱验证码免密登录 / 自动注册
+   */
+  @Post('login-email-code')
+  async loginWithEmailCode(@Body() dto: LoginEmailCodeDto) {
+    // 1. 校验验证码
+    const isValid = this.emailOtpService.verifyCode(dto.email, dto.code);
+    if (!isValid) {
+      throw new BadRequestException('验证码错误或已过期');
+    }
+
+    const normalizedEmail = dto.email.toLowerCase().trim();
+
+    // 2. 查询用户
+    let user = await this.prisma.user.findFirst({
+      where: { email: normalizedEmail },
+      include: { tenant: true },
+    });
+
+    let authenticatedUser: {
+      id: string;
+      email: string | null;
+      phone: string | null;
+      role: any;
+      avatarUrl?: string | null;
+    };
+    let isNewUser = false;
+
+    if (user) {
+      if (!user.isActive) {
+        throw new ForbiddenException('账号已被禁用');
+      }
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
+      authenticatedUser = user;
+    } else {
+      // 首次登录，自动注册
+      authenticatedUser = await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: normalizedEmail,
+            role: 'TENANT',
+            isActive: true,
+            lastLoginAt: new Date(),
+          },
+        });
+
+        // 检查是否有管理员预创建的租客档案未绑定 userId
+        const preTenant = await tx.tenant.findFirst({
+          where: { email: normalizedEmail, userId: null },
+        });
+
+        if (preTenant) {
+          await tx.tenant.update({
+            where: { id: preTenant.id },
+            data: { userId: newUser.id },
+          });
+        } else {
+          await tx.tenant.create({
+            data: {
+              userId: newUser.id,
+              name: normalizedEmail.split('@')[0],
+              phone: `pending-${newUser.id}`,
+              email: normalizedEmail,
+              emergencyContact: '',
+              emergencyPhone: '',
+            },
+          });
+        }
+
+        return newUser;
+      });
+      isNewUser = true;
+    }
+
+    // 3. 签发 Token
+    const tokens = await this.jwtService.generateTokens({
+      sub: authenticatedUser.id,
+      role: authenticatedUser.role,
+    });
+
+    return {
+      ...tokens,
+      user: {
+        id: authenticatedUser.id,
+        email: authenticatedUser.email,
+        phone: authenticatedUser.phone,
+        role: authenticatedUser.role,
+        avatarUrl: authenticatedUser.avatarUrl,
+      },
+      isNewUser,
+    };
+  }
+
+  /**
+   * 登录后在应用内输入邀请码完成房源与身份绑定
+   */
+  @Post('bind-invite-code')
+  @UseGuards(JwtAuthGuard)
+  async bindInviteCode(@Request() req: any, @Body() dto: BindInviteCodeDto) {
+    const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
+    if (!validation.valid) {
+      throw new BadRequestException('邀请码无效或已过期');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. 邀请码一次性失效
+      await tx.user.update({
+        where: { id: validation.invitedBy! },
+        data: { inviteCode: null, inviteExpiredAt: null },
+      });
+
+      // 2. 更新当前用户 invitedBy 关联
+      await tx.user.update({
+        where: { id: req.user.userId },
+        data: { invitedBy: validation.invitedBy },
+      });
+    });
+
+    return {
+      success: true,
+      message: '邀请码兑换成功，房源身份已成功关联！',
     };
   }
 }
