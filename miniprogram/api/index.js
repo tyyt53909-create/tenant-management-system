@@ -6,6 +6,16 @@ export const login = (data) => {
   return request.post('/auth/login', data)
 }
 
+// 获取 Google Client ID
+export const getGoogleClientId = () => {
+  return request.get('/auth/google/client-id')
+}
+
+// Google 登录
+export const loginWithGoogle = (data) => {
+  return request.post('/auth/google', data)
+}
+
 // 获取我的合同
 export const getMyContracts = () => {
   return request.get('/contracts/my')

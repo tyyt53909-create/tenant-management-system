@@ -20,3 +20,13 @@ export const refreshToken = (refreshToken: string) => {
 export const getCurrentUser = (): Promise<User> => {
   return request.get('/auth/me');
 };
+
+// 获取 Google Client ID
+export const getGoogleClientId = (): Promise<{ clientId: string }> => {
+  return request.get('/auth/google/client-id');
+};
+
+// Google 登录
+export const loginWithGoogle = (data: { idToken: string; inviteCode?: string }) => {
+  return request.post('/auth/google', data);
+};

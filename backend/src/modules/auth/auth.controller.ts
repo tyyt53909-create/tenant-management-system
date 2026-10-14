@@ -9,6 +9,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { GoogleAuthService } from './google-auth.service.js';
+import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import * as bcrypt from 'bcrypt';
 
 @Controller('auth')
@@ -17,6 +19,7 @@ export class AuthController {
     private readonly inviteCodeService: InviteCodeService,
     private readonly jwtService: JwtAuthService,
     private readonly prisma: PrismaService,
+    private readonly googleAuthService: GoogleAuthService,
   ) {}
 
   @Post('register')
@@ -137,6 +140,9 @@ export class AuthController {
     }
 
     // 4. 验证密码
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('该账号未设置密码，请使用 Google 第三方登录');
+    }
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('邮箱/手机号或密码错误');
@@ -253,6 +259,7 @@ export class AuthController {
           },
         },
         createdAt: true,
+        avatarUrl: true,
       },
     });
 
@@ -261,5 +268,136 @@ export class AuthController {
     }
 
     return user;
+  }
+
+  /**
+   * 获取 Google Client ID 配置（供前端动态挂载 Google GIS SDK）
+   */
+  @Get('google/client-id')
+  getGoogleClientId() {
+    return {
+      clientId: this.googleAuthService.getClientId(),
+    };
+  }
+
+  /**
+   * Google 登录 / 注册入口
+   */
+  @Post('google')
+  async googleAuth(@Body() dto: GoogleAuthDto): Promise<GoogleAuthResponseDto> {
+    // 1. 验证 Google idToken
+    const googleUser = await this.googleAuthService.verifyIdToken(dto.idToken);
+
+    // 2. 检查用户是否已存在（按 googleId 或 email 匹配）
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { googleId: googleUser.googleId },
+          { email: googleUser.email },
+        ],
+      },
+      include: { tenant: true },
+    });
+
+    let authenticatedUser: {
+      id: string;
+      email: string | null;
+      phone: string | null;
+      role: any;
+      avatarUrl?: string | null;
+    };
+    let isNewUser = false;
+
+    if (user) {
+      // 用户已存在
+      if (!user.isActive) {
+        throw new ForbiddenException('账号已被禁用');
+      }
+
+      // 如果尚未关联 googleId 或 avatarUrl，补充关联
+      if (!user.googleId || !user.avatarUrl) {
+        authenticatedUser = await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleId: user.googleId || googleUser.googleId,
+            avatarUrl: user.avatarUrl || googleUser.avatarUrl,
+            lastLoginAt: new Date(),
+          },
+        });
+      } else {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        });
+        authenticatedUser = user;
+      }
+    } else {
+      // 用户不存在：首次使用 Google 登录
+      if (!dto.inviteCode) {
+        throw new BadRequestException('该 Google 账号尚未关联租客档案，首次登录请输入管理员提供的邀请码');
+      }
+
+      // 校验邀请码
+      const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
+      if (!validation.valid) {
+        throw new BadRequestException('邀请码无效或已过期');
+      }
+
+      // 事务创建 User 和 Tenant
+      authenticatedUser = await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: googleUser.email,
+            googleId: googleUser.googleId,
+            avatarUrl: googleUser.avatarUrl,
+            role: 'TENANT',
+            invitedBy: validation.invitedBy,
+            isActive: true,
+            lastLoginAt: new Date(),
+          },
+        });
+
+        const tenantPhone = `pending-${newUser.id}`;
+
+        // 邀请码一次性失效
+        await tx.user.update({
+          where: { id: validation.invitedBy! },
+          data: { inviteCode: null, inviteExpiredAt: null },
+        });
+
+        await tx.tenant.create({
+          data: {
+            userId: newUser.id,
+            name: googleUser.name || googleUser.email.split('@')[0],
+            phone: tenantPhone,
+            email: googleUser.email,
+            emergencyContact: '',
+            emergencyPhone: '',
+          },
+        });
+
+        return newUser;
+      });
+
+      isNewUser = true;
+    }
+
+    // 3. 生成 JWT Token
+    const tokens = await this.jwtService.generateTokens({
+      sub: authenticatedUser.id,
+      role: authenticatedUser.role,
+    });
+
+    return {
+      ...tokens,
+      user: {
+        id: authenticatedUser.id,
+        email: authenticatedUser.email,
+        phone: authenticatedUser.phone,
+        role: authenticatedUser.role,
+        avatarUrl: authenticatedUser.avatarUrl,
+      },
+      isNewUser,
+    };
   }
 }
