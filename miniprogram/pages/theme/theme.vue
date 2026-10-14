@@ -52,6 +52,10 @@
         <text class="tips-text">关怀版：大字体高对比，特别适合长辈使用</text>
       </view>
       <view class="tips-item">
+        <text class="tips-icon">🏡</text>
+        <text class="tips-text">栖居版：温暖克制的自然配色，雅致柔和的圆角设计</text>
+      </view>
+      <view class="tips-item">
         <text class="tips-icon">🌙</text>
         <text class="tips-text">夜间模式：护眼配色，适合夜晚或暗光环境</text>
       </view>

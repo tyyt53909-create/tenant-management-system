@@ -139,11 +139,11 @@ export default {
 <style scoped>
 .page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: var(--color-bg-secondary);
 }
 
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #7a8469 0%, #68715b 100%);
   padding: 60rpx 30rpx;
 }
 
@@ -178,10 +178,11 @@ export default {
 }
 
 .menu-list {
-  background-color: #fff;
+  background-color: var(--color-bg-primary);
   margin: 20rpx;
-  border-radius: 16rpx;
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .menu-item {
@@ -189,7 +190,12 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 30rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid var(--color-border-light);
+  transition: background-color 0.2s;
+}
+
+.menu-item:active {
+  background-color: var(--color-bg-tertiary);
 }
 
 .menu-item:last-child {
@@ -208,7 +214,7 @@ export default {
 
 .text {
   font-size: 28rpx;
-  color: #333;
+  color: var(--color-text-primary);
 }
 
 .menu-badge {
@@ -218,7 +224,7 @@ export default {
   line-height: 34rpx;
   padding: 0 10rpx;
   border-radius: 17rpx;
-  background-color: #ff4d4f;
+  background-color: var(--color-warning);
   color: #fff;
   font-size: 20rpx;
   text-align: center;
@@ -226,17 +232,23 @@ export default {
 
 .arrow {
   font-size: 40rpx;
-  color: #ccc;
+  color: var(--color-text-tertiary);
 }
 
 .btn-logout {
   width: calc(100% - 40rpx);
   margin: 40rpx 20rpx;
   height: 88rpx;
-  background-color: #fff;
-  color: #f44336;
-  border: 1rpx solid #f0f0f0;
-  border-radius: 12rpx;
+  background-color: var(--color-bg-primary);
+  color: var(--color-error);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
   font-size: 28rpx;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-logout:active {
+  opacity: 0.8;
+  transform: scale(0.98);
 }
 </style>
