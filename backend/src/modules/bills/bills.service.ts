@@ -6,6 +6,25 @@ import { QueryBillsDto } from './dto/query-bills.dto.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { LateFeeUtil, LateFeeRule } from './utils/late-fee.util.js';
+import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
+import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
+
+const BILL_TYPE_LABEL: Record<string, string> = {
+  RENT: '租金',
+  DEPOSIT: '押金',
+  UTILITY: '水电费',
+  MAINTENANCE: '维修费',
+  CLEANING: '保洁费',
+  OTHER: '其他',
+};
+
+const BILL_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待支付',
+  PARTIAL: '部分支付',
+  PAID: '已支付',
+  OVERDUE: '已逾期',
+  CANCELLED: '已取消',
+};
 
 /**
  * 由账单的滞纳金记录汇总出列表展示所需的摘要（导出以便单测）。
@@ -542,5 +561,131 @@ export class BillsService {
       where: { billId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * 账单数据 CSV 导出
+   */
+  async exportBills(query: any) {
+    const where: any = {};
+    if (query.status) where.status = query.status;
+    if (query.billType) where.billType = query.billType;
+    if (query.contractId) where.contractId = query.contractId;
+    if (query.buildingId) {
+      where.contract = { room: { buildingId: query.buildingId } };
+    }
+    if (query.startDate || query.endDate) {
+      where.dueDate = {};
+      if (query.startDate) where.dueDate.gte = new Date(query.startDate);
+      if (query.endDate) where.dueDate.lte = new Date(query.endDate);
+    }
+
+    const bills = await this.prisma.bill.findMany({
+      where,
+      include: {
+        contract: {
+          include: {
+            tenant: { select: { name: true, phone: true } },
+            room: { select: { roomNumber: true } },
+          },
+        },
+        lateFees: { select: { confirmedAmount: true, settledAmount: true, suggestedAmount: true } },
+      },
+      orderBy: [{ dueDate: 'desc' }, { createdAt: 'desc' }],
+      take: 5000,
+    });
+
+    const columns: CsvColumn[] = [
+      { header: '账单编号', key: 'billNumber' },
+      { header: '房间号', formatter: (b) => b.contract?.room?.roomNumber || '' },
+      { header: '租客姓名', formatter: (b) => b.contract?.tenant?.name || '' },
+      { header: '租客手机', formatter: (b) => b.contract?.tenant?.phone || '' },
+      { header: '账单类型', formatter: (b) => BILL_TYPE_LABEL[b.billType] || b.billType },
+      { header: '账期', key: 'period' },
+      { header: '应付金额(元)', formatter: (b) => centsToYuanString(b.amount) },
+      { header: '已付金额(元)', formatter: (b) => centsToYuanString(b.paidAmount) },
+      { header: '未付本金(元)', formatter: (b) => centsToYuanString(Math.max(0, b.amount - b.paidAmount)) },
+      {
+        header: '确认滞纳金(元)',
+        formatter: (b) => {
+          const summary = summarizeLateFees(b.lateFees || []);
+          return summary.amount !== null ? centsToYuanString(summary.amount) : '0.00';
+        },
+      },
+      { header: '到期日期', formatter: (b) => (b.dueDate ? new Date(b.dueDate).toISOString().slice(0, 10) : '') },
+      { header: '状态', formatter: (b) => BILL_STATUS_LABEL[b.status] || b.status },
+      { header: '创建时间', formatter: (b) => (b.createdAt ? new Date(b.createdAt).toLocaleString('zh-CN') : '') },
+    ];
+
+    return generateCsv(columns, bills);
+  }
+
+  /**
+   * 电子收款收据单据数据聚合
+   */
+  async getReceipt(billId: string) {
+    const bill = await this.prisma.bill.findUnique({
+      where: { id: billId },
+      include: {
+        contract: {
+          include: {
+            tenant: true,
+            room: {
+              include: {
+                building: true,
+              },
+            },
+          },
+        },
+        paymentRecords: {
+          orderBy: { paidAt: 'desc' },
+        },
+        lateFees: {
+          where: { confirmedAmount: { not: null } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('账单不存在');
+    }
+
+    const lateFeeSummary = summarizeLateFees(bill.lateFees || []);
+    const confirmedLateFee = lateFeeSummary.amount ?? 0;
+    const totalPayable = bill.amount + confirmedLateFee;
+    const paymentRecords = bill.paymentRecords || [];
+    const totalPaid = paymentRecords.reduce((sum, p) => sum + p.amount, 0);
+    const unpaid = Math.max(0, totalPayable - totalPaid);
+
+    return {
+      receiptNumber: `RCP-${bill.billNumber}`,
+      billId: bill.id,
+      billNumber: bill.billNumber,
+      payerName: bill.contract?.tenant?.name || '租客',
+      payerPhone: bill.contract?.tenant?.phone || '',
+      roomNumber: bill.contract?.room?.roomNumber || '',
+      buildingName: bill.contract?.room?.building?.name || '',
+      period: bill.period,
+      billType: bill.billType,
+      billTypeLabel: BILL_TYPE_LABEL[bill.billType] || bill.billType,
+      principalAmount: bill.amount,
+      paidAmount: bill.paidAmount,
+      confirmedLateFee,
+      totalPayable,
+      totalPaid,
+      unpaid,
+      amountInChinese: centsToChineseRMB(totalPaid > 0 ? totalPaid : bill.paidAmount),
+      payments: paymentRecords.map((p) => ({
+        id: p.id,
+        amount: p.amount,
+        amountYuan: centsToYuanString(p.amount),
+        paymentMethod: p.paymentMethod,
+        transactionNumber: p.transactionNumber,
+        paidAt: p.paidAt,
+        notes: p.notes,
+      })),
+      issuedAt: new Date(),
+    };
   }
 }

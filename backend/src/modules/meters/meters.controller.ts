@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { MetersService } from './meters.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
+import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -19,6 +20,34 @@ export class MetersController {
   @Roles('ADMIN')
   create(@Body() createMeterDto: CreateMeterDto) {
     return this.metersService.create(createMeterDto);
+  }
+
+  // 批量抄表底表（仅 ADMIN）
+  @Get('batch-sheet')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  getBatchSheet(@Query() query: QueryBatchSheetDto) {
+    return this.metersService.getBatchSheet(query);
+  }
+
+  // 批量登记读数（仅 ADMIN）
+  @Post('batch-readings')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  createBatchReadings(@Request() req: any, @Body() dto: BatchMeterReadingsDto) {
+    return this.metersService.createBatchReadings(dto, req.user.userId);
+  }
+
+  // 抄表台账 CSV 导出（仅 ADMIN）
+  @Get('readings/export')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async exportReadings(@Query() query: any, @Res({ passthrough: true }) res: any) {
+    const csv = await this.metersService.exportReadings(query);
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="meter-readings-${dateStr}.csv"`);
+    return csv;
   }
 
   // 水电表档案：仅管理者（docs/03-权限矩阵.md §3.5，租客仅可看自己房间读数）

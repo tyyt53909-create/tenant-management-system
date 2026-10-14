@@ -40,6 +40,7 @@ describe('MetersService', () => {
       prepayAccount: {
         findUnique: vi.fn(),
         findUniqueOrThrow: vi.fn(),
+        findMany: vi.fn(),
         updateMany: vi.fn(),
       },
       prepayTransaction: { create: vi.fn() },
@@ -329,6 +330,161 @@ describe('MetersService', () => {
         take: 20,
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
+    });
+  });
+
+  describe('getBatchSheet', () => {
+    it('正确按筛选聚合房间、租客、最新读数与预付余额', async () => {
+      const mockMeters = [
+        {
+          id: 'meter-001',
+          meterNumber: 'E-101',
+          meterType: 'ELECTRICITY',
+          unitPrice: 120,
+          buildingId: 'b-01',
+          roomId: 'r-101',
+          building: { name: '1号楼' },
+          room: {
+            roomNumber: '101',
+            floor: 1,
+            status: 'OCCUPIED',
+            contracts: [{ id: 'c-1', tenantId: 't-1', tenant: { id: 't-1', name: '张三', phone: '13800000001' } }],
+          },
+          readings: [{ currentReading: 150, previousReading: 100, usage: 50, readingTime: new Date('2026-10-01') }],
+        },
+      ];
+      prisma.meter.findMany.mockResolvedValue(mockMeters);
+      prisma.prepayAccount.findMany.mockResolvedValue([
+        { roomId: 'r-101', tenantId: 't-1', balanceCache: 8800 },
+      ]);
+
+      const sheet = await service.getBatchSheet({ buildingId: 'b-01', meterType: 'ELECTRICITY' });
+
+      expect(sheet).toHaveLength(1);
+      expect(sheet[0]).toEqual({
+        meterId: 'meter-001',
+        meterNumber: 'E-101',
+        meterType: 'ELECTRICITY',
+        unitPrice: 120,
+        buildingId: 'b-01',
+        buildingName: '1号楼',
+        roomId: 'r-101',
+        roomNumber: '101',
+        floor: 1,
+        roomStatus: 'OCCUPIED',
+        tenantId: 't-1',
+        tenantName: '张三',
+        tenantPhone: '13800000001',
+        lastReading: 150,
+        lastReadingTime: mockMeters[0].readings[0].readingTime,
+        lastUsage: 50,
+        prepayBalance: 8800,
+      });
+    });
+  });
+
+  describe('createBatchReadings', () => {
+    it('批量录入：正常情况全量成功，更新读数并扣费', async () => {
+      prisma.meter.findUnique.mockResolvedValue({
+        id: 'meter-001',
+        meterType: 'ELECTRICITY',
+        meterNumber: 'E-101',
+        unitPrice: 100,
+        roomId: 'r-101',
+        isActive: true,
+        room: { roomNumber: '101' },
+      });
+      prisma.meterReading.findFirst.mockResolvedValue({ currentReading: 200 });
+      prisma.meterReading.create.mockResolvedValue({ id: 'rd-new', readingTime: new Date() });
+      prisma.contract.findFirst.mockResolvedValue(null); // 无合同，不扣费
+
+      const res = await service.createBatchReadings(
+        { readings: [{ meterId: 'meter-001', currentReading: 260 }] },
+        operatorId,
+      );
+
+      expect(res.total).toBe(1);
+      expect(res.successCount).toBe(1);
+      expect(res.failureCount).toBe(0);
+      expect(res.results[0].success).toBe(true);
+      expect(res.results[0].usage).toBe(60);
+    });
+
+    it('批量录入：行级异常处理（小于上次读数返回失败，不中断其他合法行）', async () => {
+      prisma.meter.findUnique
+        .mockResolvedValueOnce({
+          id: 'm-err',
+          meterType: 'WATER',
+          meterNumber: 'W-01',
+          unitPrice: 50,
+          roomId: 'r-01',
+          isActive: true,
+          room: { roomNumber: '101' },
+        })
+        .mockResolvedValueOnce({
+          id: 'm-ok',
+          meterType: 'WATER',
+          meterNumber: 'W-02',
+          unitPrice: 50,
+          roomId: 'r-02',
+          isActive: true,
+          room: { roomNumber: '102' },
+        });
+
+      prisma.meterReading.findFirst
+        .mockResolvedValueOnce({ currentReading: 300 }) // m-err: 之前是 300
+        .mockResolvedValueOnce({ currentReading: 100 }); // m-ok: 之前是 100
+
+      prisma.meterReading.create.mockResolvedValue({ id: 'rd-ok', readingTime: new Date() });
+      prisma.contract.findFirst.mockResolvedValue(null);
+
+      const res = await service.createBatchReadings(
+        {
+          readings: [
+            { meterId: 'm-err', currentReading: 250 }, // 250 < 300 失败
+            { meterId: 'm-ok', currentReading: 150 },  // 150 >= 100 成功
+          ],
+        },
+        operatorId,
+      );
+
+      expect(res.total).toBe(2);
+      expect(res.successCount).toBe(1);
+      expect(res.failureCount).toBe(1);
+      expect(res.results[0].success).toBe(false);
+      expect(res.results[0].error).toContain('不能小于上次读数');
+      expect(res.results[1].success).toBe(true);
+      expect(res.results[1].usage).toBe(50);
+    });
+  });
+
+  describe('exportReadings', () => {
+    it('正确生成包含 UTF-8 BOM 的抄表台账 CSV', async () => {
+      prisma.meterReading.findMany.mockResolvedValue([
+        {
+          id: 'rd-1',
+          previousReading: 100,
+          currentReading: 160,
+          usage: 60,
+          readingTime: new Date('2026-10-10T10:00:00Z'),
+          readBy: 'admin',
+          notes: '抄表正常',
+          meter: {
+            meterNumber: 'E-01',
+            meterType: 'ELECTRICITY',
+            unitPrice: 150,
+            building: { name: 'A栋' },
+            room: { roomNumber: '201' },
+          },
+        },
+      ]);
+
+      const csv = await service.exportReadings({});
+
+      expect(csv.startsWith('\uFEFF')).toBe(true);
+      expect(csv).toContain('记录ID,表号,表类型,楼栋,房间号,上次读数,本次读数,用量,单价(元),抄表时间,抄表人,备注');
+      expect(csv).toContain('E-01,电费,A栋,201,100.00,160.00,60.00,1.50');
+      expect(csv).toContain('抄表正常');
     });
   });
 });

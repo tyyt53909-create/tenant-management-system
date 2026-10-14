@@ -13,6 +13,8 @@
           <el-button type="primary" @click="handleQuery">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
           <el-button type="primary" @click="handleCreate">新增水电表</el-button>
+          <el-button type="success" @click="batchDialogVisible = true">批量抄表</el-button>
+          <el-button :loading="exporting" @click="handleExportCsv">导出台账</el-button>
         </el-form-item>
       </el-form>
 
@@ -174,6 +176,9 @@
         <el-button @click="readingsDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 批量抄表工作台组件 -->
+    <BatchReadingDialog v-model="batchDialogVisible" @success="fetchData" />
   </div>
 </template>
 
@@ -181,6 +186,8 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
+import BatchReadingDialog from './BatchReadingDialog.vue';
+import { downloadCsv } from '@/utils/export';
 import {
   getMeters,
   createMeter,
@@ -199,6 +206,18 @@ const dialogTitle = ref('新增水电表');
 const formRef = ref<FormInstance>();
 const tableData = ref<Meter[]>([]);
 const currentEditId = ref('');
+const batchDialogVisible = ref(false);
+const exporting = ref(false);
+
+async function handleExportCsv() {
+  exporting.value = true;
+  try {
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    await downloadCsv('/meters/readings/export', queryForm, `meter-readings-${dateStr}.csv`);
+  } finally {
+    exporting.value = false;
+  }
+}
 
 // ── 讀數登記（T137）──
 const readingDialogVisible = ref(false);

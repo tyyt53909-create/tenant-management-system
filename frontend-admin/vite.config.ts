@@ -10,11 +10,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src')
     }
   },
+  css: {
+    postcss: {}
+  },
   server: {
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3100',
         changeOrigin: true
       }
     }

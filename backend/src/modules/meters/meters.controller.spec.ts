@@ -20,6 +20,9 @@ describe('MetersController', () => {
             findReadings: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
+            getBatchSheet: vi.fn(),
+            createBatchReadings: vi.fn(),
+            exportReadings: vi.fn(),
           },
         },
       ],
@@ -89,5 +92,39 @@ describe('MetersController', () => {
 
     expect(result.message).toBe('水电表已删除');
     expect(service.remove).toHaveBeenCalledWith('meter-1');
+  });
+
+  it('getBatchSheet：透传查询条件', async () => {
+    vi.spyOn(service, 'getBatchSheet').mockResolvedValue([{ meterId: 'm-1' }] as any);
+    const query = { buildingId: 'b-1' };
+
+    const result = await controller.getBatchSheet(query as any);
+
+    expect(result).toHaveLength(1);
+    expect(service.getBatchSheet).toHaveBeenCalledWith(query);
+  });
+
+  it('createBatchReadings：透传 DTO 与操作人', async () => {
+    const dto = { readings: [{ meterId: 'm-1', currentReading: 120 }] };
+    vi.spyOn(service, 'createBatchReadings').mockResolvedValue({ total: 1, successCount: 1, failureCount: 0, results: [] } as any);
+
+    const result = await controller.createBatchReadings({ user: { userId: 'admin-1' } }, dto as any);
+
+    expect(result.successCount).toBe(1);
+    expect(service.createBatchReadings).toHaveBeenCalledWith(dto, 'admin-1');
+  });
+
+  it('exportReadings：设置下载响应头并返回 CSV 文本', async () => {
+    vi.spyOn(service, 'exportReadings').mockResolvedValue('\uFEFF记录ID,表号\r\n1,M001');
+    const resMock = { setHeader: vi.fn() };
+
+    const result = await controller.exportReadings({}, resMock);
+
+    expect(result).toContain('记录ID,表号');
+    expect(resMock.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+    expect(resMock.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      expect.stringContaining('attachment; filename="meter-readings-'),
+    );
   });
 });

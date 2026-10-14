@@ -74,3 +74,64 @@ export const getMeterReadings = (
 ): Promise<PaginatedResponse<MeterReading>> => {
   return request.get(`/meters/${meterId}/readings`, { params });
 };
+
+export interface BatchSheetItem {
+  meterId: string;
+  meterNumber: string;
+  meterType: 'ELECTRICITY' | 'WATER' | 'GAS';
+  unitPrice: number;
+  buildingId: string;
+  buildingName: string;
+  roomId: string | null;
+  roomNumber: string;
+  floor: number | null;
+  roomStatus: string | null;
+  tenantId: string | null;
+  tenantName: string | null;
+  tenantPhone: string | null;
+  lastReading: number;
+  lastReadingTime: string | null;
+  lastUsage: number;
+  prepayBalance: number | null;
+}
+
+export interface BatchReadingSubmitItem {
+  meterId: string;
+  currentReading: number;
+  readingTime?: string;
+  notes?: string;
+}
+
+export interface BatchReadingResponse {
+  total: number;
+  successCount: number;
+  failureCount: number;
+  results: Array<{
+    meterId: string;
+    meterNumber?: string;
+    roomNumber?: string;
+    success: boolean;
+    currentReading?: number;
+    previousReading?: number;
+    usage?: number;
+    amount?: number;
+    deducted?: number;
+    shortfall?: number;
+    error?: string;
+  }>;
+}
+
+export const getBatchSheet = (params?: {
+  buildingId?: string;
+  meterType?: string;
+  floor?: number;
+}): Promise<BatchSheetItem[]> => {
+  return request.get('/meters/batch-sheet', { params });
+};
+
+export const submitBatchReadings = (
+  readings: BatchReadingSubmitItem[]
+): Promise<BatchReadingResponse> => {
+  return request.post('/meters/batch-readings', { readings });
+};
+

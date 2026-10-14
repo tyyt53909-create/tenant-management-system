@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { BillsService } from './bills.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
@@ -21,6 +21,18 @@ export class BillsController {
     return this.billsService.create(createBillDto);
   }
 
+  // 账单 CSV 导出（仅管理者）
+  @Get('export')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async exportBills(@Query() query: any, @Res({ passthrough: true }) res: any) {
+    const csv = await this.billsService.exportBills(query);
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="bills-export-${dateStr}.csv"`);
+    return csv;
+  }
+
   @Get()
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -39,6 +51,14 @@ export class BillsController {
     }
     // 管理员可以看所有
     return this.billsService.findAll(query);
+  }
+
+  // 电子收款收据单据
+  @Get(':id/receipt')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TENANT')
+  getReceipt(@Param('id') id: string) {
+    return this.billsService.getReceipt(id);
   }
 
   @Get(':id')

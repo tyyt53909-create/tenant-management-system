@@ -22,6 +22,7 @@
           <el-button type="primary" @click="handleQuery">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
           <el-button type="primary" @click="handleCreate">新增账单</el-button>
+          <el-button :loading="exporting" @click="handleExportCsv">导出 CSV</el-button>
         </el-form-item>
       </el-form>
 
@@ -94,7 +95,7 @@
             <span v-else class="late-fee-cell late-fee-empty">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button type="success" link :disabled="!canReceive(row)" @click="handlePayment(row)">收款</el-button>
             <el-tooltip placement="top" :disabled="canOpenLateFee(row)" :content="lateFeeDisabledReason(row)">
@@ -104,6 +105,7 @@
                 </el-button>
               </span>
             </el-tooltip>
+            <el-button type="info" link :disabled="row.paidAmount <= 0" @click="handleOpenReceipt(row)">收据</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
@@ -357,6 +359,9 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 电子收款收据模态框 -->
+    <ReceiptModal v-model="receiptVisible" :bill-id="receiptBillId" />
   </div>
 </template>
 
@@ -365,6 +370,8 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { formatMoney, formatDateOnly } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
+import ReceiptModal from '@/components/common/ReceiptModal.vue';
+import { downloadCsv } from '@/utils/export';
 import {
   getBills,
   createBill,
@@ -385,6 +392,24 @@ const dialogTitle = ref('新增账单');
 const formRef = ref<FormInstance>();
 const tableData = ref<Bill[]>([]);
 const currentEditId = ref('');
+const receiptVisible = ref(false);
+const receiptBillId = ref('');
+const exporting = ref(false);
+
+function handleOpenReceipt(row: Bill) {
+  receiptBillId.value = row.id;
+  receiptVisible.value = true;
+}
+
+async function handleExportCsv() {
+  exporting.value = true;
+  try {
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    await downloadCsv('/bills/export', queryForm, `bills-export-${dateStr}.csv`);
+  } finally {
+    exporting.value = false;
+  }
+}
 
 // ── 收款登记（T135）──
 const paymentDialogVisible = ref(false);

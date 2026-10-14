@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { CheckoutService } from './checkout.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
@@ -19,6 +19,18 @@ export class CheckoutController {
     return this.checkoutService.create(createCheckoutDto);
   }
 
+  // 退租记录 CSV 导出（仅管理者）
+  @Get('export')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async exportCheckouts(@Query() query: any, @Res({ passthrough: true }) res: any) {
+    const csv = await this.checkoutService.exportCheckouts(query);
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="checkout-export-${dateStr}.csv"`);
+    return csv;
+  }
+
   // 退租记录列表：管理者看全部，租客仅自己的记录（保洁无权限，docs/03-权限矩阵.md §3.7）
   @Get()
   @UseGuards(RolesGuard)
@@ -28,6 +40,14 @@ export class CheckoutController {
       return this.checkoutService.findByTenant(req.user?.tenantId, query);
     }
     return this.checkoutService.findAll(query);
+  }
+
+  // 电子退租结算单据
+  @Get(':id/voucher')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'TENANT')
+  getVoucher(@Param('id') id: string) {
+    return this.checkoutService.getVoucher(id);
   }
 
   // 退租记录详情：租客仅自己的记录（越权按 404 处理）

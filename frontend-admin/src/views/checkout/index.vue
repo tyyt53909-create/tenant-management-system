@@ -14,6 +14,7 @@
           <el-button type="primary" @click="handleQuery">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
           <el-button type="primary" @click="handleCreate">新增退租记录</el-button>
+          <el-button :loading="exporting" @click="handleExportCsv">导出 CSV</el-button>
         </el-form-item>
       </el-form>
 
@@ -98,8 +99,9 @@
             <el-button type="primary" link @click="toggleDetail(row)">查看明细</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
+            <el-button type="info" link @click="handleOpenVoucher(row)">结算单</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
@@ -294,6 +296,12 @@
         <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 结算单凭单弹窗 -->
+    <SettlementVoucherModal
+      v-model="voucherVisible"
+      :checkout-id="voucherCheckoutId"
+    />
   </div>
 </template>
 
@@ -302,7 +310,9 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, TableInstance } from 'element-plus';
 import { createCheckout, deleteCheckout, getCheckoutById, getCheckoutRecords, updateCheckout } from '@/api/checkout';
+import SettlementVoucherModal from '@/components/common/SettlementVoucherModal.vue';
 import { useUserStore } from '@/stores/user';
+import { downloadCsv } from '@/utils/export';
 import type {
   CheckoutItem,
   CheckoutItemPayload,
@@ -350,6 +360,9 @@ const userStore = useUserStore();
 
 const loading = ref(false);
 const submitLoading = ref(false);
+const exporting = ref(false);
+const voucherVisible = ref(false);
+const voucherCheckoutId = ref('');
 const dialogVisible = ref(false);
 const dialogTitle = ref('新增退租记录');
 const formRef = ref<FormInstance>();
@@ -531,6 +544,27 @@ const handleQuery = () => {
 const handleReset = () => {
   queryForm.status = '';
   handleQuery();
+};
+
+const handleOpenVoucher = (row: CheckoutRecord) => {
+  voucherCheckoutId.value = row.id;
+  voucherVisible.value = true;
+};
+
+const handleExportCsv = async () => {
+  exporting.value = true;
+  try {
+    await downloadCsv(
+      '/checkout-records/export',
+      queryForm.status ? { status: queryForm.status } : {},
+      `退租结算记录_${new Date().toISOString().split('T')[0]}.csv`,
+    );
+    ElMessage.success('导出成功');
+  } catch {
+    ElMessage.error('导出失败');
+  } finally {
+    exporting.value = false;
+  }
 };
 
 const handleCreate = async () => {

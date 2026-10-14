@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { PrepayService } from './prepay.service.js';
 import { CreatePrepayAccountDto } from './dto/create-prepay-account.dto.js';
 import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
@@ -37,6 +37,18 @@ export class PrepayController {
       return this.prepayService.findByTenant(req.user.tenantId);
     }
     return this.prepayService.findAll({});
+  }
+
+  // 管理员：预付交易流水导出（CSV）
+  @Get('transactions/export')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async exportTransactions(@Query() query: any, @Res({ passthrough: true }) res: any) {
+    const csv = await this.prepayService.exportTransactions(query);
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="prepay-transactions-${dateStr}.csv"`);
+    return csv;
   }
 
   // 租客查看自己的交易记录

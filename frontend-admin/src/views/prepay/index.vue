@@ -5,6 +5,7 @@
         <el-form-item>
           <el-button type="primary" @click="handleCreate">新增预付账户</el-button>
           <el-button @click="fetchData">刷新</el-button>
+          <el-button :loading="exporting" @click="handleExportCsv">导出全量流水 CSV</el-button>
         </el-form-item>
       </el-form>
 
@@ -145,6 +146,7 @@
         />
       </div>
       <template #footer>
+        <el-button :loading="exporting" @click="handleExportAccountCsv">导出本账户流水 CSV</el-button>
         <el-button @click="txListDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -177,9 +179,11 @@ import {
   getPrepayTransactions,
 } from '@/api/prepay';
 import type { PrepayAccount, PrepayTransaction, PrepayTransactionType } from '@/api/prepay';
+import { downloadCsv } from '@/utils/export';
 
 const loading = ref(false);
 const submitLoading = ref(false);
+const exporting = ref(false);
 const tableData = ref<PrepayAccount[]>([]);
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
 
@@ -321,6 +325,40 @@ const loadTransactions = async () => {
     // 请求拦截器已弹出错误提示
   } finally {
     txListLoading.value = false;
+  }
+};
+
+const handleExportCsv = async () => {
+  exporting.value = true;
+  try {
+    await downloadCsv(
+      '/prepay-accounts/transactions/export',
+      {},
+      `预付流水汇总_${new Date().toISOString().split('T')[0]}.csv`,
+    );
+    ElMessage.success('导出成功');
+  } catch {
+    ElMessage.error('导出失败');
+  } finally {
+    exporting.value = false;
+  }
+};
+
+const handleExportAccountCsv = async () => {
+  const account = currentAccount.value;
+  if (!account) return;
+  exporting.value = true;
+  try {
+    await downloadCsv(
+      '/prepay-accounts/transactions/export',
+      { prepayAccountId: account.id },
+      `预付账户流水_${account.roomNumber || account.roomId}_${new Date().toISOString().split('T')[0]}.csv`,
+    );
+    ElMessage.success('导出成功');
+  } catch {
+    ElMessage.error('导出失败');
+  } finally {
+    exporting.value = false;
   }
 };
 

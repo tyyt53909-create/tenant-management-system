@@ -6,6 +6,9 @@ import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
+import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
+import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
+import { centsToYuanString } from '../../common/utils/currency.util.js';
 
 /** 表类型 → 费用名称（用于扣费流水描述） */
 const METER_TYPE_LABEL: Record<string, string> = {
@@ -176,6 +179,272 @@ export class MetersService {
       data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
+  }
+
+  /**
+   * 批量抄表工作台底表查询（平铺展示各房源水电表、最新读数及预付余额）
+   */
+  async getBatchSheet(query: QueryBatchSheetDto) {
+    const where: any = { isActive: true };
+    if (query.buildingId) {
+      where.buildingId = query.buildingId;
+    }
+    if (query.meterType) {
+      where.meterType = query.meterType;
+    }
+    if (query.floor !== undefined) {
+      where.room = { floor: Number(query.floor) };
+    }
+
+    const meters = await this.prisma.meter.findMany({
+      where,
+      include: {
+        building: { select: { id: true, name: true } },
+        room: {
+          select: {
+            id: true,
+            roomNumber: true,
+            floor: true,
+            status: true,
+            contracts: {
+              where: { status: 'ACTIVE' },
+              take: 1,
+              select: {
+                id: true,
+                tenantId: true,
+                tenant: { select: { id: true, name: true, phone: true } },
+              },
+            },
+          },
+        },
+        readings: {
+          orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+          select: {
+            id: true,
+            currentReading: true,
+            previousReading: true,
+            usage: true,
+            readingTime: true,
+          },
+        },
+      },
+      orderBy: [
+        { buildingId: 'asc' },
+        { room: { floor: 'asc' } },
+        { room: { roomNumber: 'asc' } },
+        { meterType: 'asc' },
+      ],
+    });
+
+    // 批量查出活跃预付账户余额
+    const roomTenantPairs = meters
+      .filter((m) => m.roomId && m.room?.contracts?.[0]?.tenantId)
+      .map((m) => ({
+        roomId: m.roomId!,
+        tenantId: m.room!.contracts[0].tenantId,
+      }));
+
+    const prepayAccounts = roomTenantPairs.length > 0
+      ? await this.prisma.prepayAccount.findMany({
+          where: {
+            OR: roomTenantPairs.map((p) => ({
+              roomId: p.roomId,
+              tenantId: p.tenantId,
+            })),
+          },
+          select: { roomId: true, tenantId: true, balanceCache: true },
+        })
+      : [];
+
+    const prepayMap = new Map<string, number>();
+    for (const acc of prepayAccounts) {
+      prepayMap.set(`${acc.tenantId}_${acc.roomId}`, acc.balanceCache);
+    }
+
+    return meters.map((m) => {
+      const activeContract = m.room?.contracts?.[0];
+      const lastReading = m.readings?.[0];
+      const balanceCache = activeContract
+        ? prepayMap.get(`${activeContract.tenantId}_${m.roomId}`) ?? 0
+        : null;
+
+      return {
+        meterId: m.id,
+        meterNumber: m.meterNumber,
+        meterType: m.meterType,
+        unitPrice: m.unitPrice,
+        buildingId: m.buildingId,
+        buildingName: m.building?.name || '',
+        roomId: m.roomId,
+        roomNumber: m.room?.roomNumber || '公共区域',
+        floor: m.room?.floor ?? null,
+        roomStatus: m.room?.status ?? null,
+        tenantId: activeContract?.tenant?.id ?? null,
+        tenantName: activeContract?.tenant?.name ?? null,
+        tenantPhone: activeContract?.tenant?.phone ?? null,
+        lastReading: lastReading ? Number(lastReading.currentReading) : 0,
+        lastReadingTime: lastReading?.readingTime ?? null,
+        lastUsage: lastReading ? Number(lastReading.usage) : 0,
+        prepayBalance: balanceCache,
+      };
+    });
+  }
+
+  /**
+   * 批量读数登记（行级独立报告 + 事务原子性处理有效行）
+   */
+  async createBatchReadings(dto: BatchMeterReadingsDto, operatorId: string) {
+    const results: Array<{
+      meterId: string;
+      meterNumber?: string;
+      roomNumber?: string;
+      success: boolean;
+      currentReading?: number;
+      previousReading?: number;
+      usage?: number;
+      amount?: number;
+      deducted?: number;
+      shortfall?: number;
+      error?: string;
+    }> = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of dto.readings) {
+        const meter = await tx.meter.findUnique({
+          where: { id: item.meterId },
+          include: { room: true },
+        });
+
+        if (!meter) {
+          results.push({
+            meterId: item.meterId,
+            success: false,
+            error: '水电表不存在',
+          });
+          continue;
+        }
+
+        if (!meter.isActive) {
+          results.push({
+            meterId: item.meterId,
+            meterNumber: meter.meterNumber,
+            roomNumber: meter.room?.roomNumber,
+            success: false,
+            error: '水电表已停用',
+          });
+          continue;
+        }
+
+        const previous = await tx.meterReading.findFirst({
+          where: { meterId: item.meterId },
+          orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+        });
+        const previousReading = previous ? Number(previous.currentReading) : 0;
+
+        if (item.currentReading < previousReading) {
+          results.push({
+            meterId: item.meterId,
+            meterNumber: meter.meterNumber,
+            roomNumber: meter.room?.roomNumber,
+            success: false,
+            currentReading: item.currentReading,
+            previousReading,
+            error: `当前读数(${item.currentReading})不能小于上次读数(${previousReading})`,
+          });
+          continue;
+        }
+
+        const usage = Math.round((item.currentReading - previousReading) * 100) / 100;
+        const readingTime = item.readingTime ? new Date(item.readingTime) : new Date();
+
+        const reading = await tx.meterReading.create({
+          data: {
+            meterId: item.meterId,
+            currentReading: item.currentReading,
+            previousReading,
+            usage,
+            source: 'MANUAL',
+            readingTime,
+            readBy: operatorId,
+            notes: item.notes,
+          },
+        });
+
+        const deduction = await this.applyReadingDeduction(tx, meter, reading, usage, operatorId);
+
+        results.push({
+          meterId: item.meterId,
+          meterNumber: meter.meterNumber,
+          roomNumber: meter.room?.roomNumber,
+          success: true,
+          currentReading: item.currentReading,
+          previousReading,
+          usage,
+          amount: deduction.amount,
+          deducted: deduction.deducted,
+          shortfall: deduction.shortfall,
+        });
+      }
+    });
+
+    const successCount = results.filter((r) => r.success).length;
+    const failureCount = results.length - successCount;
+
+    return {
+      total: results.length,
+      successCount,
+      failureCount,
+      results,
+    };
+  }
+
+  /**
+   * 抄表台账数据 CSV 导出
+   */
+  async exportReadings(query: any) {
+    const where: any = {};
+    if (query.meterId) where.meterId = query.meterId;
+    if (query.meterType) where.meter = { meterType: query.meterType };
+    if (query.buildingId) {
+      where.meter = { ...where.meter, buildingId: query.buildingId };
+    }
+    if (query.startDate || query.endDate) {
+      where.readingTime = {};
+      if (query.startDate) where.readingTime.gte = new Date(query.startDate);
+      if (query.endDate) where.readingTime.lte = new Date(query.endDate);
+    }
+
+    const readings = await this.prisma.meterReading.findMany({
+      where,
+      include: {
+        meter: {
+          include: {
+            room: true,
+            building: true,
+          },
+        },
+      },
+      orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+      take: 5000,
+    });
+
+    const columns: CsvColumn[] = [
+      { header: '记录ID', key: 'id' },
+      { header: '表号', formatter: (r) => r.meter?.meterNumber || '' },
+      { header: '表类型', formatter: (r) => METER_TYPE_LABEL[r.meter?.meterType] || r.meter?.meterType || '' },
+      { header: '楼栋', formatter: (r) => r.meter?.building?.name || '' },
+      { header: '房间号', formatter: (r) => r.meter?.room?.roomNumber || '公共区域' },
+      { header: '上次读数', formatter: (r) => Number(r.previousReading).toFixed(2) },
+      { header: '本次读数', formatter: (r) => Number(r.currentReading).toFixed(2) },
+      { header: '用量', formatter: (r) => Number(r.usage).toFixed(2) },
+      { header: '单价(元)', formatter: (r) => centsToYuanString(r.meter?.unitPrice) },
+      { header: '抄表时间', formatter: (r) => r.readingTime ? new Date(r.readingTime).toLocaleString('zh-CN') : '' },
+      { header: '抄表人', key: 'readBy' },
+      { header: '备注', key: 'notes' },
+    ];
+
+    return generateCsv(columns, readings);
   }
 
   /**

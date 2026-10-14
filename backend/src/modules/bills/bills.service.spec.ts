@@ -735,4 +735,80 @@ describe('BillsService', () => {
       await expect(service.findOneForTenant(billId, 'tenant-1')).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('exportBills', () => {
+    it('正确生成包含 UTF-8 BOM 的账单 CSV', async () => {
+      prisma.bill.findMany.mockResolvedValue([
+        {
+          id: 'b-1',
+          billNumber: 'B20261001-001',
+          billType: 'RENT',
+          period: '2026-10',
+          amount: 250000,
+          paidAmount: 250000,
+          status: 'PAID',
+          dueDate: new Date('2026-10-05'),
+          createdAt: new Date('2026-10-01'),
+          contract: {
+            tenant: { name: '李四', phone: '13900000002' },
+            room: { roomNumber: '302' },
+          },
+          lateFees: [],
+        },
+      ]);
+
+      const csv = await service.exportBills({ status: 'PAID' });
+
+      expect(csv.startsWith('\uFEFF')).toBe(true);
+      expect(csv).toContain('账单编号,房间号,租客姓名,租客手机,账单类型,账期,应付金额(元),已付金额(元),未付本金(元),确认滞纳金(元),到期日期,状态,创建时间');
+      expect(csv).toContain('B20261001-001,302,李四,13900000002,租金,2026-10,2500.00,2500.00,0.00,0.00,2026-10-05,已支付');
+    });
+  });
+
+  describe('getReceipt', () => {
+    it('账单不存在：404', async () => {
+      prisma.bill.findUnique.mockResolvedValue(null);
+      await expect(service.getReceipt('invalid-id')).rejects.toThrow(NotFoundException);
+    });
+
+    it('返回完整单据快照，包括中文大写金额和收款流水', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: 'b-1',
+        billNumber: 'B20261001-001',
+        billType: 'RENT',
+        period: '2026-10',
+        amount: 300000,
+        paidAmount: 300000,
+        status: 'PAID',
+        contract: {
+          tenant: { name: '王五', phone: '13700000003' },
+          room: { roomNumber: '501', building: { name: '阳光公寓' } },
+        },
+        paymentRecords: [
+          {
+            id: 'pay-1',
+            amount: 300000,
+            paymentMethod: 'WECHAT',
+            transactionNumber: 'WX123456',
+            paidAt: new Date('2026-10-02'),
+            notes: '微信转账',
+          },
+        ],
+        lateFees: [],
+      });
+
+      const receipt = await service.getReceipt('b-1');
+
+      expect(receipt.receiptNumber).toBe('RCP-B20261001-001');
+      expect(receipt.payerName).toBe('王五');
+      expect(receipt.roomNumber).toBe('501');
+      expect(receipt.buildingName).toBe('阳光公寓');
+      expect(receipt.principalAmount).toBe(300000);
+      expect(receipt.totalPaid).toBe(300000);
+      expect(receipt.unpaid).toBe(0);
+      expect(receipt.amountInChinese).toBe('叁仟元整');
+      expect(receipt.payments).toHaveLength(1);
+      expect(receipt.payments[0].amountYuan).toBe('3000.00');
+    });
+  });
 });

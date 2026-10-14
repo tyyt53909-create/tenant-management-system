@@ -382,4 +382,32 @@ describe('PrepayService', () => {
       expect(result.meta).toEqual({ page: 2, limit: 5, total: 1, totalPages: 1 });
     });
   });
+
+  describe('exportTransactions', () => {
+    it('正确生成包含 UTF-8 BOM 的预付流水 CSV', async () => {
+      prisma.prepayTransaction.findMany.mockResolvedValue([
+        {
+          id: 'tx-101',
+          type: 'RECHARGE',
+          amount: 50000,
+          balanceAfter: 68800,
+          transactionNumber: 'REC20261014-001',
+          description: '微信充值',
+          operatorId: 'admin',
+          createdAt: new Date('2026-10-14T08:00:00Z'),
+          account: {
+            roomId: 'room-1',
+            tenant: { name: '周八', phone: '13500000008' },
+          },
+        },
+      ]);
+      prisma.room.findMany.mockResolvedValue([{ id: 'room-1', roomNumber: '601' }]);
+
+      const csv = await service.exportTransactions({});
+
+      expect(csv.startsWith('\uFEFF')).toBe(true);
+      expect(csv).toContain('流水号,房间号,租客姓名,租客手机,交易类型,变动金额(元),变动后余额(元),第三方交易号,说明,经办人,时间');
+      expect(csv).toContain('tx-101,601,周八,13500000008,充值,500.00,688.00,REC20261014-001,微信充值,admin');
+    });
+  });
 });

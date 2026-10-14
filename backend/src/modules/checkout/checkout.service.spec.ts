@@ -304,4 +304,79 @@ describe('CheckoutService', () => {
       await expect(service.remove(recordId)).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('exportCheckouts', () => {
+    it('正确生成包含 UTF-8 BOM 的退租记录 CSV', async () => {
+      prisma.checkoutRecord.findMany.mockResolvedValue([
+        {
+          id: 'chk-1',
+          checkoutDate: new Date('2026-10-12'),
+          totalRefund: 180000,
+          processedBy: 'admin',
+          status: 'COMPLETED',
+          createdAt: new Date('2026-10-12'),
+          contractId: 'contract-1',
+          notes: '顺利退租',
+          room: { roomNumber: '202' },
+          contract: { tenant: { name: '赵六', phone: '13600000004' } },
+          items: [{ id: 'item-1' }, { id: 'item-2' }],
+        },
+      ]);
+
+      const csv = await service.exportCheckouts({});
+
+      expect(csv.startsWith('\uFEFF')).toBe(true);
+      expect(csv).toContain('退租记录ID,房间号,租客姓名,租客电话,合同ID,退租日期,明细项数,实退总额(元),经办人,状态,创建时间,备注');
+      expect(csv).toContain('chk-1,202,赵六,13600000004,contract-1,2026-10-12,2,1800.00,admin,已完成');
+    });
+  });
+
+  describe('getVoucher', () => {
+    it('不存在 → 404', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue(null);
+      await expect(service.getVoucher('not-found')).rejects.toThrow(NotFoundException);
+    });
+
+    it('返回完整退租结算凭单，包含扣款与退款汇总及中文大写净额', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({
+        id: 'chk-1',
+        checkoutDate: new Date('2026-10-12'),
+        totalRefund: 180000,
+        status: 'COMPLETED',
+        processedBy: 'admin-1',
+        notes: '无物品遗留',
+        room: { roomNumber: '202', building: { name: '天河公寓' } },
+        contract: {
+          id: 'contract-1',
+          startDate: new Date('2025-10-12'),
+          endDate: new Date('2026-10-11'),
+          depositAmount: 200000,
+          tenant: { name: '赵六', phone: '13600000004' },
+        },
+        items: [
+          {
+            id: 'it-1',
+            itemType: 'CLEANING_FEE',
+            description: '深度保洁费',
+            amount: 20000,
+            isAdjusted: false,
+            adjustReason: null,
+          },
+        ],
+      });
+
+      const voucher = await service.getVoucher('chk-1');
+
+      expect(voucher.voucherNumber).toBe('VCH-CHK-1');
+      expect(voucher.tenantName).toBe('赵六');
+      expect(voucher.roomNumber).toBe('202');
+      expect(voucher.buildingName).toBe('天河公寓');
+      expect(voucher.depositAmount).toBe(200000);
+      expect(voucher.totalDeduction).toBe(20000);
+      expect(voucher.netRefund).toBe(180000);
+      expect(voucher.netRefundInChinese).toBe('壹仟捌佰元整');
+      expect(voucher.items).toHaveLength(1);
+      expect(voucher.items[0].amountYuan).toBe('200.00');
+    });
+  });
 });

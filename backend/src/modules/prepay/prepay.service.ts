@@ -5,6 +5,8 @@ import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
 import { QueryPrepayAccountsDto } from './dto/query-prepay-accounts.dto.js';
 import { CreatePrepayTransactionDto } from './dto/create-prepay-transaction.dto.js';
 import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.js';
+import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
+import { centsToYuanString } from '../../common/utils/currency.util.js';
 
 @Injectable()
 export class PrepayService {
@@ -294,5 +296,64 @@ export class PrepayService {
     }
 
     return dto.type === 'RECHARGE' ? dto.amount : -dto.amount;
+  }
+
+  /**
+   * 预付账户交易流水 CSV 导出
+   */
+  async exportTransactions(query: any) {
+    const where: any = {};
+    if (query.accountId) where.accountId = query.accountId;
+    if (query.type) where.type = query.type;
+    if (query.startDate || query.endDate) {
+      where.createdAt = {};
+      if (query.startDate) where.createdAt.gte = new Date(query.startDate);
+      if (query.endDate) where.createdAt.lte = new Date(query.endDate);
+    }
+
+    const transactions = await this.prisma.prepayTransaction.findMany({
+      where,
+      include: {
+        account: {
+          include: {
+            tenant: { select: { name: true, phone: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+    });
+
+    const roomIds = [...new Set(transactions.map((t) => t.account?.roomId).filter(Boolean))];
+    const rooms = roomIds.length
+      ? await this.prisma.room.findMany({
+          where: { id: { in: roomIds as string[] } },
+          select: { id: true, roomNumber: true },
+        })
+      : [];
+    const roomMap = new Map(rooms.map((r) => [r.id, r.roomNumber]));
+
+    const typeLabelMap: Record<string, string> = {
+      RECHARGE: '充值',
+      DEDUCTION: '扣费',
+      REFUND: '退款',
+      ADJUSTMENT: '调账',
+    };
+
+    const columns: CsvColumn[] = [
+      { header: '流水号', key: 'id' },
+      { header: '房间号', formatter: (t) => roomMap.get(t.account?.roomId || '') || '' },
+      { header: '租客姓名', formatter: (t) => t.account?.tenant?.name || '' },
+      { header: '租客手机', formatter: (t) => t.account?.tenant?.phone || '' },
+      { header: '交易类型', formatter: (t) => typeLabelMap[t.type] || t.type },
+      { header: '变动金额(元)', formatter: (t) => centsToYuanString(t.amount) },
+      { header: '变动后余额(元)', formatter: (t) => centsToYuanString(t.balanceAfter) },
+      { header: '第三方交易号', key: 'transactionNumber' },
+      { header: '说明', key: 'description' },
+      { header: '经办人', key: 'operatorId' },
+      { header: '时间', formatter: (t) => (t.createdAt ? new Date(t.createdAt).toLocaleString('zh-CN') : '') },
+    ];
+
+    return generateCsv(columns, transactions);
   }
 }
