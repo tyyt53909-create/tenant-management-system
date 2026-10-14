@@ -100,7 +100,15 @@
         </view>
 
         <view class="oauth-btn-wrap">
-          <button class="btn-google" :disabled="googleLoading" @tap="handleGoogleLogin">
+          <!-- #ifdef H5 -->
+          <view id="g_id_signin_container" class="google-official-btn"></view>
+          <!-- #endif -->
+          <button 
+            v-if="!gisButtonLoaded"
+            class="btn-google" 
+            :disabled="googleLoading" 
+            @tap="handleGoogleLogin"
+          >
             <image class="google-icon-img" src="/static/google-icon.svg" mode="aspectFit"></image>
             <text>{{ googleLoading ? '正在验证 Google 登录…' : 'Sign in with Google' }}</text>
           </button>
@@ -143,7 +151,8 @@ export default {
       emailLoading: false,
       loading: false,
       googleLoading: false,
-      googleClientId: ''
+      googleClientId: '',
+      gisButtonLoaded: false
     }
   },
   mounted() {
@@ -249,6 +258,19 @@ export default {
                   }
                 }
               })
+              const container = document.getElementById('g_id_signin_container')
+              if (container) {
+                window.google.accounts.id.renderButton(container, {
+                  theme: 'outline',
+                  size: 'large',
+                  text: 'signin_with',
+                  shape: 'rectangular',
+                  width: 280,
+                  logo_alignment: 'left'
+                })
+                this.gisButtonLoaded = true
+              }
+              window.google.accounts.id.prompt()
             }
           }
           document.head.appendChild(script)
@@ -556,6 +578,14 @@ export default {
 
 .oauth-btn-wrap {
   margin-bottom: 24rpx;
+}
+
+.google-official-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto 12rpx;
+  min-height: 84rpx;
 }
 
 .btn-google {
