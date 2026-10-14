@@ -1,0 +1,106 @@
+/**
+ * Element Plus 栖居主题 CSS 变量覆盖
+ * 使用 CSS 变量方式，更简单直接
+ */
+
+:root {
+  /* 主色调 - 橄榄绿 */
+  --el-color-primary: #535b43;
+  --el-color-primary-light-3: #768168;
+  --el-color-primary-light-5: #8a9476;
+  --el-color-primary-light-7: #a3b091;
+  --el-color-primary-light-8: #c4ccb8;
+  --el-color-primary-light-9: #edf0e8;
+  --el-color-primary-dark-2: #3d4232;
+  
+  /* 成功色 */
+  --el-color-success: #66846b;
+  --el-color-success-light-3: #7d9881;
+  --el-color-success-light-5: #94ac97;
+  --el-color-success-light-7: #abc0ad;
+  --el-color-success-light-8: #c9d7ca;
+  --el-color-success-light-9: #eaf2ea;
+  
+  /* 警告色 */
+  --el-color-warning: #b87648;
+  --el-color-warning-light-3: #c58e65;
+  --el-color-warning-light-5: #d2a682;
+  --el-color-warning-light-7: #dfbe9f;
+  --el-color-warning-light-8: #ecdbc7;
+  --el-color-warning-light-9: #f6eee6;
+  
+  /* 危险色 */
+  --el-color-danger: #ba6459;
+  --el-color-danger-light-3: #c77e74;
+  --el-color-danger-light-5: #d4988f;
+  --el-color-danger-light-7: #e1b2aa;
+  --el-color-danger-light-8: #eed9d4;
+  --el-color-danger-light-9: #fbeeea;
+  
+  /* 错误色（同危险色） */
+  --el-color-error: #ba6459;
+  --el-color-error-light-3: #c77e74;
+  --el-color-error-light-5: #d4988f;
+  --el-color-error-light-7: #e1b2aa;
+  --el-color-error-light-8: #eed9d4;
+  --el-color-error-light-9: #fbeeea;
+  
+  /* 信息色 */
+  --el-color-info: #647c83;
+  --el-color-info-light-3: #7e9399;
+  --el-color-info-light-5: #98aaaf;
+  --el-color-info-light-7: #b2c1c5;
+  --el-color-info-light-8: #d3dcde;
+  --el-color-info-light-9: #eaf0f2;
+  
+  /* 背景色 */
+  --el-bg-color-page: #f7f5f0;
+  --el-bg-color: #fffefa;
+  --el-bg-color-overlay: #ffffff;
+  
+  /* 文字色 */
+  --el-text-color-primary: #302f2a;
+  --el-text-color-regular: #5e6058;
+  --el-text-color-secondary: #8b897f;
+  --el-text-color-placeholder: #bfbdb5;
+  --el-text-color-disabled: #bfbdb5;
+  
+  /* 边框色 */
+  --el-border-color: #e9e5dd;
+  --el-border-color-light: #ebe9e1;
+  --el-border-color-lighter: #f0ede5;
+  --el-border-color-extra-light: #f5f3eb;
+  --el-border-color-dark: #dcd8cc;
+  --el-border-color-darker: #ccc8bc;
+  
+  /* 填充色 */
+  --el-fill-color: #f1eee8;
+  --el-fill-color-light: #f5f3eb;
+  --el-fill-color-lighter: #f9f7f1;
+  --el-fill-color-extra-light: #fcfbf7;
+  --el-fill-color-dark: #e9e5dd;
+  --el-fill-color-darker: #dcd8cc;
+  --el-fill-color-blank: #ffffff;
+  
+  /* 圆角 */
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 16px;
+  --el-border-radius-circle: 100%;
+  
+  /* 阴影 */
+  --el-box-shadow: 0 2px 8px rgba(54, 45, 26, 0.035);
+  --el-box-shadow-light: 0 2px 4px rgba(54, 45, 26, 0.025);
+  --el-box-shadow-lighter: 0 1px 2px rgba(54, 45, 26, 0.015);
+  --el-box-shadow-dark: 0 15px 55px rgba(54, 45, 26, 0.035);
+  
+  /* 遮罩 */
+  --el-overlay-color-lighter: rgba(48, 47, 42, 0.15);
+  --el-overlay-color-light: rgba(48, 47, 42, 0.3);
+  --el-overlay-color: rgba(48, 47, 42, 0.5);
+  
+  /* 禁用状态 */
+  --el-disabled-bg-color: #f9f7f1;
+  --el-disabled-text-color: #bfbdb5;
+  --el-disabled-border-color: #f0ede5;
+}
