@@ -9,6 +9,7 @@ import { LoginDto } from './dto/login.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { EmailOtpService } from './email-otp.service.js';
+import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthController', () => {
@@ -17,6 +18,7 @@ describe('AuthController', () => {
   let jwtService: JwtAuthService;
   let googleAuthService: GoogleAuthService;
   let emailOtpService: EmailOtpService;
+  let tenantCapabilityService: TenantCapabilityService;
   let prisma: PrismaService;
 
   beforeEach(async () => {
@@ -53,6 +55,12 @@ describe('AuthController', () => {
           },
         },
         {
+          provide: TenantCapabilityService,
+          useValue: {
+            getEffectiveCapabilities: vi.fn().mockResolvedValue(['tenant.contract.read', 'tenant.bill.read']),
+          },
+        },
+        {
           provide: PrismaService,
           useValue: {
             user: {
@@ -77,6 +85,7 @@ describe('AuthController', () => {
     jwtService = module.get<JwtAuthService>(JwtAuthService);
     googleAuthService = module.get<GoogleAuthService>(GoogleAuthService);
     emailOtpService = module.get<EmailOtpService>(EmailOtpService);
+    tenantCapabilityService = module.get<TenantCapabilityService>(TenantCapabilityService);
     prisma = module.get<PrismaService>(PrismaService);
   });
 
@@ -812,6 +821,44 @@ describe('AuthController', () => {
           data: { invitedBy: 'admin-inviter' },
         });
       });
+    });
+  });
+
+  describe('getMe (GET /auth/me)', () => {
+    it('租客身份获取个人资料时，返回当前生效的 capabilities 列表', async () => {
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+        id: 'tenant-user-1',
+        email: 'tenant@example.com',
+        role: 'TENANT',
+        isActive: true,
+      } as any);
+
+      const result = await controller.getMe({ user: { userId: 'tenant-user-1' } });
+      expect(result.id).toBe('tenant-user-1');
+      expect(result.capabilities).toEqual(['tenant.contract.read', 'tenant.bill.read']);
+      expect(tenantCapabilityService.getEffectiveCapabilities).toHaveBeenCalledWith('tenant-user-1');
+    });
+
+    it('非租客身份（如 ADMIN）获取个人资料时，返回空 capabilities 数组', async () => {
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+        id: 'admin-user-1',
+        email: 'admin@example.com',
+        role: 'ADMIN',
+        isActive: true,
+      } as any);
+
+      const result = await controller.getMe({ user: { userId: 'admin-user-1' } });
+      expect(result.id).toBe('admin-user-1');
+      expect(result.capabilities).toEqual([]);
+      expect(tenantCapabilityService.getEffectiveCapabilities).not.toHaveBeenCalled();
+    });
+
+    it('用户不存在时抛出 UnauthorizedException', async () => {
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+
+      await expect(
+        controller.getMe({ user: { userId: 'non-existent' } }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

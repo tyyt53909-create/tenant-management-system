@@ -8,6 +8,8 @@ import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
+import { CapabilityGuard } from '../../common/guards/capability.guard.js';
 
 @Controller('prepay-accounts')
 @UseGuards(JwtAuthGuard)
@@ -30,8 +32,9 @@ export class PrepayController {
 
   // 租客查看自己的账户
   @Get('my')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.prepay.read')
   findMy(@Request() req: any) {
     if (req.user.role === 'TENANT') {
       return this.prepayService.findByTenant(req.user.tenantId);
@@ -53,8 +56,9 @@ export class PrepayController {
 
   // 租客查看自己的交易记录
   @Get('transactions')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.prepay.read')
   findTransactions(@Request() req: any, @Query() query: QueryPrepayTransactionsDto) {
     if (req.user.role === 'TENANT') {
       return this.prepayService.findTransactionsByTenant(req.user.tenantId, query);

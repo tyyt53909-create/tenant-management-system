@@ -1,10 +1,11 @@
 <template>
   <view class="page q-page page-safe-bottom">
     <text class="q-eyebrow">MY BALANCE / 预付账户</text><text class="q-title">收支清楚，生活从容。</text><text class="q-description">余额与每笔流水，随时可以核对。</text>
-    <view v-if="error" class="q-error" @tap="loadData">{{ error }} · 点此重试</view>
-    <view v-if="noAccount" class="q-surface q-empty"><text class="q-empty-title">尚未开通预付账户</text><text>请联系管理者开通账户；开通后可在这里核对余额与流水。</text></view>
+    <view v-if="blocked" class="q-surface q-empty"><text class="q-empty-title">功能已被暂停</text><text>此功能已被暂停，如有需要请联系管理处。</text></view>
+    <view v-else-if="error" class="q-error" @tap="loadData">{{ error }} · 点此重试</view>
+    <view v-if="noAccount && !blocked" class="q-surface q-empty"><text class="q-empty-title">尚未开通预付账户</text><text>请联系管理者开通账户；开通后可在这里核对余额与流水。</text></view>
     <view v-if="loading" class="q-skeleton" aria-label="正在加载账户"><view/><view/><view/></view>
-    <view class="balance-card" v-if="loaded">
+    <view class="balance-card" v-if="loaded && !blocked">
       <view class="balance-header">
         <text class="title">账户余额</text>
       </view>
@@ -14,7 +15,7 @@
       </view>
     </view>
 
-    <view class="transaction-list" v-if="loaded">
+    <view class="transaction-list" v-if="loaded && !blocked">
       <view class="list-header">
         <text class="title">账户流水</text>
       </view>
@@ -41,7 +42,7 @@
 
 <script>
 import { getMyAccount, getRechargeRecords } from '../../api/index.js'
-import { ensureTenantSession } from '../../utils/session.js'
+import { ensureTenantSession, hasCapability } from '../../utils/session.js'
 import { money } from '../../utils/format.js'
 
 export default {
@@ -52,6 +53,7 @@ export default {
       noAccount: false,
       loading: false,
       error: '',
+      blocked: false,
       transactions: []
     }
   },
@@ -64,6 +66,11 @@ export default {
       this.loading=true;this.error='';this.noAccount=false;
       try {
         if (!await ensureTenantSession()) return
+        if (!hasCapability('tenant.prepay.read')) {
+          this.blocked = true
+          return
+        }
+        this.blocked = false
         const accountRes = await getMyAccount()
         this.balance = accountRes.balanceCache || 0
 
@@ -71,8 +78,15 @@ export default {
         this.transactions = transactionsRes.data || []
         this.loaded=true
       } catch (error) {
-        if(error.statusCode===404){this.noAccount=true;this.loaded=false}
-        else this.error='账户信息未能加载，请检查连接后重试'
+        if (error?.message === 'CAPABILITY_DENIED' || error?.statusCode === 403) {
+          this.blocked = true
+          this.error = ''
+        } else if (error.statusCode === 404) {
+          this.noAccount = true
+          this.loaded = false
+        } else {
+          this.error = '账户信息未能加载，请检查连接后重试'
+        }
       } finally {
         this.loading=false
       }

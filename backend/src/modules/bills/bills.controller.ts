@@ -8,6 +8,8 @@ import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
+import { CapabilityGuard } from '../../common/guards/capability.guard.js';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
@@ -42,8 +44,9 @@ export class BillsController {
 
   // 租客查看自己的账单
   @Get('my')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.bill.read')
   findMy(@Request() req: any, @Query() query: QueryBillsDto) {
     // 租客只能查看自己的账单
     if (req.user.role === 'TENANT') {
@@ -53,18 +56,28 @@ export class BillsController {
     return this.billsService.findAll(query);
   }
 
+  // 单据快速识别与智能匹配（仅管理员）
+  @Post('recognize')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  recognizeVoucher(@Body() dto: { text?: string; code?: string }) {
+    return this.billsService.recognizeVoucher(dto.code || dto.text || '');
+  }
+
   // 电子收款收据单据（租客只能看自己的收据）
   @Get(':id/receipt')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.bill.read')
   getReceipt(@Request() req: any, @Param('id') id: string) {
     const tenantId = req.user?.role === 'TENANT' ? req.user?.tenantId : undefined;
     return this.billsService.getReceipt(id, tenantId);
   }
 
   @Get(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.bill.read')
   findOne(@Request() req: any, @Param('id') id: string) {
     // 租客需要验证是否是自己的账单
     if (req.user.role === 'TENANT') {

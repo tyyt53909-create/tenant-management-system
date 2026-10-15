@@ -5,15 +5,18 @@ import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
+import { CapabilityGuard } from '../../common/guards/capability.guard.js';
 import { ContractAttachmentsService } from './contract-attachments.service.js';
 
 @Controller('contracts/:id/attachments')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CapabilityGuard)
 export class ContractAttachmentsController {
   constructor(private readonly attachments: ContractAttachmentsService) {}
 
   @Get()
   @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.contract.read')
   list(@Param('id') id: string, @Request() req: any) { return this.attachments.list(id, req.user); }
 
   @Post()
@@ -23,6 +26,7 @@ export class ContractAttachmentsController {
 
   @Get(':attachmentId/file')
   @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.contract.read')
   async download(@Param('id') id: string, @Param('attachmentId') attachmentId: string, @Request() req: any, @Res() res: Response) {
     const file = await this.attachments.file(id, attachmentId, req.user);
     res.setHeader('Content-Type', file.mimeType);

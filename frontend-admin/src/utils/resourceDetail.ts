@@ -1,6 +1,6 @@
 import type { ResourceKind,ResourceRecord } from './resource';
 export function resourceDetailTabs(kind:ResourceKind){
-  if(kind==='tenants')return [{id:'overview',label:'基本资料'},{id:'contracts',label:'租赁关联'},{id:'audit',label:'操作记录'}];
+  if(kind==='tenants')return [{id:'overview',label:'基本资料'},{id:'contracts',label:'租赁关联'},{id:'audit',label:'操作记录'},{id:'account',label:'登入账号'}];
   if(kind==='bills')return [{id:'overview',label:'费用明细'},{id:'payments',label:'收款进度'},{id:'audit',label:'操作记录'}];
   if(kind==='maintenance')return [{id:'progress',label:'工单进度'},{id:'overview',label:'报修详情'},{id:'audit',label:'操作记录'}];
   if(kind==='meters')return [{id:'overview',label:'设备资料'},{id:'readings',label:'读数历史'}];

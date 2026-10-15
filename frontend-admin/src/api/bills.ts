@@ -88,3 +88,53 @@ export const getLateFees = (billId: string): Promise<LateFee[]> => {
 export const addLateFee = (billId: string, data: LateFeePayload = {}): Promise<LateFee> => {
   return request.post(`/bills/${billId}/late-fees`, data);
 };
+
+// ── 单据识别与匹配 ──
+
+export interface RecognizeVoucherResult {
+  success: boolean;
+  matchedBy: string;
+  billId: string;
+  billNumber: string;
+  billType: string;
+  billTypeLabel: string;
+  period: string;
+  status: string;
+  isPaid: boolean;
+  isCancelled: boolean;
+  dueDate: string;
+  amount: number;
+  amountYuan: string;
+  paidAmount: number;
+  paidAmountYuan: string;
+  unpaidAmount: number;
+  unpaidAmountYuan: string;
+  outstandingLateFees: number;
+  outstandingLateFeesYuan: string;
+  suggestedAmount: number;
+  suggestedAmountYuan: string;
+  extractedAmountCents: number | null;
+  extractedAmountYuan: string | null;
+  amountMatchStatus: 'MATCHED' | 'MISMATCH' | 'UNKNOWN';
+  tenant: {
+    id: string;
+    name: string;
+    phone: string;
+  };
+  room: {
+    id: string;
+    roomNumber: string;
+    buildingName: string;
+  };
+  recentPayments: Array<{
+    id: string;
+    amount: number;
+    amountYuan: string;
+    paymentMethod: string;
+    paidAt: string;
+  }>;
+}
+
+export const recognizeVoucher = (data: { text?: string; code?: string }): Promise<RecognizeVoucherResult> => {
+  return request.post('/bills/recognize', data);
+};

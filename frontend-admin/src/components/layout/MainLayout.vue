@@ -24,6 +24,7 @@
         <button class="icon-button mobile-toggle" aria-label="打开导航" :aria-expanded="mobileOpen" @click="mobileOpen = !mobileOpen"><el-icon :size="20"><Menu /></el-icon></button>
         <div class="qiju-breadcrumb"><span>运营中心</span><span>/</span><b>{{ currentPage.title }}</b></div>
         <div class="top-spacer" />
+        <button class="voucher-trigger" title="识别并核销租客缴费单据 (⌘ V)" @click="voucherVisible = true"><el-icon><Ticket /></el-icon><span>单据识别入账</span><kbd>⌘ V</kbd></button>
         <button class="search-trigger" @click="searchVisible = true"><el-icon><Search /></el-icon><span>搜索页面与服务…</span><kbd>⌘ K</kbd></button>
         <span class="top-date">{{ today }}</span>
         <router-link class="icon-button" to="/notifications" aria-label="通知中心"><el-icon :size="20"><Bell /></el-icon><i v-if="notificationStore.unreadCount" class="unread-dot" /></router-link>
@@ -45,13 +46,15 @@
       <div class="command-list"><button v-for="item in searchResults" :key="item.path" @click="openPage(item.path)"><el-icon><component :is="item.icon" /></el-icon><span>{{ item.title }}</span><el-icon><ArrowRight /></el-icon></button></div>
       <section v-if="searchQuery.trim().length>=2" class="record-search"><h3>业务记录 <small>每类最多 5 条</small></h3><el-skeleton v-if="recordSearchLoading" :rows="3" animated /><p v-else-if="recordSearchError" class="pane-error" role="alert">{{ recordSearchError }}</p><div v-else class="record-search-results"><button v-for="item in recordSearchResults" :key="`${item.kind}-${item.id}`" @click="openRecord(item)"><span class="record-glyph"><el-icon><component :is="recordIcons[item.kind]" /></el-icon></span><span><strong>{{ item.title }}</strong><small>{{ recordKinds[item.kind] }} · {{ item.subtitle }}{{ item.status ? ` · ${stateLabel(item.status)}` : '' }}</small></span><el-icon><ArrowRight /></el-icon></button><p v-if="!recordSearchResults.length">没有匹配的业务记录。</p></div></section>
     </el-dialog>
+    <VoucherRecognitionModal v-model="voucherVisible" :initial-text="voucherInitialText" @settled="handleGlobalVoucherSettled" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { House, User, OfficeBuilding, Document, Wallet, Tools, Brush, Bell, TrendCharts, Tickets, Odometer, Switch, Setting, ArrowDown, ArrowRight, Search, Menu } from '@element-plus/icons-vue';
+import { House, User, OfficeBuilding, Document, Wallet, Tools, Brush, Bell, TrendCharts, Tickets, Ticket, Odometer, Switch, Setting, ArrowDown, ArrowRight, Search, Menu } from '@element-plus/icons-vue';
+import VoucherRecognitionModal from '@/components/common/VoucherRecognitionModal.vue';
 import { useUserStore } from '@/stores/user';
 import { useNotificationStore } from '@/stores/notification';
 import { usePreferencesStore } from '@/stores/preferences';
@@ -106,12 +109,44 @@ const userInitial = computed(() => userStore.user?.email?.slice(0, 1).toUpperCas
 const searchResults = computed(() => navigation.filter((item) => `${item.title}${item.description}`.includes(searchQuery.value.trim())));
 function openPage(path: string) { searchVisible.value = false; searchQuery.value = ''; router.push(path); }
 function handleCommand(command: string) { if (command === 'logout') { userStore.logout(); router.push('/login'); } }
+
+const voucherVisible = ref(false);
+const voucherInitialText = ref('');
+function handleGlobalVoucherSettled(payload: any) {
+  window.dispatchEvent(new CustomEvent('bill-settled', { detail: payload }));
+}
+function handleGlobalPaste(event: ClipboardEvent) {
+  const target = event.target as HTMLElement | null;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as any).isContentEditable)) {
+    return;
+  }
+  const text = event.clipboardData?.getData('text/plain') || '';
+  if (text && text.trim()) {
+    if (text.includes('[VOUCHER:') || text.includes('BILL-') || text.includes('缴费凭单') || text.includes('账单编号')) {
+      event.preventDefault();
+      voucherInitialText.value = text.trim();
+      voucherVisible.value = true;
+    }
+  }
+}
+
 function keyboard(event: KeyboardEvent) {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); searchVisible.value = !searchVisible.value; }
   if (event.key === 'Escape') mobileOpen.value = false;
 }
-onMounted(() => { void notificationStore.fetchUnreadCount();void management.load();window.addEventListener('keydown', keyboard); });
-onUnmounted(() => {window.removeEventListener('keydown', keyboard);searchGeneration++;searchController?.abort();if(searchTimer)clearTimeout(searchTimer);});
+onMounted(() => {
+  void notificationStore.fetchUnreadCount();
+  void management.load();
+  window.addEventListener('keydown', keyboard);
+  window.addEventListener('paste', handleGlobalPaste);
+});
+onUnmounted(() => {
+  window.removeEventListener('keydown', keyboard);
+  window.removeEventListener('paste', handleGlobalPaste);
+  searchGeneration++;
+  searchController?.abort();
+  if (searchTimer) clearTimeout(searchTimer);
+});
 watch(() => route.path, () => { mobileOpen.value = false; void notificationStore.fetchUnreadCount(); });
 </script>
 <style src="@/styles/optimized-ui.css" />

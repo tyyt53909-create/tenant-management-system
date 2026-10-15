@@ -2,6 +2,7 @@
   <view class="q-page page-with-tabbar">
     <text class="q-eyebrow">MY SPACE / 我的生活</text>
     <text class="q-title">居住的小事，都在这里。</text>
+    <view v-if="error" class="q-error" @tap="loadUserInfo">{{ error }} · 点此重试</view>
 
     <!-- 租客名片 -->
     <view class="profile-card q-surface">
@@ -77,7 +78,7 @@
         <text class="profile-subtext">{{ currentRoomTitle ? '已关联房源' : '待绑定' }}</text>
         <text class="profile-arrow">›</text>
       </view>
-      <view v-for="item in menu" :key="item.label" class="profile-menu-item" @tap="open(item.path)">
+      <view v-for="item in visibleMenu" :key="item.label" class="profile-menu-item" @tap="open(item.path)">
         <QIcon :name="item.icon" :size="36" />
         <text>{{ item.label }}</text>
         <text v-if="item.icon === 'bell' && unreadCount" class="profile-badge">
@@ -161,15 +162,25 @@ export default {
       inputInviteCode: '',
       bindLoading: false,
       showContactModal: false,
+      error: '',
       landlordContact: getLandlordContact({}, []),
+      capabilities: uni.getStorageSync('user_capabilities') || [],
       menu: [
         { label: '通知提醒', icon: 'bell', path: '/pages/notifications/notifications' },
-        { label: '我的合同', icon: 'contract', path: '/pages/contract/contract' },
-        { label: '账户余额', icon: 'wallet', path: '/pages/account/account' }
+        { label: '我的合同', icon: 'contract', path: '/pages/contract/contract', capability: 'tenant.contract.read' },
+        { label: '账户余额', icon: 'wallet', path: '/pages/account/account', capability: 'tenant.prepay.read' }
       ]
     }
   },
   computed: {
+    visibleMenu() {
+      if (!Array.isArray(this.capabilities)) {
+        return this.menu.filter((item) => !item.capability)
+      }
+      return this.menu.filter(
+        (item) => !item.capability || this.capabilities.includes(item.capability),
+      )
+    },
     maskedPhone() {
       const p = this.userInfo.phone || ''
       if (p.startsWith('pending-')) return ''
@@ -198,6 +209,7 @@ export default {
         uni.reLaunch({ url: '/pages/login/login' })
         return
       }
+      this.error = ''
       try {
         const user = await getUserInfo()
         uni.setStorageSync('user_role', user.role)
@@ -208,11 +220,15 @@ export default {
         this.rawUser = user
         this.userEmail = user.email || ''
         this.userInfo = user.tenant || {}
+        this.capabilities = user.capabilities || []
+        uni.setStorageSync('user_capabilities', this.capabilities)
         this.landlordContact = getLandlordContact(user, this.userInfo.contracts || [])
         const res = await getUnreadCount()
         this.unreadCount = res.unreadCount || 0
       } catch (error) {
         console.error('个人信息加载失败', error)
+        this.error = '居住信息暂时未能加载，请检查连接'
+        this.capabilities = null
       }
     },
     open(path) {

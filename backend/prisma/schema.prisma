@@ -212,6 +212,12 @@ enum DeviceType {
   WEB
 }
 
+// 租客能力覆写效果
+enum CapabilityEffect {
+  ALLOW
+  DENY
+}
+
 // ============================================
 // P0 核心表（18张）
 // ============================================
@@ -341,10 +347,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant        Tenant?
-  auditLogs     AuditLog[]
-  notifications Notification[]
-  deviceTokens  DeviceToken[]
+  tenant              Tenant?
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  deviceTokens        DeviceToken[]
+  capabilityOverrides UserCapabilityOverride[]
 
   @@index([email])
   @@index([phone])
@@ -841,4 +848,21 @@ model MeterPriceHistory {
 
   @@index([meterType, effectiveDate])
   @@map("meter_price_history")
+}
+
+// 25. UserCapabilityOverride（租客能力覆写）
+model UserCapabilityOverride {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  capability String
+  effect     CapabilityEffect
+  reason     String?
+  grantedBy  String
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([userId, capability])
+  @@index([userId])
+  @@map("user_capability_overrides")
 }

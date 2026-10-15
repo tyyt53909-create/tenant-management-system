@@ -6,6 +6,8 @@ import { QueryCheckoutsDto } from './dto/query-checkouts.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
+import { CapabilityGuard } from '../../common/guards/capability.guard.js';
 
 @Controller('checkout')
 @UseGuards(JwtAuthGuard)
@@ -33,8 +35,9 @@ export class CheckoutController {
 
   // 退租记录列表：管理者看全部，租客仅自己的记录（保洁无权限，docs/03-权限矩阵.md §3.7）
   @Get()
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.checkout.read')
   findAll(@Request() req: any, @Query() query: QueryCheckoutsDto) {
     if (req.user?.role === 'TENANT') {
       return this.checkoutService.findByTenant(req.user?.tenantId, query);
@@ -44,8 +47,9 @@ export class CheckoutController {
 
   // 电子退租结算单据（租客只能看自己的单据）
   @Get(':id/voucher')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.checkout.read')
   getVoucher(@Request() req: any, @Param('id') id: string) {
     const tenantId = req.user?.role === 'TENANT' ? req.user?.tenantId : undefined;
     return this.checkoutService.getVoucher(id, tenantId);
@@ -53,8 +57,9 @@ export class CheckoutController {
 
   // 退租记录详情：租客仅自己的记录（越权按 404 处理）
   @Get(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.checkout.read')
   findOne(@Request() req: any, @Param('id') id: string) {
     if (req.user?.role === 'TENANT') {
       return this.checkoutService.findOneForTenant(id, req.user?.tenantId);
