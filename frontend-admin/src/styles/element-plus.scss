@@ -1,0 +1,411 @@
+/**
+ * Element Plus 栖居主题定制
+ * 覆盖 Element Plus 默认主题，应用栖居设计系统
+ * 
+ * 使用方法：在 main.ts 中导入此文件
+ * import './styles/element-plus.scss'
+ */
+
+// 覆盖 Element Plus 的 SCSS 变量
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  // ==================== 主色调 ====================
+  $colors: (
+    'primary': (
+      'base': #535b43,
+      'light-3': #768168,
+      'light-5': #8a9476,
+      'light-7': #a3b091,
+      'light-8': #c4ccb8,
+      'light-9': #edf0e8,
+      'dark-2': #3d4232,
+    ),
+    'success': (
+      'base': #66846b,
+      'light-3': #7d9881,
+      'light-5': #94ac97,
+      'light-7': #abc0ad,
+      'light-8': #c9d7ca,
+      'light-9': #eaf2ea,
+      'dark-2': #4d6350,
+    ),
+    'warning': (
+      'base': #b87648,
+      'light-3': #c58e65,
+      'light-5': #d2a682,
+      'light-7': #dfbe9f,
+      'light-8': #ecdbc7,
+      'light-9': #f6eee6,
+      'dark-2': #8a5836,
+    ),
+    'danger': (
+      'base': #ba6459,
+      'light-3': #c77e74,
+      'light-5': #d4988f,
+      'light-7': #e1b2aa,
+      'light-8': #eed9d4,
+      'light-9': #fbeeea,
+      'dark-2': #8c4b43,
+    ),
+    'error': (
+      'base': #ba6459,
+      'light-3': #c77e74,
+      'light-5': #d4988f,
+      'light-7': #e1b2aa,
+      'light-8': #eed9d4,
+      'light-9': #fbeeea,
+      'dark-2': #8c4b43,
+    ),
+    'info': (
+      'base': #647c83,
+      'light-3': #7e9399,
+      'light-5': #98aaaf,
+      'light-7': #b2c1c5,
+      'light-8': #d3dcde,
+      'light-9': #eaf0f2,
+      'dark-2': #4b5d62,
+    ),
+  ),
+  
+  // ==================== 背景色 ====================
+  $bg-color: (
+    'page': #f7f5f0,
+    '': #fffefa,
+    'overlay': #ffffff,
+  ),
+  
+  // ==================== 文字色 ====================
+  $text-color: (
+    'primary': #302f2a,
+    'regular': #5e6058,
+    'secondary': #8b897f,
+    'placeholder': #bfbdb5,
+    'disabled': #bfbdb5,
+  ),
+  
+  // ==================== 边框色 ====================
+  $border-color: (
+    '': #e9e5dd,
+    'light': #ebe9e1,
+    'lighter': #f0ede5,
+    'extra-light': #f5f3eb,
+    'dark': #dcd8cc,
+    'darker': #ccc8bc,
+  ),
+  
+  // ==================== 填充色 ====================
+  $fill-color: (
+    '': #f1eee8,
+    'light': #f5f3eb,
+    'lighter': #f9f7f1,
+    'extra-light': #fcfbf7,
+    'dark': #e9e5dd,
+    'darker': #dcd8cc,
+    'blank': #ffffff,
+  ),
+  
+  // ==================== 圆角 ====================
+  $border-radius: (
+    'base': 8px,
+    'small': 6px,
+    'round': 16px,
+    'circle': 100%,
+  ),
+  
+  // ==================== 字体 ====================
+  $font-family: (
+    '': "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
+  ),
+  
+  $font-size: (
+    'extra-large': 18px,
+    'large': 16px,
+    'medium': 14px,
+    'base': 14px,
+    'small': 13px,
+    'extra-small': 12px,
+  ),
+  
+  // ==================== 阴影 ====================
+  $box-shadow: (
+    '': (0 2px 8px rgba(54, 45, 26, 0.035)),
+    'light': (0 2px 4px rgba(54, 45, 26, 0.025)),
+    'lighter': (0 1px 2px rgba(54, 45, 26, 0.015)),
+    'dark': (0 15px 55px rgba(54, 45, 26, 0.035)),
+  ),
+  
+  // ==================== 遮罩层 ====================
+  $overlay-color: (
+    '': rgba(48, 47, 42, 0.5),
+    'light': rgba(48, 47, 42, 0.3),
+    'lighter': rgba(48, 47, 42, 0.15),
+  ),
+  
+  // ==================== 禁用状态 ====================
+  $disabled: (
+    'bg-color': #f9f7f1,
+    'text-color': #bfbdb5,
+    'border-color': #f0ede5,
+  ),
+);
+
+// ==================== 自定义组件样式 ====================
+
+// 按钮
+.el-button {
+  font-weight: 550;
+  transition: all 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  
+  &:hover {
+    transform: translateY(-1px);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+  
+  &--primary {
+    &:hover {
+      background-color: #3d4232;
+      border-color: #3d4232;
+    }
+  }
+}
+
+// 输入框
+.el-input {
+  &__wrapper {
+    box-shadow: 0 0 0 1px var(--el-input-border-color, var(--el-border-color)) inset;
+    transition: all 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+    
+    &:hover {
+      box-shadow: 0 0 0 1px var(--el-input-hover-border-color) inset;
+    }
+    
+    &.is-focus {
+      box-shadow: 0 0 0 2px var(--el-color-primary) inset, 0 0 0 4px var(--el-color-primary-light-9);
+    }
+  }
+}
+
+// 表格
+.el-table {
+  --el-table-border-color: #e9e5dd;
+  --el-table-header-bg-color: #f1eee8;
+  --el-table-row-hover-bg-color: #edf0e8;
+  
+  th {
+    font-weight: 650;
+    color: #5e6058;
+  }
+  
+  .el-table__body tr:hover > td {
+    background-color: #edf0e8 !important;
+  }
+}
+
+// 卡片
+.el-card {
+  border-radius: 12px;
+  border-color: #e9e5dd;
+  box-shadow: 0 2px 8px rgba(54, 45, 26, 0.035);
+  transition: all 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  
+  &:hover {
+    box-shadow: 0 15px 55px rgba(54, 45, 26, 0.035);
+    transform: translateY(-2px);
+  }
+  
+  &__header {
+    font-weight: 650;
+    border-bottom-color: #e9e5dd;
+  }
+}
+
+// 对话框
+.el-dialog {
+  border-radius: 16px;
+  box-shadow: 0 18px 45px rgba(54, 45, 26, 0.12);
+  
+  &__header {
+    font-weight: 650;
+  }
+}
+
+// 抽屉
+.el-drawer {
+  &__header {
+    font-weight: 650;
+  }
+}
+
+// 消息提示
+.el-message {
+  border-radius: 12px;
+  box-shadow: 0 15px 55px rgba(54, 45, 26, 0.035);
+  
+  &--success {
+    --el-message-bg-color: #eaf2ea;
+    --el-message-border-color: #abc0ad;
+    --el-message-text-color: #4d6350;
+  }
+  
+  &--warning {
+    --el-message-bg-color: #f6eee6;
+    --el-message-border-color: #dfbe9f;
+    --el-message-text-color: #8a5836;
+  }
+  
+  &--error {
+    --el-message-bg-color: #fbeeea;
+    --el-message-border-color: #e1b2aa;
+    --el-message-text-color: #8c4b43;
+  }
+  
+  &--info {
+    --el-message-bg-color: #eaf0f2;
+    --el-message-border-color: #b2c1c5;
+    --el-message-text-color: #4b5d62;
+  }
+}
+
+// 通知
+.el-notification {
+  border-radius: 12px;
+  box-shadow: 0 18px 45px rgba(54, 45, 26, 0.12);
+}
+
+// 标签
+.el-tag {
+  border-radius: 6px;
+  font-weight: 550;
+  
+  &--primary {
+    --el-tag-bg-color: #edf0e8;
+    --el-tag-border-color: #c4ccb8;
+    --el-tag-text-color: #3d4232;
+  }
+}
+
+// 徽章
+.el-badge {
+  &__content {
+    font-weight: 650;
+    border-radius: 10px;
+  }
+}
+
+// 分页
+.el-pagination {
+  button, .el-pager li {
+    border-radius: 6px;
+    font-weight: 550;
+    
+    &:hover {
+      color: var(--el-color-primary);
+    }
+  }
+  
+  .el-pager li.is-active {
+    background-color: var(--el-color-primary);
+    font-weight: 650;
+  }
+}
+
+// 下拉菜单
+.el-dropdown-menu {
+  border-radius: 12px;
+  box-shadow: 0 15px 55px rgba(54, 45, 26, 0.035);
+  
+  &__item {
+    transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+    
+    &:hover {
+      background-color: #edf0e8;
+      color: var(--el-color-primary);
+    }
+  }
+}
+
+// 菜单
+.el-menu {
+  &--horizontal {
+    border-bottom-color: #e9e5dd;
+  }
+  
+  &-item {
+    transition: all 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+    
+    &:hover {
+      background-color: #edf0e8 !important;
+    }
+    
+    &.is-active {
+      border-bottom-color: var(--el-color-primary);
+      font-weight: 650;
+    }
+  }
+}
+
+// 标签页
+.el-tabs {
+  &__nav-wrap::after {
+    background-color: #e9e5dd;
+  }
+  
+  &__item {
+    font-weight: 550;
+    transition: all 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+    
+    &:hover {
+      color: var(--el-color-primary);
+    }
+    
+    &.is-active {
+      font-weight: 650;
+    }
+  }
+  
+  &__active-bar {
+    background-color: var(--el-color-primary);
+    height: 3px;
+  }
+}
+
+// 进度条
+.el-progress {
+  &__text {
+    font-weight: 650;
+  }
+}
+
+// 开关
+.el-switch {
+  &.is-checked .el-switch__core {
+    background-color: var(--el-color-primary);
+  }
+}
+
+// 滑块
+.el-slider {
+  &__button {
+    border-color: var(--el-color-primary);
+  }
+  
+  &__bar {
+    background-color: var(--el-color-primary);
+  }
+}
+
+// 步骤条
+.el-steps {
+  .el-step {
+    &__head.is-finish {
+      color: var(--el-color-primary);
+      border-color: var(--el-color-primary);
+    }
+    
+    &__title.is-finish {
+      color: var(--el-color-primary);
+    }
+  }
+}

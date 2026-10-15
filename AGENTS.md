@@ -1,8 +1,8 @@
 # AGENTS.md - AI 协作开发总规则
 
 > 本文档是所有 AI 模型的必读文档
-> 版本: 1.0
-> 最后更新: 2026-10-11
+> 版本: 1.2
+> 最后更新: 2026-10-13
 
 ---
 
@@ -26,23 +26,26 @@
 
 | 技术 | 版本 | 说明 |
 |------|------|------|
-| **Node.js** | 20.x | LTS 版本 |
-| **TypeScript** | 5.x | 严格模式 |
-| **NestJS** | 10.x | 后端框架 |
-| **Prisma** | 5.x | ORM，类型安全查询 |
-| **PostgreSQL** | 16 | 数据库 |
+| **Node.js** | 20.x | LTS 版本（小程序构建/测试按 Node 20 验证） |
+| **TypeScript** | 5.9 | 严格模式（`backend/package.json`: ^5.9.3） |
+| **NestJS** | 12.x | 后端框架（@nestjs/* ^12.0.1） |
+| **Prisma** | 5.22 | ORM，类型安全查询 |
+| **PostgreSQL** | 16 | 数据库（docker-compose: postgres:16-alpine） |
 | **Redis** | 6+ | 会话和缓存 |
-| **Jest** | 29.x | 测试框架 |
+| **Vitest** | 4.x | 测试框架（`npm test` = `vitest run`，另见 `npm run test:e2e`） |
+| **oxlint** | 1.x | 代码检查（`npm run lint` = `oxlint --type-aware src/ test/`） |
+
+> 说明：NestJS 12 脚手架默认使用 **Vitest + oxlint**，不再使用 Jest/ESLint（依据 T001、T131 交接记录；2026-10-13 T150 核对 `backend/package.json`）。
 
 ### 1.2 前端
 
 | 技术 | 版本 | 说明 |
 |------|------|------|
-| **Vue 3** | 3.x | 网页后台 + 小程序 |
-| **TypeScript** | 5.x | 前端类型安全 |
-| **uni-app** | 3.x | 小程序框架 |
-| **Element Plus** | 2.x | 后台组件库（建议） |
-| **Vite** | 5.x | 构建工具 |
+| **Vue 3** | 3.5 / 3.4 | 网页后台（^3.5.42）+ 小程序（3.4.21） |
+| **TypeScript** | 6.0（前端后台） | 前端类型安全（frontend-admin `~6.0.2`；后端为 5.9） |
+| **uni-app** | 3.0.0-5020620260917001 | 小程序框架（`miniprogram/package.json`） |
+| **Element Plus** | 2.x | 后台组件库（^2.14.7） |
+| **Vite** | 8.x / 5.2 | 网页后台（^8.3.0）；小程序（5.2.8） |
 
 ### 1.3 基础设施
 
@@ -80,50 +83,58 @@ tenant-system/
 │   ├── adr/                    # 架构决策记录
 │   │   ├── 001-xxx.md
 │   │   └── 002-xxx.md
-│   ├── tasks/                  # 任务书
-│   │   ├── T001-xxx.md
-│   │   └── T002-xxx.md
 │   ├── handoff/                # 交接记录
 │   │   ├── 2026-10-12-T001-xxx.md
 │   │   └── 2026-10-13-T002-xxx.md
 │   └── archive/                # 已归档文档
 │
-├── prisma/                     # 数据库
-│   ├── schema.prisma           # Prisma schema
-│   ├── migrations/             # 迁移文件
-│   └── seed.ts                 # 初始化数据
+├── tasks/                      # 任务书（仓库根目录，**不在** docs/ 下）
+│   ├── T001-后端脚手架.md
+│   └── T146-主题系统Vue3迁移.md
 │
-├── src/                        # 后端源码
-│   ├── main.ts                 # 入口文件
-│   ├── app.module.ts           # 根模块
-│   ├── config/                 # 配置
-│   │   ├── database.config.ts
-│   │   └── app.config.ts
-│   ├── common/                 # 公共模块
-│   │   ├── decorators/
-│   │   ├── guards/             # 守卫（权限控制）
-│   │   ├── interceptors/       # 拦截器（日志、转换）
-│   │   ├── filters/            # 异常过滤器
-│   │   └── utils/
-│   └── modules/                # 业务模块
-│       ├── auth/               # 认证模块
-│       ├── rooms/              # 房源模块（样板）
-│       ├── tenants/            # 租客模块
-│       ├── contracts/          # 合同模块
-│       ├── billing/            # 账单模块
-│       ├── prepay/             # 预付账户模块
-│       ├── meters/             # 水电读数模块
-│       ├── maintenance/        # 报修模块
-│       ├── checkout/           # 退租模块
-│       └── notifications/      # 通知模块
+├── backend/                    # 后端子项目（仓库根目录没有 package.json/tsconfig.json）
+│   ├── prisma/                 # 数据库
+│   │   ├── schema.prisma       # Prisma schema（24 张表）
+│   │   ├── migrations/         # 迁移文件
+│   │   └── seed.ts             # 初始化数据
+│   ├── .env.example            # 环境变量示例
+│   └── src/                    # 后端源码
+│       ├── main.ts             # 入口文件
+│       ├── app.module.ts       # 根模块
+│       ├── config/             # 配置
+│       │   ├── database.config.ts
+│       │   └── app.config.ts
+│       ├── common/             # 公共模块
+│       │   ├── decorators/
+│       │   ├── guards/         # 守卫（权限控制）
+│       │   ├── interceptors/   # 拦截器（日志、转换）
+│       │   ├── filters/        # 异常过滤器
+│       │   └── utils/
+│       └── modules/            # 业务模块
+│           ├── auth/           # 认证模块
+│           ├── rooms/          # 房源模块（样板）
+│           ├── tenants/        # 租客模块
+│           ├── contracts/      # 合同模块
+│           ├── bills/          # 账单模块
+│           ├── prepay/         # 预付账户模块
+│           ├── meters/         # 水电读数模块
+│           ├── maintenance/    # 报修模块
+│           ├── checkout/       # 退租模块
+│           ├── notifications/  # 通知模块
+│           ├── audit/          # 审计日志模块
+│           ├── buildings/      # 楼栋模块
+│           ├── dashboard/      # 仪表板模块
+│           ├── files/          # 文件上传模块
+│           └── scheduler/      # 定时任务模块
 │
 ├── frontend-admin/             # 网页后台（独立项目）
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.ts
 │
-├── miniprogram/                # 微信小程序（uni-app）
-│   ├── src/
+├── miniprogram/                # 微信小程序（uni-app，源码在根目录 pages/、api/ 等）
+│   ├── pages/
+│   ├── api/
 │   ├── package.json
 │   └── manifest.json
 │
@@ -131,11 +142,9 @@ tenant-system/
 │   ├── check-docs.js           # 文档检查脚本
 │   └── update-index.js         # 更新 INDEX.md
 │
-├── .env.example                # 环境变量示例
 ├── .gitignore
-├── package.json
-├── tsconfig.json
 ├── docker-compose.yml          # 本地开发环境
+├── README.md
 ├── AGENTS.md                   # 本文档
 └── STATUS.md                   # 项目状态跟踪
 ```
@@ -238,7 +247,7 @@ git worktree add ../tenant-system-worktrees/T001-scaffold -b feature/T001-scaffo
 cd ../tenant-system-worktrees/T001-scaffold
 
 # 4. 在任务书中登记（必须）
-cat >> docs/tasks/T001-脚手架搭建.md << EOF
+cat >> tasks/T001-脚手架搭建.md << EOF
 
 ## 开发信息
 - 分支: feature/T001-scaffold
@@ -249,7 +258,7 @@ cat >> docs/tasks/T001-脚手架搭建.md << EOF
 EOF
 
 # 5. 提交任务登记
-git add docs/tasks/T001-脚手架搭建.md
+git add tasks/T001-脚手架搭建.md
 git commit -m "docs(task): 登记 T001 任务开发信息"
 ```
 
@@ -282,7 +291,7 @@ git worktree remove --force ../tenant-system-worktrees/T001-scaffold
 git branch -d feature/T001-scaffold
 
 # 4. 在任务书中标记完成
-cat >> docs/tasks/T001-脚手架搭建.md << EOF
+cat >> tasks/T001-脚手架搭建.md << EOF
 
 - 完成时间: $(date +"%Y-%m-%d %H:%M:%S")
 - 状态: completed
@@ -421,7 +430,7 @@ version: 1.0
 2. **阅读 docs/INDEX.md**（找到需要的文档，5分钟）
 3. **只依据 status=active 的文档**
 4. **检查 docs/09-待确认清单.md**
-5. **阅读任务书** `docs/tasks/T{编号}.md`
+5. **阅读任务书** `tasks/T{编号}.md`（仓库根目录，**不在** docs/ 下）
 6. **创建 Worktree**（如果是新任务）
 7. **开始工作**
 
@@ -493,21 +502,26 @@ graph TD
 
 ### 7.3 测试命令
 
+> 后端命令均在 `backend/` 目录执行（仓库根目录没有 package.json）；脚本见 `backend/package.json`。
+
 ```bash
-# 运行所有测试
+# 运行所有测试（vitest run）
 npm test
 
-# 运行单元测试
-npm run test:unit
-
-# 运行集成测试
+# 运行端到端测试（vitest + supertest）
 npm run test:e2e
 
-# 生成覆盖率报告
+# 生成覆盖率报告（@vitest/coverage-v8）
 npm run test:cov
 
 # 监听模式（开发时）
 npm run test:watch
+
+# 代码检查（oxlint）
+npm run lint
+
+# 小程序测试（miniprogram/ 下为 node --test tests/*.test.mjs）
+npm --prefix miniprogram test
 ```
 
 ---
@@ -609,7 +623,7 @@ npm run test:watch
 - ✅ 已删除分支
 
 ### 资源
-- 任务书：docs/tasks/T{编号}.md
+- 任务书：tasks/T{编号}.md
 - 相关文档：docs/XX.md
 
 ---
@@ -669,13 +683,15 @@ npm run test:watch
 
 ### Q6: 任务编号从哪里来？
 
-**A**: 任务编号由人工分配，查看 `docs/tasks/` 目录下最新的编号 +1
+**A**: 任务编号由人工分配，查看仓库根目录 `tasks/` 下最新的编号 +1
 
 ---
 
 ## 11. 快速参考
 
 ### 常用命令
+
+> 后端命令（prisma / npm）在后端子目录 `backend/` 下执行。
 
 ```bash
 # 创建 Worktree
@@ -709,10 +725,10 @@ node scripts/check-docs.js
 ### 常用路径
 
 - 文档索引：`docs/INDEX.md`
-- 任务书：`docs/tasks/T{编号}.md`
+- 任务书：`tasks/T{编号}.md`（仓库根目录）
 - 交接记录：`docs/handoff/YYYY-MM-DD-T{编号}.md`
 - 待确认清单：`docs/09-待确认清单.md`
-- 样板模块：`src/modules/rooms/`
+- 样板模块：`backend/src/modules/rooms/`
 
 ---
 
@@ -804,7 +820,7 @@ T101完成 → T102开始 → T102完成 → T103开始
 每个任务必须满足以下条件才算完成：
 
 1. **功能验收**：所有验收标准通过
-2. **代码质量**：通过ESLint、TypeScript类型检查
+2. **代码质量**：通过 oxlint（`npm run lint`）、TypeScript 类型检查
 3. **测试通过**：单元测试和集成测试通过
 4. **文档同步**：相关文档已更新
 5. **PR创建**：创建PR，填写完整的PR模板
@@ -937,6 +953,7 @@ npm run test:cov
 
 ## 13. 更新日志
 
+- **2026-10-13 v1.2**: 技术栈纠错（NestJS 12 / TypeScript 5.9（后端）、Vitest 4 / oxlint，替代 NestJS 10 / Jest）；目录结构纠错（任务书在仓库根目录 `tasks/`，后端子项目在 `backend/`，根目录无 package.json）；测试命令对齐 `backend/package.json`（移除不存在的 `test:unit`）
 - **2026-10-11 v1.1**: 增加"统筹者+子智能体并行协作"章节
 - **2026-10-11 v1.0**: 初始版本，包含技术栈、Git 工作流、文档治理、安全红线
 

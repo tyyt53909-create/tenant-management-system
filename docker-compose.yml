@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tenant-system-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tenant_user
+      POSTGRES_PASSWORD: tenant_password
+      POSTGRES_DB: tenant_system
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      # 本机 5432 被占用时（如自带 PostgreSQL），用 POSTGRES_PORT=5433 启动
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenant_user -d tenant_system"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tenant-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: tenant-system-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tenant-network
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: tenant-system-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - tenant-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  mosquitto_data:
+    driver: local
+  mosquitto_log:
+    driver: local
+
+networks:
+  tenant-network:
+    driver: bridge

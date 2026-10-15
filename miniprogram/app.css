@@ -1,0 +1,473 @@
+/**
+ * 全局主题样式
+ * 使用 CSS 变量系统
+ */
+
+/* ==================== 全局重置 ==================== */
+page {
+  background-color: var(--color-bg-secondary, #f5f5f5);
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+  font-size: var(--font-size-md, 28rpx);
+  color: var(--color-text-primary, #1f1f1f);
+  line-height: var(--line-height-md, 1.5);
+}
+
+view, text, image {
+  box-sizing: border-box;
+}
+
+/* ==================== 主题变量（栖居版默认值） ==================== */
+page {
+  /* 颜色 - 栖居版：温暖克制的自然配色 */
+  --color-primary: #68715b;
+  --color-primary-light: #7a8469;
+  --color-primary-dark: #4e5845;
+  --color-success: #68715b;
+  --color-warning: #ad735a;
+  --color-error: #c16f62;
+  --color-info: #68715b;
+  
+  --color-text-primary: #302f2a;
+  --color-text-secondary: #817e76;
+  --color-text-tertiary: #a49f95;
+  --color-text-disabled: #c8c5bc;
+  
+  --color-bg-primary: #fffefa;
+  --color-bg-secondary: #f5f2ec;
+  --color-bg-tertiary: #eae6de;
+  
+  --color-border: #e9e6de;
+  --color-border-light: #f0ede5;
+  --color-border-dark: #d8d2c8;
+  
+  --color-success-bg: #ecf0e9;
+  --color-warning-bg: #f8ece5;
+  --color-error-bg: #faeee9;
+  --color-info-bg: #ecf0e9;
+  
+  /* 字体 */
+  --font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-size-xl: 38rpx;
+  --font-size-lg: 32rpx;
+  --font-size-md: 26rpx;
+  --font-size-sm: 24rpx;
+  --font-size-xs: 22rpx;
+  
+  --line-height-lg: 1.55;
+  --line-height-md: 1.5;
+  --line-height-sm: 1.4;
+  
+  --font-weight-light: 400;
+  --font-weight-regular: 550;
+  --font-weight-medium: 650;
+  --font-weight-bold: 720;
+  
+  /* 间距 */
+  --spacing-xs: 10rpx;
+  --spacing-sm: 14rpx;
+  --spacing-md: 18rpx;
+  --spacing-lg: 26rpx;
+  --spacing-xl: 36rpx;
+  --spacing-xxl: 52rpx;
+  
+  /* 圆角 - 栖居版：更大的圆角，柔和亲切 */
+  --radius-sm: 10rpx;
+  --radius-md: 14rpx;
+  --radius-lg: 18rpx;
+  --radius-xl: 20rpx;
+  --radius-circle: 50%;
+  
+  /* 阴影 - 栖居版：轻柔暖色调阴影 */
+  --shadow-sm: 0 4rpx 12rpx rgba(74, 62, 47, 0.055);
+  --shadow-md: 0 8rpx 24rpx rgba(74, 62, 47, 0.08);
+  --shadow-lg: 0 12rpx 34rpx rgba(74, 62, 47, 0.10);
+  
+  /* 动画 - 栖居版：流畅但不急促 */
+  --duration-fast: 160ms;
+  --duration-normal: 260ms;
+  --duration-slow: 380ms;
+
+  /* 底部安全区（T162）
+   * tabBar 页面若不给滚动容器留底部空间，最后一张卡片会被原生 tabbar 压住
+   * （实测账单页第 4 张卡完全被遮挡，滚到底也露不出来）。
+   * H5 下原生 tabbar 约 50px；微信端约 100rpx；再加 iPhone 底部安全区。 */
+  --tabbar-height: 100rpx;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-space: calc(var(--tabbar-height) + var(--safe-area-bottom) + 20rpx);
+  /* 非 tabBar 页面（详情类）只需避开底部安全区 */
+  --safe-bottom-space: calc(var(--safe-area-bottom) + 32rpx);
+}
+
+/* ==================== 通用工具类 ==================== */
+
+/* 文字颜色 */
+.text-primary { color: var(--color-text-primary); }
+.text-secondary { color: var(--color-text-secondary); }
+.text-tertiary { color: var(--color-text-tertiary); }
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-error { color: var(--color-error); }
+
+/* 背景颜色 */
+.bg-primary { background-color: var(--color-bg-primary); }
+.bg-secondary { background-color: var(--color-bg-secondary); }
+.bg-tertiary { background-color: var(--color-bg-tertiary); }
+
+/* 字体大小 */
+.text-xl { font-size: var(--font-size-xl); }
+.text-lg { font-size: var(--font-size-lg); }
+.text-md { font-size: var(--font-size-md); }
+.text-sm { font-size: var(--font-size-sm); }
+.text-xs { font-size: var(--font-size-xs); }
+
+/* 字重 */
+.font-light { font-weight: var(--font-weight-light); }
+.font-regular { font-weight: var(--font-weight-regular); }
+.font-medium { font-weight: var(--font-weight-medium); }
+.font-bold { font-weight: var(--font-weight-bold); }
+
+/* 间距 - Padding */
+.p-xs { padding: var(--spacing-xs); }
+.p-sm { padding: var(--spacing-sm); }
+.p-md { padding: var(--spacing-md); }
+.p-lg { padding: var(--spacing-lg); }
+.p-xl { padding: var(--spacing-xl); }
+.p-xxl { padding: var(--spacing-xxl); }
+
+/* 间距 - Margin */
+.m-xs { margin: var(--spacing-xs); }
+.m-sm { margin: var(--spacing-sm); }
+.m-md { margin: var(--spacing-md); }
+.m-lg { margin: var(--spacing-lg); }
+.m-xl { margin: var(--spacing-xl); }
+.m-xxl { margin: var(--spacing-xxl); }
+
+/* 圆角 */
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+.rounded-circle { border-radius: var(--radius-circle); }
+
+/* 阴影 */
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+
+/* 过渡动画 */
+.transition-fast { transition: all var(--duration-fast) ease-in-out; }
+.transition-normal { transition: all var(--duration-normal) ease-in-out; }
+.transition-slow { transition: all var(--duration-slow) ease-in-out; }
+
+/* ==================== 通用组件样式 ==================== */
+
+/* 卡片 */
+.card {
+  background-color: var(--color-bg-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.card-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.card-more {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--duration-fast) ease-in-out;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-primary:active {
+  background-color: var(--color-primary-dark);
+}
+
+.btn-success {
+  background-color: var(--color-success);
+  color: #ffffff;
+}
+
+.btn-warning {
+  background-color: var(--color-warning);
+  color: #ffffff;
+}
+
+.btn-error {
+  background-color: var(--color-error);
+  color: #ffffff;
+}
+
+.btn-outline {
+  background-color: transparent;
+  border: 2rpx solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.btn-text {
+  background-color: transparent;
+  color: var(--color-primary);
+  padding: var(--spacing-xs) var(--spacing-md);
+}
+
+/* 分割线 */
+.divider {
+  height: 1rpx;
+  background-color: var(--color-border-light);
+  margin: var(--spacing-md) 0;
+}
+
+/* 空状态 */
+.empty {
+  text-align: center;
+  padding: var(--spacing-xxl) var(--spacing-lg);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+/* 加载状态 */
+.loading {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+/* 徽章 */
+.badge {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
+}
+
+.badge-success {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.badge-warning {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.badge-error {
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.badge-info {
+  background-color: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+/* 列表项 */
+.list-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-md) 0;
+  border-bottom: 1rpx solid var(--color-border-light);
+  transition: background-color var(--duration-fast) ease-in-out;
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.list-item:active {
+  background-color: var(--color-bg-tertiary);
+}
+
+/* 图标 */
+.icon {
+  width: 48rpx;
+  height: 48rpx;
+  margin-right: var(--spacing-md);
+}
+
+.icon-lg {
+  width: 64rpx;
+  height: 64rpx;
+}
+
+.icon-sm {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+/* 头像 */
+.avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: var(--radius-circle);
+  background-color: var(--color-bg-secondary);
+}
+
+.avatar-lg {
+  width: 120rpx;
+  height: 120rpx;
+}
+
+.avatar-sm {
+  width: 60rpx;
+  height: 60rpx;
+}
+
+/* Flex 布局 */
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+/* 文本对齐 */
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+/* ==================== 布局：底部留白（T162） ==================== */
+
+/* tabBar 页面的滚动容器：避免内容被原生 tabbar 遮挡 */
+.page-with-tabbar {
+  padding-bottom: var(--tabbar-space) !important;
+}
+
+/* 非 tabBar 页面：只避开底部安全区 */
+.page-safe-bottom {
+  padding-bottom: var(--safe-bottom-space) !important;
+}
+
+/* ==================== 长文本处理（T162） ==================== */
+
+/**
+ * 给 flex 子项内的文本加此配合类：
+ * flex 子项默认 min-width: auto，长串（如账单编号 B1791852043686QFUSFV）
+ * 不会收缩也不换行，会撑破容器顶到边缘。min-width:0 让其可收缩，
+ * overflow-wrap 让无空格长串能够断行。
+ */
+.text-break {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* 左标签不参与收缩，右值可收缩换行 */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+}
+
+.info-row .info-label {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.info-row .info-value {
+  min-width: 0;
+  flex: 1;
+  text-align: right;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* 文本截断 */
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-ellipsis-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==================== PC 桌面端大屏自适应手机画幅 ==================== */
+@media screen and (min-width: 500px) {
+  body {
+    background-color: #1e1d1a !important;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  
+  #app, uni-app {
+    width: 100% !important;
+    max-width: 430px !important;
+    min-height: 100vh;
+    margin: 0 auto !important;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.45);
+    background-color: #f5f2ec;
+    position: relative;
+  }
+
+  uni-page-head .uni-page-head {
+    width: 100% !important;
+    max-width: 430px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+  }
+
+  uni-tabbar .uni-tabbar {
+    width: 100% !important;
+    max-width: 430px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+  }
+}
+

@@ -459,3 +459,14 @@ docker-compose exec redis redis-cli ping
 - [Docker Compose 官方文档](https://docs.docker.com/compose/)
 - [PostgreSQL Docker 镜像](https://hub.docker.com/_/postgres)
 - [Redis Docker 镜像](https://hub.docker.com/_/redis)
+
+---
+
+## 开发信息
+
+- **分支**: feature/T002-T003-infra
+- **工作树**: /Users/Admin/ai/租客管理系統-worktrees/T002-T003-infra
+- **模型**: Claude Opus 5.5
+- **开始时间**: 2026-10-11 21:35:00
+- **状态**: completed
+- **完成时间**: 2026-10-11 21:45:00

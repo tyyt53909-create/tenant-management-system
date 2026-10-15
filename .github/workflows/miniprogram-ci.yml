@@ -1,0 +1,42 @@
+name: Miniprogram Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'miniprogram/**'
+      - '.github/workflows/miniprogram-ci.yml'
+  pull_request:
+    branches: [main, develop, 'feature/**']
+    paths:
+      - 'miniprogram/**'
+      - '.github/workflows/miniprogram-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install locked toolchain
+        working-directory: miniprogram
+        run: npm ci
+      - name: Test request, role routing and cleaning workflow
+        working-directory: miniprogram
+        run: npm test
+      - name: Build Weixin miniprogram
+        working-directory: miniprogram
+        env:
+          # 编译验证占位域名，非实际部署地址、不会发送请求。
+          VITE_API_BASE_URL: https://api.example.test/api
+        run: npm run build:mp-weixin
+      - name: Build H5
+        working-directory: miniprogram
+        env:
+          VITE_API_BASE_URL: https://api.example.test/api
+        run: npm run build:h5
+      - name: Verify built pages and assets
+        working-directory: miniprogram
+        run: npm run check:artifacts
