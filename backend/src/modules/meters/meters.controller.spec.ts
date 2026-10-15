@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MetersController } from './meters.controller.js';
 import { MetersService } from './meters.service.js';
+import { MetersSimulatorService } from './meters-simulator.service.js';
 
 describe('MetersController', () => {
   let controller: MetersController;
   let service: MetersService;
+  let simulatorService: MetersSimulatorService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -29,11 +31,18 @@ describe('MetersController', () => {
             settleBatch: vi.fn(),
           },
         },
+        {
+          provide: MetersSimulatorService,
+          useValue: {
+            runSimulation: vi.fn(),
+          },
+        },
       ],
     }).compile();
 
     controller = module.get<MetersController>(MetersController);
     service = module.get<MetersService>(MetersService);
+    simulatorService = module.get<MetersSimulatorService>(MetersSimulatorService);
   });
 
   it('create：透传 DTO', async () => {
@@ -178,5 +187,15 @@ describe('MetersController', () => {
 
     expect(result.successCount).toBe(5);
     expect(service.settleBatch).toHaveBeenCalledWith(dto, 'admin-1');
+  });
+
+  it('runSimulation：透传模拟器 DTO 与操作人', async () => {
+    const dto = { scenario: 'DAILY_HOURLY' } as any;
+    vi.spyOn(simulatorService, 'runSimulation').mockResolvedValue({ success: true, scenario: 'DAILY_HOURLY', message: 'ok' } as any);
+
+    const result = await controller.runSimulation({ user: { userId: 'admin-1' } }, dto);
+
+    expect(result.success).toBe(true);
+    expect(simulatorService.runSimulation).toHaveBeenCalledWith(dto, 'admin-1');
   });
 });

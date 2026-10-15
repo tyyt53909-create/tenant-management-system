@@ -204,3 +204,52 @@ export const getUtilitiesOverview = (params?: {
   return request.get('/meters/usage-overview', { params });
 };
 
+// ── 虚拟水电表模拟器（方案 A）──
+
+export interface RunSimulationPayload {
+  scenario: 'DAILY_HOURLY' | 'TIME_TRAVEL_MONTH' | 'ANOMALY_TEST';
+  meterId?: string;
+  buildingId?: string;
+  days?: number;
+  autoSettle?: boolean;
+  variance?: number;
+}
+
+export interface SimulationResultResponse {
+  success: boolean;
+  scenario: string;
+  message: string;
+  totalMeters?: number;
+  totalReadings?: number;
+  days?: number;
+  meterResults?: Array<{
+    meterId: string;
+    meterNumber: string;
+    meterType: string;
+    roomNumber: string;
+    pointsCount: number;
+    totalUsage: number;
+    startReading: number;
+    endReading: number;
+  }>;
+  anomalyResults?: {
+    totalTests: number;
+    passedCount: number;
+    failedCount: number;
+    meterId: string;
+    meterNumber: string;
+    testCases: Array<{
+      testCase: string;
+      name: string;
+      status: 'PASSED' | 'FAILED';
+      detail: string;
+    }>;
+  };
+}
+
+export const runMeterSimulator = (
+  data: RunSimulationPayload
+): Promise<SimulationResultResponse> => {
+  return request.post('/meters/simulator/run', data);
+};
+

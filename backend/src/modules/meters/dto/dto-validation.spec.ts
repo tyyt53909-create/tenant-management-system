@@ -72,3 +72,45 @@ describe('CreateMeterReadingDto 校验', () => {
   });
 });
 
+import { RunSimulationDto, SimulationScenario } from './run-simulation.dto.js';
+
+describe('RunSimulationDto 校验', () => {
+  it('合法 DAILY_HOURLY 请求校验通过', async () => {
+    const dto = plainToInstance(RunSimulationDto, {
+      scenario: SimulationScenario.DAILY_HOURLY,
+      meterId: 'meter-1',
+      variance: 0.2,
+      autoSettle: false,
+    });
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('合法 TIME_TRAVEL_MONTH 请求校验通过', async () => {
+    const dto = plainToInstance(RunSimulationDto, {
+      scenario: SimulationScenario.TIME_TRAVEL_MONTH,
+      days: 30,
+      autoSettle: false,
+    });
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('非法 scenario 应被拦截', async () => {
+    const dto = plainToInstance(RunSimulationDto, {
+      scenario: 'INVALID_SCENARIO' as any,
+    });
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors.some((e) => e.property === 'scenario')).toBe(true);
+  });
+
+  it('超出范围的 days 应被拦截', async () => {
+    const dto = plainToInstance(RunSimulationDto, {
+      scenario: SimulationScenario.TIME_TRAVEL_MONTH,
+      days: 100, // max is 90
+    });
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors.some((e) => e.property === 'days')).toBe(true);
+  });
+});
+

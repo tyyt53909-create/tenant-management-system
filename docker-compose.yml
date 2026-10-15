@@ -41,10 +41,28 @@ services:
     networks:
       - tenant-network
 
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: tenant-system-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - tenant-network
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  mosquitto_data:
+    driver: local
+  mosquitto_log:
     driver: local
 
 networks:

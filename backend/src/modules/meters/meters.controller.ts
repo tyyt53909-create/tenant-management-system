@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { MetersService } from './meters.service.js';
+import { MetersSimulatorService } from './meters-simulator.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
@@ -8,6 +9,7 @@ import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
+import { RunSimulationDto } from './dto/run-simulation.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -15,7 +17,18 @@ import { Roles } from '../../common/decorators/roles.decorator.js';
 @Controller('meters')
 @UseGuards(JwtAuthGuard)
 export class MetersController {
-  constructor(private readonly metersService: MetersService) {}
+  constructor(
+    private readonly metersService: MetersService,
+    private readonly metersSimulatorService: MetersSimulatorService,
+  ) {}
+
+  // 运行虚拟水电表模拟器（仅 ADMIN）
+  @Post('simulator/run')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  runSimulation(@Request() req: any, @Body() dto: RunSimulationDto) {
+    return this.metersSimulatorService.runSimulation(dto, req.user.userId);
+  }
 
   @Post()
   @UseGuards(RolesGuard)
