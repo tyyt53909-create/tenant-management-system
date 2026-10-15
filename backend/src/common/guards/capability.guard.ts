@@ -20,17 +20,17 @@ export class CapabilityGuard implements CanActivate {
       return true;
     }
 
-    // 接口已要求能力，但守卫没有拿到服务：拒绝，避免漏注入变成全部放行
-    if (!this.capabilityService) {
-      throw new ForbiddenException('CAPABILITY_DENIED');
-    }
-
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
     // 未认证交给前面的 JwtAuthGuard。非租客角色不受这张表限制。
     if (!user || user.role !== 'TENANT') {
       return true;
+    }
+
+    // 接口已要求能力且请求方为租客，但守卫没有拿到服务：拒绝，避免漏注入变成全部放行
+    if (!this.capabilityService) {
+      throw new ForbiddenException('CAPABILITY_DENIED');
     }
 
     const userId = user.userId || user.id || user.sub;

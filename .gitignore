@@ -56,6 +56,7 @@ Desktop.ini
 # IDE
 .vscode/
 .idea/
+.codex/
 *.swp
 *.swo
 *~
