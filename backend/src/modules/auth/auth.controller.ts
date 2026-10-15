@@ -13,6 +13,7 @@ import { GoogleAuthService } from './google-auth.service.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { EmailOtpService } from './email-otp.service.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
+import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
 import * as bcrypt from 'bcrypt';
 
 @Controller('auth')
@@ -23,6 +24,7 @@ export class AuthController {
     private readonly prisma: PrismaService,
     private readonly googleAuthService: GoogleAuthService,
     private readonly emailOtpService: EmailOtpService,
+    private readonly tenantCapabilityService: TenantCapabilityService,
   ) {}
 
   @Post('register')
@@ -296,7 +298,15 @@ export class AuthController {
       throw new UnauthorizedException('用户不存在');
     }
 
-    return user;
+    const capabilities =
+      user.role === 'TENANT'
+        ? await this.tenantCapabilityService.getEffectiveCapabilities(user.id)
+        : [];
+
+    return {
+      ...user,
+      capabilities,
+    };
   }
 
   /**

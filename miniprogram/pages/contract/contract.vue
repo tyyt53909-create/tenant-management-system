@@ -1,7 +1,11 @@
 <template>
   <view class="page q-page page-safe-bottom">
     <text class="q-eyebrow">MY CONTRACT / 我的合同</text><text class="q-title">安心居住，有约在先。</text><text class="q-description">每一个关于居所的约定，都清楚留存。</text>
-    <view v-if="error" class="q-error" @tap="loadContract">{{ error }} · 点此重试</view>
+    <view v-if="blocked" class="q-surface q-empty" style="margin-top: 24rpx;">
+      <text class="q-empty-title">功能已被暂停</text>
+      <text>此功能已被暂停，如有需要请联系管理处。</text>
+    </view>
+    <view v-else-if="error" class="q-error" @tap="loadContract">{{ error }} · 点此重试</view>
     <view v-if="loading" class="q-skeleton" aria-label="正在加载合同"><view/><view/><view/></view>
     <view class="contract-card" v-if="contract">
       <view class="card-header">
@@ -102,7 +106,7 @@
 
 <script>
 import { getMyContracts } from '../../api/index.js'
-import { ensureTenantSession } from '../../utils/session.js'
+import { ensureTenantSession, hasCapability } from '../../utils/session.js'
 import { orDash, withUnit, money } from '../../utils/format.js'
 import request from '../../utils/request.js'
 import ProtectedPhoto from '../../components/ProtectedPhoto.vue'
@@ -112,7 +116,7 @@ export default {
   components: { ProtectedPhoto },
   data() {
     return {
-      contract: null, loading:false, error:'', attachments:[],attachmentsLoading:false,attachmentsError:'', attachmentsGeneration:0
+      contract: null, loading:false, error:'', blocked:false, attachments:[],attachmentsLoading:false,attachmentsError:'', attachmentsGeneration:0
     }
   },
   computed: {
@@ -141,14 +145,24 @@ export default {
       this.loading=true;this.error='';this.contract=null;this.attachments=[];this.attachmentsError='';this.attachmentsGeneration++;
       try {
         if (!await ensureTenantSession()) return
+        if (!hasCapability('tenant.contract.read')) {
+          this.blocked = true
+          return
+        }
+        this.blocked = false
         const res = await getMyContracts()
         // 获取最新的活跃合同
         if (res.data && res.data.length > 0) {
           this.contract = res.data.find(item => item.status === 'ACTIVE') || res.data[0]
           await this.loadAttachments()
         }
-      } catch (error) {
-        this.error='合同未能加载，请检查连接后重试'
+      } catch (err) {
+        if (err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
+          this.blocked = true
+          this.error = ''
+        } else {
+          this.error='合同未能加载，请检查连接后重试'
+        }
       } finally {
         this.loading=false
       }

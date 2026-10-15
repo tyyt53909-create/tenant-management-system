@@ -1,7 +1,7 @@
 <template>
   <div class="bills-page">
     <ManagementMetrics resource="bills" />
-    <ResourcePanel title="账单与收款" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="bills" :rows="tableData" /><el-button type="primary" @click="handleCreate">＋ 新增账单</el-button></template>
+    <ResourcePanel title="账单与收款" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="bills" :rows="tableData" /><el-button type="success" plain @click="voucherModalVisible = true"><el-icon><Ticket /></el-icon> 单据识别入账</el-button><el-button type="primary" @click="handleCreate">＋ 新增账单</el-button></template>
       <div class="resource-tabs"><button v-for="tab in [{value:'',label:'全部账单'},{value:'PENDING',label:'待缴付'},{value:'PARTIAL',label:'部分缴纳'},{value:'OVERDUE',label:'逾期'},{value:'PAID',label:'已缴清'}]" :key="tab.value" :class="{active:queryForm.status===tab.value}" @click="queryForm.status=tab.value;handleQuery()">{{ tab.label }}</button></div>
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="状态">
@@ -364,14 +364,17 @@
 
     <!-- 电子收款收据模态框 -->
     <ReceiptModal v-model="receiptVisible" :bill-id="receiptBillId" />
+
+    <!-- 单据识别入账模态框 -->
+    <VoucherRecognitionModal v-model="voucherModalVisible" @settled="onVoucherSettled" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { formatMoney, formatDateOnly } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Wallet, QuestionFilled, Loading } from '@element-plus/icons-vue';
+import { Wallet, QuestionFilled, Loading, Ticket } from '@element-plus/icons-vue';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
 import ExportCurrent from '@/components/common/ExportCurrent.vue';
@@ -379,6 +382,7 @@ import ResourceDrawer from '@/components/common/ResourceDrawer.vue';
 import EntitySelect from '@/components/common/EntitySelect.vue';
 import type { FormInstance } from 'element-plus';
 import ReceiptModal from '@/components/common/ReceiptModal.vue';
+import VoucherRecognitionModal from '@/components/common/VoucherRecognitionModal.vue';
 import { downloadCsv } from '@/utils/export';
 import {
   getBills,
@@ -985,7 +989,21 @@ const handleConfirmLateFee = async () => {
   });
 };
 
-onMounted(fetchData);
+const voucherModalVisible = ref(false);
+function onVoucherSettled() {
+  void fetchData();
+}
+function handleBillSettledEvent() {
+  void fetchData();
+}
+
+onMounted(() => {
+  void fetchData();
+  window.addEventListener('bill-settled', handleBillSettledEvent);
+});
+onUnmounted(() => {
+  window.removeEventListener('bill-settled', handleBillSettledEvent);
+});
 </script>
 
 <style scoped>

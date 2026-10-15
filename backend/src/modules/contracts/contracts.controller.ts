@@ -7,6 +7,8 @@ import { RenewContractDto } from './dto/renew-contract.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
+import { CapabilityGuard } from '../../common/guards/capability.guard.js';
 
 @Controller('contracts')
 @UseGuards(JwtAuthGuard)
@@ -29,8 +31,9 @@ export class ContractsController {
 
   // 租客查看自己的合同
   @Get('my')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.contract.read')
   findMy(@Request() req: any, @Query() query: QueryContractsDto) {
     if (req.user.role === 'TENANT') {
       return this.contractsService.findByTenant(req.user.tenantId, query);
@@ -39,8 +42,9 @@ export class ContractsController {
   }
 
   @Get(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.contract.read')
   findOne(@Request() req: any, @Param('id') id: string) {
     if (req.user.role === 'TENANT') {
       return this.contractsService.findOneForTenant(id, req.user.tenantId);

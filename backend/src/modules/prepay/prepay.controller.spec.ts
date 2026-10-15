@@ -6,6 +6,7 @@ import { PrepayController } from './prepay.controller.js';
 import { PrepayService } from './prepay.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { CapabilityGuard } from '../../common/guards/capability.guard.js';
 
 describe('预付流水 HTTP 分页转换', () => {
   let app: INestApplication;
@@ -23,6 +24,7 @@ describe('预付流水 HTTP 分页转换', () => {
         return true;
       } })
       .overrideGuard(RolesGuard).useValue({ canActivate: () => true })
+      .overrideGuard(CapabilityGuard).useValue({ canActivate: () => true })
       .compile();
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));

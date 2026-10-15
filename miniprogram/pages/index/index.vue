@@ -1,7 +1,7 @@
 <template>
   <view class="q-page page-with-tabbar home-page">
     <view class="home-greeting"><view><text class="q-eyebrow">{{ today }}</text><text class="q-title">{{ greeting }}，欢迎回家</text></view><view class="home-bell" @tap="goToNotifications"><QIcon name="bell" :size="40" /><view v-if="unreadCount" class="unread-dot" /></view></view>
-    <view class="home-room" @tap="goToContract"><QIcon name="home" :size="28" /><text>{{ roomInfo || '我的居所 · 暂无生效合同' }}</text><text>›</text></view>
+    <view v-if="canViewContract" class="home-room" @tap="goToContract"><QIcon name="home" :size="28" /><text>{{ roomInfo || '我的居所 · 暂无生效合同' }}</text><text>›</text></view>
     <view v-if="error" class="q-error" @tap="loadData">{{ error }} · 点此重试</view>
     <QCalendar :events="calendarEvents" @open="openEvent" />
     <view class="q-section-heading"><text>待处理事项</text><text class="q-link" @tap="goToMaintenance">查看全部 ›</text></view>
@@ -21,8 +21,8 @@
       </view>
       <button class="banner-copy-btn" @tap.stop="copyWechat">复制微信</button>
     </view>
-    <view class="q-section-heading"><text>常用服务</text></view>
-    <view class="home-services"><view v-for="item in services" :key="item.name" class="service" @tap="openService(item.path, item.tab)"><QIcon :name="item.icon" :size="42" :active="true" /><text>{{ item.name }}</text></view></view>
+    <view v-if="visibleServices.length" class="q-section-heading"><text>常用服务</text></view>
+    <view v-if="visibleServices.length" class="home-services"><view v-for="item in visibleServices" :key="item.name" class="service" @tap="openService(item.path, item.tab)"><QIcon :name="item.icon" :size="42" :active="true" /><text>{{ item.name }}</text></view></view>
     <view class="q-section-heading"><text>最近通知</text><text class="q-link" @tap="goToNotifications">查看全部 ›</text></view>
     <view class="q-surface notice-surface"><view v-for="notice in notices" :key="notice.id" class="home-notice" @tap="goToNotifications"><view :class="['notice-dot', { read: notice.isRead }]" /><view><text class="notice-title">{{ notice.title }}</text><text class="notice-description">{{ notice.body }}</text></view><text class="q-arrow">›</text></view><view v-if="!notices.length" class="q-empty"><text>暂时没有新的通知</text></view></view>
     <text class="q-note">栖居 · 让每一件小事，都有清楚的回应</text>
@@ -45,9 +45,23 @@ export default {
   components: { QIcon, QCalendar, ContactCardModal },
   data() {
     const d = new Date()
-    return { today: `${d.getMonth() + 1}月${d.getDate()}日 · ${['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][d.getDay()]}`, greeting: d.getHours() < 12 ? '早上好' : d.getHours() < 18 ? '下午好' : '晚上好', userName: '', roomInfo: '', pendingBillsCount: 0, recentBills: [], repairs: [], notices: [], unreadCount: 0, loading: true, error: '', showContactModal: false, landlordContact: getLandlordContact({}, []), services: [{ name: '账单', icon: 'bill', path: '/pages/bills/bills', tab: true }, { name: '合同', icon: 'contract', path: '/pages/contract/contract' }, { name: '报修', icon: 'repair', path: '/pages/maintenance/maintenance', tab: true }, { name: '余额', icon: 'wallet', path: '/pages/account/account' }] }
+    return { today: `${d.getMonth() + 1}月${d.getDate()}日 · ${['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][d.getDay()]}`, greeting: d.getHours() < 12 ? '早上好' : d.getHours() < 18 ? '下午好' : '晚上好', userName: '', roomInfo: '', pendingBillsCount: 0, recentBills: [], repairs: [], notices: [], unreadCount: 0, loading: true, error: '', showContactModal: false, landlordContact: getLandlordContact({}, []), capabilities: uni.getStorageSync('user_capabilities') || [], services: [{ name: '账单', icon: 'bill', path: '/pages/bills/bills', tab: true }, { name: '合同', icon: 'contract', path: '/pages/contract/contract' }, { name: '报修', icon: 'repair', path: '/pages/maintenance/maintenance', tab: true }, { name: '余额', icon: 'wallet', path: '/pages/account/account' }] }
   },
-  computed: { calendarEvents() { return homeEvents(this.recentBills, this.repairs) }, activeRepair() { return this.repairs.find(r => !['COMPLETED', 'CANCELLED'].includes(r.status)) } },
+  computed: {
+    calendarEvents() { return homeEvents(this.recentBills, this.repairs) },
+    activeRepair() { return this.repairs.find(r => !['COMPLETED', 'CANCELLED'].includes(r.status)) },
+    canViewContract() {
+      return Array.isArray(this.capabilities) && this.capabilities.includes('tenant.contract.read')
+    },
+    visibleServices() {
+      if (!Array.isArray(this.capabilities)) return []
+      return this.services.filter(s => {
+        if (s.name === '合同') return this.capabilities.includes('tenant.contract.read')
+        if (s.name === '余额') return this.capabilities.includes('tenant.prepay.read')
+        return true
+      })
+    }
+  },
   onShow() { this.loadData() },
   methods: {
     async loadData() {
@@ -57,13 +71,37 @@ export default {
         const user = await getUserInfo(); uni.setStorageSync('user_role', user.role)
         if (user.role === 'CLEANER') { openHome(user.role); return }
         this.userName = user.tenant?.name || '租客'
-        const [bills, repairs, contracts, notices, unread] = await Promise.all([getMyBills({ page: 1, limit: 50 }), getMyMaintenance({ page: 1, limit: 20 }), getMyContracts(), getNotifications({ page: 1, limit: 3 }), getUnreadCount()])
+        this.capabilities = user.capabilities || []
+        uni.setStorageSync('user_capabilities', this.capabilities)
+        const caps = Array.isArray(this.capabilities) ? this.capabilities : []
+        const billsPromise = caps.includes('tenant.bill.read')
+          ? getMyBills({ page: 1, limit: 50 }).catch(() => ({ data: [] }))
+          : Promise.resolve({ data: [] })
+        const repairsPromise = caps.includes('tenant.maintenance.read')
+          ? getMyMaintenance({ page: 1, limit: 20 }).catch(() => ({ data: [] }))
+          : Promise.resolve({ data: [] })
+        const contractsPromise = caps.includes('tenant.contract.read')
+          ? getMyContracts().catch(() => ({ data: [] }))
+          : Promise.resolve({ data: [] })
+        const noticesPromise = getNotifications({ page: 1, limit: 3 }).catch(() => ({ data: [] }))
+        const unreadPromise = getUnreadCount().catch(() => ({ unreadCount: 0 }))
+
+        const [bills, repairs, contracts, notices, unread] = await Promise.all([
+          billsPromise,
+          repairsPromise,
+          contractsPromise,
+          noticesPromise,
+          unreadPromise,
+        ])
         this.recentBills = bills.data || []; this.repairs = repairs.data || []; this.notices = notices.data || []; this.unreadCount = unread.unreadCount || 0
         this.pendingBillsCount = this.recentBills.filter(b => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(b.status)).length
         const contract = contracts.data?.find(c => c.status === 'ACTIVE')
         this.roomInfo = contract?.room ? `${contract.room.building?.name || '我的居所'} · ${contract.room.roomNumber}室` : ''
         this.landlordContact = getLandlordContact(user, contracts.data || [])
-      } catch { this.error = '居住信息暂时未能加载，请检查连接' } finally { this.loading = false }
+      } catch {
+        this.error = '居住信息暂时未能加载，请检查连接'
+        this.capabilities = null
+      } finally { this.loading = false }
     },
     repairStatus(status) { return { SUBMITTED: '已提交，等待受理', ACKNOWLEDGED: '物业已受理', ASSIGNED: '维修人员已安排', IN_PROGRESS: '维修处理中', PENDING_CONFIRM: '维修完成，待确认' }[status] || '查看报修进度' },
     openContact() { this.showContactModal = true },

@@ -23,6 +23,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
 import { PublicModule } from './modules/public/public.module.js';
 import { StatisticsModule } from './modules/statistics/statistics.module.js';
+import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-capabilities.module.js';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { StatisticsModule } from './modules/statistics/statistics.module.js';
       envFilePath: '.env',
     }),
     PrismaModule,
+    TenantCapabilitiesModule,
     AuthModule,
     RoomsModule,
     TenantsModule,

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { CapabilityGuard } from '../../common/guards/capability.guard.js';
 import { FilesService } from '../files/files.service.js';
 import { FilesController } from '../files/files.controller.js';
 import { ContractAttachmentsService } from './contract-attachments.service.js';
@@ -64,7 +65,9 @@ describe('合同图片 HTTP 上传、重读与授权', () => {
       const identity = req.headers.authorization?.replace('Bearer ', '');
       if (!actors[identity]) throw new UnauthorizedException();
       req.user = actors[identity]; return true;
-    } }).compile();
+    } })
+    .overrideGuard(CapabilityGuard).useValue({ canActivate: () => true })
+    .compile();
     app = module.createNestApplication(); app.setGlobalPrefix('api'); await app.init();
   });
   afterEach(async () => {

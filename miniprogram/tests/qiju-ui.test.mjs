@@ -18,7 +18,8 @@ let calls, replies, navigation, toasts
 beforeEach(() => {
   calls = []; replies = []; navigation = []; toasts = []
   globalThis.uni = {
-    getStorageSync: () => 'test-token', setStorageSync: () => {},
+    getStorageSync: (key) => (key === 'user_capabilities' ? ['tenant.bill.read', 'tenant.bills.read', 'tenant.bills.export', 'tenant.maintenance.create', 'tenant.maintenance.read', 'tenant.prepay.read', 'tenant.contract.read', 'tenant.meters.read', 'tenant.checkout.read'] : 'test-token'),
+    setStorageSync: () => {},
     navigateTo: ({ url }) => navigation.push(url), switchTab: ({ url }) => navigation.push(url), reLaunch: ({ url }) => navigation.push(url),
     showToast: ({ title }) => toasts.push(title), pageScrollTo: () => {},
     request: (options) => { calls.push(options); const data = replies.shift(); assert.ok(data, `Unexpected request ${options.url}`); options.success({ statusCode: 200, data }) },

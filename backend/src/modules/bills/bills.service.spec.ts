@@ -14,6 +14,7 @@ describe('BillsService', () => {
     const prismaMock: any = {
       bill: {
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
         findMany: vi.fn(),
         count: vi.fn(),
         create: vi.fn(),
@@ -870,6 +871,96 @@ describe('BillsService', () => {
 
       const res = await service.getReceipt('b-1', 'tenant-real');
       expect(res.receiptNumber).toBe('RCP-B20261001-001');
+    });
+  });
+
+  describe('recognizeVoucher', () => {
+    it('通过 [VOUCHER:单号:金额] 标签精准识别账单并比对金额', async () => {
+      prisma.bill.findFirst.mockResolvedValue({
+        id: 'bill-101',
+        billNumber: 'BILL-202610-001',
+        billType: 'RENT',
+        period: '2026-10',
+        status: 'PENDING',
+        amount: 250000,
+        paidAmount: 0,
+        dueDate: new Date('2026-10-25'),
+        contract: {
+          tenant: { id: 't-1', name: '张三', phone: '13800000001' },
+          room: { id: 'r-1', roomNumber: '302', building: { name: '2号楼' } },
+        },
+        paymentRecords: [],
+        lateFees: [],
+      });
+
+      const input = '【栖居生活 · 缴费凭单】\n单据识别码：[VOUCHER:BILL-202610-001:250000]\n已转账请查收';
+      const result = await service.recognizeVoucher(input);
+
+      expect(result.success).toBe(true);
+      expect(result.billNumber).toBe('BILL-202610-001');
+      expect(result.room.roomNumber).toBe('302');
+      expect(result.room.buildingName).toBe('2号楼');
+      expect(result.tenant.name).toBe('张三');
+      expect(result.unpaidAmount).toBe(250000);
+      expect(result.amountMatchStatus).toBe('MATCHED');
+      expect(result.isPaid).toBe(false);
+    });
+
+    it('部分缴纳后，单据金额等于原账单金额时不算匹配', async () => {
+      prisma.bill.findFirst.mockResolvedValue({
+        id: 'bill-103',
+        billNumber: 'BILL-202610-001',
+        billType: 'RENT',
+        period: '2026-10',
+        status: 'PARTIAL',
+        amount: 250000,
+        paidAmount: 50000,
+        dueDate: new Date('2026-10-25'),
+        contract: {
+          tenant: { id: 't-1', name: '张三', phone: '13800000001' },
+          room: { id: 'r-1', roomNumber: '302', building: { name: '2号楼' } },
+        },
+        paymentRecords: [],
+        lateFees: [],
+      });
+
+      const result = await service.recognizeVoucher('[VOUCHER:BILL-202610-001:250000]');
+      expect(result.amountMatchStatus).toBe('MISMATCH');
+      expect(result.unpaidAmount).toBe(200000);
+      expect(result.suggestedAmount).toBe(200000);
+    });
+
+    it('通过纯单号或文本中单号成功识别', async () => {
+      prisma.bill.findFirst.mockResolvedValue({
+        id: 'bill-102',
+        billNumber: 'BILL-202610-002',
+        billType: 'UTILITY',
+        period: '2026-10',
+        status: 'PAID',
+        amount: 15000,
+        paidAmount: 15000,
+        dueDate: new Date('2026-10-20'),
+        contract: {
+          tenant: { id: 't-2', name: '李四', phone: '13900000002' },
+          room: { id: 'r-2', roomNumber: '101', building: { name: '1号楼' } },
+        },
+        paymentRecords: [],
+        lateFees: [],
+      });
+
+      const result = await service.recognizeVoucher('账单编号：BILL-202610-002');
+      expect(result.success).toBe(true);
+      expect(result.billNumber).toBe('BILL-202610-002');
+      expect(result.isPaid).toBe(true);
+      expect(result.unpaidAmount).toBe(0);
+    });
+
+    it('未找到账单或无法提取单号时正确抛出异常', async () => {
+      await expect(service.recognizeVoucher('')).rejects.toThrow(BadRequestException);
+      await expect(service.recognizeVoucher('这是一段完全无关的文字没有任何数字')).rejects.toThrow(BadRequestException);
+
+      prisma.bill.findFirst.mockResolvedValue(null);
+      await expect(service.recognizeVoucher('BILL-NOT-EXIST')).rejects.toThrow(NotFoundException);
     });
   });
 });
