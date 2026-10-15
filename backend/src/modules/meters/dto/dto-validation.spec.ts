@@ -54,4 +54,21 @@ describe('CreateMeterReadingDto 校验', () => {
 
     expect(errors.some((error) => error.property === 'readingTime')).toBe(true);
   });
+
+  it('支持 isInitial, autoSettle, messageId, allowRollover, source 合法字段', async () => {
+    const dto = plainToInstance(CreateMeterReadingDto, {
+      currentReading: 150.5,
+      readingTime: '2026-10-15T12:00:00.000Z',
+      source: 'DEVICE',
+      isInitial: false,
+      autoSettle: false,
+      messageId: 'iot-msg-123',
+      allowRollover: true,
+      notes: '测试设备上报',
+    });
+
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors).toHaveLength(0);
+  });
 });
+

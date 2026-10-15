@@ -7,6 +7,7 @@ import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
+import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -37,6 +38,17 @@ export class MetersController {
   @Roles('ADMIN')
   createBatchReadings(@Request() req: any, @Body() dto: BatchMeterReadingsDto) {
     return this.metersService.createBatchReadings(dto, req.user.userId);
+  }
+
+  // 批量周期结算水电表（仅 ADMIN）
+  @Post('settle-batch')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  settleBatch(
+    @Request() req: any,
+    @Body() dto: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string },
+  ) {
+    return this.metersService.settleBatch(dto, req.user.userId);
   }
 
   // 抄表台账 CSV 导出（仅 ADMIN）
@@ -85,6 +97,29 @@ export class MetersController {
   @Roles('ADMIN')
   findReadings(@Param('id') id: string, @Query() query: QueryMeterReadingsDto) {
     return this.metersService.findReadings(id, query);
+  }
+
+  // 周期结算指定水电表（仅 ADMIN）
+  @Post(':id/settle')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  settleMeter(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: SettleMeterDto,
+  ) {
+    return this.metersService.settleMeter(id, dto, req.user.userId);
+  }
+
+  // 查询水电表未结算用量及预估金额（仅 ADMIN）
+  @Get(':id/unsettled-usage')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  getUnsettledUsage(
+    @Param('id') id: string,
+    @Query('settleUntil') settleUntil?: string,
+  ) {
+    return this.metersService.getUnsettledUsage(id, settleUntil);
   }
 
   @Get(':id')

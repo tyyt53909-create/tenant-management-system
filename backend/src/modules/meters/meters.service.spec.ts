@@ -22,6 +22,7 @@ describe('MetersService', () => {
 
   beforeEach(async () => {
     const prismaMock: any = {
+      building: { findUnique: vi.fn() },
       meter: {
         findUnique: vi.fn(),
         findMany: vi.fn(),
@@ -35,6 +36,7 @@ describe('MetersService', () => {
         findMany: vi.fn(),
         count: vi.fn(),
         create: vi.fn(),
+        update: vi.fn(),
       },
       contract: { findFirst: vi.fn() },
       prepayAccount: {
@@ -61,22 +63,43 @@ describe('MetersService', () => {
     vi.restoreAllMocks();
   });
 
+  describe('create (initialReading)', () => {
+    it('创建表时指定 initialReading，自动创建初始底数记录', async () => {
+      prisma.building.findUnique.mockResolvedValue({ id: 'b-01' });
+      prisma.meter.findUnique.mockResolvedValue(null);
+      prisma.meter.create.mockResolvedValue({ id: 'meter-new', meterNumber: 'M-NEW' });
+      prisma.meterReading.create.mockResolvedValue({ id: 'reading-init' });
+
+      const res = await service.create({
+        buildingId: 'b-01',
+        meterType: 'ELECTRICITY' as any,
+        meterNumber: 'M-NEW',
+        unitPrice: 100,
+        priceEffectiveDate: '2026-10-01',
+        initialReading: 125.5,
+      });
+
+      expect(res.id).toBe('meter-new');
+      expect(prisma.meterReading.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          meterId: 'meter-new',
+          currentReading: 125.5,
+          previousReading: 125.5,
+          usage: 0,
+          notes: expect.stringContaining('[INITIAL]'),
+        }),
+      });
+    });
+  });
+
   describe('createReading', () => {
-    it('首次读数：previous=0，余额充足全额扣费', async () => {
+    it('首次读数：无历史记录时自动作为初始底数登记，不计算用量与扣费', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
       prisma.meterReading.findFirst.mockResolvedValue(null);
       prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
         id: 'reading-1',
         ...data,
       }));
-      prisma.contract.findFirst.mockResolvedValue({ id: 'contract-1', tenantId: 'tenant-1' });
-      prisma.prepayAccount.findUnique.mockResolvedValue({ id: 'account-1', balanceCache: 50000 });
-      prisma.prepayAccount.updateMany.mockResolvedValue({ count: 1 });
-      prisma.prepayAccount.findUniqueOrThrow.mockResolvedValue({
-        id: 'account-1',
-        balanceCache: 30000,
-      });
-      prisma.prepayTransaction.create.mockResolvedValue({ id: 'tx-1' });
 
       const result = await service.createReading(
         meterId,
@@ -84,29 +107,48 @@ describe('MetersService', () => {
         operatorId,
       );
 
-      // usage 200 × 单价 100 = 20000 分，全额扣费
       expect(prisma.meterReading.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ previousReading: 0, usage: 200, source: 'MANUAL' }),
-      });
-      expect(prisma.prepayAccount.updateMany).toHaveBeenCalledWith({
-        where: { id: 'account-1', balanceCache: { gte: 20000 } },
-        data: { balanceCache: { decrement: 20000 } },
-      });
-      expect(prisma.prepayTransaction.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          type: 'DEDUCTION',
-          amount: -20000,
-          balanceAfter: 30000,
-          relatedId: 'reading-1',
-          relatedType: 'METER_READING',
+          previousReading: 200,
+          currentReading: 200,
+          usage: 0,
+          source: 'MANUAL',
+          notes: expect.stringContaining('[INITIAL]'),
         }),
       });
+      expect(prisma.prepayAccount.updateMany).not.toHaveBeenCalled();
       expect(prisma.bill.create).not.toHaveBeenCalled();
-      expect(result.deduction.applied).toBe(true);
-      expect(result.deduction.shortfall).toBe(0);
+      expect(result.deduction.applied).toBe(false);
+      expect(result.deduction.reason).toContain('初始底数');
     });
 
-    it('非首次读数：usage = 本次 - 上次', async () => {
+    it('显式声明 isInitial: true，作为初始底数登记，不计费用', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      prisma.meterReading.findFirst.mockResolvedValue({ id: 'reading-0', currentReading: 150 });
+      prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
+        id: 'reading-init',
+        ...data,
+      }));
+
+      const result = await service.createReading(
+        meterId,
+        { currentReading: 300, isInitial: true } as any,
+        operatorId,
+      );
+
+      expect(prisma.meterReading.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          previousReading: 300,
+          currentReading: 300,
+          usage: 0,
+          notes: expect.stringContaining('[INITIAL]'),
+        }),
+      });
+      expect(prisma.prepayAccount.updateMany).not.toHaveBeenCalled();
+      expect(result.deduction.applied).toBe(false);
+    });
+
+    it('非首次读数：usage = 本次 - 上次，余额充足全额扣费', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
       prisma.meterReading.findFirst.mockResolvedValue({ id: 'reading-0', currentReading: 150 });
       prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
@@ -119,20 +161,22 @@ describe('MetersService', () => {
       prisma.prepayAccount.findUniqueOrThrow.mockResolvedValue({ balanceCache: 45000 });
       prisma.prepayTransaction.create.mockResolvedValue({ id: 'tx-2' });
 
-      await service.createReading(meterId, { currentReading: 200 } as any, operatorId);
+      const result = await service.createReading(meterId, { currentReading: 200 } as any, operatorId);
 
       expect(prisma.meterReading.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ previousReading: 150, usage: 50 }),
+        data: expect.objectContaining({ previousReading: 150, currentReading: 200, usage: 50 }),
       });
       expect(prisma.prepayAccount.updateMany).toHaveBeenCalledWith({
         where: { id: 'account-1', balanceCache: { gte: 5000 } },
         data: { balanceCache: { decrement: 5000 } },
       });
+      expect(result.deduction.applied).toBe(true);
+      expect(result.deduction.shortfall).toBe(0);
     });
 
     it('余额不足：扣尽余额 + 差额生成 UTILITY 补缴账单', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
-      prisma.meterReading.findFirst.mockResolvedValue(null);
+      prisma.meterReading.findFirst.mockResolvedValue({ id: 'reading-0', currentReading: 0 });
       prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
         id: 'reading-3',
         ...data,
@@ -175,7 +219,7 @@ describe('MetersService', () => {
 
     it('余额为 0：不扣费，全额生成补缴账单', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
-      prisma.meterReading.findFirst.mockResolvedValue(null);
+      prisma.meterReading.findFirst.mockResolvedValue({ id: 'reading-0', currentReading: 0 });
       prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
         id: 'reading-4',
         ...data,
@@ -200,7 +244,7 @@ describe('MetersService', () => {
 
     it('无生效合同：不扣费（返回原因），仍保存读数', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
-      prisma.meterReading.findFirst.mockResolvedValue(null);
+      prisma.meterReading.findFirst.mockResolvedValue({ id: 'reading-0', currentReading: 50 });
       prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
         id: 'reading-5',
         ...data,
@@ -220,7 +264,7 @@ describe('MetersService', () => {
 
     it('无预付账户：不扣费', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
-      prisma.meterReading.findFirst.mockResolvedValue(null);
+      prisma.meterReading.findFirst.mockResolvedValue({ id: 'reading-0', currentReading: 50 });
       prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
         id: 'reading-6',
         ...data,
@@ -244,7 +288,7 @@ describe('MetersService', () => {
         roomId: null,
         publicAreaId: 'area-1',
       });
-      prisma.meterReading.findFirst.mockResolvedValue(null);
+      prisma.meterReading.findFirst.mockResolvedValue({ id: 'reading-0', currentReading: 50 });
       prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
         id: 'reading-7',
         ...data,
@@ -288,6 +332,126 @@ describe('MetersService', () => {
         service.createReading(meterId, { currentReading: 200 } as any, operatorId),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.meterReading.create).not.toHaveBeenCalled();
+    });
+
+    it('去重防护：相同 messageId 重复上传时返回已存在记录且不重复扣费', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      const existingReading = { id: 'msg-exist', currentReading: 180, notes: '[msgId:iot-pkg-999]' };
+      prisma.meterReading.findFirst.mockResolvedValue(existingReading);
+
+      const result = await service.createReading(
+        meterId,
+        { currentReading: 180, messageId: 'iot-pkg-999' } as any,
+        operatorId,
+      );
+
+      expect(result.reading).toEqual(existingReading);
+      expect(result.deduction.applied).toBe(false);
+      expect(result.deduction.reason).toContain('messageId 已存在');
+      expect(prisma.meterReading.create).not.toHaveBeenCalled();
+    });
+
+    it('防重保护：相同 (readingTime, currentReading) 重复到达时返回已有记录', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      const duplicateRecord = { id: 'dup-1', currentReading: 180, readingTime: new Date('2026-10-15T12:00:00Z') };
+      // 第一次 findFirst 是 messageId (无), 第二次 findFirst 是时间读数防重
+      prisma.meterReading.findFirst.mockResolvedValueOnce(duplicateRecord);
+
+      const result = await service.createReading(
+        meterId,
+        { currentReading: 180, readingTime: '2026-10-15T12:00:00Z' } as any,
+        operatorId,
+      );
+
+      expect(result.reading).toEqual(duplicateRecord);
+      expect(result.deduction.applied).toBe(false);
+      expect(prisma.meterReading.create).not.toHaveBeenCalled();
+    });
+
+    it('乱序延迟到达：时间早于最新记录且读数合法时，记录入库打标 [OUT_OF_ORDER]，不触发即时扣费', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      const latestRecord = { id: 'latest', currentReading: 200, readingTime: new Date('2026-10-15T14:00:00Z') };
+      const precedingRecord = { id: 'preceding', currentReading: 150, readingTime: new Date('2026-10-15T10:00:00Z') };
+
+      // 1: 防重 (null)
+      // 2: latest (14:00, 200)
+      // 3: 检查后续是否有矛盾 (null)
+      // 4: 查找前面最近记录 preceding (10:00, 150)
+      prisma.meterReading.findFirst
+        .mockResolvedValueOnce(latestRecord)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(precedingRecord);
+
+      prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
+        id: 'out-of-order-reading',
+        ...data,
+      }));
+
+      const result = await service.createReading(
+        meterId,
+        { currentReading: 170, readingTime: '2026-10-15T12:00:00Z' } as any,
+        operatorId,
+      );
+
+      expect(prisma.meterReading.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          previousReading: 150,
+          currentReading: 170,
+          usage: 20,
+          notes: expect.stringContaining('[OUT_OF_ORDER]'),
+        }),
+      });
+      expect(result.deduction.applied).toBe(false);
+      expect(result.deduction.reason).toContain('延迟乱序数据已入库归档');
+      expect(prisma.prepayAccount.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('乱序矛盾异常：早于后续记录的时间点读数却高于后续读数，抛出 400 异常', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      const latestRecord = { id: 'latest', currentReading: 200, readingTime: new Date('2026-10-15T14:00:00Z') };
+      const contradictoryRecord = { id: 'later-smaller', currentReading: 160, readingTime: new Date('2026-10-15T13:00:00Z') };
+
+      prisma.meterReading.findFirst
+        .mockResolvedValueOnce(latestRecord)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(contradictoryRecord);
+
+      await expect(
+        service.createReading(
+          meterId,
+          { currentReading: 180, readingTime: '2026-10-15T12:00:00Z' } as any,
+          operatorId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.meterReading.create).not.toHaveBeenCalled();
+    });
+
+    it('采集与结算拆分：autoSettle=false 仅采集读数，不扣费', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      prisma.meterReading.findFirst.mockResolvedValue({
+        id: 'prev',
+        currentReading: 100,
+        readingTime: new Date(Date.now() - 3600000),
+      });
+
+      prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({
+        id: 'reading-nosettle',
+        ...data,
+      }));
+
+      const result = await service.createReading(
+        meterId,
+        { currentReading: 150, autoSettle: false } as any,
+        operatorId,
+      );
+
+      expect(prisma.meterReading.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ previousReading: 100, currentReading: 150, usage: 50 }),
+      });
+      expect(prisma.prepayAccount.updateMany).not.toHaveBeenCalled();
+      expect(result.deduction.applied).toBe(false);
+      expect(result.deduction.reason).toContain('未开启自动扣费');
     });
 
     it('表不存在：404', async () => {
@@ -546,6 +710,105 @@ describe('MetersService', () => {
       expect(result.completion.totalMeters).toBe(2);
       expect(result.completion.pendingMeters).toBe(0);
       expect(result.completion.status).toBe('DONE');
+    });
+  });
+
+  describe('settleMeter', () => {
+    it('表不存在：404', async () => {
+      prisma.meter.findUnique.mockResolvedValue(null);
+      await expect(service.settleMeter('m-no', {}, operatorId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('无读数记录：400', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      prisma.meterReading.findFirst.mockResolvedValue(null);
+      await expect(service.settleMeter(meterId, {}, operatorId)).rejects.toThrow(BadRequestException);
+    });
+
+    it('已结算读数无新增用量：settled=false, usage=0', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      const latestReading = { id: 'rd-latest', currentReading: 200, readingTime: new Date() };
+      prisma.meterReading.findFirst
+        .mockResolvedValueOnce(latestReading)
+        .mockResolvedValueOnce(latestReading);
+
+      const result = await service.settleMeter(meterId, {}, operatorId);
+      expect(result.settled).toBe(false);
+      expect(result.usage).toBe(0);
+      expect(result.reason).toContain('已结算');
+    });
+
+    it('结算周期内累计用量并完成扣费，打标 [SETTLED]', async () => {
+      prisma.meter.findUnique.mockResolvedValue(baseMeter);
+      const latestReading = { id: 'rd-latest', currentReading: 250, readingTime: new Date(), notes: '日常采集' };
+      const lastSettledReading = { id: 'rd-base', currentReading: 150, readingTime: new Date('2026-10-01') };
+
+      prisma.meterReading.findFirst
+        .mockResolvedValueOnce(latestReading)
+        .mockResolvedValueOnce(lastSettledReading);
+
+      prisma.contract.findFirst.mockResolvedValue({ id: 'c-1', tenantId: 't-1' });
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: 'acc-1', balanceCache: 20000 });
+      prisma.prepayAccount.updateMany.mockResolvedValue({ count: 1 });
+      prisma.prepayAccount.findUniqueOrThrow.mockResolvedValue({ balanceCache: 10000 });
+      prisma.prepayTransaction.create.mockResolvedValue({ id: 'tx-settle' });
+      prisma.meterReading.update.mockResolvedValue({ id: 'rd-latest' });
+
+      const result = await service.settleMeter(meterId, { notes: '10月结账' }, operatorId);
+
+      expect(result.settled).toBe(true);
+      expect(result.usage).toBe(100); // 250 - 150
+      expect(result.amount).toBe(10000); // 100 * 100
+      expect(prisma.meterReading.update).toHaveBeenCalledWith({
+        where: { id: 'rd-latest' },
+        data: { notes: expect.stringContaining('[SETTLED]') },
+      });
+      expect(result.deduction.applied).toBe(true);
+      expect(result.deduction.deducted).toBe(10000);
+    });
+  });
+
+  describe('getUnsettledUsage', () => {
+    it('准确预估未结算用量及扣费金额', async () => {
+      prisma.meter.findUnique.mockResolvedValue({
+        ...baseMeter,
+        room: {
+          contracts: [{ tenantId: 't-1', tenant: { name: '李四' } }],
+        },
+      });
+      const latestReading = { id: 'rd-latest', currentReading: 320, readingTime: new Date('2026-10-15T10:00:00Z') };
+      const lastSettled = { id: 'rd-settled', currentReading: 200, readingTime: new Date('2026-10-01T00:00:00Z') };
+
+      prisma.meterReading.findFirst
+        .mockResolvedValueOnce(latestReading)
+        .mockResolvedValueOnce(lastSettled);
+
+      prisma.prepayAccount.findUnique.mockResolvedValue({ balanceCache: 15000 });
+
+      const result = await service.getUnsettledUsage(meterId);
+
+      expect(result.unsettledUsage).toBe(120); // 320 - 200
+      expect(result.estimatedAmount).toBe(12000); // 120 * 100
+      expect(result.prepayBalance).toBe(15000);
+      expect(result.lastSettledReading).toBe(200);
+      expect(result.currentReading).toBe(320);
+    });
+  });
+
+  describe('settleBatch', () => {
+    it('按列表批量结算，汇总成功和失败结果', async () => {
+      vi.spyOn(service, 'settleMeter')
+        .mockResolvedValueOnce({ settled: true, usage: 50, amount: 5000 } as any)
+        .mockRejectedValueOnce(new BadRequestException('无读数记录'));
+
+      const res = await service.settleBatch({ meterIds: ['m-1', 'm-2'] }, operatorId);
+
+      expect(res.total).toBe(2);
+      expect(res.successCount).toBe(1);
+      expect(res.failureCount).toBe(1);
+      expect(res.results[0].success).toBe(true);
+      expect(res.results[1].success).toBe(false);
+      expect(res.results[1].error).toContain('无读数记录');
     });
   });
 });

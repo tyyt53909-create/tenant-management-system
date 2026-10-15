@@ -40,6 +40,11 @@ export interface MeterReadingPayload {
   currentReading: number;
   /** 讀數時間（ISO 字串，缺省為當前時間） */
   readingTime?: string;
+  source?: 'MANUAL' | 'DEVICE';
+  isInitial?: boolean;
+  autoSettle?: boolean;
+  messageId?: string;
+  allowRollover?: boolean;
   notes?: string;
 }
 
@@ -59,12 +64,35 @@ export interface MeterReadingResult {
   deduction: ReadingDeduction;
 }
 
-/** 登記讀數（自動扣費；餘額不足生成 UTILITY 補繳帳單） */
+/** 登記讀數（支持初始底数、自动扣费与乱序去重） */
 export const createMeterReading = (
   meterId: string,
   data: MeterReadingPayload
 ): Promise<MeterReadingResult> => {
   return request.post(`/meters/${meterId}/readings`, data);
+};
+
+/** 周期结算指定水电表（采集与结算拆分） */
+export const settleMeter = (
+  meterId: string,
+  data?: { settleUntil?: string; notes?: string }
+): Promise<any> => {
+  return request.post(`/meters/${meterId}/settle`, data || {});
+};
+
+/** 查询水电表未结算用量及预估金额 */
+export const getUnsettledUsage = (
+  meterId: string,
+  params?: { settleUntil?: string }
+): Promise<any> => {
+  return request.get(`/meters/${meterId}/unsettled-usage`, { params });
+};
+
+/** 批量周期结算水电表 */
+export const settleBatch = (
+  data: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string }
+): Promise<any> => {
+  return request.post('/meters/settle-batch', data);
 };
 
 /** 讀數歷史（分頁倒序） */

@@ -24,6 +24,9 @@ describe('MetersController', () => {
             createBatchReadings: vi.fn(),
             exportReadings: vi.fn(),
             getUsageOverview: vi.fn(),
+            settleMeter: vi.fn(),
+            getUnsettledUsage: vi.fn(),
+            settleBatch: vi.fn(),
           },
         },
       ],
@@ -146,5 +149,34 @@ describe('MetersController', () => {
 
     expect(result).toEqual(mockOverview);
     expect(service.getUsageOverview).toHaveBeenCalledWith(query);
+  });
+
+  it('settleMeter：透传表 id、DTO 与操作人', async () => {
+    const dto = { notes: '月度结算' };
+    vi.spyOn(service, 'settleMeter').mockResolvedValue({ settled: true, usage: 100 } as any);
+
+    const result = await controller.settleMeter({ user: { userId: 'admin-1' } }, 'meter-1', dto);
+
+    expect(result.settled).toBe(true);
+    expect(service.settleMeter).toHaveBeenCalledWith('meter-1', dto, 'admin-1');
+  });
+
+  it('getUnsettledUsage：透传表 id 与截止时间', async () => {
+    vi.spyOn(service, 'getUnsettledUsage').mockResolvedValue({ unsettledUsage: 50, estimatedAmount: 5000 } as any);
+
+    const result = await controller.getUnsettledUsage('meter-1', '2026-10-15T00:00:00Z');
+
+    expect(result.unsettledUsage).toBe(50);
+    expect(service.getUnsettledUsage).toHaveBeenCalledWith('meter-1', '2026-10-15T00:00:00Z');
+  });
+
+  it('settleBatch：透传批量结算 DTO 与操作人', async () => {
+    const dto = { buildingId: 'b-1' };
+    vi.spyOn(service, 'settleBatch').mockResolvedValue({ total: 5, successCount: 5, failureCount: 0, results: [] } as any);
+
+    const result = await controller.settleBatch({ user: { userId: 'admin-1' } }, dto);
+
+    expect(result.successCount).toBe(5);
+    expect(service.settleBatch).toHaveBeenCalledWith(dto, 'admin-1');
   });
 });

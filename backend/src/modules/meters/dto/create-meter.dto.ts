@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsEnum, IsInt, IsOptional, IsDateString, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsInt, IsOptional, IsDateString, IsNumber, Min } from 'class-validator';
 
 enum MeterType {
   ELECTRICITY = 'ELECTRICITY',
@@ -32,4 +32,10 @@ export class CreateMeterDto {
 
   @IsDateString()
   priceEffectiveDate: string;
+
+  /** 设备绑定初始底数（非必填，填入时不计费并作为后续起步底数） */
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @IsOptional()
+  initialReading?: number;
 }

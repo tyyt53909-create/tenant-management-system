@@ -51,9 +51,10 @@
             {{ new Date(row.createdAt).toLocaleString('zh-CN') }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button type="success" link :disabled="!row.isActive" @click="handleReading(row)">读数</el-button>
+            <el-button type="warning" link :disabled="!row.isActive" @click="handleOpenSettle(row)">结算</el-button>
             <el-button type="primary" link @click="handleViewReadings(row)">记录</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
@@ -90,6 +91,9 @@
         <el-form-item label="表号" prop="meterNumber">
           <el-input v-model="formData.meterNumber" placeholder="请输入表号" />
         </el-form-item>
+        <el-form-item v-if="!currentEditId" label="设备初始底数" prop="initialReading">
+          <el-input-number v-model="formData.initialReading" :min="0" :precision="2" placeholder="绑定时表底数（不计费）" />
+        </el-form-item>
         <el-form-item label="单价(元)" prop="unitPrice">
           <el-input-number v-model="formData.unitPrice" :min="0" :precision="2" />
         </el-form-item>
@@ -124,9 +128,18 @@
         style="margin-bottom: 16px"
       />
 
-      <el-form ref="readingFormRef" :model="readingForm" :rules="readingRules" label-width="100px">
+      <el-form ref="readingFormRef" :model="readingForm" :rules="readingRules" label-width="110px">
+        <el-form-item label="读数模式">
+          <el-radio-group v-model="readingForm.mode">
+            <el-radio label="NORMAL">日常抄表</el-radio>
+            <el-radio label="INITIAL">登记初始底数（不计费）</el-radio>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="当前读数" prop="currentReading">
           <el-input-number v-model="readingForm.currentReading" :min="0" :precision="2" :step="10" />
+        </el-form-item>
+        <el-form-item v-if="readingForm.mode === 'NORMAL'" label="自动结算扣费">
+          <el-switch v-model="readingForm.autoSettle" active-text="即时扣费" inactive-text="仅采集记录（周期结算）" />
         </el-form-item>
         <el-form-item label="读数时间">
           <el-date-picker
@@ -144,6 +157,61 @@
       <template #footer>
         <el-button @click="readingDialogVisible = false">关闭</el-button>
         <el-button type="primary" :loading="readingSubmitLoading" @click="handleReadingSubmit">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 周期结算对话框 -->
+    <el-dialog v-model="settleDialogVisible" title="水电周期结算" width="560px">
+      <div v-loading="settleDataLoading">
+        <el-alert
+          title="将累计结算上次结算或初始底数至今的未计费度数，从租客预付账户扣费或生成差额补缴账单。"
+          type="info"
+          :closable="false"
+          style="margin-bottom: 16px"
+        />
+        <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
+          <el-descriptions-item label="表号">{{ currentMeter?.meterNumber }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{ meterTypeMap[currentMeter?.meterType || ''] }}</el-descriptions-item>
+          <el-descriptions-item label="房源">{{ unsettledInfo?.roomNumber || '公共区域' }}</el-descriptions-item>
+          <el-descriptions-item label="签约租客">{{ unsettledInfo?.tenantName || '无生效合同' }}</el-descriptions-item>
+          <el-descriptions-item label="单价">¥{{ ((currentMeter?.unitPrice || 0) / 100).toFixed(2) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
+          <el-descriptions-item label="预付余额">
+            <span v-if="unsettledInfo?.prepayBalance !== null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? '#F56C6C' : '#67C23A', fontWeight: 'bold' }">
+              ¥{{ (unsettledInfo.prepayBalance / 100).toFixed(2) }}
+            </span>
+            <span v-else style="color: #909399">无预付账户</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="起步结算底数">{{ unsettledInfo?.lastSettledReading ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="当前最新读数">{{ unsettledInfo?.currentReading ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="待结算用量">
+            <span style="font-size: 15px; font-weight: bold; color: #409EFF">
+              {{ unsettledInfo?.unsettledUsage ?? 0 }} {{ unitMap[currentMeter?.meterType || ''] || '' }}
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="预估结算金额">
+            <span style="font-size: 15px; font-weight: bold; color: #E6A23C">
+              ¥{{ ((unsettledInfo?.estimatedAmount || 0) / 100).toFixed(2) }}
+            </span>
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <el-form label-width="80px">
+          <el-form-item label="结算备注">
+            <el-input v-model="settleNotes" placeholder="例如：2026年10月结账" />
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <template #footer>
+        <el-button @click="settleDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="settleSubmitLoading"
+          :disabled="!unsettledInfo || unsettledInfo.unsettledUsage <= 0"
+          @click="handleConfirmSettle"
+        >
+          立即结算
+        </el-button>
       </template>
     </el-dialog>
 
@@ -200,6 +268,8 @@ import {
   deleteMeter,
   createMeterReading,
   getMeterReadings,
+  getUnsettledUsage,
+  settleMeter,
 } from '@/api/meters';
 import type { MeterReading } from '@/api/meters';
 import type { Meter } from '@/types';
@@ -232,10 +302,23 @@ const readingFormRef = ref<FormInstance>();
 const currentMeter = ref<Meter | null>(null);
 const readingResultText = ref('');
 const readingResultType = ref<'success' | 'warning'>('success');
-const readingForm = reactive({ currentReading: 0, readingTime: '', notes: '' });
+const readingForm = reactive({
+  mode: 'NORMAL' as 'NORMAL' | 'INITIAL',
+  currentReading: 0,
+  autoSettle: true,
+  readingTime: '',
+  notes: '',
+});
 const readingRules = {
   currentReading: [{ required: true, message: '请输入当前读数', trigger: 'blur' }],
 };
+
+// ── 周期结算 ──
+const settleDialogVisible = ref(false);
+const settleDataLoading = ref(false);
+const settleSubmitLoading = ref(false);
+const unsettledInfo = ref<any>(null);
+const settleNotes = ref('');
 
 // ── 讀數記錄 ──
 const readingsDialogVisible = ref(false);
@@ -255,6 +338,7 @@ const formData = reactive({
   roomId: '',
   meterType: 'ELECTRICITY',
   meterNumber: '',
+  initialReading: undefined as number | undefined,
   unitPrice: 0,
   priceEffectiveDate: '',
   isActive: true,
@@ -311,7 +395,16 @@ const handleReset = () => {
 };
 
 const handleCreate = () => {
-  Object.assign(formData,{buildingId:'',roomId:'',meterType:'ELECTRICITY',meterNumber:'',unitPrice:0,priceEffectiveDate:'',isActive:true});
+  Object.assign(formData, {
+    buildingId: '',
+    roomId: '',
+    meterType: 'ELECTRICITY',
+    meterNumber: '',
+    initialReading: undefined,
+    unitPrice: 0,
+    priceEffectiveDate: '',
+    isActive: true,
+  });
   formRef.value?.clearValidate();
   dialogTitle.value = '新增水电表';
   currentEditId.value = '';
@@ -326,6 +419,7 @@ const handleEdit = (row: Meter) => {
     roomId: row.roomId || '',
     meterType: row.meterType,
     meterNumber: row.meterNumber,
+    initialReading: undefined,
     unitPrice: row.unitPrice / 100,
     priceEffectiveDate: row.priceEffectiveDate.split('T')[0],
     isActive: row.isActive,
@@ -381,7 +475,9 @@ const formatDateTime = (value: string) => (value ? value.replace('T', ' ').slice
 
 const handleReading = (row: Meter) => {
   currentMeter.value = row;
+  readingForm.mode = 'NORMAL';
   readingForm.currentReading = 0;
+  readingForm.autoSettle = true;
   readingForm.readingTime = '';
   readingForm.notes = '';
   readingResultText.value = '';
@@ -395,15 +491,18 @@ const handleReadingSubmit = async () => {
     if (!valid) return;
     readingSubmitLoading.value = true;
     try {
+      const isInitial = readingForm.mode === 'INITIAL';
       const result = await createMeterReading(meter.id, {
         currentReading: readingForm.currentReading,
+        isInitial,
+        autoSettle: isInitial ? false : readingForm.autoSettle,
         readingTime: readingForm.readingTime || undefined,
         notes: readingForm.notes || undefined,
       });
       const usage = Number(result.reading.usage).toFixed(2);
       const deduction = result.deduction;
       if (!deduction.applied) {
-        readingResultText.value = `用量 ${usage}；未扣费：${deduction.reason}`;
+        readingResultText.value = `登记成功（用量 ${usage}）；扣费提示：${deduction.reason}`;
         readingResultType.value = 'warning';
       } else if (deduction.shortfall > 0) {
         readingResultText.value = `用量 ${usage}；已扣费 ¥${(deduction.deducted / 100).toFixed(2)}；余额不足，已生成补缴账单 ¥${(deduction.shortfall / 100).toFixed(2)}`;
@@ -412,13 +511,52 @@ const handleReadingSubmit = async () => {
         readingResultText.value = `用量 ${usage}；已扣费 ¥${(deduction.deducted / 100).toFixed(2)}`;
         readingResultType.value = 'success';
       }
-      ElMessage.success('读数登记成功');
+      ElMessage.success(isInitial ? '初始底数登记成功' : '读数登记成功');
+      fetchData();
     } catch {
       // 请求拦截器已弹出错误提示
     } finally {
       readingSubmitLoading.value = false;
     }
   });
+};
+
+// ── 周期结算 ──
+
+const handleOpenSettle = async (row: Meter) => {
+  currentMeter.value = row;
+  settleNotes.value = '';
+  unsettledInfo.value = null;
+  settleDialogVisible.value = true;
+  settleDataLoading.value = true;
+  try {
+    const res = await getUnsettledUsage(row.id);
+    unsettledInfo.value = res;
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || err?.message || '获取未结算用量失败');
+  } finally {
+    settleDataLoading.value = false;
+  }
+};
+
+const handleConfirmSettle = async () => {
+  const meter = currentMeter.value;
+  if (!meter) return;
+  settleSubmitLoading.value = true;
+  try {
+    const res = await settleMeter(meter.id, { notes: settleNotes.value || undefined });
+    if (!res.settled) {
+      ElMessage.info(res.reason || '无待结算用量');
+    } else {
+      ElMessage.success(`周期结算成功！结算用量 ${res.usage}，金额 ¥${(res.amount / 100).toFixed(2)}`);
+    }
+    settleDialogVisible.value = false;
+    fetchData();
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || err?.message || '结算失败');
+  } finally {
+    settleSubmitLoading.value = false;
+  }
 };
 
 // ── 讀數記錄 ──

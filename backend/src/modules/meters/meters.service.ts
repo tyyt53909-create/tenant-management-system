@@ -8,6 +8,7 @@ import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
+import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
 
@@ -31,16 +32,36 @@ export class MetersService {
     const existing = await this.prisma.meter.findUnique({ where: { meterNumber: dto.meterNumber } });
     if (existing) throw new ConflictException('表号已存在');
 
-    return this.prisma.meter.create({
-      data: {
-        buildingId: dto.buildingId,
-        roomId: dto.roomId,
-        publicAreaId: dto.publicAreaId,
-        meterType: dto.meterType as any,
-        meterNumber: dto.meterNumber,
-        unitPrice: dto.unitPrice,
-        priceEffectiveDate: new Date(dto.priceEffectiveDate),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const meter = await tx.meter.create({
+        data: {
+          buildingId: dto.buildingId,
+          roomId: dto.roomId,
+          publicAreaId: dto.publicAreaId,
+          meterType: dto.meterType as any,
+          meterNumber: dto.meterNumber,
+          unitPrice: dto.unitPrice,
+          priceEffectiveDate: new Date(dto.priceEffectiveDate),
+        },
+      });
+
+      // 设备绑定登记初始底数（不计费，作为后续起步值）
+      if (dto.initialReading !== undefined && dto.initialReading !== null) {
+        await tx.meterReading.create({
+          data: {
+            meterId: meter.id,
+            currentReading: dto.initialReading,
+            previousReading: dto.initialReading,
+            usage: 0,
+            source: 'MANUAL',
+            readingTime: new Date(dto.priceEffectiveDate || Date.now()),
+            readBy: 'SYSTEM',
+            notes: '[INITIAL] 设备绑定登记初始底数',
+          },
+        });
+      }
+
+      return meter;
     });
   }
 
@@ -105,13 +126,16 @@ export class MetersService {
 
   /**
    * 水電讀數登記（docs/02-数据模型.md §2.14）
-   * - 自動取上一條讀數作為 previousReading，計算 usage
-   * - 房間關聯預付帳戶時自動扣費（用量 × 當前單價）
-   * - 餘額不足：先扣盡餘額，差額生成 UTILITY 補繳帳單（dueDate = 讀數日 + 7 天）
-   * - 公共區域表按運營成本處理，不扣費（docs/09-待确认清单.md §7）
+   * - 首次读数自动作为初始底数登记（usage=0，不计费）
+   * - 支持设备消息去重（messageId / 重复时间读数检测）与乱序延迟上传保护
+   * - 支持采集与结算拆分（autoSettle）
+   * - 房间关联预付账户时根据单价自动扣费；余额不足差额生成 UTILITY 补缴账单
    */
   async createReading(meterId: string, dto: CreateMeterReadingDto, operatorId: string) {
     const readingTime = dto.readingTime ? new Date(dto.readingTime) : new Date();
+    const source = dto.source || 'MANUAL';
+    // 采集与结算拆分：手工录入默认自动结算，智能设备上传默认仅采集（除非显式指定 autoSettle: true）
+    const shouldAutoSettle = dto.autoSettle !== undefined ? dto.autoSettle : (source !== 'DEVICE');
 
     return this.prisma.$transaction(async (tx) => {
       const meter = await tx.meter.findUnique({ where: { id: meterId } });
@@ -124,20 +148,151 @@ export class MetersService {
         throw new BadRequestException('水电表已停用，不能登记读数');
       }
 
-      const previous = await tx.meterReading.findFirst({
+      // 1. 消息幂等去重：相同 messageId 重复上传
+      if (dto.messageId) {
+        const msgTag = `[msgId:${dto.messageId}]`;
+        const existingMsgReading = await tx.meterReading.findFirst({
+          where: {
+            meterId,
+            notes: { contains: msgTag },
+          },
+        });
+        if (existingMsgReading) {
+          return {
+            reading: existingMsgReading,
+            deduction: { applied: false, reason: '重复消息（messageId 已存在），已忽略并返回已有记录' },
+          };
+        }
+      }
+
+      // 查询当前最新读数记录
+      const latestReadingRecord = await tx.meterReading.findFirst({
         where: { meterId },
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
-      const previousReading = previous ? Number(previous.currentReading) : 0;
+      // 2. 首次读数 / 初始底数处理
+      // 1) 显式声明 isInitial: true
+      // 2) 或者当前表无任何历史记录且未显式指定 isInitial: false
+      const isInitialBaseline = dto.isInitial === true || (!latestReadingRecord && dto.isInitial !== false);
 
-      if (dto.currentReading < previousReading) {
+      if (isInitialBaseline) {
+        const tag = '[INITIAL]';
+        let notes = dto.notes ? `${tag} ${dto.notes}` : `${tag} 登记初始底数`;
+        if (dto.messageId) notes += ` [msgId:${dto.messageId}]`;
+
+        const reading = await tx.meterReading.create({
+          data: {
+            meterId,
+            currentReading: dto.currentReading,
+            previousReading: dto.currentReading,
+            usage: 0,
+            source: source as any,
+            readingTime,
+            readBy: operatorId,
+            notes,
+          },
+        });
+        return {
+          reading,
+          deduction: { applied: false, reason: '初始底数登记，不计算用量与扣费' },
+        };
+      }
+
+      // 3. 数据防重：同一时间戳与读数的设备重复上报
+      if (
+        latestReadingRecord &&
+        dto.readingTime &&
+        latestReadingRecord.readingTime.getTime() === readingTime.getTime() &&
+        Number(latestReadingRecord.currentReading) === dto.currentReading
+      ) {
+        return {
+          reading: latestReadingRecord,
+          deduction: { applied: false, reason: '同一时间戳与读数的设备重复上报，已忽略' },
+        };
+      }
+
+      // 4. 乱序到达 / 延迟上传防护
+      if (latestReadingRecord && readingTime < latestReadingRecord.readingTime) {
+        // 检查是否存在完全重复的历史记录
+        const duplicateHistorical = await tx.meterReading.findFirst({
+          where: {
+            meterId,
+            readingTime,
+            currentReading: dto.currentReading,
+          },
+        });
+        if (duplicateHistorical) {
+          return {
+            reading: duplicateHistorical,
+            deduction: { applied: false, reason: '同一时间戳与读数的设备重复上报，已忽略' },
+          };
+        }
+
+        // 检查是否存在逻辑矛盾：在此时间点之后的历史记录，其读数居然低于当前新上报读数（除非允许翻转）
+        const laterReadingWithLowerValue = await tx.meterReading.findFirst({
+          where: {
+            meterId,
+            readingTime: { gte: readingTime },
+            currentReading: { lt: dto.currentReading },
+          },
+        });
+        if (laterReadingWithLowerValue && !dto.allowRollover) {
+          throw new BadRequestException(
+            `乱序读数异常：早于后续记录（时间: ${laterReadingWithLowerValue.readingTime.toISOString()}, 读数: ${laterReadingWithLowerValue.currentReading}）的时间点读数（${dto.currentReading}）高于后续读数`,
+          );
+        }
+
+        const precedingRecord = await tx.meterReading.findFirst({
+          where: {
+            meterId,
+            readingTime: { lte: readingTime },
+          },
+          orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+        });
+
+        const prevVal = precedingRecord ? Number(precedingRecord.currentReading) : dto.currentReading;
+        if (dto.currentReading < prevVal && !dto.allowRollover) {
+          throw new BadRequestException(
+            `乱序读数异常：当前读数（${dto.currentReading}）小于该时间之前的历史读数（${prevVal}）`,
+          );
+        }
+
+        const usage = Math.round((dto.currentReading - prevVal) * 100) / 100;
+        let notes = `[OUT_OF_ORDER] 延迟乱序上报数据补录${dto.notes ? `；${dto.notes}` : ''}`;
+        if (dto.messageId) notes += ` [msgId:${dto.messageId}]`;
+
+        const reading = await tx.meterReading.create({
+          data: {
+            meterId,
+            currentReading: dto.currentReading,
+            previousReading: prevVal,
+            usage,
+            source: source as any,
+            readingTime,
+            readBy: operatorId,
+            notes,
+          },
+        });
+
+        return {
+          reading,
+          deduction: { applied: false, reason: '延迟乱序数据已入库归档，不触发即时扣费' },
+        };
+      }
+
+      // 5. 正常时序读数
+      const previousReading = latestReadingRecord ? Number(latestReadingRecord.currentReading) : 0;
+      if (dto.currentReading < previousReading && !dto.allowRollover) {
         throw new BadRequestException(
           `当前读数（${dto.currentReading}）不能小于上次读数（${previousReading}）`,
         );
       }
 
       const usage = Math.round((dto.currentReading - previousReading) * 100) / 100;
+      let notes = dto.notes || '';
+      if (dto.messageId) notes = notes ? `${notes} [msgId:${dto.messageId}]` : `[msgId:${dto.messageId}]`;
+      if (shouldAutoSettle) notes = notes ? `${notes} [SETTLED]` : '[SETTLED]';
 
       const reading = await tx.meterReading.create({
         data: {
@@ -145,14 +300,17 @@ export class MetersService {
           currentReading: dto.currentReading,
           previousReading,
           usage,
-          source: 'MANUAL',
+          source: source as any,
           readingTime,
           readBy: operatorId,
-          notes: dto.notes,
+          notes: notes || null,
         },
       });
 
-      const deduction = await this.applyReadingDeduction(tx, meter, reading, usage, operatorId);
+      let deduction: any = { applied: false, reason: '已采集读数，未开启自动扣费（等待周期结算）' };
+      if (shouldAutoSettle) {
+        deduction = await this.applyReadingDeduction(tx, meter, reading, usage, operatorId);
+      }
 
       return { reading, deduction };
     });
@@ -296,6 +454,7 @@ export class MetersService {
 
   /**
    * 批量读数登记（行级独立报告 + 事务原子性处理有效行）
+   * - 支持初始底数、消息去重、乱序检测与按需扣费
    */
   async createBatchReadings(dto: BatchMeterReadingsDto, operatorId: string) {
     const results: Array<{
@@ -339,13 +498,167 @@ export class MetersService {
           continue;
         }
 
-        const previous = await tx.meterReading.findFirst({
+        const readingTime = item.readingTime ? new Date(item.readingTime) : new Date();
+        const source = item.source || 'MANUAL';
+
+        // 幂等去重 1: messageId
+        if (item.messageId) {
+          const msgTag = `[msgId:${item.messageId}]`;
+          const existingMsgReading = await tx.meterReading.findFirst({
+            where: {
+              meterId: item.meterId,
+              notes: { contains: msgTag },
+            },
+          });
+          if (existingMsgReading) {
+            results.push({
+              meterId: item.meterId,
+              meterNumber: meter.meterNumber,
+              roomNumber: meter.room?.roomNumber,
+              success: true,
+              currentReading: Number(existingMsgReading.currentReading),
+              previousReading: Number(existingMsgReading.previousReading),
+              usage: Number(existingMsgReading.usage),
+            });
+            continue;
+          }
+        }
+
+        const latestReadingRecord = await tx.meterReading.findFirst({
           where: { meterId: item.meterId },
           orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
         });
-        const previousReading = previous ? Number(previous.currentReading) : 0;
 
-        if (item.currentReading < previousReading) {
+        // 初始底数处理
+        const isInitialBaseline = item.isInitial === true || (!latestReadingRecord && item.isInitial !== false);
+        if (isInitialBaseline) {
+          let notes = `[INITIAL]${item.notes ? ` ${item.notes}` : ' 登记初始底数'}`;
+          if (item.messageId) notes += ` [msgId:${item.messageId}]`;
+
+          await tx.meterReading.create({
+            data: {
+              meterId: item.meterId,
+              currentReading: item.currentReading,
+              previousReading: item.currentReading,
+              usage: 0,
+              source: source as any,
+              readingTime,
+              readBy: operatorId,
+              notes,
+            },
+          });
+
+          results.push({
+            meterId: item.meterId,
+            meterNumber: meter.meterNumber,
+            roomNumber: meter.room?.roomNumber,
+            success: true,
+            currentReading: item.currentReading,
+            previousReading: item.currentReading,
+            usage: 0,
+            amount: 0,
+            deducted: 0,
+            shortfall: 0,
+          });
+          continue;
+        }
+
+        // 幂等防重 2: 完全相同 (meterId, readingTime, currentReading)
+        if (
+          latestReadingRecord &&
+          item.readingTime &&
+          latestReadingRecord.readingTime.getTime() === readingTime.getTime() &&
+          Number(latestReadingRecord.currentReading) === item.currentReading
+        ) {
+          results.push({
+            meterId: item.meterId,
+            meterNumber: meter.meterNumber,
+            roomNumber: meter.room?.roomNumber,
+            success: true,
+            currentReading: Number(latestReadingRecord.currentReading),
+            previousReading: Number(latestReadingRecord.previousReading),
+            usage: Number(latestReadingRecord.usage),
+          });
+          continue;
+        }
+
+        // 乱序延迟上传防护
+        if (latestReadingRecord && readingTime < latestReadingRecord.readingTime) {
+          const laterReadingWithLowerValue = await tx.meterReading.findFirst({
+            where: {
+              meterId: item.meterId,
+              readingTime: { gte: readingTime },
+              currentReading: { lt: item.currentReading },
+            },
+          });
+          if (laterReadingWithLowerValue && !item.allowRollover) {
+            results.push({
+              meterId: item.meterId,
+              meterNumber: meter.meterNumber,
+              roomNumber: meter.room?.roomNumber,
+              success: false,
+              currentReading: item.currentReading,
+              error: `乱序读数异常：早于后续记录的时间点读数(${item.currentReading})高于后续读数`,
+            });
+            continue;
+          }
+
+          const precedingRecord = await tx.meterReading.findFirst({
+            where: {
+              meterId: item.meterId,
+              readingTime: { lte: readingTime },
+            },
+            orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+          });
+
+          const prevVal = precedingRecord ? Number(precedingRecord.currentReading) : item.currentReading;
+          if (item.currentReading < prevVal && !item.allowRollover) {
+            results.push({
+              meterId: item.meterId,
+              meterNumber: meter.meterNumber,
+              roomNumber: meter.room?.roomNumber,
+              success: false,
+              currentReading: item.currentReading,
+              error: `乱序读数异常：当前读数(${item.currentReading})小于该时间之前的历史读数(${prevVal})`,
+            });
+            continue;
+          }
+
+          const usage = Math.round((item.currentReading - prevVal) * 100) / 100;
+          let notes = `[OUT_OF_ORDER] 延迟乱序上报数据补录${item.notes ? `；${item.notes}` : ''}`;
+          if (item.messageId) notes += ` [msgId:${item.messageId}]`;
+
+          await tx.meterReading.create({
+            data: {
+              meterId: item.meterId,
+              currentReading: item.currentReading,
+              previousReading: prevVal,
+              usage,
+              source: source as any,
+              readingTime,
+              readBy: operatorId,
+              notes,
+            },
+          });
+
+          results.push({
+            meterId: item.meterId,
+            meterNumber: meter.meterNumber,
+            roomNumber: meter.room?.roomNumber,
+            success: true,
+            currentReading: item.currentReading,
+            previousReading: prevVal,
+            usage,
+            amount: 0,
+            deducted: 0,
+            shortfall: 0,
+          });
+          continue;
+        }
+
+        // 正常时序读数
+        const previousReading = latestReadingRecord ? Number(latestReadingRecord.currentReading) : 0;
+        if (item.currentReading < previousReading && !item.allowRollover) {
           results.push({
             meterId: item.meterId,
             meterNumber: meter.meterNumber,
@@ -359,7 +672,11 @@ export class MetersService {
         }
 
         const usage = Math.round((item.currentReading - previousReading) * 100) / 100;
-        const readingTime = item.readingTime ? new Date(item.readingTime) : new Date();
+        const shouldAutoSettle = item.autoSettle !== undefined ? item.autoSettle : (source !== 'DEVICE');
+
+        let notes = item.notes || '';
+        if (item.messageId) notes = notes ? `${notes} [msgId:${item.messageId}]` : `[msgId:${item.messageId}]`;
+        if (shouldAutoSettle) notes = notes ? `${notes} [SETTLED]` : '[SETTLED]';
 
         const reading = await tx.meterReading.create({
           data: {
@@ -367,14 +684,17 @@ export class MetersService {
             currentReading: item.currentReading,
             previousReading,
             usage,
-            source: 'MANUAL',
+            source: source as any,
             readingTime,
             readBy: operatorId,
-            notes: item.notes,
+            notes: notes || null,
           },
         });
 
-        const deduction = await this.applyReadingDeduction(tx, meter, reading, usage, operatorId);
+        let deduction: any = { applied: false, amount: 0, deducted: 0, shortfall: 0 };
+        if (shouldAutoSettle) {
+          deduction = await this.applyReadingDeduction(tx, meter, reading, usage, operatorId);
+        }
 
         results.push({
           meterId: item.meterId,
@@ -384,9 +704,9 @@ export class MetersService {
           currentReading: item.currentReading,
           previousReading,
           usage,
-          amount: deduction.amount,
-          deducted: deduction.deducted,
-          shortfall: deduction.shortfall,
+          amount: deduction.amount || 0,
+          deducted: deduction.deducted || 0,
+          shortfall: deduction.shortfall || 0,
         });
       }
     });
@@ -784,6 +1104,248 @@ export class MetersService {
         status: resultPendingMeters > 0 ? 'FOLLOW_UP' : 'DONE',
       },
       trend: isDemo ? demoTrend : trend,
+    };
+  }
+
+  /**
+   * 查看水电表未结算用量与预估金额（预览）
+   */
+  async getUnsettledUsage(meterId: string, settleUntilStr?: string) {
+    const meter = await this.prisma.meter.findUnique({
+      where: { id: meterId },
+      include: {
+        room: {
+          include: {
+            contracts: {
+              where: { status: 'ACTIVE' },
+              take: 1,
+              include: { tenant: { select: { id: true, name: true, phone: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!meter) throw new NotFoundException('水电表不存在');
+
+    const settleUntil = settleUntilStr ? new Date(settleUntilStr) : new Date();
+
+    const latestReading = await this.prisma.meterReading.findFirst({
+      where: {
+        meterId,
+        readingTime: { lte: settleUntil },
+      },
+      orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    if (!latestReading) {
+      return {
+        meterId,
+        unsettledUsage: 0,
+        estimatedAmount: 0,
+        lastSettledReading: 0,
+        lastSettledTime: null,
+        currentReading: 0,
+        readingTime: null,
+        hasReadings: false,
+      };
+    }
+
+    const lastSettledReading = await this.prisma.meterReading.findFirst({
+      where: {
+        meterId,
+        readingTime: { lte: latestReading.readingTime },
+        OR: [
+          { notes: { contains: '[SETTLED]' } },
+          { notes: { contains: '[INITIAL]' } },
+        ],
+      },
+      orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    if (lastSettledReading && lastSettledReading.id === latestReading.id) {
+      return {
+        meterId,
+        unsettledUsage: 0,
+        estimatedAmount: 0,
+        lastSettledReading: Number(latestReading.currentReading),
+        lastSettledTime: latestReading.readingTime,
+        currentReading: Number(latestReading.currentReading),
+        readingTime: latestReading.readingTime,
+        hasReadings: true,
+      };
+    }
+
+    let baselineVal = 0;
+    if (lastSettledReading) {
+      baselineVal = Number(lastSettledReading.currentReading);
+    } else {
+      const earliest = await this.prisma.meterReading.findFirst({
+        where: { meterId },
+        orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
+      });
+      baselineVal = earliest ? Number(earliest.currentReading) : 0;
+    }
+
+    const currentVal = Number(latestReading.currentReading);
+    const unsettledUsage = Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100);
+    const estimatedAmount = Math.round(unsettledUsage * meter.unitPrice);
+
+    const activeContract = meter.room?.contracts?.[0];
+    let prepayBalance: number | null = null;
+    if (meter.roomId && activeContract?.tenantId) {
+      const account = await this.prisma.prepayAccount.findUnique({
+        where: { tenantId_roomId: { tenantId: activeContract.tenantId, roomId: meter.roomId } },
+      });
+      prepayBalance = account ? account.balanceCache : null;
+    }
+
+    return {
+      meterId,
+      meterNumber: meter.meterNumber,
+      meterType: meter.meterType,
+      unitPrice: meter.unitPrice,
+      roomNumber: meter.room?.roomNumber || '公共区域',
+      tenantName: activeContract?.tenant?.name || null,
+      prepayBalance,
+      lastSettledReading: baselineVal,
+      lastSettledTime: lastSettledReading?.readingTime ?? null,
+      currentReading: currentVal,
+      readingTime: latestReading.readingTime,
+      unsettledUsage,
+      estimatedAmount,
+      targetReadingId: latestReading.id,
+      hasReadings: true,
+    };
+  }
+
+  /**
+   * 周期结算指定水电表（采集与结算拆分）
+   * 结算上次结算（或初始底数）至截止时间之间的累计用量，生成统一扣费流水或补缴账单
+   */
+  async settleMeter(meterId: string, dto: SettleMeterDto, operatorId: string) {
+    const settleUntil = dto.settleUntil ? new Date(dto.settleUntil) : new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const meter = await tx.meter.findUnique({ where: { id: meterId } });
+      if (!meter) throw new NotFoundException('水电表不存在');
+
+      const latestReading = await tx.meterReading.findFirst({
+        where: {
+          meterId,
+          readingTime: { lte: settleUntil },
+        },
+        orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      if (!latestReading) {
+        throw new BadRequestException('该水电表在指定结算时间前无任何读数记录');
+      }
+
+      const lastSettledReading = await tx.meterReading.findFirst({
+        where: {
+          meterId,
+          readingTime: { lte: latestReading.readingTime },
+          OR: [
+            { notes: { contains: '[SETTLED]' } },
+            { notes: { contains: '[INITIAL]' } },
+          ],
+        },
+        orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      if (lastSettledReading && lastSettledReading.id === latestReading.id) {
+        return {
+          meterId,
+          settled: false,
+          usage: 0,
+          amount: 0,
+          reason: '最新读数已结算，无新增未结算用量',
+        };
+      }
+
+      let baselineVal = 0;
+      if (lastSettledReading) {
+        baselineVal = Number(lastSettledReading.currentReading);
+      } else {
+        const earliest = await tx.meterReading.findFirst({
+          where: { meterId },
+          orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
+        });
+        baselineVal = earliest ? Number(earliest.currentReading) : 0;
+      }
+
+      const currentVal = Number(latestReading.currentReading);
+      const usage = Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100);
+
+      if (usage <= 0) {
+        await tx.meterReading.update({
+          where: { id: latestReading.id },
+          data: {
+            notes: latestReading.notes ? `${latestReading.notes} [SETTLED]` : '[SETTLED]',
+          },
+        });
+        return {
+          meterId,
+          settled: true,
+          usage: 0,
+          amount: 0,
+          deduction: { applied: false, reason: '周期内累计用量为 0' },
+        };
+      }
+
+      const deduction = await this.applyReadingDeduction(tx, meter, latestReading, usage, operatorId);
+
+      const updatedNotes = latestReading.notes
+        ? `${latestReading.notes} [SETTLED]${dto.notes ? ` 备注:${dto.notes}` : ''}`
+        : `[SETTLED]${dto.notes ? ` 备注:${dto.notes}` : ''}`;
+
+      await tx.meterReading.update({
+        where: { id: latestReading.id },
+        data: { notes: updatedNotes },
+      });
+
+      return {
+        meterId,
+        settled: true,
+        baselineReading: baselineVal,
+        currentReading: currentVal,
+        usage,
+        amount: Math.round(usage * meter.unitPrice),
+        deduction,
+      };
+    });
+  }
+
+  /**
+   * 批量周期结算（如按楼栋或表列表）
+   */
+  async settleBatch(
+    dto: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string },
+    operatorId: string,
+  ) {
+    let meterIds = dto.meterIds;
+    if (!meterIds || meterIds.length === 0) {
+      const where: any = { isActive: true };
+      if (dto.buildingId) where.buildingId = dto.buildingId;
+      const meters = await this.prisma.meter.findMany({ where, select: { id: true } });
+      meterIds = meters.map((m) => m.id);
+    }
+
+    const results: any[] = [];
+    for (const id of meterIds) {
+      try {
+        const res = await this.settleMeter(id, { settleUntil: dto.settleUntil, notes: dto.notes }, operatorId);
+        results.push({ meterId: id, success: true, ...res });
+      } catch (err: any) {
+        results.push({ meterId: id, success: false, error: err.message });
+      }
+    }
+
+    return {
+      total: results.length,
+      successCount: results.filter((r) => r.success).length,
+      failureCount: results.filter((r) => !r.success).length,
+      results,
     };
   }
 }
