@@ -18,6 +18,7 @@ describe('CheckoutController', () => {
             findByTenant: vi.fn(),
             findOne: vi.fn(),
             findOneForTenant: vi.fn(),
+            getVoucher: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
           },
@@ -103,5 +104,17 @@ describe('CheckoutController', () => {
 
     expect(result.message).toBe('退租记录已删除');
     expect(service.remove).toHaveBeenCalledWith('checkout-1');
+  });
+
+  it('getVoucher：管理员不限 tenantId，租客透传 req.user.tenantId', async () => {
+    vi.spyOn(service, 'getVoucher').mockResolvedValue({ id: 'voucher-1' } as any);
+
+    // ADMIN
+    await controller.getVoucher({ user: { role: 'ADMIN' } }, 'chk-1');
+    expect(service.getVoucher).toHaveBeenCalledWith('chk-1', undefined);
+
+    // TENANT
+    await controller.getVoucher({ user: { role: 'TENANT', tenantId: 'tenant-1' } }, 'chk-1');
+    expect(service.getVoucher).toHaveBeenCalledWith('chk-1', 'tenant-1');
   });
 });

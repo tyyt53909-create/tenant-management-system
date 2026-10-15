@@ -204,13 +204,15 @@ describe('RoomsService', () => {
 
   describe('findOne', () => {
     it('管理员详情读取排序后的真实照片，其他角色不扩展照片列表', async () => {
-      prisma.room.findUnique.mockResolvedValue({id:'r1',status:'VACANT',cleanStatus:'PENDING_CLEAN'});
-      await service.findOne('r1','ADMIN');
-      expect(prisma.room.findUnique).toHaveBeenLastCalledWith(expect.objectContaining({include:expect.objectContaining({
-        photos:{select:{id:true,fileUrl:true},orderBy:[{sortOrder:'asc'},{createdAt:'asc'}],take:20},
-      })}));
-      await service.findOne('r1','CLEANER');
-      expect(prisma.room.findUnique.mock.calls.at(-1)[0].include).not.toHaveProperty('photos');
+      (prisma.room.findUnique as any).mockResolvedValue({ id: 'r1', status: 'VACANT', cleanStatus: 'PENDING_CLEAN' });
+      await service.findOne('r1', 'ADMIN');
+      expect(prisma.room.findUnique).toHaveBeenLastCalledWith(expect.objectContaining({
+        include: expect.objectContaining({
+          photos: { select: { id: true, fileUrl: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], take: 20 },
+        }),
+      }));
+      await service.findOne('r1', 'CLEANER');
+      expect((prisma.room.findUnique as any).mock.calls.at(-1)[0].include).not.toHaveProperty('photos');
     });
     it('应该返回房源详情', async () => {
       const mockRoom = {

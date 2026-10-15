@@ -19,6 +19,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    // 明确 Token 用途防混用：禁止使用 Refresh Token 访问受保护业务接口
+    if (payload.tokenType === 'REFRESH') {
+      throw new UnauthorizedException('禁止使用 Refresh Token 访问受保护接口');
+    }
+
     // 验证用户是否存在且激活
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },

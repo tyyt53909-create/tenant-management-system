@@ -366,12 +366,10 @@ export class SchedulerService {
   // 每月账单生成
   // ------------------------------------------------------------------
 
-  async generateMonthlyBills(): Promise<MonthlyBillSummary> {
-    const now = new Date();
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth();
-    const period = `${year}-${String(month + 1).padStart(2, '0')}`;
-    const monthStart = new Date(Date.UTC(year, month, 1));
+  async generateMonthlyBills(now: Date = new Date()): Promise<MonthlyBillSummary> {
+    const { year, month } = this.getBusinessDateParts(now);
+    const period = `${year}-${String(month).padStart(2, '0')}`;
+    const monthStart = new Date(Date.UTC(year, month - 1, 1));
 
     const summary: MonthlyBillSummary = { period, generated: 0, skipped: 0, notified: 0, errors: [] };
 
@@ -396,7 +394,7 @@ export class SchedulerService {
           continue;
         }
 
-        const dueDate = new Date(Date.UTC(year, month, Math.min(contract.paymentDay, 28)));
+        const dueDate = new Date(Date.UTC(year, month - 1, Math.min(contract.paymentDay, 28)));
 
         await this.billsService.create({
           contractId: contract.id,
@@ -435,6 +433,31 @@ export class SchedulerService {
   // 内部工具
   // ------------------------------------------------------------------
 
+  /** 获取业务时区（Asia/Shanghai）的年月日 */
+  private getBusinessDateParts(date: Date = new Date(), timeZone: string = TIMEZONE): {
+    year: number;
+    month: number;
+    day: number;
+  } {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    let year = date.getUTCFullYear();
+    let month = date.getUTCMonth() + 1;
+    let day = date.getUTCDate();
+    for (const part of parts) {
+      if (part.type === 'year') year = parseInt(part.value, 10);
+      if (part.type === 'month') month = parseInt(part.value, 10);
+      if (part.type === 'day') day = parseInt(part.value, 10);
+    }
+    return { year, month, day };
+  }
+
   /** 通知发送（失败不阻断任务，仅记录日志） */
   private async notify(
     userId: string,
@@ -461,9 +484,10 @@ export class SchedulerService {
     }
   }
 
-  /** 今日零点（UTC，与 @db.Date 存储一致） */
+  /** 今日零点（按 Asia/Shanghai 业务日历日期的 00:00:00 UTC，与 @db.Date 存储一致） */
   private startOfTodayUtc(now: Date = new Date()): Date {
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const { year, month, day } = this.getBusinessDateParts(now);
+    return new Date(Date.UTC(year, month - 1, day));
   }
 
   /** 自然日差值（to - from，按 UTC 日历日） */

@@ -53,12 +53,13 @@ export class BillsController {
     return this.billsService.findAll(query);
   }
 
-  // 电子收款收据单据
+  // 电子收款收据单据（租客只能看自己的收据）
   @Get(':id/receipt')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'TENANT')
-  getReceipt(@Param('id') id: string) {
-    return this.billsService.getReceipt(id);
+  getReceipt(@Request() req: any, @Param('id') id: string) {
+    const tenantId = req.user?.role === 'TENANT' ? req.user?.tenantId : undefined;
+    return this.billsService.getReceipt(id, tenantId);
   }
 
   @Get(':id')

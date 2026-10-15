@@ -87,6 +87,35 @@ describe('BillsService', () => {
       expect(result.bill.status).toBe('PARTIAL');
     });
 
+    it('并发防护：收款时对当前账单执行悲观行锁 FOR UPDATE', async () => {
+      prisma.$executeRawUnsafe = vi.fn().mockResolvedValue(1);
+      prisma.bill.findUnique.mockResolvedValue({
+        id: billId,
+        amount: 100000,
+        paidAmount: 0,
+        status: 'PENDING',
+      });
+      prisma.paymentRecord.findFirst.mockResolvedValue(null);
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'pay-lock', amount: 40000 });
+      prisma.bill.update.mockResolvedValue({
+        id: billId,
+        amount: 100000,
+        paidAmount: 40000,
+        status: 'PARTIAL',
+      });
+
+      await service.addPayment(
+        billId,
+        { amount: 40000, paymentMethod: 'CASH' } as any,
+        operatorId,
+      );
+
+      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('FOR UPDATE'),
+        billId,
+      );
+    });
+
     it('补缴剩余：状态 PARTIAL → PAID', async () => {
       prisma.bill.findUnique.mockResolvedValue({
         id: billId,
@@ -809,6 +838,38 @@ describe('BillsService', () => {
       expect(receipt.amountInChinese).toBe('叁仟元整');
       expect(receipt.payments).toHaveLength(1);
       expect(receipt.payments[0].amountYuan).toBe('3000.00');
+    });
+
+    it('租客越权读取他人收据抛出 NotFoundException', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: 'b-1',
+        contract: { tenantId: 'tenant-real' },
+      });
+
+      await expect(service.getReceipt('b-1', 'tenant-attacker')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('租客读取自己收据正常放行', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: 'b-1',
+        billNumber: 'B20261001-001',
+        amount: 300000,
+        paidAmount: 300000,
+        dueDate: new Date('2026-10-15'),
+        period: '2026-10',
+        contract: {
+          tenantId: 'tenant-real',
+          tenant: { name: '张三', phone: '13800000000' },
+          room: { roomNumber: '101', building: { name: 'A栋' } },
+        },
+        paymentRecords: [],
+        lateFees: [],
+      });
+
+      const res = await service.getReceipt('b-1', 'tenant-real');
+      expect(res.receiptNumber).toBe('RCP-B20261001-001');
     });
   });
 });

@@ -82,7 +82,7 @@ export class MetersSimulatorService {
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
-      let currentVal = latest ? Number(latest.currentReading) : (meter.initialReading ? Number(meter.initialReading) : 100.0);
+      let currentVal = latest ? Number(latest.currentReading) : (Number((meter as any).initialReading) || 100.0);
       const startReading = currentVal;
 
       // 若此前没有任何读数记录，先补登记一条初始底数
@@ -208,7 +208,7 @@ export class MetersSimulatorService {
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
-      let currentVal = latest ? Number(latest.currentReading) : (meter.initialReading ? Number(meter.initialReading) : 100.0);
+      let currentVal = latest ? Number(latest.currentReading) : (Number((meter as any).initialReading) || 100.0);
       const startReading = currentVal;
 
       let startBaseTime: Date;

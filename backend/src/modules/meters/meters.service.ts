@@ -292,7 +292,25 @@ export class MetersService {
       const usage = Math.round((dto.currentReading - previousReading) * 100) / 100;
       let notes = dto.notes || '';
       if (dto.messageId) notes = notes ? `${notes} [msgId:${dto.messageId}]` : `[msgId:${dto.messageId}]`;
-      if (shouldAutoSettle) notes = notes ? `${notes} [SETTLED]` : '[SETTLED]';
+
+      // 统一结算基准：若开启自动结算，结算基准应为上次已结算读数（避免设备采集后人工抄表漏计前段用量）
+      let billableUsage = usage;
+      if (shouldAutoSettle) {
+        const lastSettledReading = await tx.meterReading.findFirst({
+          where: {
+            meterId,
+            OR: [
+              { notes: { contains: '[SETTLED]' } },
+              { notes: { contains: '[INITIAL]' } },
+            ],
+          },
+          orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+        });
+        const settleBaseline = lastSettledReading
+          ? Number(lastSettledReading.currentReading)
+          : previousReading;
+        billableUsage = Math.max(0, Math.round((dto.currentReading - settleBaseline) * 100) / 100);
+      }
 
       const reading = await tx.meterReading.create({
         data: {
@@ -309,7 +327,16 @@ export class MetersService {
 
       let deduction: any = { applied: false, reason: '已采集读数，未开启自动扣费（等待周期结算）' };
       if (shouldAutoSettle) {
-        deduction = await this.applyReadingDeduction(tx, meter, reading, usage, operatorId);
+        deduction = await this.applyReadingDeduction(tx, meter, reading, billableUsage, operatorId);
+        // 统一入账基准：仅当扣费或生成账单成功时，才正式盖印 [SETTLED]
+        if (deduction.applied || billableUsage === 0) {
+          const settledNotes = reading.notes ? `${reading.notes} [SETTLED]` : '[SETTLED]';
+          await tx.meterReading.update({
+            where: { id: reading.id },
+            data: { notes: settledNotes },
+          });
+          reading.notes = settledNotes;
+        }
       }
 
       return { reading, deduction };
@@ -674,9 +701,26 @@ export class MetersService {
         const usage = Math.round((item.currentReading - previousReading) * 100) / 100;
         const shouldAutoSettle = item.autoSettle !== undefined ? item.autoSettle : (source !== 'DEVICE');
 
+        let billableUsage = usage;
+        if (shouldAutoSettle) {
+          const lastSettledReading = await tx.meterReading.findFirst({
+            where: {
+              meterId: item.meterId,
+              OR: [
+                { notes: { contains: '[SETTLED]' } },
+                { notes: { contains: '[INITIAL]' } },
+              ],
+            },
+            orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+          });
+          const settleBaseline = lastSettledReading
+            ? Number(lastSettledReading.currentReading)
+            : previousReading;
+          billableUsage = Math.max(0, Math.round((item.currentReading - settleBaseline) * 100) / 100);
+        }
+
         let notes = item.notes || '';
         if (item.messageId) notes = notes ? `${notes} [msgId:${item.messageId}]` : `[msgId:${item.messageId}]`;
-        if (shouldAutoSettle) notes = notes ? `${notes} [SETTLED]` : '[SETTLED]';
 
         const reading = await tx.meterReading.create({
           data: {
@@ -693,7 +737,15 @@ export class MetersService {
 
         let deduction: any = { applied: false, amount: 0, deducted: 0, shortfall: 0 };
         if (shouldAutoSettle) {
-          deduction = await this.applyReadingDeduction(tx, meter, reading, usage, operatorId);
+          deduction = await this.applyReadingDeduction(tx, meter, reading, billableUsage, operatorId);
+          if (deduction.applied || billableUsage === 0) {
+            const settledNotes = reading.notes ? `${reading.notes} [SETTLED]` : '[SETTLED]';
+            await tx.meterReading.update({
+              where: { id: reading.id },
+              data: { notes: settledNotes },
+            });
+            reading.notes = settledNotes;
+          }
         }
 
         results.push({
@@ -817,7 +869,7 @@ export class MetersService {
     }
 
     let prepayTransaction = null;
-    if (deducted > 0) {
+    if (account && deducted > 0) {
       const updatedAccount = await tx.prepayAccount.findUniqueOrThrow({
         where: { id: account.id },
       });
@@ -860,7 +912,7 @@ export class MetersService {
             totalAmount: amount,
             deducted,
             shortfall,
-            reason: '预付账户余额不足，补缴差额',
+            reason: account ? '预付账户余额不足，补缴差额' : '未开通预付账户，直接生成水电账单',
           },
         },
       });
@@ -1295,6 +1347,19 @@ export class MetersService {
 
       const deduction = await this.applyReadingDeduction(tx, meter, latestReading, usage, operatorId);
 
+      if (!deduction.applied) {
+        return {
+          meterId,
+          settled: false,
+          baselineReading: baselineVal,
+          currentReading: currentVal,
+          usage,
+          amount: Math.round(usage * meter.unitPrice),
+          deduction,
+          reason: deduction.reason || '扣费或账单生成未成功，未标记结算',
+        };
+      }
+
       const updatedNotes = latestReading.notes
         ? `${latestReading.notes} [SETTLED]${dto.notes ? ` 备注:${dto.notes}` : ''}`
         : `[SETTLED]${dto.notes ? ` 备注:${dto.notes}` : ''}`;
@@ -1335,7 +1400,7 @@ export class MetersService {
     for (const id of meterIds) {
       try {
         const res = await this.settleMeter(id, { settleUntil: dto.settleUntil, notes: dto.notes }, operatorId);
-        results.push({ meterId: id, success: true, ...res });
+        results.push({ success: true, ...res });
       } catch (err: any) {
         results.push({ meterId: id, success: false, error: err.message });
       }

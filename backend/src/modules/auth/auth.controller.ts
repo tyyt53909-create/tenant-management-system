@@ -207,6 +207,10 @@ export class AuthController {
       throw new UnauthorizedException('Token 无效或已过期');
     }
 
+    if (payload.tokenType !== 'REFRESH') {
+      throw new UnauthorizedException('Token 用途不匹配，请提供 Refresh Token');
+    }
+
     // 2. 查询用户
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },

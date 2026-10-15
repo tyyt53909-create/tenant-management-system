@@ -341,6 +341,24 @@ describe('SchedulerService（定时任务）', () => {
       expect(where.paymentCycle).toBe('MONTHLY');
       expect(where.endDate.gte).toBeInstanceOf(Date);
     });
+
+    it('上海时间每月 1 日 01:10 触发时（UTC 为前一月最后一天 17:10），正确按上海时区生成本月账期（2026-11）', async () => {
+      // UTC 2026-10-31 17:10:00 对应 Asia/Shanghai 2026-11-01 01:10:00
+      const shanghaiNov1stTrigger = new Date('2026-10-31T17:10:00.000Z');
+      prisma.contract.findMany.mockResolvedValue([contract]);
+      prisma.bill.findFirst.mockResolvedValue(null);
+      billsService.create.mockResolvedValue({ id: 'b-nov' });
+
+      const result = await service.generateMonthlyBills(shanghaiNov1stTrigger);
+
+      expect(result.period).toBe('2026-11');
+      expect(billsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          period: '2026-11',
+          dueDate: '2026-11-05T00:00:00.000Z',
+        }),
+      );
+    });
   });
 
   describe('runDaily（聚合）', () => {

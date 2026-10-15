@@ -763,8 +763,8 @@ describe('MetersService', () => {
         where: { id: 'rd-latest' },
         data: { notes: expect.stringContaining('[SETTLED]') },
       });
-      expect(result.deduction.applied).toBe(true);
-      expect(result.deduction.deducted).toBe(10000);
+      expect((result as any).deduction.applied).toBe(true);
+      expect((result as any).deduction.deducted).toBe(10000);
     });
   });
 

@@ -42,12 +42,13 @@ export class CheckoutController {
     return this.checkoutService.findAll(query);
   }
 
-  // 电子退租结算单据
+  // 电子退租结算单据（租客只能看自己的单据）
   @Get(':id/voucher')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'TENANT')
-  getVoucher(@Param('id') id: string) {
-    return this.checkoutService.getVoucher(id);
+  getVoucher(@Request() req: any, @Param('id') id: string) {
+    const tenantId = req.user?.role === 'TENANT' ? req.user?.tenantId : undefined;
+    return this.checkoutService.getVoucher(id, tenantId);
   }
 
   // 退租记录详情：租客仅自己的记录（越权按 404 处理）

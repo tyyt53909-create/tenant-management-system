@@ -86,6 +86,19 @@ describe('JwtAuthService', () => {
 
       const verified = await service.verifyToken(newAccessToken);
       expect(verified.sub).toBe('user-123');
+      expect(verified.tokenType).toBe('ACCESS');
+    });
+
+    it('禁止使用 Access Token 作为 Refresh Token 刷新（防混用）', async () => {
+      const payload: JwtPayload = {
+        sub: 'user-123',
+        role: 'ADMIN',
+      };
+
+      const tokens = await service.generateTokens(payload);
+      await expect(
+        service.refreshAccessToken(tokens.accessToken, payload),
+      ).rejects.toThrow();
     });
   });
 });

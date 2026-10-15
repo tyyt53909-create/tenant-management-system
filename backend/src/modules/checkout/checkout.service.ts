@@ -241,9 +241,9 @@ export class CheckoutService {
   }
 
   /**
-   * 电子退租结算确认凭单数据聚合
+   * 电子退租结算确认凭单数据聚合（支持租客归属防越权）
    */
-  async getVoucher(id: string) {
+  async getVoucher(id: string, tenantId?: string) {
     const record = await this.prisma.checkoutRecord.findUnique({
       where: { id },
       include: {
@@ -258,6 +258,10 @@ export class CheckoutService {
     });
 
     if (!record) {
+      throw new NotFoundException('退租记录不存在');
+    }
+
+    if (tenantId && (!record.contract || record.contract.tenantId !== tenantId)) {
       throw new NotFoundException('退租记录不存在');
     }
 

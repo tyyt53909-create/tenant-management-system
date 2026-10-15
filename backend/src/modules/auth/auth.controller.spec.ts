@@ -441,6 +441,7 @@ describe('AuthController', () => {
       vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
         sub: 'user-123',
         role: 'TENANT',
+        tokenType: 'REFRESH',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
       vi.spyOn(jwtService, 'refreshAccessToken').mockResolvedValue('new-access-token');
@@ -455,6 +456,16 @@ describe('AuthController', () => {
       );
     });
 
+    it('禁止使用 Access Token 刷新 Token', async () => {
+      vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
+        sub: 'user-123',
+        role: 'TENANT',
+        tokenType: 'ACCESS',
+      });
+
+      await expect(controller.refresh(dto)).rejects.toThrow(UnauthorizedException);
+    });
+
     it('应该拒绝无效的 Refresh Token', async () => {
       vi.spyOn(jwtService, 'verifyToken').mockRejectedValue(new Error('Invalid token'));
 
@@ -465,6 +476,7 @@ describe('AuthController', () => {
       vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
         sub: 'user-123',
         role: 'TENANT',
+        tokenType: 'REFRESH',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
 
@@ -481,6 +493,7 @@ describe('AuthController', () => {
       vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
         sub: 'user-123',
         role: 'TENANT',
+        tokenType: 'REFRESH',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
 

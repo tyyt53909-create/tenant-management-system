@@ -314,6 +314,15 @@ export class BillsService {
    */
   async addPayment(billId: string, dto: CreatePaymentDto, operatorId: string) {
     return this.prisma.$transaction(async (tx) => {
+      // 悲观行锁：并发收款时串行化锁定当前账单，杜绝并发超收与状态脏写覆盖
+      try {
+        if (typeof (tx as any).$executeRawUnsafe === 'function') {
+          await (tx as any).$executeRawUnsafe(`SELECT id FROM bills WHERE id = $1 FOR UPDATE`, billId);
+        }
+      } catch {
+        // 兼容单元测试 mock 或无原生 SQL 执行环境
+      }
+
       const bill = await tx.bill.findUnique({ where: { id: billId } });
 
       if (!bill) {
@@ -621,9 +630,9 @@ export class BillsService {
   }
 
   /**
-   * 电子收款收据单据数据聚合
+   * 电子收款收据单据数据聚合（支持租客归属防越权）
    */
-  async getReceipt(billId: string) {
+  async getReceipt(billId: string, tenantId?: string) {
     const bill = await this.prisma.bill.findUnique({
       where: { id: billId },
       include: {
@@ -649,6 +658,10 @@ export class BillsService {
 
     if (!bill) {
       throw new NotFoundException('账单不存在');
+    }
+
+    if (tenantId && (!bill.contract || bill.contract.tenantId !== tenantId)) {
+      throw new NotFoundException('收据不存在');
     }
 
     const lateFeeSummary = summarizeLateFees(bill.lateFees || []);

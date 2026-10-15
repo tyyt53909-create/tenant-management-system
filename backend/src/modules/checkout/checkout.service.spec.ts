@@ -378,5 +378,35 @@ describe('CheckoutService', () => {
       expect(voucher.items).toHaveLength(1);
       expect(voucher.items[0].amountYuan).toBe('200.00');
     });
+
+    it('租客越权读取他人退租凭单抛出 NotFoundException', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({
+        id: 'chk-1',
+        contract: { tenantId: 'tenant-real' },
+      });
+
+      await expect(service.getVoucher('chk-1', 'tenant-attacker')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('租客读取自己退租凭单正常放行', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({
+        id: 'chk-1',
+        status: 'COMPLETED',
+        contractId: 'c-1',
+        contract: {
+          tenantId: 'tenant-real',
+          depositAmount: 100000,
+          tenant: { name: '李四', phone: '13900000000' },
+        },
+        room: { roomNumber: '102', building: { name: 'B栋' } },
+        items: [],
+      });
+
+      const voucher = await service.getVoucher('chk-1', 'tenant-real');
+      expect(voucher.tenantName).toBe('李四');
+      expect(voucher.roomNumber).toBe('102');
+    });
   });
 });

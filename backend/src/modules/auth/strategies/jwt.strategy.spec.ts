@@ -81,4 +81,9 @@ describe('JwtStrategy 租客档案强制校验（T158 安全回归）', () => {
     const actor=await strategy.validate({sub:'u-1',role:'TENANT'} as any);
     expect(actor.role).toBe('CLEANER');expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
   });
+  it('禁止使用 Refresh Token 访问受保护接口（防混用绕过过期时间）', async () => {
+    await expect(
+      strategy.validate({ sub: 'u-1', role: 'ADMIN', tokenType: 'REFRESH' } as any),
+    ).rejects.toThrow(UnauthorizedException);
+  });
 });
