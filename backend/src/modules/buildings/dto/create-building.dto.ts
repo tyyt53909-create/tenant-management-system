@@ -13,6 +13,11 @@ export class CreateBuildingDto {
   @Min(1, { message: '楼层数至少为1' })
   floors: number;
 
+  @IsInt()
+  @IsOptional()
+  @Min(1, { message: '楼层数至少为1' })
+  totalFloors?: number;
+
   @IsOptional()
   metadata?: any;
 }

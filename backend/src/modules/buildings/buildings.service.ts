@@ -9,8 +9,13 @@ export class BuildingsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateBuildingDto) {
+    const data: any = { ...dto };
+    if (data.totalFloors !== undefined && data.floors === undefined) {
+      data.floors = data.totalFloors;
+    }
+    delete data.totalFloors;
     return this.prisma.building.create({
-      data: dto,
+      data,
     });
   }
 
@@ -71,9 +76,15 @@ export class BuildingsService {
       throw new NotFoundException('楼栋不存在');
     }
 
+    const data: any = { ...dto };
+    if (data.totalFloors !== undefined && data.floors === undefined) {
+      data.floors = data.totalFloors;
+    }
+    delete data.totalFloors;
+
     return this.prisma.building.update({
       where: { id },
-      data: dto,
+      data,
     });
   }
 

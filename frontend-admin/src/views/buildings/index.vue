@@ -8,10 +8,23 @@
       </el-form>
 
       <el-table :data="tableData" v-loading="loading" border stripe empty-text="暂无楼栋，点击右上角「新增楼栋」开始录入">
-        <el-table-column prop="name" label="楼栋名称" width="200" />
-        <el-table-column prop="address" label="地址" min-width="300" />
-        <el-table-column prop="totalFloors" label="总楼层" width="100" />
-        <el-table-column prop="isActive" label="状态" width="100">
+        <el-table-column prop="name" label="楼栋名称" width="180" />
+        <el-table-column prop="address" label="地址" min-width="240" />
+        <el-table-column label="总楼层" width="90">
+          <template #default="{ row }">
+            {{ row.floors || row.totalFloors || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="管家/房东联系" width="220">
+          <template #default="{ row }">
+            <div v-if="row.metadata?.landlordName || row.metadata?.landlordPhone">
+              <div style="font-weight: 550; color: #333;">{{ row.metadata.landlordName || '专属管家' }} <span style="font-size: 12px; color: #666; font-weight: normal;">{{ row.metadata.landlordPhone }}</span></div>
+              <div v-if="row.metadata?.landlordWechat" style="font-size: 12px; color: #2e7d32;">微信: {{ row.metadata.landlordWechat }}</div>
+            </div>
+            <span v-else style="color: #bbb;">默认管家服务</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="isActive" label="状态" width="90">
           <template #default="{ row }">
             <el-tag :type="row.isActive ? 'success' : 'danger'">
               {{ row.isActive ? '启用' : '停用' }}
@@ -23,7 +36,7 @@
             {{ new Date(row.createdAt).toLocaleString('zh-CN') }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
@@ -42,8 +55,8 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
+      <el-form ref="formRef" :model="formData" :rules="rules" label-width="110px">
         <el-form-item label="楼栋名称" prop="name">
           <el-input v-model="formData.name" placeholder="请输入楼栋名称" />
         </el-form-item>
@@ -55,6 +68,20 @@
         </el-form-item>
         <el-form-item label="状态" prop="isActive">
           <el-switch v-model="formData.isActive" />
+        </el-form-item>
+
+        <el-divider content-position="left">管家与房东联系信息（租客端联系卡片）</el-divider>
+        <el-form-item label="管家/房东姓名">
+          <el-input v-model="formData.landlordName" placeholder="例如：陈管家 / 李房东" />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="formData.landlordPhone" placeholder="例如：13800138000" />
+        </el-form-item>
+        <el-form-item label="微信号">
+          <el-input v-model="formData.landlordWechat" placeholder="例如：qiju_service（租客可一键复制）" />
+        </el-form-item>
+        <el-form-item label="服务时间">
+          <el-input v-model="formData.serviceHours" placeholder="例如：09:00 - 21:00" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -81,7 +108,16 @@ const tableData = ref<Building[]>([]);
 const currentEditId = ref('');
 
 const pagination = reactive({ page: 1, limit: 20, total: 0 });
-const formData = reactive({ name: '', address: '', totalFloors: 1, isActive: true });
+const formData = reactive({
+  name: '',
+  address: '',
+  totalFloors: 1,
+  isActive: true,
+  landlordName: '',
+  landlordPhone: '',
+  landlordWechat: '',
+  serviceHours: '',
+});
 const rules = {
   name: [{ required: true, message: '请输入楼栋名称', trigger: 'blur' }],
   address: [{ required: true, message: '请输入地址', trigger: 'blur' }],
@@ -104,13 +140,33 @@ const fetchData = async () => {
 const handleCreate = () => {
   dialogTitle.value = '新增楼栋';
   currentEditId.value = '';
+  Object.assign(formData, {
+    name: '',
+    address: '',
+    totalFloors: 1,
+    isActive: true,
+    landlordName: '',
+    landlordPhone: '',
+    landlordWechat: '',
+    serviceHours: '09:00 - 21:00',
+  });
   dialogVisible.value = true;
 };
 
-const handleEdit = (row: Building) => {
+const handleEdit = (row: any) => {
   dialogTitle.value = '编辑楼栋';
   currentEditId.value = row.id;
-  Object.assign(formData, row);
+  const meta = row.metadata || {};
+  Object.assign(formData, {
+    name: row.name,
+    address: row.address,
+    totalFloors: row.floors || row.totalFloors || 1,
+    isActive: row.isActive !== false,
+    landlordName: meta.landlordName || '',
+    landlordPhone: meta.landlordPhone || '',
+    landlordWechat: meta.landlordWechat || '',
+    serviceHours: meta.serviceHours || '09:00 - 21:00',
+  });
   dialogVisible.value = true;
 };
 
@@ -135,11 +191,25 @@ const handleSubmit = async () => {
     if (!valid) return;
     submitLoading.value = true;
     try {
+      const payload: any = {
+        name: formData.name,
+        address: formData.address,
+        floors: Number(formData.totalFloors || 1),
+        isActive: formData.isActive,
+        metadata: {
+          landlordName: formData.landlordName || '专属管家',
+          landlordPhone: formData.landlordPhone || '13800138000',
+          landlordWechat: formData.landlordWechat || 'qiju_service',
+          serviceHours: formData.serviceHours || '09:00 - 21:00',
+          notice: '紧急设施问题（漏水、断电、门锁等）请直接拨打电话，一般咨询可添加微信留言。',
+        },
+      };
+
       if (currentEditId.value) {
-        await updateBuilding(currentEditId.value, formData);
+        await updateBuilding(currentEditId.value, payload);
         ElMessage.success('更新成功');
       } else {
-        await createBuilding(formData);
+        await createBuilding(payload);
         ElMessage.success('创建成功');
       }
       dialogVisible.value = false;

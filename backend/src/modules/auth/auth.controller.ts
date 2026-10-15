@@ -271,7 +271,10 @@ export class AuthController {
                     roomNumber: true,
                     building: {
                       select: {
+                        id: true,
                         name: true,
+                        address: true,
+                        metadata: true,
                       },
                     },
                   },

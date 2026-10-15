@@ -55,6 +55,33 @@
             <text class="value">每月{{ contract.paymentDay }}号</text>
           </view>
         </view>
+
+        <view class="info-section">
+          <text class="section-title">房东 / 管理方联系方式</text>
+          <view class="info-item">
+            <text class="label">联系人</text>
+            <text class="value">{{ landlordContact.name }}</text>
+          </view>
+          <view class="info-item">
+            <text class="label">微信号</text>
+            <view class="contact-inline-action">
+              <text class="value selectable" :selectable="true">{{ landlordContact.wechat }}</text>
+              <button class="contract-pill-btn wechat-pill" @tap="copyWechat">复制微信</button>
+            </view>
+          </view>
+          <view class="info-item">
+            <text class="label">联系电话</text>
+            <view class="contact-inline-action">
+              <text class="value selectable" :selectable="true">{{ landlordContact.formattedPhone || landlordContact.phone }}</text>
+              <button class="contract-pill-btn call-pill" @tap="callPhone">拨打</button>
+              <button class="contract-pill-btn copy-pill" @tap="copyPhone">复制</button>
+            </view>
+          </view>
+          <view class="info-item" v-if="landlordContact.serviceHours">
+            <text class="label">服务时间</text>
+            <text class="value">{{ landlordContact.serviceHours }}</text>
+          </view>
+        </view>
       </view>
     </view>
 
@@ -79,12 +106,18 @@ import { ensureTenantSession } from '../../utils/session.js'
 import { orDash, withUnit, money } from '../../utils/format.js'
 import request from '../../utils/request.js'
 import ProtectedPhoto from '../../components/ProtectedPhoto.vue'
+import { getLandlordContact, copyToClipboard, makePhoneCall } from '../../utils/contact.js'
 
 export default {
   components: { ProtectedPhoto },
   data() {
     return {
       contract: null, loading:false, error:'', attachments:[],attachmentsLoading:false,attachmentsError:'', attachmentsGeneration:0
+    }
+  },
+  computed: {
+    landlordContact() {
+      return getLandlordContact({}, this.contract ? [this.contract] : [])
     }
   },
   onLoad() {
@@ -95,6 +128,15 @@ export default {
     orDash,
     withUnit,
     money,
+    copyWechat() {
+      copyToClipboard(this.landlordContact.wechat, '微信号')
+    },
+    copyPhone() {
+      copyToClipboard(this.landlordContact.phone, '电话号码')
+    },
+    callPhone() {
+      makePhoneCall(this.landlordContact.phone)
+    },
     async loadContract() {
       this.loading=true;this.error='';this.contract=null;this.attachments=[];this.attachmentsError='';this.attachmentsGeneration++;
       try {
@@ -245,5 +287,41 @@ export default {
   padding: 200rpx 0;
   color: #999;
   font-size: 26rpx;
+}
+
+.contact-inline-action {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.contract-pill-btn {
+  font-size: 20rpx;
+  font-weight: 550;
+  height: 48rpx;
+  line-height: 48rpx;
+  padding: 0 16rpx;
+  border-radius: 12rpx;
+  border: none;
+  margin: 0;
+}
+
+.contract-pill-btn::after {
+  border: none;
+}
+
+.wechat-pill {
+  background: #2e7d32;
+  color: #ffffff;
+}
+
+.call-pill {
+  background: #515c43;
+  color: #ffffff;
+}
+
+.copy-pill {
+  background: #ece8df;
+  color: #68715b;
 }
 </style>

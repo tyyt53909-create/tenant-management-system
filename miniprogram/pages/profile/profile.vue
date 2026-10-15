@@ -22,6 +22,52 @@
       <button class="invite-banner-btn" @tap="openBindModal">输入邀请码</button>
     </view>
 
+    <!-- 专属房东与管家联系卡片 -->
+    <view class="q-section-heading">
+      <text>专属管家与房东</text>
+      <text class="q-link" @tap="showContact">联系详情 ›</text>
+    </view>
+    <view class="q-surface landlord-card">
+      <view class="landlord-header">
+        <view class="landlord-avatar">{{ landlordContact.name?.slice(0, 1) || '管' }}</view>
+        <view class="landlord-meta">
+          <view class="landlord-title-row">
+            <text class="landlord-name">{{ landlordContact.name || '栖居管家' }}</text>
+            <text class="landlord-role-tag">专属责任人</text>
+          </view>
+          <text class="landlord-room-sub">{{ landlordContact.roomTitle || '栖居居所生活服务' }}</text>
+        </view>
+      </view>
+
+      <view class="landlord-items">
+        <!-- 微信号 -->
+        <view class="landlord-item-row">
+          <view class="item-badge-wrap">
+            <text class="item-tag wechat-tag">微信</text>
+            <text class="item-value selectable" :selectable="true">{{ landlordContact.wechat }}</text>
+          </view>
+          <button class="pill-btn wechat-pill" @tap="copyWechat">复制微信号</button>
+        </view>
+
+        <!-- 电话号码 -->
+        <view class="landlord-item-row">
+          <view class="item-badge-wrap">
+            <text class="item-tag phone-tag">电话</text>
+            <text class="item-value selectable" :selectable="true">{{ landlordContact.formattedPhone || landlordContact.phone }}</text>
+          </view>
+          <view class="phone-btn-group">
+            <button class="pill-btn call-pill" @tap="callLandlord">拨打</button>
+            <button class="pill-btn copy-pill" @tap="copyPhone">复制</button>
+          </view>
+        </view>
+      </view>
+
+      <view class="landlord-card-footer">
+        <text class="landlord-hours-text">⏰ 服务时间：{{ landlordContact.serviceHours }}</text>
+        <text class="landlord-tip-text">设施紧急故障请直接拨打电话，日常沟通欢迎添加微信留言。</text>
+      </view>
+    </view>
+
     <!-- 居住服务 -->
     <view class="q-section-heading"><text>居住服务</text></view>
     <view class="q-surface profile-menu">
@@ -86,16 +132,25 @@
         </view>
       </view>
     </view>
+
+    <!-- 房东/管家联系卡片弹窗 -->
+    <ContactCardModal
+      :visible="showContactModal"
+      :contact="landlordContact"
+      @close="showContactModal = false"
+    />
   </view>
 </template>
 
 <script>
 import QIcon from '../../components/QIcon.vue'
+import ContactCardModal from '../../components/ContactCardModal.vue'
 import { getUserInfo, getUnreadCount, bindInviteCode } from '../../api/index.js'
 import { clearSession, openHome } from '../../utils/session.js'
+import { getLandlordContact, copyToClipboard, makePhoneCall } from '../../utils/contact.js'
 
 export default {
-  components: { QIcon },
+  components: { QIcon, ContactCardModal },
   data() {
     return {
       userInfo: {},
@@ -105,6 +160,8 @@ export default {
       showBindDialog: false,
       inputInviteCode: '',
       bindLoading: false,
+      showContactModal: false,
+      landlordContact: getLandlordContact({}, []),
       menu: [
         { label: '通知提醒', icon: 'bell', path: '/pages/notifications/notifications' },
         { label: '我的合同', icon: 'contract', path: '/pages/contract/contract' },
@@ -151,6 +208,7 @@ export default {
         this.rawUser = user
         this.userEmail = user.email || ''
         this.userInfo = user.tenant || {}
+        this.landlordContact = getLandlordContact(user, this.userInfo.contracts || [])
         const res = await getUnreadCount()
         this.unreadCount = res.unreadCount || 0
       } catch (error) {
@@ -189,11 +247,16 @@ export default {
       }
     },
     showContact() {
-      uni.showModal({
-        title: '联系管理者',
-        content: '请通过签约时约定的联系方式联系管理者。居住设施问题也可以通过报修页面提交。',
-        showCancel: false
-      })
+      this.showContactModal = true
+    },
+    copyWechat() {
+      copyToClipboard(this.landlordContact.wechat, '微信号')
+    },
+    copyPhone() {
+      copyToClipboard(this.landlordContact.phone, '电话号码')
+    },
+    callLandlord() {
+      makePhoneCall(this.landlordContact.phone)
     },
     showAbout() {
       uni.showModal({
@@ -450,5 +513,179 @@ export default {
 
 .modal-btn-confirm::after {
   border: none;
+}
+
+/* 专属管家与房东名片样式 */
+.landlord-card {
+  padding: 32rpx;
+  margin-top: 12rpx;
+  border-radius: 28rpx;
+  background: #fffefa;
+  border: 1rpx solid #eedec9;
+}
+
+.landlord-header {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  margin-bottom: 26rpx;
+}
+
+.landlord-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: #515c43;
+  color: #fffefa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.landlord-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.landlord-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.landlord-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #302f2a;
+}
+
+.landlord-role-tag {
+  font-size: 20rpx;
+  color: #515c43;
+  background: #ecf0e9;
+  padding: 2rpx 12rpx;
+  border-radius: 10rpx;
+}
+
+.landlord-room-sub {
+  display: block;
+  font-size: 22rpx;
+  color: #8c857b;
+  margin-top: 6rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.landlord-items {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.landlord-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fbf9f4;
+  border: 1rpx solid #ede8de;
+  border-radius: 18rpx;
+  padding: 18rpx 22rpx;
+  gap: 12rpx;
+}
+
+.item-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.item-tag {
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 10rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.wechat-tag {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.phone-tag {
+  background: #eef2eb;
+  color: #515c43;
+}
+
+.item-value {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #302f2a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill-btn {
+  font-size: 22rpx;
+  font-weight: 550;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 20rpx;
+  border-radius: 14rpx;
+  border: none;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.pill-btn::after {
+  border: none;
+}
+
+.wechat-pill {
+  background: #2e7d32;
+  color: #ffffff;
+}
+
+.phone-btn-group {
+  display: flex;
+  gap: 10rpx;
+  flex-shrink: 0;
+}
+
+.call-pill {
+  background: #515c43;
+  color: #ffffff;
+}
+
+.copy-pill {
+  background: #ece8df;
+  color: #68715b;
+}
+
+.landlord-card-footer {
+  margin-top: 22rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx dashed #ede8de;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.landlord-hours-text {
+  font-size: 21rpx;
+  color: #8c857b;
+}
+
+.landlord-tip-text {
+  font-size: 20rpx;
+  color: #a49f95;
+  line-height: 1.4;
 }
 </style>

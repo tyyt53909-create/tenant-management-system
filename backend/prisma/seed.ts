@@ -93,7 +93,12 @@ export async function runSeed({ prisma, env = process.env, log = (message: strin
       name: '默认楼栋',
       floors: 7,
       metadata: {
-        landlordName: '管理员',
+        landlordName: '陈管家',
+        landlordPhone: '13800138000',
+        landlordWechat: 'qiju_service',
+        serviceHours: '09:00 - 21:00',
+        emergencyPhone: '13800138000',
+        notice: '紧急设施问题（漏水、断电、门锁等）请优先拨打电话，一般咨询可添加微信留言。',
         description: '系统默认楼栋',
       },
       isActive: true,

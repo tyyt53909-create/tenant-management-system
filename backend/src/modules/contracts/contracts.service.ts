@@ -205,7 +205,7 @@ export class ContractsService {
         orderBy: { createdAt: 'desc' },
         include: {
           room: true,
-          building: { select: { name: true, address: true } },
+          building: { select: { id: true, name: true, address: true, metadata: true } },
         },
       }),
       this.prisma.contract.count({ where }),
