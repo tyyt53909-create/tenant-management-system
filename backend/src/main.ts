@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import { resolveCorsOrigins } from './config/cors.config.js';
+import { resolveTrustProxy } from './config/throttle.config.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,6 +16,11 @@ async function bootstrap() {
   
   // 全局路径前缀
   app.setGlobalPrefix('api');
+
+  const trustProxy = resolveTrustProxy(process.env.TRUST_PROXY, process.env.NODE_ENV);
+  if (trustProxy !== false) {
+    app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
+  }
   
   // 启用全局验证管道
   app.useGlobalPipes(
