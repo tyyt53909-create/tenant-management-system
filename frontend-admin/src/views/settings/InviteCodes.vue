@@ -232,20 +232,27 @@ import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getInviteCodes, generateInviteCode, revokeInviteCode } from '@/api/auth';
 import type { InviteCode } from '@/types';
+import { usePagedTable } from '@/composables';
 
-const loading = ref(false);
 const generating = ref(false);
-const tableData = ref<InviteCode[]>([]);
 
-const pagination = reactive({
-  page: 1,
-  limit: 20,
-  total: 0,
-});
-
-const queryForm = reactive({
-  search: '',
-  status: '',
+const {
+  loading,
+  tableData,
+  pagination,
+  queryForm,
+  fetchData,
+  handleQuery,
+  handleReset,
+} = usePagedTable<InviteCode, { search: string; status: string }>({
+  fetchApi: (params) =>
+    getInviteCodes({
+      page: params.page,
+      limit: params.limit,
+      search: params.search || undefined,
+      status: params.status || undefined,
+    }),
+  defaultQuery: { search: '', status: '' },
 });
 
 const generateDialogVisible = ref(false);
@@ -258,36 +265,6 @@ const generateForm = reactive({
 
 const resultDialogVisible = ref(false);
 const generatedCodes = ref<string[]>([]);
-
-const fetchData = async () => {
-  loading.value = true;
-  try {
-    const res: any = await getInviteCodes({
-      page: pagination.page,
-      limit: pagination.limit,
-      search: queryForm.search || undefined,
-      status: queryForm.status || undefined,
-    });
-    tableData.value = res.data || [];
-    pagination.total = res.meta?.total || 0;
-  } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '获取邀请码列表失败');
-  } finally {
-    loading.value = false;
-  }
-};
-
-const handleQuery = () => {
-  pagination.page = 1;
-  fetchData();
-};
-
-const handleReset = () => {
-  queryForm.search = '';
-  queryForm.status = '';
-  pagination.page = 1;
-  fetchData();
-};
 
 const openGenerateDialog = () => {
   generateForm.count = 1;

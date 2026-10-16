@@ -1,7 +1,12 @@
 <template>
   <div class="meters-page">
     <ManagementMetrics resource="meters" />
-    <ResourcePanel title="水电表档案" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="meters" :rows="tableData" /><el-button type="primary" @click="handleCreate">＋ 新增水电表</el-button></template>
+    <ResourcePanel title="水电表档案" :count="pagination.total" :loading="loading" :error="loadError || undefined" @retry="fetchData">
+      <template #actions>
+        <ExportCurrent resource="meters" :rows="tableData" />
+        <el-button type="primary" @click="handleCreate">＋ 新增水电表</el-button>
+      </template>
+
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="类型">
           <el-select v-model="queryForm.meterType" placeholder="请选择类型" clearable>
@@ -29,7 +34,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="房源" min-width="160"><template #default="{row}">{{ row.room?.roomNumber || '公共区域' }}</template></el-table-column>
+        <el-table-column label="房源" min-width="160">
+          <template #default="{ row }">{{ row.room?.roomNumber || '公共区域' }}</template>
+        </el-table-column>
         <el-table-column prop="unitPrice" label="单价" width="120">
           <template #default="{ row }">
             ¥{{ (row.unitPrice / 100).toFixed(2) }}/{{ unitMap[row.meterType] }}
@@ -74,92 +81,19 @@
       </div>
     </ResourcePanel>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="120px">
-        <el-form-item label="楼栋" prop="buildingId">
-          <EntitySelect v-model="formData.buildingId" resource="buildings" />
-        </el-form-item>
-        <el-form-item label="房源" prop="roomId">
-          <EntitySelect v-model="formData.roomId" resource="rooms" placeholder="可选，公共区域留空" @selected="row=>{if(row)formData.buildingId=row.buildingId}" />
-        </el-form-item>
-        <el-form-item label="表类型" prop="meterType">
-          <el-select v-model="formData.meterType">
-            <el-option label="电表" value="ELECTRICITY" />
-            <el-option label="水表" value="WATER" />
-            <el-option label="燃气表" value="GAS" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="表号" prop="meterNumber">
-          <el-input v-model="formData.meterNumber" placeholder="请输入表号" />
-        </el-form-item>
-        <el-form-item v-if="!currentEditId" label="设备初始底数" prop="initialReading">
-          <el-input-number v-model="formData.initialReading" :min="0" :precision="2" placeholder="绑定时表底数（不计费）" />
-        </el-form-item>
-        <el-form-item label="单价(元)" prop="unitPrice">
-          <el-input-number v-model="formData.unitPrice" :min="0" :precision="2" />
-        </el-form-item>
-        <el-form-item label="价格生效日期" prop="priceEffectiveDate">
-          <el-date-picker v-model="formData.priceEffectiveDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />
-        </el-form-item>
-        <el-form-item label="状态" prop="isActive">
-          <el-switch v-model="formData.isActive" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
-      </template>
-    </el-dialog>
+    <!-- 新增 / 编辑水电表组件 -->
+    <MeterFormDialog
+      v-model="dialogVisible"
+      :meter="currentEditMeter"
+      @success="fetchData"
+    />
 
-    <!-- 讀數登記 -->
-    <el-dialog v-model="readingDialogVisible" title="登记读数" width="520px">
-      <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
-        <el-descriptions-item label="表号">{{ currentMeter?.meterNumber }}</el-descriptions-item>
-        <el-descriptions-item label="单价">
-          ¥{{ ((currentMeter?.unitPrice || 0) / 100).toFixed(2) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}
-        </el-descriptions-item>
-      </el-descriptions>
-
-      <el-alert
-        v-if="readingResultText"
-        :title="readingResultText"
-        :type="readingResultType"
-        show-icon
-        :closable="false"
-        style="margin-bottom: 16px"
-      />
-
-      <el-form ref="readingFormRef" :model="readingForm" :rules="readingRules" label-width="110px">
-        <el-form-item label="读数模式">
-          <el-radio-group v-model="readingForm.mode">
-            <el-radio label="NORMAL">日常抄表</el-radio>
-            <el-radio label="INITIAL">登记初始底数（不计费）</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="当前读数" prop="currentReading">
-          <el-input-number v-model="readingForm.currentReading" :min="0" :precision="2" :step="10" />
-        </el-form-item>
-        <el-form-item v-if="readingForm.mode === 'NORMAL'" label="自动结算扣费">
-          <el-switch v-model="readingForm.autoSettle" active-text="即时扣费" inactive-text="仅采集记录（周期结算）" />
-        </el-form-item>
-        <el-form-item label="读数时间">
-          <el-date-picker
-            v-model="readingForm.readingTime"
-            type="datetime"
-            placeholder="缺省为当前时间"
-            value-format="YYYY-MM-DDTHH:mm:ss"
-          />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="readingForm.notes" placeholder="选填" />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="readingDialogVisible = false">关闭</el-button>
-        <el-button type="primary" :loading="readingSubmitLoading" @click="handleReadingSubmit">确定</el-button>
-      </template>
-    </el-dialog>
+    <!-- 读数登记组件 -->
+    <MeterReadingDialog
+      v-model="readingDialogVisible"
+      :meter="currentMeter"
+      @success="fetchData"
+    />
 
     <!-- 周期结算对话框 -->
     <el-dialog v-model="settleDialogVisible" title="水电周期结算" width="560px">
@@ -216,7 +150,7 @@
       </template>
     </el-dialog>
 
-    <!-- 讀數記錄 -->
+    <!-- 读数记录 -->
     <el-dialog v-model="readingsDialogVisible" title="读数记录" width="680px">
       <el-table :data="readings" v-loading="readingsLoading" size="small" border>
         <el-table-column label="读数时间" width="160">
@@ -265,102 +199,46 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
 import ExportCurrent from '@/components/common/ExportCurrent.vue';
-import EntitySelect from '@/components/common/EntitySelect.vue';
-import type { FormInstance } from 'element-plus';
 import BatchReadingDialog from './BatchReadingDialog.vue';
 import MeterSimulatorDialog from './MeterSimulatorDialog.vue';
+import MeterFormDialog from './components/MeterFormDialog.vue';
+import MeterReadingDialog from './components/MeterReadingDialog.vue';
 import { downloadCsv } from '@/utils/export';
 import {
   getMeters,
-  createMeter,
-  updateMeter,
   deleteMeter,
-  createMeterReading,
   getMeterReadings,
   getUnsettledUsage,
   settleMeter,
+  type MeterReading,
 } from '@/api/meters';
-import type { MeterReading } from '@/api/meters';
 import type { Meter } from '@/types';
+import { usePagedTable } from '@/composables';
 
-const loading = ref(false);
-const loadError=ref('');
-const submitLoading = ref(false);
+const exporting = ref(false);
 const dialogVisible = ref(false);
-const dialogTitle = ref('新增水电表');
-const formRef = ref<FormInstance>();
-const tableData = ref<Meter[]>([]);
-const currentEditId = ref('');
+const currentEditMeter = ref<Meter | null>(null);
+
+const readingDialogVisible = ref(false);
+const currentMeter = ref<Meter | null>(null);
+
 const batchDialogVisible = ref(false);
 const simulatorDialogVisible = ref(false);
-const exporting = ref(false);
 
-async function handleExportCsv() {
-  exporting.value = true;
-  try {
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    await downloadCsv('/meters/readings/export', queryForm, `meter-readings-${dateStr}.csv`);
-  } finally {
-    exporting.value = false;
-  }
-}
-
-// ── 讀數登記（T137）──
-const readingDialogVisible = ref(false);
-const readingSubmitLoading = ref(false);
-const readingFormRef = ref<FormInstance>();
-const currentMeter = ref<Meter | null>(null);
-const readingResultText = ref('');
-const readingResultType = ref<'success' | 'warning'>('success');
-const readingForm = reactive({
-  mode: 'NORMAL' as 'NORMAL' | 'INITIAL',
-  currentReading: 0,
-  autoSettle: true,
-  readingTime: '',
-  notes: '',
-});
-const readingRules = {
-  currentReading: [{ required: true, message: '请输入当前读数', trigger: 'blur' }],
-};
-
-// ── 周期结算 ──
-const settleDialogVisible = ref(false);
-const settleDataLoading = ref(false);
-const settleSubmitLoading = ref(false);
-const unsettledInfo = ref<any>(null);
-const settleNotes = ref('');
-
-// ── 讀數記錄 ──
 const readingsDialogVisible = ref(false);
 const readingsLoading = ref(false);
 const readings = ref<MeterReading[]>([]);
-const readingsPagination = reactive({ page: 1, limit: 20, total: 0 });
-
-const queryForm = reactive({ meterType: '' });
-
-/** 区分「系统暂无数据」与「筛选无结果」 */
-const emptyText = computed(() =>
-  queryForm.meterType ? '没有符合条件的水电表，试试调整类型筛选' : '暂无水电表，点击右上角「新增水电表」开始录入',
-);
-const pagination = reactive({ page: 1, limit: 20, total: 0 });
-const formData = reactive({
-  buildingId: 'building-001',
-  roomId: '',
-  meterType: 'ELECTRICITY',
-  meterNumber: '',
-  initialReading: undefined as number | undefined,
-  unitPrice: 0,
-  priceEffectiveDate: '',
-  isActive: true,
+const readingsPagination = reactive({
+  page: 1,
+  limit: 10,
+  total: 0,
 });
 
-const rules = {
-  buildingId: [{ required: true, message: '请输入楼栋ID', trigger: 'blur' }],
-  meterType: [{ required: true, message: '请选择表类型', trigger: 'change' }],
-  meterNumber: [{ required: true, message: '请输入表号', trigger: 'blur' }],
-  unitPrice: [{ required: true, message: '请输入单价', trigger: 'blur' }],
-  priceEffectiveDate: [{ required: true, message: '请选择生效日期', trigger: 'change' }],
-};
+const settleDialogVisible = ref(false);
+const settleDataLoading = ref(false);
+const settleSubmitLoading = ref(false);
+const settleNotes = ref('');
+const unsettledInfo = ref<any>(null);
 
 const meterTypeMap: Record<string, string> = {
   ELECTRICITY: '电表',
@@ -380,60 +258,51 @@ const unitMap: Record<string, string> = {
   GAS: '立方米',
 };
 
-const fetchData = async () => {
-  loading.value = true;
-  loadError.value='';
+const {
+  loading,
+  loadError,
+  tableData,
+  pagination,
+  queryForm,
+  fetchData,
+  handleQuery,
+  handleReset,
+} = usePagedTable<Meter, { meterType: string }>({
+  fetchApi: (params) =>
+    getMeters({
+      page: params.page,
+      limit: params.limit,
+      meterType: params.meterType || undefined,
+    }),
+  defaultQuery: { meterType: '' },
+});
+
+const emptyText = computed(() =>
+  queryForm.meterType
+    ? '没有符合条件的水电表，试试调整类型筛选'
+    : '暂无水电表，点击右上角「新增水电表」开始录入',
+);
+
+const handleExportCsv = async () => {
+  exporting.value = true;
   try {
-    const response = await getMeters({ page: pagination.page, limit: pagination.limit, ...queryForm });
-    tableData.value = response.data;
-    pagination.total = response.meta.total;
-  } catch (error) {
-    loadError.value='水电表列表未能加载，请重试。';
+    await downloadCsv(
+      '/meters/export',
+      queryForm.meterType ? { meterType: queryForm.meterType } : {},
+      `meters-export-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
   } finally {
-    loading.value = false;
+    exporting.value = false;
   }
 };
 
-const handleQuery = () => {
-  pagination.page = 1;
-  fetchData();
-};
-
-const handleReset = () => {
-  queryForm.meterType = '';
-  handleQuery();
-};
-
 const handleCreate = () => {
-  Object.assign(formData, {
-    buildingId: '',
-    roomId: '',
-    meterType: 'ELECTRICITY',
-    meterNumber: '',
-    initialReading: undefined,
-    unitPrice: 0,
-    priceEffectiveDate: '',
-    isActive: true,
-  });
-  formRef.value?.clearValidate();
-  dialogTitle.value = '新增水电表';
-  currentEditId.value = '';
+  currentEditMeter.value = null;
   dialogVisible.value = true;
 };
 
 const handleEdit = (row: Meter) => {
-  dialogTitle.value = '编辑水电表';
-  currentEditId.value = row.id;
-  Object.assign(formData, {
-    buildingId: row.buildingId,
-    roomId: row.roomId || '',
-    meterType: row.meterType,
-    meterNumber: row.meterNumber,
-    initialReading: undefined,
-    unitPrice: row.unitPrice / 100,
-    priceEffectiveDate: row.priceEffectiveDate.split('T')[0],
-    isActive: row.isActive,
-  });
+  currentEditMeter.value = row;
   dialogVisible.value = true;
 };
 
@@ -452,86 +321,12 @@ const handleDelete = async (row: Meter) => {
   }
 };
 
-const handleSubmit = async () => {
-  if (!formRef.value) return;
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return;
-    submitLoading.value = true;
-    try {
-      const data: any = {
-        ...formData,
-        unitPrice: Math.round(formData.unitPrice * 100),
-      };
-      if (currentEditId.value) {
-        await updateMeter(currentEditId.value, data);
-        ElMessage.success('更新成功');
-      } else {
-        await createMeter(data);
-        ElMessage.success('创建成功');
-      }
-      dialogVisible.value = false;
-      fetchData();
-    } catch (error) {
-      ElMessage.error('操作失败');
-    } finally {
-      submitLoading.value = false;
-    }
-  });
-};
-
 const formatDateTime = (value: string) => (value ? value.replace('T', ' ').slice(0, 19) : '-');
-
-// ── 讀數登記 ──
 
 const handleReading = (row: Meter) => {
   currentMeter.value = row;
-  readingForm.mode = 'NORMAL';
-  readingForm.currentReading = 0;
-  readingForm.autoSettle = true;
-  readingForm.readingTime = '';
-  readingForm.notes = '';
-  readingResultText.value = '';
   readingDialogVisible.value = true;
 };
-
-const handleReadingSubmit = async () => {
-  const meter = currentMeter.value;
-  if (!readingFormRef.value || !meter) return;
-  await readingFormRef.value.validate(async (valid) => {
-    if (!valid) return;
-    readingSubmitLoading.value = true;
-    try {
-      const isInitial = readingForm.mode === 'INITIAL';
-      const result = await createMeterReading(meter.id, {
-        currentReading: readingForm.currentReading,
-        isInitial,
-        autoSettle: isInitial ? false : readingForm.autoSettle,
-        readingTime: readingForm.readingTime || undefined,
-        notes: readingForm.notes || undefined,
-      });
-      const usage = Number(result.reading.usage).toFixed(2);
-      const deduction = result.deduction;
-      if (!deduction.applied) {
-        readingResultText.value = `登记成功（用量 ${usage}）；扣费提示：${deduction.reason}`;
-        readingResultType.value = 'warning';
-      } else if (deduction.shortfall > 0) {
-        readingResultText.value = `用量 ${usage}；已扣费 ¥${(deduction.deducted / 100).toFixed(2)}；余额不足，已生成补缴账单 ¥${(deduction.shortfall / 100).toFixed(2)}`;
-        readingResultType.value = 'warning';
-      } else {
-        readingResultText.value = `用量 ${usage}；已扣费 ¥${(deduction.deducted / 100).toFixed(2)}`;
-        readingResultType.value = 'success';
-      }
-      ElMessage.success(isInitial ? '初始底数登记成功' : '读数登记成功');
-      fetchData();
-    } catch {
-      // 请求拦截器已弹出错误提示
-    } finally {
-      readingSubmitLoading.value = false;
-    }
-  });
-};
-
-// ── 周期结算 ──
 
 const handleOpenSettle = async (row: Meter) => {
   currentMeter.value = row;
@@ -569,8 +364,6 @@ const handleConfirmSettle = async () => {
   }
 };
 
-// ── 讀數記錄 ──
-
 const handleViewReadings = (row: Meter) => {
   currentMeter.value = row;
   readingsPagination.page = 1;
@@ -590,7 +383,7 @@ const loadReadings = async () => {
     readings.value = response.data;
     readingsPagination.total = response.meta.total;
   } catch {
-    // 请求拦截器已弹出错误提示
+    // Handled by request interceptor
   } finally {
     readingsLoading.value = false;
   }
