@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SchedulerService, SYSTEM_OPERATOR } from './scheduler.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -375,6 +375,23 @@ describe('SchedulerService（定时任务）', () => {
       expect(summary.errors[0]).toContain('合同自动流转失败');
       expect(summary.billsOverdue).toBe(0);
       expect(summary.remindersSent).toBe(0);
+    });
+  });
+
+  describe('cleanupExpiredNotifications', () => {
+    it('删除超过 180 天的通知', async () => {
+      prisma.notification.deleteMany = vi.fn().mockResolvedValue({ count: 3 });
+
+      await expect(service.cleanupExpiredNotifications()).resolves.toBe(3);
+      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
+        where: { createdAt: { lt: new Date(FIXED_NOW.getTime() - 180 * 86_400_000) } },
+      });
+    });
+  });
+
+  describe('rerun', () => {
+    it('未知任务名拒绝重跑', () => {
+      expect(() => service.rerun('nope', 'MANUAL')).toThrow(NotFoundException);
     });
   });
 });

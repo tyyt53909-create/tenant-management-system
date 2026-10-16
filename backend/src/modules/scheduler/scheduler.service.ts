@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BillsService } from '../bills/bills.service.js';
@@ -6,6 +6,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { NotificationPriority } from '../notifications/dto/create-notification.dto.js';
 import { LateFeeUtil } from '../bills/utils/late-fee.util.js';
 import { BillType } from '../bills/dto/create-bill.dto.js';
+import { JobRunner, PrismaAdvisoryJobLock, type JobTriggerName } from './job-runner.js';
 
 /**
  * 定时任务（docs/04-状态机.md §2/§3/§4、docs/02-数据模型.md）
@@ -24,6 +25,15 @@ export const SYSTEM_OPERATOR = 'system';
 
 const TIMEZONE = 'Asia/Shanghai';
 const MS_PER_DAY = 86_400_000;
+const NOTIFICATION_RETENTION_DAYS = 180;
+
+export const SCHEDULER_JOBS = [
+  'daily-jobs',
+  'monthly-bill-generation',
+  'notification-cleanup',
+] as const;
+
+export type SchedulerJobName = (typeof SCHEDULER_JOBS)[number];
 
 export interface DailyJobSummary {
   contractsActivated: number;
@@ -62,13 +72,48 @@ export class SchedulerService {
   /** 每日任务（Asia/Shanghai 凌晨 1:00） */
   @Cron('0 0 1 * * *', { name: 'daily-jobs', timeZone: TIMEZONE })
   async handleDailyCron() {
-    await this.runDaily();
+    await this.rerun('daily-jobs', 'CRON');
   }
 
   /** 月度账单生成（Asia/Shanghai 每月 1 日 01:10） */
   @Cron('0 10 1 * *', { name: 'monthly-bill-generation', timeZone: TIMEZONE })
   async handleMonthlyBillCron() {
-    await this.generateMonthlyBills();
+    await this.rerun('monthly-bill-generation', 'CRON');
+  }
+
+  /** 通知保留 180 天（Asia/Shanghai 每日 01:20） */
+  @Cron('0 20 1 * * *', { name: 'notification-cleanup', timeZone: TIMEZONE })
+  async handleNotificationCleanupCron() {
+    await this.rerun('notification-cleanup', 'CRON');
+  }
+
+  /**
+   * 带咨询锁执行。另一个实例抢不到锁时记 SKIPPED，不重复跑任务。
+   */
+  rerun(name: string, trigger: JobTriggerName) {
+    if (!this.isJobName(name)) {
+      throw new NotFoundException('未知的定时任务');
+    }
+    const jobs: Record<SchedulerJobName, () => Promise<unknown>> = {
+      'daily-jobs': () => this.runDaily(),
+      'monthly-bill-generation': () => this.generateMonthlyBills(),
+      'notification-cleanup': () => this.cleanupExpiredNotifications(),
+    };
+    return new JobRunner(this.prisma, new PrismaAdvisoryJobLock(this.prisma)).run(name, trigger, jobs[name]);
+  }
+
+  /** 删除超过 180 天的通知。 */
+  async cleanupExpiredNotifications(now: Date = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - NOTIFICATION_RETENTION_DAYS * MS_PER_DAY);
+    const result = await this.prisma.notification.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+    this.logger.log(`通知清理完成：删除 ${result.count} 条，早于 ${cutoff.toISOString()}`);
+    return result.count;
+  }
+
+  private isJobName(name: string): name is SchedulerJobName {
+    return (SCHEDULER_JOBS as readonly string[]).includes(name);
   }
 
   // ------------------------------------------------------------------
