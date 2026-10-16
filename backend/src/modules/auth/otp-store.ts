@@ -10,26 +10,28 @@ export interface OtpRecord {
 }
 
 export interface OtpStore {
-  get(email: string): OtpRecord | undefined;
-  set(email: string, record: OtpRecord): void;
-  delete(email: string): void;
+  get(email: string): Promise<OtpRecord | undefined>;
+  set(email: string, record: OtpRecord): Promise<void>;
+  delete(email: string): Promise<void>;
 }
 
 export class MemoryOtpStore implements OtpStore {
   private readonly records = new Map<string, OtpRecord>();
 
-  get(email: string): OtpRecord | undefined {
+  async get(email: string): Promise<OtpRecord | undefined> {
     return this.records.get(email);
   }
 
-  set(email: string, record: OtpRecord): void {
+  async set(email: string, record: OtpRecord): Promise<void> {
     this.records.set(email, record);
   }
 
-  delete(email: string): void {
+  async delete(email: string): Promise<void> {
     this.records.delete(email);
   }
 }
 
 /** 同一组验证码最多允许的错误次数，超过后必须重新发送。 */
 export const OTP_MAX_FAILED_ATTEMPTS = 5;
+
+export const OTP_STORE = Symbol('OTP_STORE');

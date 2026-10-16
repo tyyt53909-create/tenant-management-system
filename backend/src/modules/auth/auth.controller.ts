@@ -475,7 +475,7 @@ export class AuthController {
   @AuthThrottle()
   async loginWithEmailCode(@Body() dto: LoginEmailCodeDto) {
     // 1. 校验验证码
-    const isValid = this.emailOtpService.verifyCode(dto.email, dto.code);
+    const isValid = await this.emailOtpService.verifyCode(dto.email, dto.code);
     if (!isValid) {
       throw new BadRequestException('验证码错误或已过期');
     }

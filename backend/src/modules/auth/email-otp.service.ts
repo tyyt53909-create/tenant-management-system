@@ -1,9 +1,10 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Inject, Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 import {
   MemoryOtpStore,
   OTP_MAX_FAILED_ATTEMPTS,
+  OTP_STORE,
   type OtpRecord,
   type OtpStore,
 } from './otp-store.js';
@@ -13,11 +14,15 @@ const DEV_BYPASS_CODE = '123456';
 @Injectable()
 export class EmailOtpService {
   private readonly logger = new Logger(EmailOtpService.name);
-  private readonly otpStore: OtpStore = new MemoryOtpStore();
+  private readonly otpStore: OtpStore;
   private transporter: Transporter | null = null;
   private readonly fromAddress: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() @Inject(OTP_STORE) otpStore?: OtpStore,
+  ) {
+    this.otpStore = otpStore ?? new MemoryOtpStore();
     const host = this.configService.get<string>('SMTP_HOST');
     const port = this.configService.get<number>('SMTP_PORT') || 465;
     const user = this.configService.get<string>('SMTP_USER');
@@ -48,7 +53,7 @@ export class EmailOtpService {
     }
 
     const now = Date.now();
-    const existing = this.otpStore.get(normalizedEmail);
+    const existing = await this.otpStore.get(normalizedEmail);
 
     // 60 秒防刷频冷却限制
     if (existing && now - existing.lastSentAt < 60 * 1000) {
@@ -66,7 +71,7 @@ export class EmailOtpService {
       lastSentAt: now,
       failedAttempts: 0,
     };
-    this.otpStore.set(normalizedEmail, record);
+    await this.otpStore.set(normalizedEmail, record);
 
     if (this.transporter) {
       try {
@@ -89,7 +94,7 @@ export class EmailOtpService {
       } catch (err: unknown) {
         const reason = err instanceof Error ? err.message : 'unknown';
         if (this.isProduction()) {
-          this.otpStore.delete(normalizedEmail);
+          await this.otpStore.delete(normalizedEmail);
           this.logger.error(this.redactCode(`邮件投递失败，已作废本次验证码: ${reason}`, code));
           throw new BadRequestException('验证码邮件发送失败，请稍后重试');
         }
@@ -103,7 +108,7 @@ export class EmailOtpService {
     return { cooldown: 60 };
   }
 
-  verifyCode(email: string, code: string): boolean {
+  async verifyCode(email: string, code: string): Promise<boolean> {
     const normalizedEmail = email.toLowerCase().trim();
     const trimmedCode = (code || '').trim();
 
@@ -113,28 +118,28 @@ export class EmailOtpService {
       return true;
     }
 
-    const record = this.otpStore.get(normalizedEmail);
+    const record = await this.otpStore.get(normalizedEmail);
     if (!record) {
       return false;
     }
 
     if (Date.now() > record.expiresAt || this.failedAttempts(record) >= OTP_MAX_FAILED_ATTEMPTS) {
-      this.otpStore.delete(normalizedEmail);
+      await this.otpStore.delete(normalizedEmail);
       return false;
     }
 
     if (record.code !== trimmedCode) {
       const failedAttempts = this.failedAttempts(record) + 1;
       if (failedAttempts >= OTP_MAX_FAILED_ATTEMPTS) {
-        this.otpStore.delete(normalizedEmail);
+        await this.otpStore.delete(normalizedEmail);
       } else {
-        this.otpStore.set(normalizedEmail, { ...record, failedAttempts });
+        await this.otpStore.set(normalizedEmail, { ...record, failedAttempts });
       }
       return false;
     }
 
     // 验证成功后单次失效
-    this.otpStore.delete(normalizedEmail);
+    await this.otpStore.delete(normalizedEmail);
     return true;
   }
 

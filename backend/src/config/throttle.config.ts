@@ -1,4 +1,4 @@
-import type { ThrottlerGetTrackerFunction, ThrottlerModuleOptions } from '@nestjs/throttler';
+import type { ThrottlerGetTrackerFunction, ThrottlerModuleOptions, ThrottlerStorage } from '@nestjs/throttler';
 
 /** 生产与开发的默认限流。测试环境未显式设置时会把次数抬高，避免既有测试和 e2e 被误伤。 */
 export const THROTTLE_DEFAULTS = {
@@ -33,8 +33,9 @@ export function resolveThrottleLimits(env: NodeJS.ProcessEnv = process.env): Thr
   };
 }
 
-export function createThrottleModuleOptions(): ThrottlerModuleOptions {
+export function createThrottleModuleOptions(storage?: ThrottlerStorage): ThrottlerModuleOptions {
   return {
+    storage,
     throttlers: [
       {
         name: 'default',
