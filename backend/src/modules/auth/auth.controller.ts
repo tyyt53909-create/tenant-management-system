@@ -1,8 +1,9 @@
-import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, Delete, Param, Query, UseGuards } from '@nestjs/common';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto.js';
 import { GenerateInviteCodeDto } from './dto/generate-invite-code.dto.js';
+import { QueryInviteCodesDto } from './dto/query-invite-codes.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -38,6 +39,27 @@ export class AuthController {
   async generateInviteCode(@CurrentUser() userParam: CurrentUserParam, @Body() dto: GenerateInviteCodeDto) {
     const user = resolveAuthUser(userParam);
     return this.authService.generateInviteCode(user.userId, dto);
+  }
+
+  /**
+   * 查询邀请码列表（管理员专用）
+   */
+  @Get('invite-codes')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async listInviteCodes(@Query() query: QueryInviteCodesDto) {
+    return this.authService.listInviteCodes(query);
+  }
+
+  /**
+   * 作废邀请码（管理员专用）
+   */
+  @Delete('invite-codes/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async revokeInviteCode(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    return this.authService.revokeInviteCode(id, user.userId);
   }
 
   @Post('refresh')

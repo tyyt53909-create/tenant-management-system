@@ -148,11 +148,16 @@ export async function runSeed({ prisma, env = process.env, log = (message: strin
   const testInviteCode = `INVITE-${Date.now()}`;
   const inviteExpiredAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1年后过期
 
-  await prisma.user.update({
-    where: { id: admin.id },
-    data: {
-      inviteCode: testInviteCode,
-      inviteExpiredAt,
+  await prisma.inviteCode.upsert({
+    where: { code: testInviteCode },
+    update: {},
+    create: {
+      code: testInviteCode,
+      role: 'TENANT',
+      status: 'UNUSED',
+      notes: '系统初始测试邀请码',
+      creatorId: admin.id,
+      expiresAt: inviteExpiredAt,
     },
   });
 

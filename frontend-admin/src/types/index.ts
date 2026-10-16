@@ -349,3 +349,20 @@ export interface QueryParams {
   limit?: number;
   [key: string]: any;
 }
+
+// 邀请码
+export interface InviteCode {
+  id: string;
+  code: string;
+  role: 'ADMIN' | 'TENANT';
+  status: 'UNUSED' | 'USED' | 'REVOKED';
+  notes?: string | null;
+  creatorId?: string | null;
+  creator?: { id: string; email: string; phone?: string | null };
+  usedById?: string | null;
+  usedBy?: { id: string; email: string; phone?: string | null };
+  usedAt?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

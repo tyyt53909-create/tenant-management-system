@@ -97,11 +97,8 @@ export class FederatedAuthService {
 
         const tenantPhone = `pending-${newUser.id}`;
 
-        if (invitedBy) {
-          await tx.user.update({
-            where: { id: invitedBy },
-            data: { inviteCode: null, inviteExpiredAt: null },
-          });
+        if (dto.inviteCode) {
+          await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
         }
 
         // 检查是否有管理员预创建的租客档案（userId 为空）
@@ -260,16 +257,15 @@ export class FederatedAuthService {
 
     await this.prisma.$transaction(async (tx) => {
       // 1. 邀请码一次性失效
-      await tx.user.update({
-        where: { id: validation.invitedBy! },
-        data: { inviteCode: null, inviteExpiredAt: null },
-      });
+      await this.inviteCodeService.consumeInviteCode(dto.inviteCode, userId, tx);
 
       // 2. 更新当前用户 invitedBy 关联
-      await tx.user.update({
-        where: { id: userId },
-        data: { invitedBy: validation.invitedBy },
-      });
+      if (validation.invitedBy) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { invitedBy: validation.invitedBy },
+        });
+      }
     });
 
     return {

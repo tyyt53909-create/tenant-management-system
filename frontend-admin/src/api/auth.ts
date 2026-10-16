@@ -38,3 +38,28 @@ export const getGoogleClientId = (): Promise<{ clientId: string }> => {
 export const loginWithGoogle = (data: { idToken: string; inviteCode?: string }) => {
   return request.post('/auth/google', data);
 };
+
+// 生成邀请码（支持单码与批量）
+export const generateInviteCode = (data: {
+  count?: number;
+  expiryDays?: number;
+  notes?: string;
+  role?: 'ADMIN' | 'TENANT';
+}) => {
+  return request.post('/auth/invite-codes', data);
+};
+
+// 获取邀请码列表
+export const getInviteCodes = (params?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  search?: string;
+}) => {
+  return request.get('/auth/invite-codes', { params });
+};
+
+// 作废邀请码
+export const revokeInviteCode = (id: string) => {
+  return request.delete(`/auth/invite-codes/${id}`);
+};

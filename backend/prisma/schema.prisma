@@ -199,6 +199,13 @@ enum UserRole {
   TENANT // 租客
 }
 
+// 邀请码状态
+enum InviteCodeStatus {
+  UNUSED // 未使用
+  USED // 已使用
+  REVOKED // 已作废
+}
+
 // 通知优先级
 enum NotificationPriority {
   NORMAL // 普通
@@ -350,8 +357,6 @@ model User {
 
   role UserRole
 
-  inviteCode      String?   @unique
-  inviteExpiredAt DateTime?
   invitedBy       String?
 
   isActive    Boolean   @default(true)
@@ -366,10 +371,12 @@ model User {
   deviceTokens        DeviceToken[]
   capabilityOverrides UserCapabilityOverride[]
 
+  createdInviteCodes  InviteCode[]             @relation("CreatedInviteCodes")
+  usedInviteCode      InviteCode?              @relation("UsedInviteCode")
+
   @@index([email])
   @@index([phone])
   @@index([googleId])
-  @@index([inviteCode])
   @@index([role, isActive])
   @@map("users")
 }
@@ -892,4 +899,29 @@ model UserCapabilityOverride {
   @@unique([userId, capability])
   @@index([userId])
   @@map("user_capability_overrides")
+}
+
+// 26. InviteCode（邀请码记录）
+model InviteCode {
+  id        String           @id @default(cuid())
+  code      String           @unique
+  role      UserRole         @default(TENANT)
+  status    InviteCodeStatus @default(UNUSED)
+  notes     String?
+
+  creatorId String?
+  creator   User?            @relation("CreatedInviteCodes", fields: [creatorId], references: [id], onDelete: SetNull)
+
+  usedById  String?          @unique
+  usedBy    User?            @relation("UsedInviteCode", fields: [usedById], references: [id], onDelete: SetNull)
+  usedAt    DateTime?
+
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([code])
+  @@index([status])
+  @@index([creatorId])
+  @@map("invite_codes")
 }

@@ -50,6 +50,7 @@
 
 ## 3. 任务与交接
 
+- [2026-10-16-T191-清理死代码与独立邀请码表治理.md](./handoff/2026-10-16-T191-清理死代码与独立邀请码表治理.md)：T191 / OPT-18，删除 BuildingGuard、独立 InviteCode 表与批量邀请码全生命周期治理。
 - [2026-10-16-T190-类型安全治理.md](./handoff/2026-10-16-T190-类型安全治理.md)：T190 / OPT-17，类型安全治理，消除 unsafe raw query、@CurrentUser、非测试 any 降至 0。
 - [2026-10-16-T189-拆分超大服务与控制器.md](./handoff/2026-10-16-T189-拆分超大服务与控制器.md)：T189 / OPT-16，超大服务与控制器拆分、移除 controller PrismaService 注入。
 - [2026-10-16-T188-OpenAPI与前端类型生成.md](./handoff/2026-10-16-T188-OpenAPI与前端类型生成.md)：T188 / OPT-15，OpenAPI 生成、前端类型导出与 CI 检查。
@@ -202,11 +203,13 @@
 | [T188](../tasks/T188-OpenAPI与前端类型生成.md) | OpenAPI 与前端类型自动生成（OPT-15：118 条路由、openapi-typescript、CI 门禁） | 强 | completed | 2026-10-16 |
 | [T189](../tasks/T189-拆分超大服务与控制器.md) | 拆分超大 service / controller（OPT-16：服务拆分、去 controller 注入 Prisma、<500行） | 强 | completed | 2026-10-16 |
 | [T190](../tasks/T190-类型安全治理.md) | 类型安全治理（OPT-17：消除 unsafe raw query、@CurrentUser、去 any ≤15） | 强 | completed | 2026-10-16 |
+| [T191](../tasks/T191-清理死代码与独立邀请码表治理.md) | 清理死代码与独立邀请码表治理（OPT-18：删除 BuildingGuard、独立 InviteCode 表、批量邀请码） | 强 | completed | 2026-10-16 |
 
 **交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)、[2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)、[2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)
 
 ### 3.4 交接记录
 
+- [2026-10-16-T191-清理死代码与独立邀请码表治理.md](./handoff/2026-10-16-T191-清理死代码与独立邀请码表治理.md)：T191 / OPT-18，删除 BuildingGuard、独立 InviteCode 表与批量邀请码全生命周期治理。
 - [2026-10-16-T190-类型安全治理.md](./handoff/2026-10-16-T190-类型安全治理.md)：T190 / OPT-17，类型安全治理，消除 unsafe raw query、@CurrentUser、非测试 any 降至 0。
 - [2026-10-16-T189-拆分超大服务与控制器.md](./handoff/2026-10-16-T189-拆分超大服务与控制器.md)：T189 / OPT-16，超大服务与控制器拆分、移除 controller PrismaService 注入。
 - [2026-10-16-T188-OpenAPI与前端类型生成.md](./handoff/2026-10-16-T188-OpenAPI与前端类型生成.md)：T188 / OPT-15，OpenAPI 生成、前端类型导出与 CI 检查。

@@ -145,7 +145,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** 查询邀请码列表（管理员专用） */
+        get: operations["AuthController_listInviteCodes"];
         put?: never;
         /**
          * 生成邀请码（管理员专用）
@@ -153,6 +154,23 @@ export interface paths {
          */
         post: operations["AuthController_generateInviteCode"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/invite-codes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 作废邀请码（管理员专用） */
+        delete: operations["AuthController_revokeInviteCode"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1413,6 +1431,11 @@ export interface components {
         GenerateInviteCodeDto: {
             /** @default 365 */
             expiryDays: number;
+            /** @default 1 */
+            count: number;
+            notes?: string;
+            /** @enum {string} */
+            role?: "ADMIN" | "CLEANER" | "TENANT";
         };
         RefreshTokenDto: {
             refreshToken: string;
@@ -2073,6 +2096,42 @@ export interface operations {
             };
         };
     };
+    AuthController_listInviteCodes: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                status?: "UNUSED" | "USED" | "REVOKED";
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     AuthController_generateInviteCode: {
         parameters: {
             query?: never;
@@ -2086,6 +2145,36 @@ export interface operations {
             };
         };
         responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    AuthController_revokeInviteCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             /** @description 成功 */
             200: {
                 headers: {
@@ -2096,12 +2185,6 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
-            };
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description 错误 */
             default: {

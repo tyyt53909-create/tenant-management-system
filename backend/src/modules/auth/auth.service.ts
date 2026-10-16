@@ -5,6 +5,7 @@ import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dt
 import { InviteCodeService } from './invite-code.service.js';
 import { JwtAuthService } from './jwt.service.js';
 import { GenerateInviteCodeDto } from './dto/generate-invite-code.dto.js';
+import { QueryInviteCodesDto } from './dto/query-invite-codes.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
@@ -85,13 +86,10 @@ export class AuthService {
       // 缺失时用 userId 生成唯一占位值，避免空串触发唯一约束导致第二个注册 500（T148 / BUG-1）
       const tenantPhone = dto.phone?.trim() ? dto.phone.trim() : `pending-${newUser.id}`;
 
-      // 邀请码一次性：注册成功后立即失效（docs/03-权限矩阵.md §4.1
-      // 「使用后立即失效，48小时后自动过期」）。与建号同事务，避免
+      // 邀请码一次性：注册成功后立即核销（docs/03-权限矩阵.md §4.1
+      // 「使用后立即失效」）。与建号同事务，避免
       // 「账号已建但邀请码仍可复用」的中间态。
-      await tx.user.update({
-        where: { id: validation.invitedBy! },
-        data: { inviteCode: null, inviteExpiredAt: null },
-      });
+      await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
 
       await tx.tenant.create({
         data: {
@@ -186,19 +184,50 @@ export class AuthService {
     };
   }
 
-  async generateInviteCode(userId: string, dto: GenerateInviteCodeDto) {
+  async generateInviteCode(userId: string, dto?: GenerateInviteCodeDto) {
     const expiryDays = dto?.expiryDays ?? 365;
+    const count = dto?.count ?? 1;
+    const role = dto?.role ?? 'TENANT';
+    const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+
+    if (count > 1) {
+      const inviteCodes = await this.inviteCodeService.generateBatchInviteCodes(
+        userId,
+        count,
+        expiryDays,
+        dto?.notes,
+        role,
+      );
+      return {
+        inviteCodes,
+        count: inviteCodes.length,
+        expiryDays,
+        expiresAt,
+        invitedBy: userId,
+      };
+    }
+
     const inviteCode = await this.inviteCodeService.generateInviteCode(
       userId,
       expiryDays,
+      dto?.notes,
+      role,
     );
 
     return {
       inviteCode,
       expiryDays,
-      expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
+      expiresAt,
       invitedBy: userId,
     };
+  }
+
+  async listInviteCodes(query: QueryInviteCodesDto) {
+    return this.inviteCodeService.findAll(query);
+  }
+
+  async revokeInviteCode(id: string, adminUserId?: string) {
+    return this.inviteCodeService.revokeInviteCode(id, adminUserId);
   }
 
   async refresh(dto: RefreshTokenDto): Promise<RefreshTokenResponseDto> {

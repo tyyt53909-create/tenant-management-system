@@ -32,6 +32,10 @@ describe('AuthController', () => {
           useValue: {
             validateInviteCode: vi.fn(),
             generateInviteCode: vi.fn(),
+            generateBatchInviteCodes: vi.fn(),
+            consumeInviteCode: vi.fn().mockResolvedValue(undefined),
+            findAll: vi.fn(),
+            revokeInviteCode: vi.fn(),
           },
         },
         {
@@ -247,13 +251,11 @@ describe('AuthController', () => {
         refreshToken: 'refresh-token',
       });
 
-      const { invitedByUpdate } = stubTransaction('user-invite');
+      stubTransaction('user-invite');
+      const consumeSpy = vi.spyOn(inviteCodeService, 'consumeInviteCode').mockResolvedValue(undefined as any);
       await controller.register({ ...dto, inviteCode: 'INVITE-ONCE' });
 
-      expect(invitedByUpdate).toHaveBeenCalledTimes(1);
-      const call = invitedByUpdate.mock.calls[0][0];
-      expect(call.where).toEqual({ id: 'admin-123' });
-      expect(call.data).toEqual({ inviteCode: null, inviteExpiredAt: null });
+      expect(consumeSpy).toHaveBeenCalledWith('INVITE-ONCE', 'user-invite', expect.anything());
     });
 
     it('提供 phone 时按用户输入写入租客档案', async () => {
@@ -306,7 +308,7 @@ describe('AuthController', () => {
       expect(result.expiryDays).toBe(30);
       expect(result.invitedBy).toBe('admin-1');
       expect(result.expiresAt).toBeInstanceOf(Date);
-      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 30);
+      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 30, undefined, 'TENANT');
     });
 
     it('未指定有效期时默认 365 天', async () => {
@@ -315,7 +317,7 @@ describe('AuthController', () => {
       const result = await controller.generateInviteCode(adminReq, {} as any);
 
       expect(result.expiryDays).toBe(365);
-      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 365);
+      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 365, undefined, 'TENANT');
     });
 
     it('生成的邀请码可直接用于注册', async () => {
@@ -334,11 +336,43 @@ describe('AuthController', () => {
       const registered = await controller.register({
         email: 'invited@example.com',
         password: 'password123',
-        inviteCode: generated.inviteCode,
+        inviteCode: generated.inviteCode!,
       });
 
       expect(registered.accessToken).toBe('access-token');
       expect(registered.user.email).toBe('stub@example.com');
+    });
+
+    it('管理员批量生成邀请码：调用 generateBatchInviteCodes', async () => {
+      vi.spyOn(inviteCodeService, 'generateBatchInviteCodes').mockResolvedValue(['INVITE-1', 'INVITE-2', 'INVITE-3']);
+
+      const result = await controller.generateInviteCode(adminReq, { count: 3, expiryDays: 90, notes: '批量3个' } as any);
+
+      expect(result.inviteCodes).toEqual(['INVITE-1', 'INVITE-2', 'INVITE-3']);
+      expect(result.count).toBe(3);
+      expect(result.expiryDays).toBe(90);
+      expect(result.invitedBy).toBe('admin-1');
+      expect(inviteCodeService.generateBatchInviteCodes).toHaveBeenCalledWith('admin-1', 3, 90, '批量3个', 'TENANT');
+    });
+
+    it('管理员查询邀请码列表：调用 inviteCodeService.findAll', async () => {
+      const mockResult = { data: [{ id: '1', code: 'INVITE-1' }], meta: { total: 1, page: 1, limit: 20, totalPages: 1 } };
+      vi.spyOn(inviteCodeService, 'findAll').mockResolvedValue(mockResult as any);
+
+      const res = await controller.listInviteCodes({ page: 1, limit: 20, status: 'UNUSED' } as any);
+
+      expect(res).toEqual(mockResult);
+      expect(inviteCodeService.findAll).toHaveBeenCalledWith({ page: 1, limit: 20, status: 'UNUSED' });
+    });
+
+    it('管理员作废邀请码：调用 inviteCodeService.revokeInviteCode', async () => {
+      const mockRevoked = { id: 'code-1', status: 'REVOKED' };
+      vi.spyOn(inviteCodeService, 'revokeInviteCode').mockResolvedValue(mockRevoked as any);
+
+      const res = await controller.revokeInviteCode(adminReq, 'code-1');
+
+      expect(res).toEqual(mockRevoked);
+      expect(inviteCodeService.revokeInviteCode).toHaveBeenCalledWith('code-1', 'admin-1');
     });
   });
 
@@ -809,11 +843,12 @@ describe('AuthController', () => {
         ).rejects.toThrow(BadRequestException);
       });
 
-      it('邀请码有效应在事务中清空码并更新 user.invitedBy', async () => {
+      it('邀请码有效应在事务中核销码并更新 user.invitedBy', async () => {
         vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
           valid: true,
           invitedBy: 'admin-inviter',
         });
+        const consumeSpy = vi.spyOn(inviteCodeService, 'consumeInviteCode').mockResolvedValue(undefined as any);
 
         const userUpdate = vi.fn().mockResolvedValue({});
         vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
@@ -830,14 +865,9 @@ describe('AuthController', () => {
         );
 
         expect(res.success).toBe(true);
-        expect(userUpdate).toHaveBeenCalledTimes(2);
-        // 第一调用：使邀请码失效
-        expect(userUpdate).toHaveBeenNthCalledWith(1, {
-          where: { id: 'admin-inviter' },
-          data: { inviteCode: null, inviteExpiredAt: null },
-        });
-        // 第二调用：关联用户
-        expect(userUpdate).toHaveBeenNthCalledWith(2, {
+        expect(consumeSpy).toHaveBeenCalledWith('GOODCODE', 'tenant-user-1', expect.anything());
+        expect(userUpdate).toHaveBeenCalledTimes(1);
+        expect(userUpdate).toHaveBeenCalledWith({
           where: { id: 'tenant-user-1' },
           data: { invitedBy: 'admin-inviter' },
         });

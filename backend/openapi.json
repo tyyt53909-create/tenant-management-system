@@ -483,19 +483,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -509,6 +505,132 @@
           }
         },
         "summary": "生成邀请码（管理员专用）\n生产环境管理员为租客发放邀请码的唯一 HTTP 入口（T148 / BUG-2）",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "AuthController_listInviteCodes",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "UNUSED",
+                "USED",
+                "REVOKED"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询邀请码列表（管理员专用）",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/invite-codes/{id}": {
+      "delete": {
+        "operationId": "AuthController_revokeInviteCode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "作废邀请码（管理员专用）",
         "tags": [
           "Auth"
         ],
@@ -6642,6 +6764,23 @@
             "default": 365,
             "minimum": 1,
             "maximum": 3650
+          },
+          "count": {
+            "type": "number",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "notes": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "CLEANER",
+              "TENANT"
+            ]
           }
         }
       },

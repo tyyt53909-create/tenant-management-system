@@ -171,7 +171,7 @@ tenant-system/
 |------|------|------|
 | **变量** | 小驼峰 | `userName`, `roomList` |
 | **函数** | 小驼峰，动词开头 | `createRoom()`, `findAllRooms()` |
-| **类** | 大驼峰 | `RoomsService`, `BuildingGuard` |
+| **类** | 大驼峰 | `RoomsService`, `RolesGuard` |
 | **接口** | 大驼峰，I 前缀（可选） | `IUser`, `CreateRoomDto` |
 | **枚举** | 大驼峰 | `RoomStatus`, `UserRole` |
 | **枚举值** | 大写下划线 | `ROOM_STATUS.VACANT` |
