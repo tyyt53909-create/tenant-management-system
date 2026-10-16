@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto.js';
@@ -10,6 +10,7 @@ import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import { AuthThrottle, OtpEmailThrottle } from '../../common/decorators/throttle.decorators.js';
 import { AuthService } from './auth.service.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('auth')
 export class AuthController {
@@ -34,8 +35,9 @@ export class AuthController {
   @Post('invite-codes')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  async generateInviteCode(@Request() req: any, @Body() dto: GenerateInviteCodeDto) {
-    return this.authService.generateInviteCode(req.user.userId, dto);
+  async generateInviteCode(@CurrentUser() userParam: CurrentUserParam, @Body() dto: GenerateInviteCodeDto) {
+    const user = resolveAuthUser(userParam);
+    return this.authService.generateInviteCode(user.userId, dto);
   }
 
   @Post('refresh')
@@ -50,14 +52,16 @@ export class AuthController {
 
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
-  async logoutAll(@Request() req: any) {
-    return this.authService.logoutAll(req.user.userId);
+  async logoutAll(@CurrentUser() userParam: CurrentUserParam) {
+    const user = resolveAuthUser(userParam);
+    return this.authService.logoutAll(user.userId);
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async getMe(@Request() req: any) {
-    return this.authService.getMe(req.user.userId);
+  async getMe(@CurrentUser() userParam: CurrentUserParam) {
+    const user = resolveAuthUser(userParam);
+    return this.authService.getMe(user.userId);
   }
 
   /**
@@ -101,7 +105,8 @@ export class AuthController {
   @Post('bind-invite-code')
   @AuthThrottle()
   @UseGuards(JwtAuthGuard)
-  async bindInviteCode(@Request() req: any, @Body() dto: BindInviteCodeDto) {
-    return this.authService.bindInviteCode(req.user.userId, dto);
+  async bindInviteCode(@CurrentUser() userParam: CurrentUserParam, @Body() dto: BindInviteCodeDto) {
+    const user = resolveAuthUser(userParam);
+    return this.authService.bindInviteCode(user.userId, dto);
   }
 }

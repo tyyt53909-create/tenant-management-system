@@ -43,5 +43,5 @@ export class CreateContractDto {
   endDate: string;
 
   @IsOptional()
-  lateFeeRule?: any; // JSON
+  lateFeeRule?: Record<string, unknown>; // JSON
 }

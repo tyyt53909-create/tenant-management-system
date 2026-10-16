@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import type { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { EmailOtpService } from './email-otp.service.js';
@@ -42,7 +43,7 @@ export class FederatedAuthService {
       id: string;
       email: string | null;
       phone: string | null;
-      role: any;
+      role: UserRole;
       avatarUrl?: string | null;
     };
     let isNewUser = false;
@@ -178,7 +179,7 @@ export class FederatedAuthService {
       id: string;
       email: string | null;
       phone: string | null;
-      role: any;
+      role: UserRole;
       avatarUrl?: string | null;
     };
     let isNewUser = false;

@@ -32,7 +32,7 @@ export class LocalStorage implements StorageAdapter {
     return join(this.directory, key);
   }
 
-  async put(key: string, body: Buffer): Promise<void> {
+  async put(key: string, body: Buffer, _contentType?: string): Promise<void> {
     await fs.mkdir(this.directory, { recursive: true });
     await fs.writeFile(this.path(key), body);
   }
@@ -45,7 +45,7 @@ export class LocalStorage implements StorageAdapter {
     await fs.unlink(this.path(key));
   }
 
-  async signedUrl(key: string): Promise<string> {
+  async signedUrl(key: string, _expiresInSeconds?: number): Promise<string> {
     return `/api/files/${key}`;
   }
 }

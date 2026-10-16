@@ -16,7 +16,7 @@ export class MeterAnomalySimulationRunner {
    */
   async runAnomalyTestSimulation(
     dto: RunSimulationDto,
-    targetMeters: any[],
+    targetMeters: Array<{ id: string; meterNumber?: string }>,
     operatorId: string,
   ): Promise<SimulationResult> {
     if (!targetMeters.length) {
@@ -78,12 +78,13 @@ export class MeterAnomalySimulationRunner {
           ? `成功拦截重复投递（${dupMsgId}），系统平稳返回已有记录且未发生二次计费`
           : `未正确拦截重复 messageId: ${JSON.stringify(res2.deduction)}`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       testCases.push({
         testCase: 'DUPLICATE_MESSAGE_ID',
         name: '相同 messageId 重复上传幂等防御',
         status: 'FAILED',
-        detail: `测试抛出异常: ${err.message}`,
+        detail: `测试抛出异常: ${message}`,
       });
     }
 
@@ -125,12 +126,13 @@ export class MeterAnomalySimulationRunner {
           ? '成功识别相同时间戳与读数的重发包，平稳归一并免除重复处理'
           : `未正确防重: ${JSON.stringify(resDup.deduction)}`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       testCases.push({
         testCase: 'DUPLICATE_TIMESTAMP',
         name: '同一时间戳与读数设备重发防重',
         status: 'FAILED',
-        detail: `测试抛出异常: ${err.message}`,
+        detail: `测试抛出异常: ${message}`,
       });
     }
 
@@ -178,12 +180,13 @@ export class MeterAnomalySimulationRunner {
           ? '乱序数据成功补录入库，准确标记 [OUT_OF_ORDER]，未触发即时扣费与指针错乱'
           : `未按预期处理乱序: ${JSON.stringify(resDelayed)}`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       testCases.push({
         testCase: 'OUT_OF_ORDER',
         name: '延迟乱序到达包录入与防误扣费',
         status: 'FAILED',
-        detail: `测试抛出异常: ${err.message}`,
+        detail: `测试抛出异常: ${message}`,
       });
     }
 
@@ -206,10 +209,11 @@ export class MeterAnomalySimulationRunner {
           },
           operatorId,
         );
-      } catch (err: any) {
-        if (err instanceof BadRequestException || (err as any).status === 400) {
+      } catch (err: unknown) {
+        const status = (err && typeof err === 'object' && 'status' in err) ? (err as { status?: unknown }).status : undefined;
+        if (err instanceof BadRequestException || status === 400) {
           wasBlocked = true;
-          blockedMessage = err.message;
+          blockedMessage = err instanceof Error ? err.message : String(err);
         } else {
           throw err;
         }
@@ -223,12 +227,13 @@ export class MeterAnomalySimulationRunner {
           ? `成功拦截倒走异常数据并抛出 400 提示: "${blockedMessage}"，保护表计账目安全`
           : '未能拦截读数小于上次读数的倒走错误',
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       testCases.push({
         testCase: 'CONTRADICTORY_ROLLBACK',
         name: '矛盾/倒走读数校验与400拦截',
         status: 'FAILED',
-        detail: `测试抛出未预期异常: ${err.message}`,
+        detail: `测试抛出未预期异常: ${message}`,
       });
     }
 
@@ -244,7 +249,7 @@ export class MeterAnomalySimulationRunner {
         passedCount,
         failedCount,
         meterId: meter.id,
-        meterNumber: meter.meterNumber,
+        meterNumber: meter.meterNumber || '',
         testCases,
       },
     };

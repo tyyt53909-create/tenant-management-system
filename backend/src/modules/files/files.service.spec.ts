@@ -126,7 +126,7 @@ describe('FilesService', () => {
       exif: {
         IFD0: { ImageDescription: 'gps-test' },
         GPS: { GPSLatitudeRef: 'N', GPSLatitude: '22/1 32/1 0/1', GPSLongitudeRef: 'E', GPSLongitude: '114/1 8/1 0/1' },
-      },
+      } as any,
     }).toBuffer();
 
     const res = await service.save(

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
@@ -59,7 +60,7 @@ export class TenantsService {
         email: dto.email,
         emergencyContact: dto.emergencyContact,
         emergencyPhone: dto.emergencyPhone,
-        tags: dto.tags,
+        tags: dto.tags as Prisma.InputJsonValue,
         notes: dto.notes,
       },
     });
@@ -70,7 +71,7 @@ export class TenantsService {
     const skip = (page - 1) * limit;
 
     // 构建查询条件
-    const where: any = {};
+    const where: Prisma.TenantWhereInput = {};
 
     if (isActive !== undefined) {
       where.isActive = isActive;
@@ -179,9 +180,14 @@ export class TenantsService {
     }
 
     // 4. 更新租客
+    const { tags, ...rest } = dto;
+    const data: Prisma.TenantUpdateInput = {
+      ...rest,
+      ...(tags !== undefined ? { tags: tags as Prisma.InputJsonValue } : {}),
+    };
     return this.prisma.tenant.update({
       where: { id },
-      data: dto,
+      data,
     });
   }
 

@@ -20,6 +20,13 @@ const EXTENSION: Record<ImageMime, string> = {
   'image/webp': '.webp',
 };
 
+export interface UploadedFileInput {
+  buffer?: Buffer;
+  mimetype?: string;
+  size?: number;
+  originalname?: string;
+}
+
 @Injectable()
 export class FilesService {
   private readonly logger = new Logger(FilesService.name);
@@ -37,12 +44,12 @@ export class FilesService {
    * 存储驱动由 STORAGE_DRIVER 决定，业务调用不区分本地和 S3。
    * 同时写出一张去掉 EXIF 的缩略图。
    */
-  async save(file: any, actor?: { userId?: string; role?: string; tenantId?: string }) {
+  async save(file: UploadedFileInput, actor?: { userId?: string; role?: string; tenantId?: string }) {
     if (!file) throw new BadRequestException('未收到文件');
-    if (!ALLOWED_MIME.has(file.mimetype)) {
+    if (!file.mimetype || !ALLOWED_MIME.has(file.mimetype as ImageMime)) {
       throw new BadRequestException('仅支持 JPG/PNG/WebP');
     }
-    if (file.size > MAX_SIZE) {
+    if ((file.size ?? 0) > MAX_SIZE) {
       throw new BadRequestException('单张图片最大 10MB');
     }
     const body = Buffer.isBuffer(file.buffer) ? file.buffer : Buffer.from(file.buffer ?? []);

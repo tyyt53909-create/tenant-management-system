@@ -339,24 +339,25 @@ export class MeterBillingService {
   async settleBatch(
     dto: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string },
     operatorId: string,
-    settleMeterFn?: (meterId: string, dto: SettleMeterDto, operatorId: string) => Promise<any>,
+    settleMeterFn?: (meterId: string, dto: SettleMeterDto, operatorId: string) => Promise<Record<string, unknown>>,
   ) {
     let meterIds = dto.meterIds;
     if (!meterIds || meterIds.length === 0) {
-      const where: any = { isActive: true };
+      const where: Prisma.MeterWhereInput = { isActive: true };
       if (dto.buildingId) where.buildingId = dto.buildingId;
       const meters = await this.prisma.meter.findMany({ where, select: { id: true } });
       meterIds = meters.map((m) => m.id);
     }
 
     const settle = settleMeterFn ?? ((id: string, d: SettleMeterDto, op: string) => this.settleMeter(id, d, op));
-    const results: any[] = [];
+    const results: Array<{ meterId?: string; success: boolean; error?: string; [key: string]: unknown }> = [];
     for (const id of meterIds) {
       try {
         const res = await settle(id, { settleUntil: dto.settleUntil, notes: dto.notes }, operatorId);
         results.push({ success: true, ...res });
-      } catch (err: any) {
-        results.push({ meterId: id, success: false, error: err.message });
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err.message : String(err);
+        results.push({ meterId: id, success: false, error });
       }
     }
 

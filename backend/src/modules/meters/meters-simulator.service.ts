@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MetersService } from './meters.service.js';
 import { RunSimulationDto, SimulationScenario } from './dto/run-simulation.dto.js';
@@ -87,7 +88,10 @@ export class MetersSimulatorService {
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
-      let currentVal = latest ? Number(latest.currentReading) : (Number((meter as any).initialReading) || 100.0);
+      const fallbackInitial = typeof (meter as { initialReading?: unknown }).initialReading === 'number'
+        ? Number((meter as { initialReading?: number }).initialReading)
+        : 100.0;
+      let currentVal = latest ? Number(latest.currentReading) : fallbackInitial;
       const startReading = currentVal;
 
       // 若此前没有任何读数记录，先补登记一条初始底数
@@ -213,7 +217,10 @@ export class MetersSimulatorService {
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
-      let currentVal = latest ? Number(latest.currentReading) : (Number((meter as any).initialReading) || 100.0);
+      const fallbackInitial = typeof (meter as { initialReading?: unknown }).initialReading === 'number'
+        ? Number((meter as { initialReading?: number }).initialReading)
+        : 100.0;
+      let currentVal = latest ? Number(latest.currentReading) : fallbackInitial;
       const startReading = currentVal;
 
       let startBaseTime: Date;
@@ -320,7 +327,7 @@ export class MetersSimulatorService {
       return meter ? [meter] : [];
     }
 
-    const where: any = { status: 'ACTIVE' };
+    const where: Prisma.MeterWhereInput = { isActive: true };
     if (dto.buildingId) {
       where.room = { buildingId: dto.buildingId };
     }

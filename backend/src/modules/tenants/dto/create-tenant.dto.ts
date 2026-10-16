@@ -23,7 +23,7 @@ export class CreateTenantDto {
   emergencyPhone?: string;
 
   @IsOptional()
-  tags?: any; // JSON
+  tags?: Record<string, unknown> | unknown[]; // JSON
 
   @IsString()
   @IsOptional()

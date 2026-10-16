@@ -25,7 +25,7 @@ export class CreateNotificationDto {
 
   @IsObject()
   @IsOptional()
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 
   @IsOptional()
   expiredAt?: string;

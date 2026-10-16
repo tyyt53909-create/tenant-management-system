@@ -131,7 +131,7 @@ describe('MetersController', () => {
     vi.spyOn(service, 'exportReadings').mockResolvedValue('\uFEFF记录ID,表号\r\n1,M001');
     const resMock = { setHeader: vi.fn() };
 
-    const result = await controller.exportReadings({}, resMock);
+    const result = await controller.exportReadings({}, resMock as any);
 
     expect(result).toContain('记录ID,表号');
     expect(resMock.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');

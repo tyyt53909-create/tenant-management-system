@@ -45,7 +45,7 @@ export class CheckoutItemDto {
   amount: number;
 
   @IsOptional()
-  calculation?: any; // JSON 折算明细
+  calculation?: Record<string, unknown>; // JSON 折算明细
 
   @IsOptional()
   isAdjusted?: boolean;

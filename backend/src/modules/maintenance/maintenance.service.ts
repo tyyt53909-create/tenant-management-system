@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import type { Prisma, MaintenanceCategory, MaintenancePriority } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
@@ -57,8 +58,8 @@ export class MaintenanceService {
           tenantId,
           title: dto.title,
           description: dto.description,
-          category: dto.category as any,
-          priority: dto.priority as any || 'NORMAL',
+          category: dto.category as MaintenanceCategory,
+          priority: (dto.priority as MaintenancePriority) || 'NORMAL',
         },
       });
 
@@ -89,7 +90,7 @@ export class MaintenanceService {
       return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
     }
 
-    const where: any = { tenantId };
+    const where: Prisma.MaintenanceRequestWhereInput = { tenantId };
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -123,7 +124,7 @@ export class MaintenanceService {
     const { page = 1, limit = 20, status, roomId, tenantId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.MaintenanceRequestWhereInput = {};
     if (status) where.status = status;
     if (roomId) where.roomId = roomId;
     if (tenantId) where.tenantId = tenantId;
@@ -178,7 +179,7 @@ export class MaintenanceService {
       throw new NotFoundException('报修记录不存在');
     }
 
-    const updateData: any = {};
+    const updateData: Prisma.MaintenanceRequestUpdateInput = {};
     if (dto.status) updateData.status = dto.status;
     if (dto.assignedTo) {
       updateData.assignedTo = dto.assignedTo;

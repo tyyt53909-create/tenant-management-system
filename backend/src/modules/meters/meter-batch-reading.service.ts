@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import type { Prisma, ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
@@ -18,7 +19,7 @@ export class MeterBatchReadingService {
    * 批量抄表工作台底表查询（平铺展示各房源水电表、最新读数及预付余额）
    */
   async getBatchSheet(query: QueryBatchSheetDto) {
-    const where: any = { isActive: true };
+    const where: Prisma.MeterWhereInput = { isActive: true };
     if (query.buildingId) {
       where.buildingId = query.buildingId;
     }
@@ -213,7 +214,7 @@ export class MeterBatchReadingService {
               currentReading: item.currentReading,
               previousReading: item.currentReading,
               usage: 0,
-              source: source as any,
+              source: source as ReadingSource,
               readingTime,
               readBy: operatorId,
               notes,
@@ -306,7 +307,7 @@ export class MeterBatchReadingService {
               currentReading: item.currentReading,
               previousReading: prevVal,
               usage,
-              source: source as any,
+              source: source as ReadingSource,
               readingTime,
               readBy: operatorId,
               notes,
@@ -373,14 +374,14 @@ export class MeterBatchReadingService {
             currentReading: item.currentReading,
             previousReading,
             usage,
-            source: source as any,
+            source: source as ReadingSource,
             readingTime,
             readBy: operatorId,
             notes: notes || null,
           },
         });
 
-        let deduction: any = { applied: false, amount: 0, deducted: 0, shortfall: 0 };
+        let deduction: { applied?: boolean; amount?: number; deducted?: number; shortfall?: number; reason?: string } = { applied: false, amount: 0, deducted: 0, shortfall: 0 };
         if (shouldAutoSettle) {
           deduction = await this.billingService.applyReadingDeduction(tx, meter, reading, billableUsage, operatorId);
           if (deduction.applied || billableUsage === 0) {

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import type { ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
@@ -78,7 +79,7 @@ export class MeterReadingService {
             currentReading: dto.currentReading,
             previousReading: dto.currentReading,
             usage: 0,
-            source: source as any,
+            source: source as ReadingSource,
             readingTime,
             readBy: operatorId,
             notes,
@@ -159,7 +160,7 @@ export class MeterReadingService {
             currentReading: dto.currentReading,
             previousReading: prevVal,
             usage,
-            source: source as any,
+            source: source as ReadingSource,
             readingTime,
             readBy: operatorId,
             notes,
@@ -209,14 +210,14 @@ export class MeterReadingService {
           currentReading: dto.currentReading,
           previousReading,
           usage,
-          source: source as any,
+          source: source as ReadingSource,
           readingTime,
           readBy: operatorId,
           notes: notes || null,
         },
       });
 
-      let deduction: any = { applied: false, reason: '已采集读数，未开启自动扣费（等待周期结算）' };
+      let deduction: Record<string, unknown> = { applied: false, reason: '已采集读数，未开启自动扣费（等待周期结算）' };
       if (shouldAutoSettle) {
         deduction = await this.billingService.applyReadingDeduction(tx, meter, reading, billableUsage, operatorId);
         // 统一入账基准：仅当扣费或生成账单成功时，才正式盖印 [SETTLED]

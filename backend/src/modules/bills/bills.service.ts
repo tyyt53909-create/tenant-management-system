@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import type { Prisma, BillType, BillStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
@@ -124,11 +125,11 @@ export class BillsService {
       data: {
         contractId: dto.contractId,
         billNumber,
-        billType: dto.billType as any,
+        billType: dto.billType as BillType,
         period: dto.period,
         amount: dto.amount,
         dueDate: new Date(dto.dueDate),
-        snapshot: dto.snapshot || {},
+        snapshot: dto.snapshot ? (dto.snapshot as Prisma.InputJsonValue) : {},
       },
     });
   }
@@ -137,7 +138,7 @@ export class BillsService {
     const { page = 1, limit = 20, status, billType, contractId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.BillWhereInput = {};
     if (status) where.status = status;
     if (billType) where.billType = billType;
     if (contractId) where.contractId = contractId;
@@ -176,7 +177,7 @@ export class BillsService {
 
     return {
       data: data.map((bill) => {
-        const { lateFees, ...rest } = bill as typeof bill & { lateFees: any[] };
+        const { lateFees, ...rest } = bill as typeof bill & { lateFees: Parameters<typeof summarizeLateFees>[0] };
         return { ...rest, lateFeeSummary: summarizeLateFees(lateFees) };
       }),
       meta: {
@@ -217,7 +218,7 @@ export class BillsService {
       throw new NotFoundException('账单不存在');
     }
 
-    const updateData: any = {};
+    const updateData: Prisma.BillUpdateInput = {};
     if (dto.amount !== undefined) updateData.amount = dto.amount;
     if (dto.paidAmount !== undefined) updateData.paidAmount = dto.paidAmount;
     if (dto.status) updateData.status = dto.status;
@@ -250,7 +251,7 @@ export class BillsService {
       return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
     }
 
-    const where: any = {
+    const where: Prisma.BillWhereInput = {
       contract: {
         tenantId,
       },
@@ -363,18 +364,19 @@ export class BillsService {
   /**
    * 账单数据 CSV 导出
    */
-  async exportBills(query: any) {
-    const where: any = {};
-    if (query.status) where.status = query.status;
-    if (query.billType) where.billType = query.billType;
+  async exportBills(query: Partial<QueryBillsDto>) {
+    const where: Prisma.BillWhereInput = {};
+    if (query.status) where.status = query.status as BillStatus;
+    if (query.billType) where.billType = query.billType as BillType;
     if (query.contractId) where.contractId = query.contractId;
     if (query.buildingId) {
       where.contract = { room: { buildingId: query.buildingId } };
     }
     if (query.startDate || query.endDate) {
-      where.dueDate = {};
-      if (query.startDate) where.dueDate.gte = new Date(query.startDate);
-      if (query.endDate) where.dueDate.lte = new Date(query.endDate);
+      where.dueDate = {
+        ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+        ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+      };
     }
 
     const bills = await this.prisma.bill.findMany({
@@ -386,13 +388,14 @@ export class BillsService {
             room: { select: { roomNumber: true } },
           },
         },
-        lateFees: { select: { confirmedAmount: true, settledAmount: true, suggestedAmount: true } },
+        lateFees: { select: { confirmedAmount: true, settledAmount: true, suggestedAmount: true, overdueDays: true, confirmedAt: true, settledAt: true } },
       },
       orderBy: [{ dueDate: 'desc' }, { createdAt: 'desc' }],
       take: 5000,
     });
 
-    const columns: CsvColumn[] = [
+    type ExportBillItem = (typeof bills)[number];
+    const columns: CsvColumn<ExportBillItem>[] = [
       { header: '账单编号', key: 'billNumber' },
       { header: '房间号', formatter: (b) => b.contract?.room?.roomNumber || '' },
       { header: '租客姓名', formatter: (b) => b.contract?.tenant?.name || '' },

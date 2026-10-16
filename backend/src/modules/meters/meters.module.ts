@@ -4,7 +4,7 @@ import { MetersSimulatorService } from './meters-simulator.service.js';
 import { MetersController } from './meters.controller.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { METER_ADAPTER } from './adapters/meter-adapter.js';
+import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
 import { ManualMeterAdapter, SimulatorMeterAdapter } from './adapters/manual-meter.adapter.js';
 import { MeterService } from './meter.service.js';
 import { MeterReadingService } from './meter-reading.service.js';
@@ -25,7 +25,7 @@ import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.
     {
       provide: MeterService,
       inject: [PrismaService, METER_ADAPTER],
-      useFactory: (prisma: PrismaService, adapter: any) => new MeterService(prisma, adapter),
+      useFactory: (prisma: PrismaService, adapter: MeterAdapter) => new MeterService(prisma, adapter),
     },
     MetersService,
     MetersSimulatorService,

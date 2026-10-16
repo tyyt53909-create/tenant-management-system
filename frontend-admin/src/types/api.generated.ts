@@ -1515,7 +1515,9 @@ export interface components {
             address?: string;
             floors: number;
             totalFloors?: number;
-            metadata?: Record<string, never>;
+            metadata?: {
+                [key: string]: unknown;
+            };
         };
         UpdateBuildingDto: {
             isActive?: boolean;
@@ -1531,7 +1533,9 @@ export interface components {
             paymentDay: number;
             startDate: string;
             endDate: string;
-            lateFeeRule?: Record<string, never>;
+            lateFeeRule?: {
+                [key: string]: unknown;
+            };
         };
         RenewContractDto: {
             /** @description 新合同起始日；默认取原合同到期日次日 */
@@ -1550,7 +1554,9 @@ export interface components {
             /** @description 每月付款日；默认沿用原合同 */
             paymentDay?: number;
             /** @description 滞纳金规则；默认沿用原合同 */
-            lateFeeRule?: Record<string, never>;
+            lateFeeRule?: {
+                [key: string]: unknown;
+            };
         };
         UpdateContractDto: {
             /** @enum {string} */
@@ -1563,8 +1569,11 @@ export interface components {
             period: string;
             amount: number;
             dueDate: string;
-            snapshot?: Record<string, never>;
+            snapshot?: {
+                [key: string]: unknown;
+            };
         };
+        Object: Record<string, never>;
         UpdateBillDto: {
             /** @enum {string} */
             status?: "PENDING" | "PARTIAL" | "PAID" | "OVERDUE" | "CANCELLED";
@@ -1710,7 +1719,9 @@ export interface components {
             itemType: "RENT_REFUND" | "DEPOSIT_REFUND" | "DEPOSIT_DEDUCTION" | "UTILITY_REFUND" | "OTHER_FEE" | "OTHER_REFUND";
             description: string;
             amount: number;
-            calculation?: Record<string, never>;
+            calculation?: {
+                [key: string]: unknown;
+            };
             isAdjusted?: boolean;
             adjustReason?: string;
         };
@@ -3687,9 +3698,12 @@ export interface operations {
             query?: {
                 page?: number;
                 limit?: number;
-                status?: "PENDING" | "PARTIAL" | "PAID" | "OVERDUE" | "CANCELLED";
-                billType?: "RENT" | "UTILITY" | "OTHER";
+                status?: components["schemas"]["Object"];
+                billType?: components["schemas"]["Object"];
                 contractId?: string;
+                buildingId?: string;
+                startDate?: string;
+                endDate?: string;
             };
             header?: never;
             path?: never;
@@ -3762,7 +3776,16 @@ export interface operations {
     };
     BillsController_exportBills: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                limit?: number;
+                status?: components["schemas"]["Object"];
+                billType?: components["schemas"]["Object"];
+                contractId?: string;
+                buildingId?: string;
+                startDate?: string;
+                endDate?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3793,9 +3816,12 @@ export interface operations {
             query?: {
                 page?: number;
                 limit?: number;
-                status?: "PENDING" | "PARTIAL" | "PAID" | "OVERDUE" | "CANCELLED";
-                billType?: "RENT" | "UTILITY" | "OTHER";
+                status?: components["schemas"]["Object"];
+                billType?: components["schemas"]["Object"];
                 contractId?: string;
+                buildingId?: string;
+                startDate?: string;
+                endDate?: string;
             };
             header?: never;
             path?: never;
@@ -4996,7 +5022,14 @@ export interface operations {
     };
     PrepayController_exportTransactions: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                limit?: number;
+                accountId?: string;
+                type?: components["schemas"]["Object"];
+                startDate?: string;
+                endDate?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5027,6 +5060,10 @@ export interface operations {
             query?: {
                 page?: number;
                 limit?: number;
+                accountId?: string;
+                type?: components["schemas"]["Object"];
+                startDate?: string;
+                endDate?: string;
             };
             header?: never;
             path?: never;
@@ -5061,6 +5098,10 @@ export interface operations {
             query?: {
                 page?: number;
                 limit?: number;
+                accountId?: string;
+                type?: components["schemas"]["Object"];
+                startDate?: string;
+                endDate?: string;
             };
             header?: never;
             path: {
@@ -5240,8 +5281,10 @@ export interface operations {
             query?: {
                 page?: number;
                 limit?: number;
-                status?: "DRAFT" | "PENDING" | "COMPLETED" | "CANCELLED";
+                status?: components["schemas"]["Object"];
                 contractId?: string;
+                startDate?: string;
+                endDate?: string;
             };
             header?: never;
             path?: never;
@@ -5305,7 +5348,14 @@ export interface operations {
     };
     CheckoutController_exportCheckouts: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                limit?: number;
+                status?: components["schemas"]["Object"];
+                contractId?: string;
+                startDate?: string;
+                endDate?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

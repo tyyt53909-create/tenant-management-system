@@ -89,7 +89,7 @@ describe('BillsService', () => {
     });
 
     it('并发防护：收款时对当前账单执行悲观行锁 FOR UPDATE', async () => {
-      prisma.$executeRawUnsafe = vi.fn().mockResolvedValue(1);
+      prisma.$queryRaw = vi.fn().mockResolvedValue([{ id: billId }]);
       prisma.bill.findUnique.mockResolvedValue({
         id: billId,
         amount: 100000,
@@ -111,9 +111,8 @@ describe('BillsService', () => {
         operatorId,
       );
 
-      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        expect.stringContaining('FOR UPDATE'),
-        billId,
+      expect(prisma.$queryRaw).toHaveBeenCalledWith(
+        expect.objectContaining({ strings: expect.arrayContaining([expect.stringContaining('FOR UPDATE')]) }),
       );
     });
 

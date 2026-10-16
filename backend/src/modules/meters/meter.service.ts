@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import type { Prisma, MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
@@ -37,7 +38,7 @@ export class MeterService {
           buildingId: dto.buildingId,
           roomId: dto.roomId,
           publicAreaId: dto.publicAreaId,
-          meterType: dto.meterType as any,
+          meterType: dto.meterType as MeterType,
           meterNumber: dto.meterNumber,
           unitPrice: dto.unitPrice,
           priceEffectiveDate: new Date(dto.priceEffectiveDate),
@@ -68,7 +69,7 @@ export class MeterService {
     const { page = 1, limit = 20, meterType, buildingId, roomId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.MeterWhereInput = {};
     if (meterType) where.meterType = meterType;
     if (buildingId) where.buildingId = buildingId;
     if (roomId) where.roomId = roomId;
@@ -108,7 +109,7 @@ export class MeterService {
     const meter = await this.prisma.meter.findUnique({ where: { id } });
     if (!meter) throw new NotFoundException('水电表不存在');
 
-    const updateData: any = {};
+    const updateData: Prisma.MeterUpdateInput = {};
     if (dto.unitPrice !== undefined) updateData.unitPrice = dto.unitPrice;
     if (dto.priceEffectiveDate) updateData.priceEffectiveDate = new Date(dto.priceEffectiveDate);
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;

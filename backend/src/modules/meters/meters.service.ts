@@ -15,7 +15,7 @@ import { MeterService } from './meter.service.js';
 import { MeterReadingService } from './meter-reading.service.js';
 import { MeterBatchReadingService } from './meter-batch-reading.service.js';
 import { MeterBillingService } from './meter-billing.service.js';
-import { MeterUsageQueryService } from './meter-usage-query.service.js';
+import { MeterUsageQueryService, type ExportMeterReadingsQuery } from './meter-usage-query.service.js';
 
 export { METER_TYPE_LABEL };
 
@@ -90,7 +90,7 @@ export class MetersService {
   }
 
   /** 抄表台账数据 CSV 导出 */
-  async exportReadings(query: any) {
+  async exportReadings(query: ExportMeterReadingsQuery) {
     return this.usageQueryService.exportReadings(query);
   }
 

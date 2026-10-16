@@ -19,5 +19,5 @@ export class CreateBuildingDto {
   totalFloors?: number;
 
   @IsOptional()
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }

@@ -19,7 +19,7 @@ describe('图片内容校验与缩略图', () => {
           GPSLongitudeRef: 'E',
           GPSLongitude: '114/1 8/1 0/1',
         },
-      },
+      } as any,
     }).toBuffer();
     const before = await sharp(input).metadata();
     expect(before.exif).toBeInstanceOf(Buffer);

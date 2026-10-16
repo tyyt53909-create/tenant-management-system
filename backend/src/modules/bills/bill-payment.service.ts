@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import { Prisma, type PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
@@ -27,8 +28,9 @@ export class BillPaymentService {
     return this.prisma.$transaction(async (tx) => {
       // 悲观行锁：并发收款时串行化锁定当前账单，杜绝并发超收与状态脏写覆盖
       try {
-        if (typeof (tx as any).$executeRawUnsafe === 'function') {
-          await (tx as any).$executeRawUnsafe(`SELECT id FROM bills WHERE id = $1 FOR UPDATE`, billId);
+        const rawClient = tx as unknown as { $queryRaw?: (query: Prisma.Sql) => Promise<unknown> };
+        if (typeof rawClient.$queryRaw === 'function') {
+          await rawClient.$queryRaw(Prisma.sql`SELECT id FROM bills WHERE id = ${billId} FOR UPDATE`);
         }
       } catch {
         // 兼容单元测试 mock 或无原生 SQL 执行环境
@@ -85,7 +87,7 @@ export class BillPaymentService {
         data: {
           billId,
           amount: dto.amount,
-          paymentMethod: dto.paymentMethod as any,
+          paymentMethod: dto.paymentMethod as PaymentMethod,
           transactionNumber: dto.transactionNumber,
           paidAt: dto.paidAt ? new Date(dto.paidAt) : new Date(),
           confirmedBy: operatorId,

@@ -54,9 +54,10 @@ export class GoogleAuthService {
         avatarUrl: payload.picture,
         emailVerified: payload.email_verified ?? true,
       };
-    } catch (error: any) {
-      this.logger.error(`Google Token 验证失败: ${error.message}`);
-      throw new UnauthorizedException(`Google 身份凭证无效或已过期: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Google Token 验证失败: ${message}`);
+      throw new UnauthorizedException(`Google 身份凭证无效或已过期: ${message}`);
     }
   }
 

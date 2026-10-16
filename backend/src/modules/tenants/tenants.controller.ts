@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { TenantsService } from './tenants.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
@@ -6,6 +6,7 @@ import { QueryTenantsDto } from './dto/query-tenants.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('tenants')
 @UseGuards(JwtAuthGuard)
@@ -31,9 +32,10 @@ export class TenantsController {
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'TENANT')
-  findOne(@Request() req: any, @Param('id') id: string) {
-    if (req.user?.role === 'TENANT') {
-      return this.tenantsService.findOneForTenant(id, req.user?.tenantId);
+  findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      return this.tenantsService.findOneForTenant(id, user.tenantId);
     }
     return this.tenantsService.findOne(id);
   }

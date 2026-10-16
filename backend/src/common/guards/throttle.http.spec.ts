@@ -114,7 +114,7 @@ describe('AuthController 限流装饰器', () => {
   const limited = ['register', 'login', 'googleAuth', 'loginWithEmailCode', 'bindInviteCode'] as const;
 
   it('敏感认证接口覆盖了 default 限流次数', () => {
-    const handlers = AuthController.prototype as unknown as Record<string, unknown>;
+    const handlers = AuthController.prototype as unknown as Record<string, object>;
     for (const name of limited) {
       const limit = Reflect.getMetadata('THROTTLER:LIMITdefault', handlers[name]);
       expect(typeof limit).toBe('function');
@@ -122,7 +122,7 @@ describe('AuthController 限流装饰器', () => {
   });
 
   it('发送验证码按邮箱跟踪', () => {
-    const handlers = AuthController.prototype as unknown as Record<string, unknown>;
+    const handlers = AuthController.prototype as unknown as Record<string, object>;
     const tracker = Reflect.getMetadata('THROTTLER:TRACKERdefault', handlers.sendEmailCode);
     expect(typeof tracker).toBe('function');
   });

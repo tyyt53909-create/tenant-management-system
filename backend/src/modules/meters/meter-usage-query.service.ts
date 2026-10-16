@@ -1,26 +1,37 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import type { Prisma, MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
 import { METER_TYPE_LABEL } from './meter-types.constants.js';
 
+export interface ExportMeterReadingsQuery {
+  meterId?: string;
+  meterType?: MeterType;
+  buildingId?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 @Injectable()
 export class MeterUsageQueryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async exportReadings(query: any) {
-    const where: any = {};
+  async exportReadings(query: ExportMeterReadingsQuery) {
+    const where: Prisma.MeterReadingWhereInput = {};
     if (query.meterId) where.meterId = query.meterId;
-    if (query.meterType) where.meter = { meterType: query.meterType };
-    if (query.buildingId) {
-      where.meter = { ...where.meter, buildingId: query.buildingId };
+    const meterWhere: Prisma.MeterWhereInput = {};
+    if (query.meterType) meterWhere.meterType = query.meterType;
+    if (query.buildingId) meterWhere.buildingId = query.buildingId;
+    if (Object.keys(meterWhere).length > 0) {
+      where.meter = meterWhere;
     }
     if (query.startDate || query.endDate) {
-      where.readingTime = {};
-      if (query.startDate) where.readingTime.gte = new Date(query.startDate);
-      if (query.endDate) where.readingTime.lte = new Date(query.endDate);
+      where.readingTime = {
+        ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+        ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+      };
     }
 
     const readings = await this.prisma.meterReading.findMany({
@@ -37,17 +48,18 @@ export class MeterUsageQueryService {
       take: 5000,
     });
 
-    const columns: CsvColumn[] = [
+    type ReadingItem = (typeof readings)[number];
+    const columns: CsvColumn<ReadingItem>[] = [
       { header: '记录ID', key: 'id' },
       { header: '表号', formatter: (r) => r.meter?.meterNumber || '' },
-      { header: '表类型', formatter: (r) => METER_TYPE_LABEL[r.meter?.meterType] || r.meter?.meterType || '' },
+      { header: '表类型', formatter: (r) => (r.meter?.meterType ? METER_TYPE_LABEL[r.meter.meterType] || r.meter.meterType : '') },
       { header: '楼栋', formatter: (r) => r.meter?.building?.name || '' },
       { header: '房间号', formatter: (r) => r.meter?.room?.roomNumber || '公共区域' },
       { header: '上次读数', formatter: (r) => Number(r.previousReading).toFixed(2) },
       { header: '本次读数', formatter: (r) => Number(r.currentReading).toFixed(2) },
       { header: '用量', formatter: (r) => Number(r.usage).toFixed(2) },
-      { header: '单价(元)', formatter: (r) => centsToYuanString(r.meter?.unitPrice) },
-      { header: '抄表时间', formatter: (r) => r.readingTime ? new Date(r.readingTime).toLocaleString('zh-CN') : '' },
+      { header: '单价(元)', formatter: (r) => centsToYuanString(r.meter?.unitPrice ?? 0) },
+      { header: '抄表时间', formatter: (r) => (r.readingTime ? new Date(r.readingTime).toLocaleString('zh-CN') : '') },
       { header: '抄表人', key: 'readBy' },
       { header: '备注', key: 'notes' },
     ];

@@ -1,10 +1,11 @@
-import { Controller, Post, Get, Param, Query, UseGuards, UseInterceptors, UploadedFile, Res, Request } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, UseGuards, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
-import { FilesService } from './files.service.js';
+import { FilesService, type UploadedFileInput } from './files.service.js';
 import { detectImageMime } from './image-bytes.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('files')
 @UseGuards(JwtAuthGuard)
@@ -19,8 +20,9 @@ export class FilesController {
     }),
   )
   // 上传时登记归属（T159）：actor 来自 JWT，不信任请求体
-  upload(@UploadedFile() file: any, @Request() req: any) {
-    return this.filesService.save(file, req.user);
+  upload(@UploadedFile() file: UploadedFileInput, @CurrentUser() userParam: CurrentUserParam) {
+    const user = resolveAuthUser(userParam);
+    return this.filesService.save(file, user);
   }
 
   /**
@@ -34,14 +36,15 @@ export class FilesController {
   async getFile(
     @Param('key') key: string,
     @Query('expiresIn') expiresIn: string | undefined,
-    @Request() req: any,
+    @CurrentUser() userParam: CurrentUserParam,
     @Res() res: Response,
   ) {
+    const user = resolveAuthUser(userParam);
     if (expiresIn !== undefined) {
       return res.json(await this.filesService.signUrl(key, Number(expiresIn) || 3600));
     }
 
-    await this.filesService.assertCanRead(key, req.user);
+    await this.filesService.assertCanRead(key, user);
     const body = await this.filesService.read(key);
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');

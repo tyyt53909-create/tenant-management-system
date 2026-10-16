@@ -708,7 +708,7 @@ describe('AuthController', () => {
 
     describe('loginWithEmailCode', () => {
       it('验证码错误应抛出 BadRequestException', async () => {
-        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(false);
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(false);
 
         await expect(
           controller.loginWithEmailCode({ email: 'test@example.com', code: '000000' }),
@@ -716,7 +716,7 @@ describe('AuthController', () => {
       });
 
       it('账号被禁用应抛出 ForbiddenException', async () => {
-        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
         vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({
           id: 'user-banned',
           email: 'banned@example.com',
@@ -729,7 +729,7 @@ describe('AuthController', () => {
       });
 
       it('已有正常用户验证码登录成功', async () => {
-        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
         const mockUser = {
           id: 'user-existing',
           email: 'exist@example.com',
@@ -760,7 +760,7 @@ describe('AuthController', () => {
       });
 
       it('新用户验证码登录应自动创建账户与租客记录', async () => {
-        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
         vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
 
         const mockNewUser = {
