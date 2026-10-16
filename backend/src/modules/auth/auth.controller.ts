@@ -14,6 +14,7 @@ import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { EmailOtpService } from './email-otp.service.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
+import { AuthThrottle, OtpEmailThrottle } from '../../common/decorators/throttle.decorators.js';
 import * as bcrypt from 'bcrypt';
 
 @Controller('auth')
@@ -28,6 +29,7 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @AuthThrottle()
   async register(@Body() dto: RegisterDto): Promise<RegisterResponseDto> {
     // 1. 验证邀请码
     const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
@@ -115,6 +117,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @AuthThrottle()
   async login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
     // 1. 查询用户（邮箱或手机号）
     const user = await this.prisma.user.findFirst({
@@ -323,6 +326,7 @@ export class AuthController {
    * Google 登录 / 注册入口
    */
   @Post('google')
+  @AuthThrottle()
   async googleAuth(@Body() dto: GoogleAuthDto): Promise<GoogleAuthResponseDto> {
     // 1. 验证 Google idToken
     const googleUser = await this.googleAuthService.verifyIdToken(dto.idToken);
@@ -455,6 +459,7 @@ export class AuthController {
    * 发送邮箱验证码 (OTP)
    */
   @Post('send-email-code')
+  @OtpEmailThrottle()
   async sendEmailCode(@Body() dto: SendEmailCodeDto) {
     const result = await this.emailOtpService.sendCode(dto.email);
     return {
@@ -467,6 +472,7 @@ export class AuthController {
    * 邮箱验证码免密登录 / 自动注册
    */
   @Post('login-email-code')
+  @AuthThrottle()
   async loginWithEmailCode(@Body() dto: LoginEmailCodeDto) {
     // 1. 校验验证码
     const isValid = this.emailOtpService.verifyCode(dto.email, dto.code);
@@ -563,6 +569,7 @@ export class AuthController {
    * 登录后在应用内输入邀请码完成房源与身份绑定
    */
   @Post('bind-invite-code')
+  @AuthThrottle()
   @UseGuards(JwtAuthGuard)
   async bindInviteCode(@Request() req: any, @Body() dto: BindInviteCodeDto) {
     const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
