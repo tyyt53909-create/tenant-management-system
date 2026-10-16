@@ -10,6 +10,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { EmailOtpService } from './email-otp.service.js';
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
+import { AuthService } from './auth.service.js';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthController', () => {
@@ -25,6 +26,7 @@ describe('AuthController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
+        AuthService,
         {
           provide: InviteCodeService,
           useValue: {

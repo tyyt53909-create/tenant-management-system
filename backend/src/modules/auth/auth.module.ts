@@ -17,6 +17,9 @@ import { RedisModule } from '../../redis/redis.module.js';
 import { RedisOtpStore } from '../../redis/redis-otp.store.js';
 import { RedisService } from '../../redis/redis.service.js';
 
+import { AuthService } from './auth.service.js';
+import { FederatedAuthService } from './federated-auth.service.js';
+
 @Module({
   imports: [
     ConfigModule.forFeature(jwtConfig),
@@ -37,6 +40,8 @@ import { RedisService } from '../../redis/redis.service.js';
   ],
   controllers: [AuthController],
   providers: [
+    AuthService,
+    FederatedAuthService,
     JwtAuthService,
     JwtStrategy,
     InviteCodeService,
@@ -61,6 +66,6 @@ import { RedisService } from '../../redis/redis.service.js';
       },
     },
   ],
-  exports: [JwtAuthService, InviteCodeService, GoogleAuthService, EmailOtpService, PassportModule],
+  exports: [AuthService, FederatedAuthService, JwtAuthService, InviteCodeService, GoogleAuthService, EmailOtpService, PassportModule],
 })
 export class AuthModule {}
