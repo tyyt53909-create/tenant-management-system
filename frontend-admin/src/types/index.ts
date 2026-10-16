@@ -1,4 +1,14 @@
-// 用户类型
+import type { components } from './api.generated';
+
+type ApiSchemas = components['schemas'];
+
+/** 登录请求体，来自 OpenAPI 的 LoginDto。 */
+export type LoginForm = ApiSchemas['LoginDto'];
+
+/** 注册请求体，来自 OpenAPI 的 RegisterDto。 */
+export type RegisterForm = ApiSchemas['RegisterDto'];
+
+// 用户类型。这是页面使用的形状，不是请求 DTO。
 export interface User {
   id: string;
   email: string;
@@ -7,26 +17,11 @@ export interface User {
   createdAt: string;
 }
 
-// 登录表单（后端 LoginDto 字段名为 identifier，支持邮箱或手机号）
-export interface LoginForm {
-  identifier: string; // email 或 phone
-  password: string;
-}
-
 /** 房态（与后端 RoomStatus 枚举一致） */
 export type RoomStatus = 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
 
 /** 清洁状态（与后端 CleanStatus 枚举一致） */
 export type CleanStatus = 'CLEAN' | 'PENDING_CLEAN' | 'CLEANING';
-
-// 注册表单
-export interface RegisterForm {
-  email: string;
-  phone: string;
-  password: string;
-  name: string;
-  inviteCode: string;
-}
 
 // 房源
 export interface Room {

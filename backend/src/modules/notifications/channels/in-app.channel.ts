@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { NotificationChannel, NotificationMessage } from './notification-channel.js';
 
@@ -14,7 +15,7 @@ export class InAppChannel implements NotificationChannel {
         title: message.title,
         body: message.body,
         priority: message.priority,
-        data: message.data ?? undefined,
+        data: message.data as Prisma.InputJsonValue | undefined,
         expiredAt: message.expiredAt,
       },
     });

@@ -47,7 +47,7 @@ export class FilesService {
     }
     const body = Buffer.isBuffer(file.buffer) ? file.buffer : Buffer.from(file.buffer ?? []);
     const detected = detectImageMime(body);
-    if (detected !== file.mimetype) {
+    if (!detected || detected !== file.mimetype) {
       throw new BadRequestException('文件内容不是有效的图片');
     }
 

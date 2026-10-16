@@ -1,7 +1,11 @@
 import type { IncomingMessage } from 'node:http';
 import pino from 'pino';
-import pinoHttp from 'pino-http';
+import pinoHttpImport from 'pino-http';
+import type { HttpLogger, Options } from 'pino-http';
 import { resolveRequestId } from '../common/filters/all-exceptions.filter.js';
+
+// pino-http 是 CommonJS。运行时默认导出可调用，NodeNext 的类型却把它看成模块命名空间。
+const pinoHttp = pinoHttpImport as unknown as (options: Options) => HttpLogger;
 
 const REDACTED = '[Redacted]';
 

@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import RedisImport from 'ioredis';
+import type { RedisOptions } from 'ioredis';
 import type { RedisCommandClient } from './redis.client.js';
+
+// ioredis 同样是 CommonJS 默认导出，NodeNext 下不能直接 new。
+const Redis = RedisImport as unknown as new (options: RedisOptions) => RedisCommandClient & {
+  on(event: 'error', listener: () => void): void;
+  disconnect(): void;
+};
 
 @Injectable()
 export class RedisService {
