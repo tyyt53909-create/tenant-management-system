@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
@@ -8,6 +8,8 @@ import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { LateFeeUtil, LateFeeRule } from './utils/late-fee.util.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
+import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
+import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 
 const BILL_TYPE_LABEL: Record<string, string> = {
   RENT: '租金',
@@ -85,7 +87,14 @@ export function summarizeLateFees(
 
 @Injectable()
 export class BillsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly payments: PaymentProvider;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(PAYMENT_PROVIDER) payments?: PaymentProvider,
+  ) {
+    this.payments = payments ?? new OfflinePaymentProvider();
+  }
 
   async create(dto: CreateBillDto) {
     // 验证合同存在
@@ -362,6 +371,13 @@ export class BillsService {
           throw new ConflictException('该交易号已登记过，请勿重复收款');
         }
       }
+
+      await this.payments.createOrder({
+        billId,
+        amount: dto.amount,
+        paymentMethod: dto.paymentMethod,
+        description: `账单 ${billId}`,
+      });
 
       const payment = await tx.paymentRecord.create({
         data: {

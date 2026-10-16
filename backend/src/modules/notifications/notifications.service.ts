@@ -1,25 +1,32 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateNotificationDto } from './dto/create-notification.dto.js';
 import { QueryNotificationsDto } from './dto/query-notifications.dto.js';
+import { NotificationDispatcher } from './channels/notification-dispatcher.js';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly dispatcher: NotificationDispatcher;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() dispatcher?: NotificationDispatcher,
+  ) {
+    this.dispatcher = dispatcher ?? NotificationDispatcher.createDefault(prisma);
+  }
 
   async create(dto: CreateNotificationDto) {
     const user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
     if (!user) throw new NotFoundException('接收用户不存在');
 
-    return this.prisma.notification.create({
-      data: {
-        userId: dto.userId,
-        title: dto.title,
-        body: dto.body,
-        priority: (dto.priority as 'NORMAL' | 'URGENT') ?? 'NORMAL',
-        data: dto.data ?? undefined,
-        expiredAt: dto.expiredAt ? new Date(dto.expiredAt) : undefined,
-      },
+    return this.dispatcher.dispatch({
+      userId: dto.userId,
+      email: user.email,
+      title: dto.title,
+      body: dto.body,
+      priority: dto.priority ?? 'NORMAL',
+      data: dto.data,
+      expiredAt: dto.expiredAt ? new Date(dto.expiredAt) : undefined,
     });
   }
 

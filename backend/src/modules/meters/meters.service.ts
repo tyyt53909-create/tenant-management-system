@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
@@ -11,6 +11,8 @@ import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
+import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
+import { ManualMeterAdapter } from './adapters/manual-meter.adapter.js';
 
 /** 表类型 → 费用名称（用于扣费流水描述） */
 const METER_TYPE_LABEL: Record<string, string> = {
@@ -21,7 +23,19 @@ const METER_TYPE_LABEL: Record<string, string> = {
 
 @Injectable()
 export class MetersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly meterAdapter: MeterAdapter;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(METER_ADAPTER) meterAdapter?: MeterAdapter,
+  ) {
+    this.meterAdapter = meterAdapter ?? new ManualMeterAdapter(prisma);
+  }
+
+  /** 按当前适配器取最新读数。结算仍直接查库，因为要和事务锁放在一起。 */
+  fetchReading(meterId: string) {
+    return this.meterAdapter.fetchReading(meterId);
+  }
 
   async create(dto: CreateMeterDto) {
     // 验证楼栋存在
