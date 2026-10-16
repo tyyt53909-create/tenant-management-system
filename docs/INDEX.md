@@ -206,11 +206,13 @@
 | [T190](../tasks/T190-类型安全治理.md) | 类型安全治理（OPT-17：消除 unsafe raw query、@CurrentUser、去 any ≤15） | 强 | completed | 2026-10-16 |
 | [T191](../tasks/T191-清理死代码与独立邀请码表治理.md) | 清理死代码与独立邀请码表治理（OPT-18：删除 BuildingGuard、独立 InviteCode 表、批量邀请码） | 强 | completed | 2026-10-16 |
 | [T192](../tasks/T192-管理后台大组件拆分与composable.md) | 管理后台大组件拆分与 composable 抽象（OPT-19：抽离 composable、拆分超大页面至 <=500 行） | 强 | completed | 2026-10-16 |
+| [T193](../tasks/T193-管理后台Token存储加固.md) | 管理后台 Token 存储加固与安全响应头（OPT-20：HttpOnly Cookie、内存 Token、CSP/安全响应头） | 强 | completed | 2026-10-16 |
 
 **交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)、[2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)、[2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)
 
 ### 3.4 交接记录
 
+- [2026-10-16-T193-管理后台Token存储加固.md](./handoff/2026-10-16-T193-管理后台Token存储加固.md)：T193 / OPT-20，管理后台 Token 存储加固（HttpOnly Cookie、内存 access token、CSP/安全头）。
 - [2026-10-16-T192-管理后台大组件拆分与composable.md](./handoff/2026-10-16-T192-管理后台大组件拆分与composable.md)：T192 / OPT-19，管理后台大组件拆分与 composable 抽象（抽离 composable、全仓 .vue 文件 <=500 行）。
 - [2026-10-16-T191-清理死代码与独立邀请码表治理.md](./handoff/2026-10-16-T191-清理死代码与独立邀请码表治理.md)：T191 / OPT-18，删除 BuildingGuard、独立 InviteCode 表与批量邀请码全生命周期治理。
 - [2026-10-16-T190-类型安全治理.md](./handoff/2026-10-16-T190-类型安全治理.md)：T190 / OPT-17，类型安全治理，消除 unsafe raw query、@CurrentUser、非测试 any 降至 0。

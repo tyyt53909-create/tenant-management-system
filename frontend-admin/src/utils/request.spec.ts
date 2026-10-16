@@ -2,7 +2,7 @@ import axios, { AxiosError, AxiosHeaders } from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
 import { ElMessage } from 'element-plus';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import request from './request';
+import request, { setAccessToken, getAccessToken } from './request';
 
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn() } }));
 
@@ -16,7 +16,7 @@ function unauthorized(config: InternalAxiosRequestConfig) {
 describe('请求认证恢复', () => {
   beforeEach(() => {
     const values = new Map<string, string>([
-      ['access_token', 'expired'], ['refresh_token', 'valid-refresh'], ['theme', 'qiju'],
+      ['theme', 'qiju'],
     ]);
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => values.get(key) ?? null,
@@ -25,9 +25,11 @@ describe('请求认证恢复', () => {
       clear: () => values.clear(),
     });
     vi.stubGlobal('window', { location: { href: '/rooms', pathname: '/rooms' } });
+    setAccessToken('expired');
   });
 
   afterEach(() => {
+    setAccessToken(null);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -54,6 +56,7 @@ describe('请求认证恢复', () => {
     await expect(request.get('/rooms')).rejects.toThrow();
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(calls).toBe(2);
+    expect(getAccessToken()).toBeNull();
     expect(localStorage.getItem('access_token')).toBeNull();
     expect(localStorage.getItem('refresh_token')).toBeNull();
     expect(localStorage.getItem('theme')).toBe('qiju');
@@ -72,9 +75,12 @@ describe('请求认证恢复', () => {
     await expect(Promise.all([request.get('/rooms'), request.get('/tenants')]))
       .resolves.toEqual([{ ok: true }, { ok: true }]);
     expect(refresh).toHaveBeenCalledTimes(1);
+    expect(getAccessToken()).toBe('new');
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('refresh_token')).toBeNull();
   });
 
-  it('刷新成功时保存轮换后的 refresh token', async () => {
+  it('刷新成功时更新内存 token，localStorage 中无任何 token', async () => {
     vi.spyOn(axios, 'post').mockResolvedValue({
       data: { accessToken: 'new-access', refreshToken: 'rotated-refresh' },
     });
@@ -83,26 +89,20 @@ describe('请求认证恢复', () => {
       return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config };
     };
     await expect(request.get('/rooms')).resolves.toEqual({ ok: true });
-    expect(localStorage.getItem('access_token')).toBe('new-access');
-    expect(localStorage.getItem('refresh_token')).toBe('rotated-refresh');
+    expect(getAccessToken()).toBe('new-access');
+    expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('refresh_token')).toBeNull();
   });
 
   it('刷新失败时退出会话，不清除主题设置', async () => {
     vi.spyOn(axios, 'post').mockRejectedValue(new Error('refresh expired'));
     request.defaults.adapter = async (config) => { throw unauthorized(config); };
     await expect(request.get('/rooms')).rejects.toThrow('refresh expired');
+    expect(getAccessToken()).toBeNull();
     expect(localStorage.getItem('access_token')).toBeNull();
+    expect(localStorage.getItem('refresh_token')).toBeNull();
     expect(localStorage.getItem('theme')).toBe('qiju');
     expect(window.location.href).toBe('/login');
-  });
-
-  it('没有刷新 token 时不重复请求', async () => {
-    localStorage.removeItem('refresh_token');
-    const refresh = vi.spyOn(axios, 'post');
-    request.defaults.adapter = async (config) => { throw unauthorized(config); };
-    await expect(request.get('/rooms')).rejects.toThrow('Unauthorized');
-    expect(refresh).not.toHaveBeenCalled();
-    expect(localStorage.getItem('access_token')).toBeNull();
   });
 
   it('按错误码提示能力暂停和内部错误，不展示 SQL', async () => {

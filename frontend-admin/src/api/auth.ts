@@ -14,14 +14,18 @@ export const register = (data: RegisterForm) => {
   return request.post('/auth/register', data);
 };
 
-// 刷新 Token
-export const refreshToken = (refreshToken: string) => {
-  return request.post('/auth/refresh', { refreshToken });
+// 刷新 Token（由浏览器携带 HttpOnly refresh_token Cookie，亦兼容可选的显式传参）
+export const refreshToken = (refreshToken?: string) => {
+  return request.post('/auth/refresh', refreshToken ? { refreshToken } : {});
 };
 
-// 不走带拦截器的客户端，避免登出时再用这枚 refresh token 去刷新。
-export const logout = (refreshToken: string) => {
-  return axios.post(`${API_BASE_URL}/auth/logout`, { refreshToken }, { timeout: 15000 });
+// 登出：不走带拦截器的客户端，通知服务端作废会话并清除 HttpOnly Cookie
+export const logout = (refreshToken?: string) => {
+  return axios.post(
+    `${API_BASE_URL}/auth/logout`,
+    refreshToken ? { refreshToken } : {},
+    { withCredentials: true, timeout: 15000 },
+  );
 };
 
 // 获取当前用户信息

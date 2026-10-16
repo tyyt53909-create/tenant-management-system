@@ -231,10 +231,15 @@ export class AuthService {
   }
 
   async refresh(dto: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
+    if (!dto.refreshToken) {
+      throw new UnauthorizedException('Refresh Token 不能为空');
+    }
+    const refreshToken = dto.refreshToken;
+
     // 1. 验证 Refresh Token（仅捕获 Token 解析失败）
     let payload;
     try {
-      payload = await this.jwtService.verifyToken(dto.refreshToken);
+      payload = await this.jwtService.verifyToken(refreshToken);
     } catch {
       throw new UnauthorizedException('Token 无效或已过期');
     }
@@ -264,11 +269,13 @@ export class AuthService {
     }
 
     // 5. 轮换 Refresh Token，并签发新的 Access Token
-    return this.jwtService.rotateRefreshToken(dto.refreshToken);
+    return this.jwtService.rotateRefreshToken(refreshToken);
   }
 
   async logout(dto: RefreshTokenDto) {
-    await this.jwtService.revokeRefreshToken(dto.refreshToken);
+    if (dto.refreshToken) {
+      await this.jwtService.revokeRefreshToken(dto.refreshToken);
+    }
     return { message: '已登出' };
   }
 

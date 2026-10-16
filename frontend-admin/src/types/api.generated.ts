@@ -1438,7 +1438,7 @@ export interface components {
             role?: "ADMIN" | "CLEANER" | "TENANT";
         };
         RefreshTokenDto: {
-            refreshToken: string;
+            refreshToken?: string;
         };
         RefreshTokenResponseDto: {
             accessToken: string;

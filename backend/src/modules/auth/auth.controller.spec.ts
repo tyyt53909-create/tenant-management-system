@@ -555,13 +555,63 @@ describe('AuthController', () => {
       expect(jwtService.revokeRefreshToken).toHaveBeenCalledWith(dto.refreshToken);
     });
 
-    it('登出所有设备时撤销该用户的全部会话', async () => {
-      vi.spyOn(jwtService, 'revokeUserSessions').mockResolvedValue(undefined);
+    it('通过 HttpOnly Cookie 传递 Refresh Token 刷新成功并更新 Cookie', async () => {
+      const mockUser = { id: 'user-123', role: 'TENANT', isActive: true };
+      vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
+        sub: 'user-123',
+        role: 'TENANT',
+        tokenType: 'REFRESH',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+      vi.spyOn(jwtService, 'rotateRefreshToken').mockResolvedValue({
+        accessToken: 'rotated-access',
+        refreshToken: 'rotated-refresh',
+      });
 
-      await expect(controller.logoutAll({ user: { userId: 'user-123' } })).resolves.toEqual({
+      const mockReq = { cookies: { refresh_token: 'cookie-refresh-token' } } as any;
+      const mockRes = { cookie: vi.fn(), clearCookie: vi.fn() } as any;
+
+      const result = await controller.refresh({}, mockReq, mockRes);
+      expect(result.accessToken).toBe('rotated-access');
+      expect(mockRes.cookie).toHaveBeenCalledWith(
+        'refresh_token',
+        'rotated-refresh',
+        expect.objectContaining({ httpOnly: true, path: '/api/auth' }),
+      );
+    });
+
+    it('Body 和 Cookie 均无 Refresh Token 时抛出 UnauthorizedException', async () => {
+      const mockReq = { cookies: {} } as any;
+      await expect(controller.refresh({}, mockReq)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('登出时清除 HttpOnly Cookie', async () => {
+      vi.spyOn(jwtService, 'revokeRefreshToken').mockResolvedValue(undefined);
+      const mockReq = { cookies: { refresh_token: 'cookie-refresh-token' } } as any;
+      const mockRes = { clearCookie: vi.fn() } as any;
+
+      await expect(controller.logout({}, mockReq, mockRes)).resolves.toEqual({ message: '已登出' });
+      expect(jwtService.revokeRefreshToken).toHaveBeenCalledWith('cookie-refresh-token');
+      expect(mockRes.clearCookie).toHaveBeenCalledWith(
+        'refresh_token',
+        expect.objectContaining({ httpOnly: true, path: '/api/auth' }),
+      );
+    });
+
+    it('登出所有设备时撤销该用户的全部会话并清除 Cookie', async () => {
+      vi.spyOn(jwtService, 'revokeUserSessions').mockResolvedValue(undefined);
+      const mockRes = { clearCookie: vi.fn() } as any;
+
+      await expect(
+        controller.logoutAll({ user: { userId: 'user-123' } }, mockRes),
+      ).resolves.toEqual({
         message: '已登出所有设备',
       });
       expect(jwtService.revokeUserSessions).toHaveBeenCalledWith('user-123');
+      expect(mockRes.clearCookie).toHaveBeenCalledWith(
+        'refresh_token',
+        expect.objectContaining({ httpOnly: true, path: '/api/auth' }),
+      );
     });
   });
 

@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Get, Delete, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, Delete, Param, Query, UseGuards, Req, Res, UnauthorizedException } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto.js';
@@ -12,6 +13,11 @@ import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/em
 import { AuthThrottle, OtpEmailThrottle } from '../../common/decorators/throttle.decorators.js';
 import { AuthService } from './auth.service.js';
 import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
+import {
+  setRefreshTokenCookie,
+  clearRefreshTokenCookie,
+  extractRefreshToken,
+} from './auth-cookie.util.js';
 
 @Controller('auth')
 export class AuthController {
@@ -19,14 +25,28 @@ export class AuthController {
 
   @Post('register')
   @AuthThrottle()
-  async register(@Body() dto: RegisterDto): Promise<RegisterResponseDto> {
-    return this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<RegisterResponseDto> {
+    const result = await this.authService.register(dto);
+    if (res && result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
+    return result;
   }
 
   @Post('login')
   @AuthThrottle()
-  async login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<LoginResponseDto> {
+    const result = await this.authService.login(dto);
+    if (res && result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
+    return result;
   }
 
   /**
@@ -63,20 +83,50 @@ export class AuthController {
   }
 
   @Post('refresh')
-  async refresh(@Body() dto: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
-    return this.authService.refresh(dto);
+  async refresh(
+    @Body() dto?: RefreshTokenDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<RefreshTokenResponseDto> {
+    const token = extractRefreshToken(req, dto?.refreshToken);
+    if (!token) {
+      throw new UnauthorizedException('Refresh Token 不能为空');
+    }
+    const result = await this.authService.refresh({ refreshToken: token });
+    if (res && result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
+    return result;
   }
 
   @Post('logout')
-  async logout(@Body() dto: RefreshTokenDto) {
-    return this.authService.logout(dto);
+  async logout(
+    @Body() dto?: RefreshTokenDto,
+    @Req() req?: Request,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const token = extractRefreshToken(req, dto?.refreshToken);
+    if (token) {
+      await this.authService.logout({ refreshToken: token });
+    }
+    if (res) {
+      clearRefreshTokenCookie(res);
+    }
+    return { message: '已登出' };
   }
 
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
-  async logoutAll(@CurrentUser() userParam: CurrentUserParam) {
+  async logoutAll(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
     const user = resolveAuthUser(userParam);
-    return this.authService.logoutAll(user.userId);
+    const result = await this.authService.logoutAll(user.userId);
+    if (res) {
+      clearRefreshTokenCookie(res);
+    }
+    return result;
   }
 
   @Get('me')
@@ -99,8 +149,15 @@ export class AuthController {
    */
   @Post('google')
   @AuthThrottle()
-  async googleAuth(@Body() dto: GoogleAuthDto): Promise<GoogleAuthResponseDto> {
-    return this.authService.googleAuth(dto);
+  async googleAuth(
+    @Body() dto: GoogleAuthDto,
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<GoogleAuthResponseDto> {
+    const result = await this.authService.googleAuth(dto);
+    if (res && result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
+    return result;
   }
 
   /**
@@ -117,8 +174,15 @@ export class AuthController {
    */
   @Post('login-email-code')
   @AuthThrottle()
-  async loginWithEmailCode(@Body() dto: LoginEmailCodeDto) {
-    return this.authService.loginWithEmailCode(dto);
+  async loginWithEmailCode(
+    @Body() dto: LoginEmailCodeDto,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const result = await this.authService.loginWithEmailCode(dto);
+    if (res && result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
+    return result;
   }
 
   /**

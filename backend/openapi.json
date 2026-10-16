@@ -6790,10 +6790,7 @@
           "refreshToken": {
             "type": "string"
           }
-        },
-        "required": [
-          "refreshToken"
-        ]
+        }
       },
       "RefreshTokenResponseDto": {
         "type": "object",
