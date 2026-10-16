@@ -111,7 +111,7 @@
           <el-descriptions-item label="签约租客">{{ unsettledInfo?.tenantName || '无生效合同' }}</el-descriptions-item>
           <el-descriptions-item label="单价">¥{{ ((currentMeter?.unitPrice || 0) / 100).toFixed(2) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
           <el-descriptions-item label="预付余额">
-            <span v-if="unsettledInfo?.prepayBalance !== null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? '#F56C6C' : '#67C23A', fontWeight: 'bold' }">
+            <span v-if="unsettledInfo && unsettledInfo.prepayBalance !== null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? '#F56C6C' : '#67C23A', fontWeight: 'bold' }">
               ¥{{ (unsettledInfo.prepayBalance / 100).toFixed(2) }}
             </span>
             <span v-else style="color: #909399">无预付账户</span>
