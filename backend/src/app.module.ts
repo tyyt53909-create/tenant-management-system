@@ -30,6 +30,7 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
 import { PublicModule } from './modules/public/public.module.js';
 import { StatisticsModule } from './modules/statistics/statistics.module.js';
 import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-capabilities.module.js';
+import { HealthModule } from './modules/health/health.module.js';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-c
       },
     }),
     PrismaModule,
+    HealthModule,
     TenantCapabilitiesModule,
     AuthModule,
     RoomsModule,

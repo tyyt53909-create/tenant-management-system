@@ -4,6 +4,7 @@ import { AppModule } from './app.module.js';
 import { resolveCorsOrigins } from './config/cors.config.js';
 import { resolveTrustProxy } from './config/throttle.config.js';
 import { AllExceptionsFilter, requestIdMiddleware } from './common/filters/all-exceptions.filter.js';
+import { createHttpLogger } from './logging/http-logger.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -17,6 +18,7 @@ async function bootstrap() {
   
   // 全局路径前缀
   app.setGlobalPrefix('api');
+  app.use(createHttpLogger());
   app.use(requestIdMiddleware);
   app.useGlobalFilters(new AllExceptionsFilter());
 
