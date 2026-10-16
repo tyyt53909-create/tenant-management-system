@@ -1,29 +1,41 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomUUID } from 'crypto';
-import { promises as fs } from 'fs';
-import { join, extname } from 'path';
+import { randomUUID } from 'node:crypto';
+import { extname } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service.js';
+import sharp from 'sharp';
+import { createThumbnail, detectImageMime, type ImageMime } from './image-bytes.js';
+import {
+  createStorageAdapter,
+  LocalStorage,
+  type StorageAdapter,
+  type StorageEnv,
+} from './storage.adapter.js';
 
-const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB，与待确认清单一致
+const ALLOWED_MIME = new Set<ImageMime>(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_SIZE = 10 * 1024 * 1024;
+const EXTENSION: Record<ImageMime, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
 
 @Injectable()
 export class FilesService {
-  private readonly uploadDir: string;
+  private readonly logger = new Logger(FilesService.name);
+  private readonly storage: StorageAdapter;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.uploadDir = process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
+    this.storage = createStorageAdapter(this.storageEnv());
   }
 
   /**
-   * 保存上传文件并**登记归属**（T159 安全修复）。
-   *
-   * actor 来自 JWT（服务端注入），不信任客户端传参。
-   * 归属信息用于后续 GET /files/:key 的授权校验。
+   * 保存上传文件并登记归属（T159）。
+   * 存储驱动由 STORAGE_DRIVER 决定，业务调用不区分本地和 S3。
+   * 同时写出一张去掉 EXIF 的缩略图。
    */
   async save(file: any, actor?: { userId?: string; role?: string; tenantId?: string }) {
     if (!file) throw new BadRequestException('未收到文件');
@@ -33,29 +45,48 @@ export class FilesService {
     if (file.size > MAX_SIZE) {
       throw new BadRequestException('单张图片最大 10MB');
     }
+    const body = Buffer.isBuffer(file.buffer) ? file.buffer : Buffer.from(file.buffer ?? []);
+    const detected = detectImageMime(body);
+    if (detected !== file.mimetype) {
+      throw new BadRequestException('文件内容不是有效的图片');
+    }
 
-    await fs.mkdir(this.uploadDir, { recursive: true });
-    const key = `${Date.now()}-${randomUUID()}${extname(file.originalname || '') || '.bin'}`;
-    await fs.writeFile(join(this.uploadDir, key), file.buffer);
+    const extension = EXTENSION[detected];
+    const key = `${Date.now()}-${randomUUID()}${extension || extname(file.originalname || '') || '.bin'}`;
+    const stored = detected === 'image/jpeg' ? await this.stripMetadata(body) : body;
+    await this.storage.put(key, stored, detected);
+
+    let thumbnailKey: string | undefined;
+    try {
+      const thumb = await createThumbnail(body);
+      thumbnailKey = key.replace(/\.[^.]+$/, '') + '.thumb.jpg';
+      await this.storage.put(thumbnailKey, thumb, 'image/jpeg');
+    } catch (error) {
+      this.logger.warn(`缩略图生成失败：${key} ${(error as Error).message}`);
+      thumbnailKey = undefined;
+    }
 
     const url = `/api/files/${key}`;
-
-    // 登记归属；登记失败不应阻断上传（文件已落盘），但会记入日志便于排查
-    try {
-      await this.prisma.fileAsset.create({
-        data: {
-          key,
-          url,
-          fileName: file.originalname ?? null,
-          fileSize: file.size ?? 0,
-          mimeType: file.mimetype ?? null,
-          uploadedBy: actor?.userId ?? null,
-          tenantId: actor?.tenantId ?? null,
-        },
+    const thumbnail = thumbnailKey ? `/api/files/${thumbnailKey}` : undefined;
+    await this.remember({
+      key,
+      url,
+      fileName: file.originalname ?? null,
+      fileSize: file.size ?? body.length,
+      mimeType: detected,
+      uploadedBy: actor?.userId ?? null,
+      tenantId: actor?.tenantId ?? null,
+    });
+    if (thumbnailKey && thumbnail) {
+      await this.remember({
+        key: thumbnailKey,
+        url: thumbnail,
+        fileName: null,
+        fileSize: 0,
+        mimeType: 'image/jpeg',
+        uploadedBy: actor?.userId ?? null,
+        tenantId: actor?.tenantId ?? null,
       });
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('[files] 文件归属登记失败，该文件将仅管理员可下载:', key, error);
     }
 
     return {
@@ -63,20 +94,11 @@ export class FilesService {
       url,
       fileName: file.originalname,
       fileSize: file.size,
-      mimeType: file.mimetype,
+      mimeType: detected,
+      thumbnail,
     };
   }
 
-  /**
-   * 下载授权（T159）。
-   *
-   * 规则：
-   * - ADMIN：可取任意文件（看房/报修处理等场景需要）
-   * - 其他角色：仅可取**自己上传**的文件；
-   *   key 不存在归属记录（历史文件或登记失败的）一律拒绝
-   *
-   * 拒绝时抛 404 而非 403 —— 避免通过状态码差异探测「key 是否存在」。
-   */
   async assertCanRead(key: string, actor?: { userId?: string; role?: string }) {
     if (actor?.role === 'ADMIN') return;
 
@@ -91,14 +113,74 @@ export class FilesService {
   }
 
   filePath(key: string) {
-    if (key.includes('..') || key.includes('/')) {
-      throw new BadRequestException('非法的文件key');
+    this.assertSafeKey(key);
+    if (!(this.storage instanceof LocalStorage)) {
+      throw new BadRequestException('当前存储驱动不提供本地路径');
     }
-    return join(this.uploadDir, key);
+    return this.storage.path(key);
   }
 
-  signUrl(key: string, expiresInSeconds = 3600) {
-    void this.configService;
-    return { key, url: `/api/files/${key}`, expiresIn: expiresInSeconds };
+  async read(key: string): Promise<Buffer> {
+    this.assertSafeKey(key);
+    try {
+      return await this.storage.get(key);
+    } catch {
+      throw new NotFoundException('文件不存在');
+    }
+  }
+
+  async signUrl(key: string, expiresInSeconds = 3600) {
+    this.assertSafeKey(key);
+    const url = await this.storage.signedUrl(key, expiresInSeconds);
+    return { key, url, expiresIn: expiresInSeconds };
+  }
+
+  private stripMetadata(body: Buffer): Promise<Buffer> {
+    return sharp(body, { failOn: 'error' }).rotate().jpeg({ quality: 90 }).toBuffer();
+  }
+
+  private assertSafeKey(key: string) {
+    if (key.includes('..') || key.includes('/') || key.includes('\\')) {
+      throw new BadRequestException('非法的文件key');
+    }
+  }
+
+  private async remember(data: {
+    key: string;
+    url: string;
+    fileName: string | null;
+    fileSize: number;
+    mimeType: string;
+    uploadedBy: string | null;
+    tenantId: string | null;
+  }) {
+    try {
+      await this.prisma.fileAsset.create({ data });
+    } catch {
+      this.logger.error(`文件归属登记失败，该文件将仅管理员可下载: ${data.key}`);
+    }
+  }
+
+  private storageEnv(): StorageEnv {
+    const read = (name: string) => {
+      const configured = this.configService.get<string>(name);
+      if (typeof configured === 'string' && configured.trim()) return configured.trim();
+      const fromProcess = process.env[name];
+      return fromProcess?.trim() || undefined;
+    };
+    return {
+      STORAGE_DRIVER: read('STORAGE_DRIVER'),
+      UPLOAD_DIR: read('UPLOAD_DIR'),
+      S3_ENDPOINT: read('S3_ENDPOINT'),
+      S3_REGION: read('S3_REGION'),
+      OSS_REGION: read('OSS_REGION'),
+      S3_BUCKET: read('S3_BUCKET'),
+      OSS_BUCKET: read('OSS_BUCKET'),
+      S3_ACCESS_KEY_ID: read('S3_ACCESS_KEY_ID'),
+      OSS_ACCESS_KEY_ID: read('OSS_ACCESS_KEY_ID'),
+      S3_SECRET_ACCESS_KEY: read('S3_SECRET_ACCESS_KEY'),
+      OSS_ACCESS_KEY_SECRET: read('OSS_ACCESS_KEY_SECRET'),
+      S3_FORCE_PATH_STYLE: read('S3_FORCE_PATH_STYLE'),
+    };
   }
 }

@@ -63,6 +63,7 @@ export class ContractAttachmentsService {
     if (!attachment || !['image/jpeg', 'image/png', 'image/webp'].includes(attachment.mimeType)) throw new NotFoundException('合同图片不存在');
     const match = /^\/api\/files\/([A-Za-z0-9._-]+)$/.exec(attachment.fileUrl);
     if (!match || match[1]!.includes('..')) throw new NotFoundException('合同图片不存在');
-    return { path: this.files.filePath(match[1]!), mimeType: attachment.mimeType, fileName: attachment.fileName };
+    const body = await this.files.read(match[1]!);
+    return { body, mimeType: attachment.mimeType, fileName: attachment.fileName };
   }
 }

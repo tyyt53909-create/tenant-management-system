@@ -1,8 +1,9 @@
-import { Controller, Post, Get, Param, Query, UseGuards, UseInterceptors, UploadedFile, Res, Request, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, UseGuards, UseInterceptors, UploadedFile, Res, Request } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { FilesService } from './files.service.js';
+import { detectImageMime } from './image-bytes.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 
 @Controller('files')
@@ -37,19 +38,14 @@ export class FilesController {
     @Res() res: Response,
   ) {
     if (expiresIn !== undefined) {
-      return res.json(this.filesService.signUrl(key, Number(expiresIn) || 3600));
+      return res.json(await this.filesService.signUrl(key, Number(expiresIn) || 3600));
     }
 
     await this.filesService.assertCanRead(key, req.user);
-
+    const body = await this.filesService.read(key);
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    // sendFile 的磁盘错误发生在回调中，不能用同步 try/catch 捕获。
-    await new Promise<void>((resolve, reject) => {
-      res.sendFile(this.filesService.filePath(key), error => {
-        if (error) reject(new NotFoundException('文件不存在'));
-        else resolve();
-      });
-    });
+    res.setHeader('Content-Type', detectImageMime(body) ?? 'application/octet-stream');
+    res.send(body);
   }
 }

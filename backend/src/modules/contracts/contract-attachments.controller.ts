@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Request, Res, UploadedFile, UseGuards, UseInterceptors, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Request, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
@@ -33,6 +33,6 @@ export class ContractAttachmentsController {
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`);
-    await new Promise<void>((resolve, reject) => res.sendFile(file.path, error => error ? reject(new NotFoundException('合同图片文件不存在')) : resolve()));
+    res.send(file.body);
   }
 }
