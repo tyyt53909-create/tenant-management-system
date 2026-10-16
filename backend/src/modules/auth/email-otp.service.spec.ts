@@ -32,7 +32,7 @@ describe('EmailOtpService', () => {
   });
 
   it('验证码正确能够通过校验并单次失效', async () => {
-    storeOf(service).set('tenant@example.com', {
+    await storeOf(service).set('tenant@example.com', {
       code: '889900',
       expiresAt: Date.now() + 5 * 60 * 1000,
       lastSentAt: Date.now(),
@@ -45,7 +45,7 @@ describe('EmailOtpService', () => {
   });
 
   it('过期验证码应返回 false', async () => {
-    storeOf(service).set('tenant@example.com', {
+    await storeOf(service).set('tenant@example.com', {
       code: '889900',
       expiresAt: Date.now() - 1000,
       lastSentAt: Date.now() - 2000,
@@ -94,7 +94,7 @@ describe('EmailOtpService', () => {
 
   it('连续 5 次错误后验证码作废，第 6 次即使输入正确码也失败', async () => {
     const email = 'tenant@example.com';
-    storeOf(service).set(email, {
+    await storeOf(service).set(email, {
       code: '889900',
       expiresAt: Date.now() + 5 * 60 * 1000,
       lastSentAt: Date.now(),
@@ -111,7 +111,7 @@ describe('EmailOtpService', () => {
 
   it('未达 5 次错误时，正确验证码仍然可以通过', async () => {
     const email = 'tenant@example.com';
-    storeOf(service).set(email, {
+    await storeOf(service).set(email, {
       code: '889900',
       expiresAt: Date.now() + 5 * 60 * 1000,
       lastSentAt: Date.now(),
@@ -127,7 +127,7 @@ describe('EmailOtpService', () => {
 
   it('验证码作废后必须重新发送，新验证码可以通过', async () => {
     const email = 'tenant@example.com';
-    storeOf(service).set(email, {
+    await storeOf(service).set(email, {
       code: '889900',
       expiresAt: Date.now() + 5 * 60 * 1000,
       lastSentAt: Date.now() - 61_000,

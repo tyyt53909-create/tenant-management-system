@@ -38,6 +38,9 @@ describe('AuthController', () => {
             generateTokens: vi.fn(),
             verifyToken: vi.fn(),
             refreshAccessToken: vi.fn(),
+            rotateRefreshToken: vi.fn(),
+            revokeRefreshToken: vi.fn(),
+            revokeUserSessions: vi.fn(),
           },
         },
         {
@@ -453,16 +456,16 @@ describe('AuthController', () => {
         tokenType: 'REFRESH',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
-      vi.spyOn(jwtService, 'refreshAccessToken').mockResolvedValue('new-access-token');
+      vi.spyOn(jwtService, 'rotateRefreshToken').mockResolvedValue({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+      });
 
       const result = await controller.refresh(dto);
 
       expect(result.accessToken).toBe('new-access-token');
-      expect(jwtService.verifyToken).toHaveBeenCalledWith(dto.refreshToken);
-      expect(jwtService.refreshAccessToken).toHaveBeenCalledWith(
-        dto.refreshToken,
-        { sub: 'user-123', role: 'TENANT' },
-      );
+      expect(result.refreshToken).toBe('new-refresh-token');
+      expect(jwtService.rotateRefreshToken).toHaveBeenCalledWith(dto.refreshToken);
     });
 
     it('禁止使用 Access Token 刷新 Token', async () => {
@@ -507,6 +510,22 @@ describe('AuthController', () => {
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
 
       await expect(controller.refresh(dto)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('登出时撤销这枚 refresh token 所在的会话', async () => {
+      vi.spyOn(jwtService, 'revokeRefreshToken').mockResolvedValue(undefined);
+
+      await expect(controller.logout(dto)).resolves.toEqual({ message: '已登出' });
+      expect(jwtService.revokeRefreshToken).toHaveBeenCalledWith(dto.refreshToken);
+    });
+
+    it('登出所有设备时撤销该用户的全部会话', async () => {
+      vi.spyOn(jwtService, 'revokeUserSessions').mockResolvedValue(undefined);
+
+      await expect(controller.logoutAll({ user: { userId: 'user-123' } })).resolves.toEqual({
+        message: '已登出所有设备',
+      });
+      expect(jwtService.revokeUserSessions).toHaveBeenCalledWith('user-123');
     });
   });
 

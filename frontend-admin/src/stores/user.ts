@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { User } from '@/types';
-import { login as loginApi, loginWithGoogle as loginWithGoogleApi, getCurrentUser } from '@/api/auth';
+import { login as loginApi, loginWithGoogle as loginWithGoogleApi, getCurrentUser, logout as logoutApi } from '@/api/auth';
 
 export const useUserStore = defineStore('user', () => {
   const user = ref<User | null>(null);
@@ -45,12 +45,16 @@ export const useUserStore = defineStore('user', () => {
     await fetchUserInfo();
   };
 
-  // 登出
+  // 登出：先清本地会话，再通知服务端作废这枚 refresh token。网络失败也不把人留在已退出的页面。
   const logout = () => {
+    const refreshToken = localStorage.getItem('refresh_token');
     user.value = null;
     token.value = null;
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    if (refreshToken) {
+      void logoutApi(refreshToken).catch(() => undefined);
+    }
   };
 
   return {

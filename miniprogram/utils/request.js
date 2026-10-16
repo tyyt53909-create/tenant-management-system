@@ -25,12 +25,46 @@ const request = (options) => {
             reject(new Error(message))
             return
           }
-          // Token 过期，跳转登录
-          uni.removeStorageSync('access_token')
-          uni.removeStorageSync('refresh_token')
-          uni.removeStorageSync('user_role')
-          uni.reLaunch({ url: '/pages/login/login' })
-          reject(new Error('登录已过期'))
+          const refreshToken = uni.getStorageSync('refresh_token')
+          const path = (options.url || '').split('?')[0]
+          const canRefresh = refreshToken && !options._authRetried && !/\/auth\/(login|register|refresh)$/.test(path)
+          if (!canRefresh) {
+            uni.removeStorageSync('access_token')
+            uni.removeStorageSync('refresh_token')
+            uni.removeStorageSync('user_role')
+            uni.reLaunch({ url: '/pages/login/login' })
+            reject(new Error('登录已过期'))
+            return
+          }
+          uni.request({
+            url: API_BASE_URL + '/auth/refresh',
+            method: 'POST',
+            timeout: 15000,
+            data: { refreshToken },
+            header: { 'Content-Type': 'application/json' },
+            success: (refreshRes) => {
+              const nextAccess = refreshRes.data?.accessToken
+              const nextRefresh = refreshRes.data?.refreshToken
+              if (refreshRes.statusCode < 200 || refreshRes.statusCode >= 300 || !nextAccess) {
+                uni.removeStorageSync('access_token')
+                uni.removeStorageSync('refresh_token')
+                uni.removeStorageSync('user_role')
+                uni.reLaunch({ url: '/pages/login/login' })
+                reject(new Error('登录已过期'))
+                return
+              }
+              uni.setStorageSync('access_token', nextAccess)
+              if (nextRefresh) uni.setStorageSync('refresh_token', nextRefresh)
+              request({ ...options, _authRetried: true }).then(resolve, reject)
+            },
+            fail: () => {
+              uni.removeStorageSync('access_token')
+              uni.removeStorageSync('refresh_token')
+              uni.removeStorageSync('user_role')
+              uni.reLaunch({ url: '/pages/login/login' })
+              reject(new Error('登录已过期'))
+            },
+          })
         } else {
           const message = Array.isArray(res.data?.message)
             ? res.data.message.join('；') : res.data?.message || '请求失败'

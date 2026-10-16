@@ -236,17 +236,21 @@ export class AuthController {
       throw new ForbiddenException('账号已被禁用');
     }
 
-    // 5. 生成新的 Access Token
-    const accessToken = await this.jwtService.refreshAccessToken(
-      dto.refreshToken,
-      {
-        sub: user.id,
-        role: user.role,
-      },
-    );
+    // 5. 轮换 Refresh Token，并签发新的 Access Token
+    return this.jwtService.rotateRefreshToken(dto.refreshToken);
+  }
 
-    // 6. 返回新的 Access Token
-    return { accessToken };
+  @Post('logout')
+  async logout(@Body() dto: RefreshTokenDto) {
+    await this.jwtService.revokeRefreshToken(dto.refreshToken);
+    return { message: '已登出' };
+  }
+
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  async logoutAll(@Request() req: any) {
+    await this.jwtService.revokeUserSessions(req.user.userId);
+    return { message: '已登出所有设备' };
   }
 
   @Get('me')

@@ -73,6 +73,19 @@ describe('请求认证恢复', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('刷新成功时保存轮换后的 refresh token', async () => {
+    vi.spyOn(axios, 'post').mockResolvedValue({
+      data: { accessToken: 'new-access', refreshToken: 'rotated-refresh' },
+    });
+    request.defaults.adapter = async (config) => {
+      if (config.headers.Authorization !== 'Bearer new-access') throw unauthorized(config);
+      return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config };
+    };
+    await expect(request.get('/rooms')).resolves.toEqual({ ok: true });
+    expect(localStorage.getItem('access_token')).toBe('new-access');
+    expect(localStorage.getItem('refresh_token')).toBe('rotated-refresh');
+  });
+
   it('刷新失败时退出会话，不清除主题设置', async () => {
     vi.spyOn(axios, 'post').mockRejectedValue(new Error('refresh expired'));
     request.defaults.adapter = async (config) => { throw unauthorized(config); };

@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { TenantCapabilitiesModule } from '../tenant-capabilities/tenant-capabilities.module.js';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -10,6 +11,7 @@ import { AuthController } from './auth.controller.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { EmailOtpService } from './email-otp.service.js';
 import { MemoryOtpStore, OTP_STORE } from './otp-store.js';
+import { MemoryRefreshSessionStore, REFRESH_STORE, RedisRefreshSessionStore } from './refresh-session.store.js';
 import jwtConfig from '../../config/jwt.config.js';
 import { RedisModule } from '../../redis/redis.module.js';
 import { RedisOtpStore } from '../../redis/redis-otp.store.js';
@@ -31,6 +33,7 @@ import { RedisService } from '../../redis/redis.service.js';
     }),
     PrismaModule,
     RedisModule,
+    forwardRef(() => TenantCapabilitiesModule),
   ],
   controllers: [AuthController],
   providers: [
@@ -45,6 +48,16 @@ import { RedisService } from '../../redis/redis.service.js';
       useFactory: async (redis: RedisService) => {
         await redis.connect();
         return redis.ready && redis.client ? new RedisOtpStore(redis.client) : new MemoryOtpStore();
+      },
+    },
+    {
+      provide: REFRESH_STORE,
+      inject: [RedisService],
+      useFactory: async (redis: RedisService) => {
+        await redis.connect();
+        return redis.ready && redis.client
+          ? new RedisRefreshSessionStore(redis.client)
+          : new MemoryRefreshSessionStore();
       },
     },
   ],

@@ -1,5 +1,8 @@
+import axios from 'axios';
 import request from '@/utils/request';
 import type { LoginForm, RegisterForm, User } from '@/types';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // 登录
 export const login = (data: LoginForm) => {
@@ -14,6 +17,11 @@ export const register = (data: RegisterForm) => {
 // 刷新 Token
 export const refreshToken = (refreshToken: string) => {
   return request.post('/auth/refresh', { refreshToken });
+};
+
+// 不走带拦截器的客户端，避免登出时再用这枚 refresh token 去刷新。
+export const logout = (refreshToken: string) => {
+  return axios.post(`${API_BASE_URL}/auth/logout`, { refreshToken }, { timeout: 15000 });
 };
 
 // 获取当前用户信息

@@ -57,7 +57,7 @@
 
 <script>
 import { getUserInfo, getCleaningRooms, startCleaning, completeCleaning, getUnreadCount } from '../../api/index.js'
-import { clearSession, openHome } from '../../utils/session.js'
+import { logoutSession, openHome } from '../../utils/session.js'
 
 export default {
   data() {
@@ -193,7 +193,7 @@ export default {
           if (!result.confirm) return
           this.authorized = false
           this.rooms = []
-          clearSession()
+          logoutSession()
           uni.reLaunch({ url: '/pages/login/login' })
         }
       })

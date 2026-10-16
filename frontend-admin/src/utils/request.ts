@@ -35,8 +35,12 @@ function refreshAccessToken(refreshToken: string): Promise<string> {
     refreshPromise = axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken }, { timeout: 15000 })
       .then((response) => {
         const token = response.data.accessToken;
+        const nextRefresh = response.data.refreshToken;
         if (typeof token !== 'string' || !token) throw new Error('刷新响应缺少 accessToken');
         localStorage.setItem('access_token', token);
+        if (typeof nextRefresh === 'string' && nextRefresh) {
+          localStorage.setItem('refresh_token', nextRefresh);
+        }
         return token;
       })
       .finally(() => { refreshPromise = null; });
