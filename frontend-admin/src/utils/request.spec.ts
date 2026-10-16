@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosHeaders } from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
+import { ElMessage } from 'element-plus';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from './request';
 
@@ -102,5 +103,32 @@ describe('请求认证恢复', () => {
     await expect(request.get('/rooms')).rejects.toThrow('Unauthorized');
     expect(refresh).not.toHaveBeenCalled();
     expect(localStorage.getItem('access_token')).toBeNull();
+  });
+
+  it('按错误码提示能力暂停和内部错误，不展示 SQL', async () => {
+    localStorage.removeItem('refresh_token');
+    request.defaults.adapter = async (config) => {
+      throw new AxiosError('err', 'ERR_BAD_REQUEST', config, undefined, {
+        status: 403,
+        statusText: 'Forbidden',
+        data: { code: 'CAPABILITY_DENIED', message: 'CAPABILITY_DENIED', requestId: 'req-cap' },
+        headers: new AxiosHeaders(),
+        config,
+      });
+    };
+    await expect(request.get('/bills')).rejects.toBeTruthy();
+    expect(ElMessage.error).toHaveBeenCalledWith('当前账号的这项功能已暂停');
+
+    request.defaults.adapter = async (config) => {
+      throw new AxiosError('err', 'ERR_BAD_REQUEST', config, undefined, {
+        status: 500,
+        statusText: 'Error',
+        data: { code: 'COMMON_INTERNAL_ERROR', message: 'SELECT password FROM users', requestId: 'req-500' },
+        headers: new AxiosHeaders(),
+        config,
+      });
+    };
+    await expect(request.get('/rooms')).rejects.toBeTruthy();
+    expect(ElMessage.error).toHaveBeenCalledWith('服务器内部错误，请稍后重试');
   });
 });

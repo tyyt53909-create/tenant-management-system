@@ -66,14 +66,14 @@ const request = (options) => {
             },
           })
         } else {
-          const message = Array.isArray(res.data?.message)
-            ? res.data.message.join('；') : res.data?.message || '请求失败'
+          const message = errorText(res.data)
           uni.showToast({
             title: message,
             icon: 'none'
           })
           const error = new Error(message)
           error.statusCode = res.statusCode
+          error.code = errorCode(res.data)
           reject(error)
         }
       },
@@ -86,6 +86,21 @@ const request = (options) => {
       }
     })
   })
+}
+
+function errorText(data) {
+  if (data?.code === 'CAPABILITY_DENIED' || data?.message === 'CAPABILITY_DENIED') return '当前账号的这项功能已暂停'
+  if (data?.code === 'COMMON_RATE_LIMIT_EXCEEDED') return '请求过于频繁，请稍后再试'
+  if (data?.code === 'COMMON_INTERNAL_ERROR') return '服务器内部错误，请稍后重试'
+  if (data?.code === 'COMMON_VALIDATION_ERROR' && Array.isArray(data.details)) return data.details.join('；')
+  if (Array.isArray(data?.message)) return data.message.join('；')
+  return data?.message || '请求失败'
+}
+
+function errorCode(data) {
+  if (data?.code) return data.code
+  if (data?.message === 'CAPABILITY_DENIED') return 'CAPABILITY_DENIED'
+  return ''
 }
 
 // 导出请求方法

@@ -30,6 +30,18 @@ function expireSession() {
   }
 }
 
+function errorText(data: { code?: string; message?: unknown; details?: unknown } | undefined): string {
+  if (data?.code === 'CAPABILITY_DENIED') return '当前账号的这项功能已暂停';
+  if (data?.code === 'COMMON_RATE_LIMIT_EXCEEDED') return '请求过于频繁，请稍后再试';
+  if (data?.code === 'COMMON_INTERNAL_ERROR') return '服务器内部错误，请稍后重试';
+  if (data?.code === 'COMMON_VALIDATION_ERROR' && Array.isArray(data.details)) {
+    return data.details.map(String).join('；');
+  }
+  if (Array.isArray(data?.message)) return data.message.join('；');
+  if (typeof data?.message === 'string' && data.message) return data.message;
+  return '请求失败';
+}
+
 function refreshAccessToken(refreshToken: string): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken }, { timeout: 15000 })
@@ -113,7 +125,7 @@ request.interceptors.response.use(
         }
         expireSession();
       } else {
-        if (!error.config?.silentError) ElMessage.error(data?.message || '请求失败');
+        if (!error.config?.silentError) ElMessage.error(errorText(data));
       }
     } else {
       if (!error.config?.silentError) ElMessage.error('网络错误，请检查网络连接');
