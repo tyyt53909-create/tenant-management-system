@@ -208,11 +208,13 @@
 | [T192](../tasks/T192-管理后台大组件拆分与composable.md) | 管理后台大组件拆分与 composable 抽象（OPT-19：抽离 composable、拆分超大页面至 <=500 行） | 强 | completed | 2026-10-16 |
 | [T193](../tasks/T193-管理后台Token存储加固.md) | 管理后台 Token 存储加固与安全响应头（OPT-20：HttpOnly Cookie、内存 Token、CSP/安全响应头） | 强 | completed | 2026-10-16 |
 | [T194](../tasks/T194-小程序API层重构与真实联调.md) | 小程序 API 层重构与真实联调（OPT-21：按领域解耦为 7 个模块、JSDoc 注解、统一错误码、弱网友好交互） | 强 | completed | 2026-10-17 |
+| [T195](../tasks/T195-管理后台CI.md) | 管理后台 CI 接入与门禁（OPT-22：oxlint / vue-tsc / vitest / vite build 四道门禁） | 普通 | completed | 2026-10-17 |
 
 **交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)、[2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)、[2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)
 
 ### 3.4 交接记录
 
+- [2026-10-17-T195-管理后台CI.md](./handoff/2026-10-17-T195-管理后台CI.md)：T195 / OPT-22，管理后台 CI 接入与门禁（oxlint、vue-tsc、vitest、vite build 四道门禁与阻断验证）。
 - [2026-10-17-T194-小程序API层重构与真实联调.md](./handoff/2026-10-17-T194-小程序API层重构与真实联调.md)：T194 / OPT-21，小程序 API 层重构与真实联调（按领域拆分 7 模块、JSDoc 规范、统一错误码、弱网容错）。
 - [2026-10-16-T193-管理后台Token存储加固.md](./handoff/2026-10-16-T193-管理后台Token存储加固.md)：T193 / OPT-20，管理后台 Token 存储加固（HttpOnly Cookie、内存 access token、CSP/安全头）。
 - [2026-10-16-T192-管理后台大组件拆分与composable.md](./handoff/2026-10-16-T192-管理后台大组件拆分与composable.md)：T192 / OPT-19，管理后台大组件拆分与 composable 抽象（抽离 composable、全仓 .vue 文件 <=500 行）。
