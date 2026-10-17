@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-17
-> 文档总数: 100 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 42、draft 7、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 112 份（含本索引与归档）
-> 任务书: 75 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 文档总数: 101 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 43、draft 7、archived 48（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 113 份（含本索引与归档）
+> 任务书: 76 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -240,11 +240,13 @@
 | [T202](../tasks/T202-计划收口与度量看板实测化.md) | 计划收口与度量看板实测化（修复 tsc/build 阻断、openapi.json 漂移、ENCRYPTION_KEY 运行时缺陷；看板改实测；新增 .env.example 一致性门禁） | 强 | completed | 2026-10-17 |
 | [T204](../tasks/T204-管理后台ElementPlus按需引入.md) | 管理后台 Element Plus 按需引入（OPT-19#3：unplugin-vue-components + ElementPlusResolver，首屏 JS −88%，locale 改 el-config-provider） | 强 | completed | 2026-10-17 |
 | [T203](../tasks/T203-技术债与验证缺口收口.md) | 技术债与验证缺口收口（process.env 收敛至 config 层、首屏 JS 前后实测确认未达标、docs-check ❌ 阻断 CI、ENCRYPTION_KEY 必填测试） | 强 | completed | 2026-10-17 |
+| [T205](../tasks/T205-管理后台插槽类型标注与dts启用.md) | 管理后台插槽行类型收窄与组件 dts 启用（OPT-19#3 收尾：打开 `dts` 生成并纳入版本管理，78 处调用点收窄 + 1 处 tag 值类型，79 处类型错误清零） | 强 | completed | 2026-10-17 |
 
 **交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)、[2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)、[2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)
 
 ### 3.4 交接记录
 
+- [2026-10-17-T205-管理后台插槽类型标注与dts启用.md](./handoff/2026-10-17-T205-管理后台插槽类型标注与dts启用.md)：T205，管理后台插槽行类型收窄与组件 dts 启用（`dts: 'src/components.d.ts'` 并纳入版本管理；78 处调用点收窄 + `typeBadgeMap` 值类型，`vue-tsc` 79 → 0 错误；16/16 路由与 7 条交互冒烟无告警）。
 - [2026-10-17-T204-管理后台ElementPlus按需引入.md](./handoff/2026-10-17-T204-管理后台ElementPlus按需引入.md)：T204，管理后台 Element Plus 按需引入（首屏 JS 1069→125 KB、−88.3%；分页文案与主题样式不变；16/16 路由冒烟）。
 - [2026-10-17-T203-技术债与验证缺口收口.md](./handoff/2026-10-17-T203-技术债与验证缺口收口.md)：T203，技术债与验证缺口收口（`process.env` 收敛至 config 层 0 处、首屏 JS 前后实测 1064→1065 KB 确认未达标、docs-check ❌ 改为 exit 1、`ENCRYPTION_KEY` 必填测试）。
 - [2026-10-17-T202-计划收口与度量看板实测化.md](./handoff/2026-10-17-T202-计划收口与度量看板实测化.md)：T202，计划验收项收口与看板实测化（修复 `tsc`/`build` 阻断、`openapi.json` 漂移、`ENCRYPTION_KEY` 运行时缺陷；`generate-status.mjs` 改为实测三端测试数、失败拒绝生成；新增 `.env.example` ↔ 部署文档一致性门禁；未达标验收项如实留空并注明）。
