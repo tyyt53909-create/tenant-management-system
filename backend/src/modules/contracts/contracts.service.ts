@@ -38,10 +38,7 @@ export class ContractsService {
 
     // 同一房源同时只能有一份未结束的合同。否则两份 DRAFT 会被定时任务一起置为 ACTIVE，
     // 而月账单的幂等键是 contractId+period（不含 roomId）→ 同一房间同一月两笔租金账单（T207）。
-    const activeOnRoom = await this.prisma.contract.findFirst({
-      where: { roomId: dto.roomId, status: { in: ['DRAFT', 'ACTIVE'] } },
-      select: { contractNumber: true, status: true },
-    });
+    const activeOnRoom = await this.findOtherOpenContract(this.prisma, dto.roomId);
     if (activeOnRoom) {
       throw new ConflictException(
         `该房源已有未结束的合同（${activeOnRoom.contractNumber}，状态 ${activeOnRoom.status}），请先处理后再签约`,
@@ -208,6 +205,18 @@ export class ContractsService {
     if (dto.status) updateData.status = dto.status;
 
     return this.prisma.$transaction(async (tx) => {
+      // 同房源唯一未结束合同（docs/04 §2.4）不能只在 create() 检查：续签会为同一房间
+      // 新建一份 DRAFT（旧合同仍 ACTIVE），此时若把新 DRAFT 提前置为 ACTIVE，就会同房间
+      // 两份 ACTIVE 合同 → 同月两笔租金账单（月账单幂等键是 contractId+period，不含 roomId）。
+      if (statusChanged && dto.status === 'ACTIVE') {
+        const other = await this.findOtherOpenContract(tx, contract.roomId, id);
+        if (other) {
+          throw new ConflictException(
+            `该房源已有未结束的合同（${other.contractNumber}，状态 ${other.status}），不能同时存在两份生效/草稿合同`,
+          );
+        }
+      }
+
       const updated = await tx.contract.update({ where: { id }, data: updateData });
 
       if (statusChanged) {
@@ -233,6 +242,27 @@ export class ContractsService {
 
     await this.prisma.contract.delete({ where: { id } });
     return { message: '合同已删除' };
+  }
+
+  /**
+   * 该房源上另一份「未结束」（DRAFT / ACTIVE）的合同（docs/04 §2.4）。
+   *
+   * create() 与 update()（状态流转到 ACTIVE）共用同一份判定，避免只堵住一条路径。
+   * 接受事务客户端，便于在 `$transaction` 内做检查、把竞态窗口压到最小。
+   */
+  private findOtherOpenContract(
+    client: Pick<Prisma.TransactionClient, 'contract'>,
+    roomId: string,
+    excludeId?: string,
+  ) {
+    return client.contract.findFirst({
+      where: {
+        roomId,
+        status: { in: ['DRAFT', 'ACTIVE'] },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { contractNumber: true, status: true },
+    });
   }
 
   // 租客查看自己的合同
