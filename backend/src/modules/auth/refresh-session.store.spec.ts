@@ -86,9 +86,14 @@ describe('RedisRefreshSessionStore', () => {
     const store = new RedisRefreshSessionStore(redis);
     await store.save(activeSession());
 
-    expect(await store.rotate('jti-1', 'jti-2')).toBe(true);
-    // 并发输家：同一 jti 再轮换必须失败
-    expect(await store.rotate('jti-1', 'jti-3')).toBe(false);
+    const first = await store.rotate('jti-1', 'jti-2');
+    expect(first.rotated).toBe(true);
+    expect(first.rotatedAt).toBeGreaterThan(0);
+
+    // 并发输家：同一 jti 再轮换必须失败，但必须拿到赢家的轮换时刻（否则会被误判成重放）
+    const loser = await store.rotate('jti-1', 'jti-3');
+    expect(loser.rotated).toBe(false);
+    expect(loser.rotatedAt).toBe(first.rotatedAt);
 
     const session = await store.get('jti-1');
     expect(session?.status).toBe('rotated');
@@ -96,22 +101,39 @@ describe('RedisRefreshSessionStore', () => {
     expect(session?.rotatedAt).toBeGreaterThan(0);
   });
 
-  it('rotate：不存在或非 active 的会话一律返回 false', async () => {
+  it('rotate：标记键先于会话本体写入，会话本体尚未回写时输家也能拿到轮换时刻（T208 补修）', async () => {
+    const redis = new FakeRedis();
+    const store = new RedisRefreshSessionStore(redis);
+    await store.save(activeSession());
+
+    // 手工模拟「赢家已写标记、会话本体还没回写」的中间态
+    await redis.set('refresh:rotated:jti-1', String(Date.now()), 'PX', 60_000, 'NX');
+
+    const loser = await store.rotate('jti-1', 'jti-9');
+    expect(loser.rotated).toBe(false);
+    expect(loser.rotatedAt).toBeGreaterThan(0);
+  });
+
+  it('rotate：不存在或非 active 的会话一律返回未轮换', async () => {
     const redis = new FakeRedis();
     const store = new RedisRefreshSessionStore(redis);
 
-    expect(await store.rotate('missing', 'x')).toBe(false);
+    expect((await store.rotate('missing', 'x')).rotated).toBe(false);
 
     await store.save(activeSession({ status: 'rotated' }));
-    expect(await store.rotate('jti-1', 'x')).toBe(false);
+    expect((await store.rotate('jti-1', 'x')).rotated).toBe(false);
   });
 
-  it('MemoryRefreshSessionStore.rotate 同样只成功一次', async () => {
+  it('MemoryRefreshSessionStore.rotate 同样只成功一次，并回报轮换时刻', async () => {
     const store = new MemoryRefreshSessionStore();
     await store.save(activeSession());
 
-    expect(await store.rotate('jti-1', 'jti-2')).toBe(true);
-    expect(await store.rotate('jti-1', 'jti-3')).toBe(false);
+    const first = await store.rotate('jti-1', 'jti-2');
+    expect(first.rotated).toBe(true);
+
+    const loser = await store.rotate('jti-1', 'jti-3');
+    expect(loser.rotated).toBe(false);
+    expect(loser.rotatedAt).toBe(first.rotatedAt);
     expect((await store.get('jti-1'))?.status).toBe('rotated');
   });
 });
