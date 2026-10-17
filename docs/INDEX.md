@@ -50,6 +50,12 @@
 
 ## 3. 任务与交接
 
+- [2026-10-17-T198-生产部署工件.md](./handoff/2026-10-17-T198-生产部署工件.md)：T198 / OPT-25，生产部署工件（多阶段 Dockerfile、非 root 运行、Nginx 静态反代与 gzip、docker-compose.prod 编排、release.yml 镜像发布）。
+- [2026-10-17-T197-e2e与UI测试.md](./handoff/2026-10-17-T197-e2e与UI测试.md)：T197 / OPT-24，e2e 接入 CI（backend-e2e + admin-ui）与 Playwright 5 流程（3 轮 7/7），附带结算弹窗空指针修复。
+- [2026-10-17-T196-覆盖率门禁.md](./handoff/2026-10-17-T196-覆盖率门禁.md)：T196 / OPT-23，覆盖率阈值门禁（全局 85/72，结算 8 文件分支 ≥90，740 用例全绿）。
+- [2026-10-17-T195-管理后台CI.md](./handoff/2026-10-17-T195-管理后台CI.md)：T195 / OPT-22，管理后台 CI 接入与门禁（oxlint、vue-tsc、vitest、vite build 四道门禁与阻断验证）。
+- [2026-10-17-T194-小程序API层重构与真实联调.md](./handoff/2026-10-17-T194-小程序API层重构与真实联调.md)：T194 / OPT-21，小程序 API 层重构与真实联调（按领域拆分 7 模块、JSDoc 规范、统一错误码、弱网容错）。
+- [2026-10-16-T193-管理后台Token存储加固.md](./handoff/2026-10-16-T193-管理后台Token存储加固.md)：T193 / OPT-20，管理后台 Token 存储加固（HttpOnly Cookie、内存 access token、CSP/安全头）。
 - [2026-10-16-T192-管理后台大组件拆分与composable.md](./handoff/2026-10-16-T192-管理后台大组件拆分与composable.md)：T192 / OPT-19，管理后台大组件拆分与 composable 抽象（抽离 composable、全仓 .vue 文件 <=500 行）。
 - [2026-10-16-T191-清理死代码与独立邀请码表治理.md](./handoff/2026-10-16-T191-清理死代码与独立邀请码表治理.md)：T191 / OPT-18，删除 BuildingGuard、独立 InviteCode 表与批量邀请码全生命周期治理。
 - [2026-10-16-T190-类型安全治理.md](./handoff/2026-10-16-T190-类型安全治理.md)：T190 / OPT-17，类型安全治理，消除 unsafe raw query、@CurrentUser、非测试 any 降至 0。
@@ -211,11 +217,13 @@
 | [T195](../tasks/T195-管理后台CI.md) | 管理后台 CI 接入与门禁（OPT-22：oxlint / vue-tsc / vitest / vite build 四道门禁） | 普通 | completed | 2026-10-17 |
 | [T196](../tasks/T196-覆盖率门禁.md) | 覆盖率门禁（OPT-23：全局语句 85/分支 72，结算 8 文件分支 ≥90） | 强 | completed | 2026-10-17 |
 | [T197](../tasks/T197-e2e与UI测试.md) | e2e 接入 CI + 后台 Playwright 关键流程（OPT-24：backend-e2e/admin-ui 双 job + 5 流程） | 强 | completed | 2026-10-17 |
+| [T198](../tasks/T198-生产部署工件.md) | 生产部署工件（OPT-25：多阶段 Dockerfile、Nginx 反代、docker-compose.prod、release.yml） | 强 | completed | 2026-10-17 |
 
 **交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)、[2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)、[2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)
 
 ### 3.4 交接记录
 
+- [2026-10-17-T198-生产部署工件.md](./handoff/2026-10-17-T198-生产部署工件.md)：T198 / OPT-25，生产部署工件（多阶段 Dockerfile、非 root 运行、Nginx 静态反代与 gzip、docker-compose.prod 编排、release.yml 镜像发布）。
 - [2026-10-17-T197-e2e与UI测试.md](./handoff/2026-10-17-T197-e2e与UI测试.md)：T197 / OPT-24，e2e 接入 CI（backend-e2e + admin-ui）与 Playwright 5 流程（3 轮 7/7），附带结算弹窗空指针修复。
 - [2026-10-17-T196-覆盖率门禁.md](./handoff/2026-10-17-T196-覆盖率门禁.md)：T196 / OPT-23，覆盖率阈值门禁（全局 85/72，结算 8 文件分支 ≥90，740 用例全绿）。
 - [2026-10-17-T195-管理后台CI.md](./handoff/2026-10-17-T195-管理后台CI.md)：T195 / OPT-22，管理后台 CI 接入与门禁（oxlint、vue-tsc、vitest、vite build 四道门禁与阻断验证）。

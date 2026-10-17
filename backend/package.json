@@ -23,7 +23,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:seed": "ts-node --compiler-options '{\"module\": \"commonjs\"}' prisma/seed.ts",
     "openapi:generate": "node scripts/export-openapi.mjs",
     "openapi:check": "node scripts/export-openapi.mjs --check",
     "simulate:meters": "ts-node scripts/simulate-meters.ts",
@@ -88,6 +88,6 @@
     "vitest": "^4.1.2"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node --compiler-options '{\"module\": \"commonjs\"}' prisma/seed.ts"
   }
 }
