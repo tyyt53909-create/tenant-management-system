@@ -1,3 +1,15 @@
+---
+status: archived
+owner_tier: human
+applies_to:
+  - .github/**
+last_verified: 2026-10-11
+verified_commit: null
+supersedes: null
+superseded_by: null
+version: 1.0
+---
+
 # GitHub 仓库创建完成报告
 
 > 完成时间: 2026-10-11
