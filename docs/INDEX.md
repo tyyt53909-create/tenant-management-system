@@ -1,11 +1,11 @@
 # 文档索引
 
 > 本文档是所有项目文档的唯一注册表
-> 最后更新: 2026-10-16
-> 文档总数: 79 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围；2026-10-16 按目录实数重计）
+> 最后更新: 2026-10-17
+> 文档总数: 80 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
 > 状态标注: active 1、draft 2、archived 3、未标注元信息 47（元信息补齐建议见 09-待确认清单；该分类口径本次未重算）
-> 归档文档: 3 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 83 份（含本索引与归档）
-> 任务书: 55 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 92 份（含本索引与归档）
+> 任务书: 56 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -50,6 +50,7 @@
 
 ## 3. 任务与交接
 
+- [2026-10-17-T200-仓库卫生与分支治理.md](./handoff/2026-10-17-T200-仓库卫生与分支治理.md)：T200 / OPT-27，仓库卫生与分支治理（清理 29 个旧分支与 worktree、8 份游离文档归档至 archive、去除 tsbuildinfo、收敛 AI 技能目录、全新重写 README.md）。
 - [2026-10-17-T199-备份恢复演练与性能基线.md](./handoff/2026-10-17-T199-备份恢复演练与性能基线.md)：T199 / OPT-26，备份恢复演练（RTO 2.4s、RPO 0丢失）与 100 并发 k6 性能基线（P95 66.75ms、0 错误）。
 - [2026-10-17-T198-生产部署工件.md](./handoff/2026-10-17-T198-生产部署工件.md)：T198 / OPT-25，生产部署工件（多阶段 Dockerfile、非 root 运行、Nginx 静态反代与 gzip、docker-compose.prod 编排、release.yml 镜像发布）。
 - [2026-10-17-T197-e2e与UI测试.md](./handoff/2026-10-17-T197-e2e与UI测试.md)：T197 / OPT-24，e2e 接入 CI（backend-e2e + admin-ui）与 Playwright 5 流程（3 轮 7/7），附带结算弹窗空指针修复。
@@ -220,11 +221,13 @@
 | [T197](../tasks/T197-e2e与UI测试.md) | e2e 接入 CI + 后台 Playwright 关键流程（OPT-24：backend-e2e/admin-ui 双 job + 5 流程） | 强 | completed | 2026-10-17 |
 | [T198](../tasks/T198-生产部署工件.md) | 生产部署工件（OPT-25：多阶段 Dockerfile、Nginx 反代、docker-compose.prod、release.yml） | 强 | completed | 2026-10-17 |
 | [T199](../tasks/T199-备份恢复演练与性能基线.md) | 备份恢复演练与性能基线（OPT-26：pg_dump/restore 2.4s RTO、k6 100并发基线 P95 66.75ms、0错误） | 强 | completed | 2026-10-17 |
+| [T200](../tasks/T200-仓库卫生与分支治理.md) | 仓库卫生与分支治理（OPT-27：清理 29 个旧分支/worktree、8 份历史文档归档至 archive、去 tsbuildinfo、重构 README） | 普通 | completed | 2026-10-17 |
 
 **交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)、[2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)、[2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)
 
 ### 3.4 交接记录
 
+- [2026-10-17-T200-仓库卫生与分支治理.md](./handoff/2026-10-17-T200-仓库卫生与分支治理.md)：T200 / OPT-27，仓库卫生与分支治理（清理 29 个旧分支与 worktree、8 份游离文档归档至 archive、去除 tsbuildinfo、收敛 AI 技能目录、全新重写 README.md）。
 - [2026-10-17-T199-备份恢复演练与性能基线.md](./handoff/2026-10-17-T199-备份恢复演练与性能基线.md)：T199 / OPT-26，备份恢复演练（RTO 2.4s、RPO 0丢失）与 100 并发 k6 性能基线（P95 66.75ms、0 错误）。
 - [2026-10-17-T198-生产部署工件.md](./handoff/2026-10-17-T198-生产部署工件.md)：T198 / OPT-25，生产部署工件（多阶段 Dockerfile、非 root 运行、Nginx 静态反代与 gzip、docker-compose.prod 编排、release.yml 镜像发布）。
 - [2026-10-17-T197-e2e与UI测试.md](./handoff/2026-10-17-T197-e2e与UI测试.md)：T197 / OPT-24，e2e 接入 CI（backend-e2e + admin-ui）与 Playwright 5 流程（3 轮 7/7），附带结算弹窗空指针修复。
@@ -320,6 +323,14 @@
 | [archive/T001-完成总结.md](./archive/T001-完成总结.md) | T001 后端脚手架完成总结 | - | - | 骨架阶段任务完成总结，保留原地 |
 | [archive/T002-T003-完成总结.md](./archive/T002-T003-完成总结.md) | T002-T003 基础设施配置完成总结 | - | - | 骨架阶段任务完成总结，保留原地 |
 | [archive/T101-完成总结.md](./archive/T101-完成总结.md) | T101 Prisma Schema 定义完成总结 | - | - | 骨架阶段任务完成总结，保留原地 |
+| [archive/T164_SUMMARY.md](./archive/T164_SUMMARY.md) | T164 样式与UI修复小结 | 2026-10-17 | - | 历史开发过程小结，归档至 archive |
+| [archive/T164_UI_POLISH.md](./archive/T164_UI_POLISH.md) | T164 UI打磨记录 | 2026-10-17 | - | 历史开发过程记录，归档至 archive |
+| [archive/T164_UI_REPLACEMENT.md](./archive/T164_UI_REPLACEMENT.md) | T164 UI替换记录 | 2026-10-17 | - | 历史开发过程记录，归档至 archive |
+| [archive/T165_ADMIN_THEME.md](./archive/T165_ADMIN_THEME.md) | T165 后台主题迁移记录 | 2026-10-17 | - | 历史开发过程记录，归档至 archive |
+| [archive/今日开发总结-2026-10-11.md](./archive/今日开发总结-2026-10-11.md) | 今日开发总结-2026-10-11 | 2026-10-17 | - | 初期开发总结，归档至 archive |
+| [archive/今日开发最终总结-2026-10-11.md](./archive/今日开发最终总结-2026-10-11.md) | 今日开发最终总结-2026-10-11 | 2026-10-17 | - | 初期开发总结，归档至 archive |
+| [archive/計劃.md](./archive/計劃.md) | 初期计划草稿 | 2026-10-17 | 00-项目计划书.md | 早期草案，归档至 archive |
+| [archive/项目完成总结.md](./archive/项目完成总结.md) | 项目完成总结（早期） | 2026-10-17 | - | 早期阶段总结，归档至 archive |
 
 > 归档目录不参与 CI 的 INDEX 一致性检查（脚本忽略 `docs/archive/**`），此处登记以便检索。
 
