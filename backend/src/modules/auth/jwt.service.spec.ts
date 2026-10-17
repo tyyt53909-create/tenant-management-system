@@ -107,14 +107,37 @@ describe('JwtAuthService', () => {
       await expect(rotating.rotateRefreshToken(tokens.refreshToken)).rejects.toThrow(/无效或已过期/);
     });
 
-    it('同一个 refresh token 使用两次后，该用户全部会话失效', async () => {
+    it('并发刷新（宽限窗口内重复使用）→ 只报「正在轮换中」，不销毁会话家族（回归 T208）', async () => {
       const rotating = rotatingService();
       const first = await rotating.generateTokens({ sub: 'user-123', role: 'TENANT' });
-      const second = await rotating.generateTokens({ sub: 'user-123', role: 'ADMIN' });
       const rotated = await rotating.rotateRefreshToken(first.refreshToken);
-      await expect(rotating.rotateRefreshToken(first.refreshToken)).rejects.toThrow(/所有会话已失效/);
-      await expect(rotating.rotateRefreshToken(rotated.refreshToken)).rejects.toThrow(/无效或已过期/);
-      await expect(rotating.rotateRefreshToken(second.refreshToken)).rejects.toThrow(/无效或已过期/);
+
+      // 第二个并发请求带着同一个（已被轮换的）令牌进来
+      await expect(rotating.rotateRefreshToken(first.refreshToken)).rejects.toThrow(/正在轮换中/);
+      // 关键：刚发出的新令牌仍然可用，用户不会被强制登出
+      await expect(rotating.rotateRefreshToken(rotated.refreshToken)).resolves.toMatchObject({
+        accessToken: expect.any(String),
+      });
+    });
+
+    it('超出宽限窗口仍使用已轮换的令牌 → 视为重放，该用户全部会话失效', async () => {
+      const base = new Date('2026-10-18T10:00:00.000Z');
+      vi.useFakeTimers();
+      vi.setSystemTime(base);
+      try {
+        const rotating = rotatingService();
+        const first = await rotating.generateTokens({ sub: 'user-123', role: 'TENANT' });
+        const second = await rotating.generateTokens({ sub: 'user-123', role: 'ADMIN' });
+        const rotated = await rotating.rotateRefreshToken(first.refreshToken);
+
+        // 31 秒后再次使用旧的（已轮换）令牌
+        vi.setSystemTime(new Date(base.getTime() + 31_000));
+        await expect(rotating.rotateRefreshToken(first.refreshToken)).rejects.toThrow(/所有会话已失效/);
+        await expect(rotating.rotateRefreshToken(rotated.refreshToken)).rejects.toThrow(/无效或已过期/);
+        await expect(rotating.rotateRefreshToken(second.refreshToken)).rejects.toThrow(/无效或已过期/);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('禁止使用 Access Token 作为 Refresh Token 刷新（防混用）', async () => {

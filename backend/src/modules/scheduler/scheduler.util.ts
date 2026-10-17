@@ -34,6 +34,17 @@ export function startOfTodayUtc(now: Date = new Date()): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
+/**
+ * 当前 UTC 自然日的零点。
+ *
+ * 用于「同一收件人当天只发一次」这类与 `createdAt`（真实时间戳）比较的场景：
+ * 业务日零点（startOfTodayUtc）在凌晨 01:00 上海执行时落在**未来**，
+ * 拿它去比 `createdAt >= today` 永远不成立（T208 修正）。
+ */
+export function startOfUtcDay(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 /** 自然日差值（to - from，按 UTC 日历日） */
 export function daysBetween(from: Date, to: Date): number {
   return Math.round((to.getTime() - from.getTime()) / MS_PER_DAY);

@@ -90,7 +90,7 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           JWT_SECRET: test-jwt-secret
-          ENCRYPTION_KEY: test-encryption-key-32-bytes!!
+          ENCRYPTION_KEY: ci-test-encryption-key-32-bytes!
         run: npm run test:cov
       
       - name: 上传测试覆盖率

@@ -357,8 +357,8 @@ export class BillsService {
   /**
    * 添加 / 刷新滞纳金（docs/04-状态机.md §3.4、docs/02-数据模型.md §2.9）
    */
-  async addLateFee(billId: string, dto: CreateLateFeeDto, operatorId: string) {
-    return this.lateFeeService.addLateFee(billId, dto, operatorId);
+  async addLateFee(billId: string, dto: CreateLateFeeDto, operatorId: string, referenceDate?: Date) {
+    return this.lateFeeService.addLateFee(billId, dto, operatorId, referenceDate);
   }
 
   /**
