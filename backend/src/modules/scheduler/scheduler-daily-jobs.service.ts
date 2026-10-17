@@ -4,6 +4,7 @@ import { BillsService } from '../bills/bills.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { NotificationPriority } from '../notifications/dto/create-notification.dto.js';
 import { LateFeeUtil } from '../bills/utils/late-fee.util.js';
+import { roomUpdateForContractTransition } from '../contracts/contract-transitions.js';
 import {
   SYSTEM_OPERATOR,
   MS_PER_DAY,
@@ -46,13 +47,17 @@ export class SchedulerDailyJobsService {
       });
       activated++;
 
-      // 房间随动：预留 → 已入住（仅当仍为 RESERVED，遵循房态状态机前置条件）
-      const room = await this.prisma.room.findUnique({ where: { id: contract.roomId } });
-      if (room && room.status === 'RESERVED') {
-        await this.prisma.room.update({
-          where: { id: room.id },
-          data: { status: 'OCCUPIED', version: { increment: 1 } },
-        });
+      // 房间随动：预留 → 已入住。规则与 API 共用（contract-transitions.ts），
+      // 只在其房态前置条件满足时随动，避免两处各写一份而漂移（T207）。
+      const room = await this.prisma.room.findUnique({
+        where: { id: contract.roomId },
+        select: { status: true },
+      });
+      if (room) {
+        const roomUpdate = roomUpdateForContractTransition(room, 'DRAFT', 'ACTIVE');
+        if (roomUpdate) {
+          await this.prisma.room.update({ where: { id: contract.roomId }, data: roomUpdate });
+        }
       }
     }
 

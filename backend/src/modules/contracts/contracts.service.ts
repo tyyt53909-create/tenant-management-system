@@ -11,6 +11,10 @@ import { UpdateContractDto } from './dto/update-contract.dto.js';
 import { QueryContractsDto } from './dto/query-contracts.dto.js';
 import { RenewContractDto } from './dto/renew-contract.dto.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
+import {
+  isContractTransitionAllowed,
+  roomUpdateForContractTransition,
+} from './contract-transitions.js';
 
 @Injectable()
 export class ContractsService {
@@ -27,6 +31,22 @@ export class ContractsService {
     if (!building) throw new BadRequestException('楼栋不存在');
     if (!room) throw new BadRequestException('房源不存在');
     if (!tenant) throw new BadRequestException('租客不存在');
+
+    if (new Date(dto.endDate) <= new Date(dto.startDate)) {
+      throw new BadRequestException('合同结束日期必须晚于开始日期');
+    }
+
+    // 同一房源同时只能有一份未结束的合同。否则两份 DRAFT 会被定时任务一起置为 ACTIVE，
+    // 而月账单的幂等键是 contractId+period（不含 roomId）→ 同一房间同一月两笔租金账单（T207）。
+    const activeOnRoom = await this.prisma.contract.findFirst({
+      where: { roomId: dto.roomId, status: { in: ['DRAFT', 'ACTIVE'] } },
+      select: { contractNumber: true, status: true },
+    });
+    if (activeOnRoom) {
+      throw new ConflictException(
+        `该房源已有未结束的合同（${activeOnRoom.contractNumber}，状态 ${activeOnRoom.status}），请先处理后再签约`,
+      );
+    }
 
     // 生成合同编号
     const contractNumber = `C${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
@@ -160,6 +180,23 @@ export class ContractsService {
       throw new NotFoundException('合同不存在');
     }
 
+    const statusChanged = dto.status !== undefined && dto.status !== contract.status;
+    // 状态流转校验（docs/04 §2.3）。原先 PATCH 直接写任意 status：TERMINATED 可复活、
+    // DRAFT 可跳过生效直接结束，且不碰房间，导致房态与合同不一致（T207）。
+    if (statusChanged && !isContractTransitionAllowed(contract.status, dto.status!)) {
+      throw new ConflictException(
+        `合同状态不允许从 ${contract.status ?? '未知'} 变更为 ${dto.status}（合法流转见 docs/04-状态机.md §2.3）`,
+      );
+    }
+
+    if (dto.startDate || dto.endDate) {
+      const start = dto.startDate ? new Date(dto.startDate) : contract.startDate;
+      const end = dto.endDate ? new Date(dto.endDate) : contract.endDate;
+      if (end <= start) {
+        throw new BadRequestException('合同结束日期必须晚于开始日期');
+      }
+    }
+
     const updateData: Prisma.ContractUpdateInput = {};
     if (dto.rentAmount !== undefined) updateData.rentAmount = dto.rentAmount;
     if (dto.depositAmount !== undefined) updateData.depositAmount = dto.depositAmount;
@@ -170,9 +207,21 @@ export class ContractsService {
     if (dto.lateFeeRule) updateData.lateFeeRule = dto.lateFeeRule as Prisma.InputJsonValue;
     if (dto.status) updateData.status = dto.status;
 
-    return this.prisma.contract.update({
-      where: { id },
-      data: updateData,
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.contract.update({ where: { id }, data: updateData });
+
+      if (statusChanged) {
+        // 房间随动与定时任务共用同一份规则（contract-transitions.ts）
+        const room = await tx.room.findUnique({ where: { id: contract.roomId }, select: { status: true } });
+        if (room) {
+          const roomUpdate = roomUpdateForContractTransition(room, contract.status, dto.status!);
+          if (roomUpdate) {
+            await tx.room.update({ where: { id: contract.roomId }, data: roomUpdate });
+          }
+        }
+      }
+
+      return updated;
     });
   }
 
