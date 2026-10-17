@@ -365,6 +365,7 @@ if (args.includes('--help') || args.includes('-h')) {
 选项:
   --help, -h        显示帮助信息
   --strict          启用严格模式（代码变更需同步文档）
+  --stale           仅检查过期文档（>30天未核对）
 
 环境变量:
   DOCS_STRICT_MODE  设置为 'true' 启用严格模式
@@ -374,6 +375,18 @@ if (args.includes('--help') || args.includes('-h')) {
 
 if (args.includes('--strict')) {
   process.env.DOCS_STRICT_MODE = 'true';
+}
+
+if (args.includes('--stale')) {
+  console.log('\n🔍 开始检查过期文档...\n');
+  try {
+    checkStaleDocuments();
+    console.log('\n✅ 过期检查完成！\n');
+    process.exit(0);
+  } catch (err) {
+    error(`检查过期文档出错: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 main();
