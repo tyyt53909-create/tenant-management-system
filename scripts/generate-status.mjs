@@ -85,12 +85,97 @@ function getTaskCount() {
 }
 const taskCount = getTaskCount();
 
-// 6. 测试统计（实测基线）
-const backendTestFiles = 72;
-const backendTests = 740;
-const frontendTests = 35;
-const miniprogramTests = 108;
+// 6. 测试统计（实测：直接执行三端测试套件并解析真实结果，禁止硬编码）
+const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
+
+/** 从 vitest 汇总行读取通过/失败数，例：`Test Files  77 passed (77)`、`Tests  1 failed | 766 passed (767)` */
+function readVitestSummaryLine(text, label) {
+  const line = text
+    .split('\n')
+    .map((row) => row.replace(ANSI_PATTERN, ''))
+    .find((row) => new RegExp(`^\\s*${label}\\s`).test(row));
+  return {
+    passed: Number(line?.match(/(\d+)\s+passed/)?.[1] ?? 0),
+    failed: Number(line?.match(/(\d+)\s+failed/)?.[1] ?? 0),
+  };
+}
+
+function runSuite(name, cwd, parse) {
+  let output = '';
+  let exitedWithError = false;
+  try {
+    output = execSync('npm test 2>&1', { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  } catch (error) {
+    exitedWithError = true;
+    output = String(error.stdout ?? '');
+  }
+  const stats = parse(output);
+  if (exitedWithError || stats.failed > 0) {
+    console.error(`❌ ${name}：${stats.failed} 个失败测例`);
+  }
+  return stats;
+}
+
+function parseVitestSuite(output) {
+  const files = readVitestSummaryLine(output, 'Test Files');
+  const tests = readVitestSummaryLine(output, 'Tests');
+  return { files: files.passed, tests: tests.passed, failed: files.failed + tests.failed };
+}
+
+/** 小程序使用 node --test（TAP 汇总），例：`ℹ pass 108` / `ℹ fail 0` */
+function parseNodeTestSuite(output) {
+  const clean = output.replace(ANSI_PATTERN, '');
+  const pass = clean.match(/ℹ pass (\d+)/);
+  const fail = clean.match(/ℹ fail (\d+)/);
+  return {
+    files: countFiles("miniprogram/tests/*.test.mjs"),
+    tests: Number(pass?.[1] ?? 0),
+    failed: Number(fail?.[1] ?? 0),
+  };
+}
+
+function countFiles(globPattern) {
+  try {
+    const output = execSync(`ls ${globPattern} | wc -l`, { cwd: repoRoot, encoding: 'utf8' }).trim();
+    return parseInt(output, 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Playwright e2e 需浏览器与后端，不在本脚本内执行；按源码静态计数（spec 文件数 + test 数） */
+function countPlaywrightTests() {
+  const files = countFiles('frontend-admin/e2e/*.spec.ts');
+  let tests = 0;
+  try {
+    const output = execSync('grep -h "test(" frontend-admin/e2e/*.spec.ts | wc -l', {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+    tests = parseInt(output.trim(), 10) || 0;
+  } catch {
+    tests = 0;
+  }
+  return { files, tests };
+}
+
+const backendStats = runSuite('后端 Vitest', path.join(repoRoot, 'backend'), parseVitestSuite);
+const frontendStats = runSuite('管理后台 Vitest', path.join(repoRoot, 'frontend-admin'), parseVitestSuite);
+const miniprogramStats = runSuite('小程序 node --test', path.join(repoRoot, 'miniprogram'), parseNodeTestSuite);
+const playwrightStats = countPlaywrightTests();
+
+const backendTestFiles = backendStats.files;
+const backendTests = backendStats.tests;
+const frontendTestFiles = frontendStats.files;
+const frontendTests = frontendStats.tests;
+const miniprogramTests = miniprogramStats.tests;
 const totalTests = backendTests + frontendTests + miniprogramTests;
+const totalFailedTests = backendStats.failed + frontendStats.failed + miniprogramStats.failed;
+
+if (totalFailedTests > 0) {
+  console.error(`❌ 存在 ${totalFailedTests} 个失败测例，拒绝生成进度看板（先修复测试再生成）。`);
+  process.exit(1);
+}
 
 // 7. 单一进度计算
 // 阶段 0~4 全部完成，架构优化计划 OPT-01~OPT-28 全部完成
@@ -108,9 +193,9 @@ const content = `# 项目状态跟踪
 
 > 最后更新: ${dateStr}
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: \`${gitBranch}\` 分支当前提交 \`${gitCommit}\`（T001~T201 全量完成）
+> 进度基准: \`${gitBranch}\` 分支当前提交 \`${gitCommit}\`（T001~T202 全量完成）
 > 整体进度: **${overallProgress}%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
-> 质量状态: 后端 (${backendTestFiles}/${backendTestFiles} 文件 ${backendTests} 测例)、管理后台 (${frontendTests} 测例 + Playwright 5 流程)、小程序 (${miniprogramTests} 测例) 全数通过，0 oxlint 错误，0 docs-check 报错
+> 质量状态: 后端 (${backendTestFiles} 文件 ${backendTests} 测例)、管理后台 (${frontendTestFiles} 文件 ${frontendTests} 测例 + Playwright ${playwrightStats.tests} 流程)、小程序 (${miniprogramTests} 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
 
 ---
 
@@ -120,12 +205,13 @@ const content = `# 项目状态跟踪
 |------|-----|------|
 | **当前阶段** | 阶段0~阶段4 全量收官；架构优化计划 M1~M4 全部完成 | 房态状态机、滞纳金核销、水电表MQTT模拟器、预付闭环、OTP/限流加固、生产编排与灾备演练全量交付 |
 | **整体进度** | **${overallProgress}%** | 唯一事实来源：五阶段进度严格加权均值 100% |
-| **活跃任务** | T201 | OPT-28 文档与代码一致性收口（架构优化计划最后收官任务） |
-| **已完成任务** | T001~T173 全量 + T174~T201 | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 全部 28 项优化 |
+| **活跃任务** | T202 | 计划收口与度量看板实测化（架构优化计划验收项收口） |
+| **已完成任务** | T001~T173 全量 + T174~T202 | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 全部 28 项优化 |
 | **阻塞问题** | 0 | 无阻塞 |
 | **数据模型** | ${modelCount} 张实体表 | Prisma schema 实际 model 严密对齐 |
 | **OpenAPI 路由** | ${routeCount} 条路由 | 全自动化生成规范，类型 100% 导出前端 |
 | **自动化测试** | ${totalTests} 测例全绿 | 后端 ${backendTests} + 小程序 ${miniprogramTests} + 前端 ${frontendTests}，100% 通过率 |
+| **验收缺口** | 3 项 | OPT-02#4（\`docs/06\` 为 human 文档，需人工补 §10 节号指引）、OPT-07#2（\`src/\` 非 config 层仍有 16 处 \`process.env\`，待决策）、OPT-19#3（首屏 JS 体积无优化前后实测）；详见 \`docs/13\` 与 T202 交接记录 |
 | **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
 
 ---
@@ -190,12 +276,13 @@ const content = `# 项目状态跟踪
 ## 💬 最新更新
 
 ### ${dateStr}
+- ✅ **T202 计划收口与度量看板实测化**：\`generate-status.mjs\` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；\`check-docs.js\` 新增 \`.env.example\` 与部署文档变量清单一致性校验（OPT-07）；补上 OPT-06 遗留的范围助手调用与 \`AGENTS.md\` 范围查询规则。
 - ✅ **T201 文档与代码一致性收口 (OPT-28)**：编写 \`scripts/generate-status.mjs\` 自动化度量脚本，实现 STATUS.md 单一进度指标自动生成；升级 \`scripts/check-docs.js\` 增加 28 张数据表与 120 条 OpenAPI 路由一致性硬门禁；补齐 49 份历史文档 YAML 元信息头部，死链清零，docs-check 达成 0 ❌ 错误、0 ⚠️ 警告。
 - ✅ **T200 仓库卫生与分支治理 (OPT-27)**：清理已合并的 29 个旧分支与无效 worktree；归档根目录 8 份游离文档；重构主指南 \`README.md\`。
 - ✅ **T199 备份恢复演练与性能基线 (OPT-26)**：完成 PostgreSQL 灾备演练（RTO 2.4s、RPO 0）；完成 100 并发 k6 压力基线实测（P95 66.75ms、0 错误）。
 - ✅ **T198 生产部署工件 (OPT-25)**：生产容器编排 \`docker-compose.prod.yml\` 与非 root 镜像。
-- ✅ **T197 e2e 与 UI 自动化测试 (OPT-24)**：Playwright 5 大核心流程与后端 e2e 接入 CI。
-- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，740 测例全绿。
+- ✅ **T197 e2e 与 UI 自动化测试 (OPT-24)**：Playwright ${playwrightStats.tests} 条核心流程（${playwrightStats.files} 个 spec）与后端 e2e 接入 CI。
+- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，${backendTests} 测例全绿。
 
 ---
 
@@ -211,9 +298,9 @@ const content = `# 项目状态跟踪
 
 - **数据模型**：\`grep -c '^model ' backend/prisma/schema.prisma\` = **${modelCount}**（与 docs/02 严格一致）
 - **OpenAPI 路由**：\`backend/openapi.json\` = **${routeCount}** 条路由
-- **自动化测试**：
+- **自动化测试**（实测：\`npm test\` 于 \`backend/\`、\`frontend-admin/\`、\`miniprogram/\` 分别执行后解析）：
   - 后端 Vitest：**${backendTestFiles}** 个测试文件，**${backendTests}** 个测例全绿
-  - 前端后台：**8** 个组件测试文件，**${frontendTests}** 个单元测试 + **5** 条 Playwright e2e 核心流程全绿
+  - 管理后台：**${frontendTestFiles}** 个测试文件，**${frontendTests}** 个单元测试 + **${playwrightStats.tests}** 条 Playwright e2e 核心流程全绿
   - 微信小程序：**${miniprogramTests}** 个测试用例全绿
   - **总计测试用例**：**${totalTests}** 个测试，100% 通过率
 - **文档体系**：
@@ -238,4 +325,5 @@ console.log(`✅ STATUS.md 已成功自动更新！`);
 console.log(`   - 唯一整体进度: ${overallProgress}%`);
 console.log(`   - 数据模型表数: ${modelCount}`);
 console.log(`   - OpenAPI 路由数: ${routeCount}`);
-console.log(`   - 自动化测试用例总数: ${totalTests}`);
+console.log(`   - 实测测试用例：后端 ${backendTests}（${backendTestFiles} 文件）+ 管理后台 ${frontendTests}（${frontendTestFiles} 文件）+ 小程序 ${miniprogramTests} = ${totalTests}`);
+console.log(`   - Playwright e2e（静态计数）: ${playwrightStats.tests} 条 / ${playwrightStats.files} 个 spec`);

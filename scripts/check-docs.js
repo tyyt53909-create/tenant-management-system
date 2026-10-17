@@ -335,6 +335,55 @@ function checkOpenApiRoutes() {
   }
 }
 
+// 8. 检查 backend/.env.example 与 docs/12 §1.1 变量清单一致性 (OPT-07)
+function checkEnvVarConsistency() {
+  info('检查 .env.example 与部署文档变量清单一致性...');
+  const envExamplePath = path.join(__dirname, '../backend/.env.example');
+  const deployDocPath = path.join(__dirname, '../docs/12-部署与运维.md');
+
+  if (!fs.existsSync(envExamplePath)) {
+    warn('backend/.env.example 不存在，跳过环境变量检查');
+    return;
+  }
+  if (!fs.existsSync(deployDocPath)) {
+    warn('docs/12-部署与运维.md 不存在，跳过环境变量检查');
+    return;
+  }
+
+  // .env.example 里登记过的键（含被注释的 `# SMTP_HOST=` 形式：注释本身也是登记）
+  const exampleVars = new Set(
+    (fs.readFileSync(envExamplePath, 'utf-8').match(/^\s*#?\s*[A-Z][A-Z0-9_]*=/gm) || []).map((line) =>
+      line.replace(/^\s*#?\s*/, '').replace('=', ''),
+    ),
+  );
+
+  // docs/12 §1.1 表格中所有反引号包裹的大写变量名
+  const docContent = fs.readFileSync(deployDocPath, 'utf-8');
+  const sectionMatch = docContent.match(/### 1\.1[\s\S]*?(?=\n### |\n## )/);
+  if (!sectionMatch) {
+    warn('docs/12-部署与运维.md 未找到 §1.1 后端环境变量清单');
+    return;
+  }
+  const documentedVars = new Set(
+    (sectionMatch[0].match(/`[A-Z][A-Z0-9_]{2,}`/g) || []).map((token) => token.replace(/`/g, '')),
+  );
+
+  const missingInExample = [...documentedVars].filter((name) => !exampleVars.has(name)).sort();
+  const missingInDoc = [...exampleVars].filter((name) => !documentedVars.has(name)).sort();
+
+  if (missingInExample.length === 0 && missingInDoc.length === 0) {
+    success(`.env.example 与部署文档变量清单一致 (${exampleVars.size} 项)`);
+    return;
+  }
+  if (missingInExample.length > 0) {
+    error(`docs/12 §1.1 已登记但 backend/.env.example 缺失: ${missingInExample.join(', ')}`);
+  }
+  if (missingInDoc.length > 0) {
+    error(`backend/.env.example 已登记但 docs/12 §1.1 未登记: ${missingInDoc.join(', ')}`);
+  }
+  if (STRICT_MODE) process.exit(1);
+}
+
 // 主函数
 function main() {
   console.log('\n🔍 开始检查文档...\n');
@@ -345,6 +394,7 @@ function main() {
     checkInternalLinks();
     checkSchemaModelCount();
     checkOpenApiRoutes();
+    checkEnvVarConsistency();
     checkCodeDocSync();
     checkStaleDocuments();
     

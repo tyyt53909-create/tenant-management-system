@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import { TenantsService } from './tenants.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
@@ -6,7 +7,10 @@ import { QueryTenantsDto } from './dto/query-tenants.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
-import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam, type AuthUser } from '../../common/decorators/current-user.decorator.js';
+
+/** 审计上下文：只需要 user / ip / user-agent，避免用 `any` 拿整个 express 请求（Partial 便于单测直接传最小对象） */
+type AuditRequestContext = Partial<ExpressRequest> & { user?: AuthUser };
 
 @Controller('tenants')
 @UseGuards(JwtAuthGuard)
@@ -31,9 +35,9 @@ export class TenantsController {
   @Get(':id/id-number')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  revealIdNumber(@Request() req: any, @Param('id') id: string) {
+  revealIdNumber(@Request() req: AuditRequestContext, @Param('id') id: string) {
     return this.tenantsService.revealIdNumber(id, {
-      userId: req.user.userId,
+      userId: req.user?.userId ?? '',
       ip: req.ip ?? 'unknown',
       userAgent: req.headers?.['user-agent'] ?? 'unknown',
     });

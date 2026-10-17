@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   decryptField,
   encryptField,
@@ -7,8 +8,16 @@ import {
   resolveFieldKey,
 } from './field-crypto.js';
 
+/**
+ * 字段级加密（AES-256-GCM）。
+ *
+ * 密钥口径以仓库配置为准：`ENCRYPTION_KEY`（`backend/.env.example`、`docker-compose.prod.yml`、`docs/12 §1.1`）。
+ * 旧名 `FIELD_ENCRYPTION_KEY` 仍作为兼容别名读取，避免已按旧名部署的环境直接失配。
+ */
 @Injectable()
 export class CryptoService {
+  constructor(private readonly configService: ConfigService) {}
+
   encrypt(plain: string): string {
     return encryptField(plain, this.key());
   }
@@ -32,6 +41,11 @@ export class CryptoService {
   }
 
   private key(): Buffer {
-    return resolveFieldKey(process.env.FIELD_ENCRYPTION_KEY);
+    const configured = this.configService.get<string>('ENCRYPTION_KEY');
+    const raw =
+      (typeof configured === 'string' && configured.trim() !== '' ? configured : undefined) ??
+      process.env.ENCRYPTION_KEY ??
+      process.env.FIELD_ENCRYPTION_KEY;
+    return resolveFieldKey(raw);
   }
 }
