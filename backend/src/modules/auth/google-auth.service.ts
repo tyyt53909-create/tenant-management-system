@@ -17,7 +17,7 @@ export class GoogleAuthService {
   private readonly clientId: string | undefined;
 
   constructor(private readonly configService: ConfigService) {
-    this.clientId = this.configService.get<string>('GOOGLE_CLIENT_ID') || process.env.GOOGLE_CLIENT_ID;
+    this.clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     this.client = new OAuth2Client(this.clientId);
   }
 
@@ -32,7 +32,7 @@ export class GoogleAuthService {
 
     // 开发与测试环境 Mock Token 支持（格式: mock-google-token:email[:name[:googleId]]）
     if (
-      process.env.NODE_ENV !== 'production' &&
+      this.configService.get<string>('NODE_ENV') !== 'production' &&
       (idToken.startsWith('mock-google-token:') || !this.clientId || this.clientId === 'your-google-client-id-here')
     ) {
       return this.verifyMockToken(idToken);

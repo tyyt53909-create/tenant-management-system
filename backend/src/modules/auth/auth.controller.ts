@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Get, Delete, Param, Query, UseGuards, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
@@ -21,7 +22,15 @@ import {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  /** refresh token Cookie 的 Secure 标志由配置层决定（生产环境必须为 true） */
+  private get secureCookies(): boolean {
+    return this.configService.get<string>('NODE_ENV') === 'production';
+  }
 
   @Post('register')
   @AuthThrottle()
@@ -31,7 +40,7 @@ export class AuthController {
   ): Promise<RegisterResponseDto> {
     const result = await this.authService.register(dto);
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
     }
     return result;
   }
@@ -44,7 +53,7 @@ export class AuthController {
   ): Promise<LoginResponseDto> {
     const result = await this.authService.login(dto);
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
     }
     return result;
   }
@@ -94,7 +103,7 @@ export class AuthController {
     }
     const result = await this.authService.refresh({ refreshToken: token });
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
     }
     return result;
   }
@@ -110,7 +119,7 @@ export class AuthController {
       await this.authService.logout({ refreshToken: token });
     }
     if (res) {
-      clearRefreshTokenCookie(res);
+      clearRefreshTokenCookie(res, this.secureCookies);
     }
     return { message: '已登出' };
   }
@@ -124,7 +133,7 @@ export class AuthController {
     const user = resolveAuthUser(userParam);
     const result = await this.authService.logoutAll(user.userId);
     if (res) {
-      clearRefreshTokenCookie(res);
+      clearRefreshTokenCookie(res, this.secureCookies);
     }
     return result;
   }
@@ -155,7 +164,7 @@ export class AuthController {
   ): Promise<GoogleAuthResponseDto> {
     const result = await this.authService.googleAuth(dto);
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
     }
     return result;
   }
@@ -180,7 +189,7 @@ export class AuthController {
   ) {
     const result = await this.authService.loginWithEmailCode(dto);
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
     }
     return result;
   }

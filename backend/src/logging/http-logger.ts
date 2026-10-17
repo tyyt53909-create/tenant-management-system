@@ -19,11 +19,13 @@ type LoggedRequest = IncomingMessage & {
 /**
  * JSON 访问日志。nestjs-pino 5 要求 Node >= 22.12，而 CI 仍是 Node 20，
  * 所以直接使用同一套 pino / pino-http。
+ *
+ * `level` 由启动期配置传入（config 层解析 LOG_LEVEL），此处不读 process.env。
  */
-export function createHttpLogger(stream?: pino.DestinationStream) {
+export function createHttpLogger(level = 'info', stream?: pino.DestinationStream) {
   const logger = pino(
     {
-      level: process.env.LOG_LEVEL || 'info',
+      level,
       redact: {
         paths: [
           'req.headers.authorization',

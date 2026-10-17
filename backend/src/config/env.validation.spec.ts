@@ -6,11 +6,12 @@ import { validateEnvironment } from './env.validation.js';
 
 const backendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-function productionEnv(overrides: Record<string, string> = {}) {
+function productionEnv(overrides: Record<string, string | undefined> = {}) {
   return {
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/tenant_system',
     JWT_SECRET: 'a'.repeat(32),
+    ENCRYPTION_KEY: 'c'.repeat(32),
     ...overrides,
   };
 }
@@ -27,6 +28,28 @@ describe('validateEnvironment', () => {
         productionEnv({ JWT_SECRET: 'your-jwt-secret-change-this-in-production' }),
       ),
     ).toThrow(/JWT_SECRET/);
+  });
+
+  it('生产模式缺少 ENCRYPTION_KEY 时抛错（证件号加解密依赖它，不能等到运行时才炸）', () => {
+    expect(() => validateEnvironment(productionEnv({ ENCRYPTION_KEY: '' }))).toThrow(/ENCRYPTION_KEY/);
+    expect(() => validateEnvironment(productionEnv({ ENCRYPTION_KEY: undefined }))).toThrow(/ENCRYPTION_KEY/);
+  });
+
+  it('生产模式三项必填齐备时通过', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const config = productionEnv();
+
+    expect(validateEnvironment(config)).toBe(config);
+    warn.mockRestore();
+  });
+
+  it('非生产模式缺少 ENCRYPTION_KEY 只警告', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const config = { NODE_ENV: 'development', DATABASE_URL: 'postgres://local', JWT_SECRET: 'b'.repeat(32) };
+
+    expect(validateEnvironment(config)).toBe(config);
+    expect(warn.mock.calls.map((call) => call.join(' ')).join('\n')).toMatch(/ENCRYPTION_KEY/);
+    warn.mockRestore();
   });
 
   it('开发模式缺少可选项只警告，不阻止通过', () => {

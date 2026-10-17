@@ -27,7 +27,7 @@ describe('访问日志', () => {
   beforeAll(async () => {
     const module = await Test.createTestingModule({ controllers: [LogProbeController] }).compile();
     app = module.createNestApplication();
-    app.use(createHttpLogger(stream));
+    app.use(createHttpLogger('info', stream));
     await app.init();
   });
 

@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard.js';
 import { AuthController } from '../src/modules/auth/auth.controller.js';
@@ -124,6 +125,8 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         AuthController,
       ],
       providers: [
+        // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
+        { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'test' }) },
         { provide: TenantsService, useValue: tenantsService },
         { provide: BillsService, useValue: billsService },
         { provide: CheckoutService, useValue: checkoutService },

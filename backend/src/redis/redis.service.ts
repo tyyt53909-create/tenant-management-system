@@ -61,7 +61,7 @@ export class RedisService {
   }
 
   private read(key: string): string {
-    const value = this.configService.get<string>(key) || process.env[key];
+    const value = this.configService.get<string>(key);
     return typeof value === 'string' ? value.trim() : '';
   }
 }

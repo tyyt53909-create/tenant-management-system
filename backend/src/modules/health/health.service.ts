@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { access, constants } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -24,6 +25,7 @@ export class HealthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly configService: ConfigService,
   ) {}
 
   live() {
@@ -63,7 +65,8 @@ export class HealthService {
   }
 
   private async checkDisk(): Promise<CheckState> {
-    const dir = process.env.UPLOAD_DIR?.trim() || join(process.cwd(), 'uploads');
+    const configured = this.configService.get<string>('UPLOAD_DIR');
+    const dir = typeof configured === 'string' && configured.trim() ? configured.trim() : join(process.cwd(), 'uploads');
     try {
       await access(dir, constants.W_OK);
       return 'ok';

@@ -98,8 +98,11 @@ function hasJsonSchema(response: unknown): boolean {
   return Boolean(content?.['application/json']?.schema);
 }
 
-export function mountOpenApi(app: INestApplication): void {
-  if (process.env.NODE_ENV === 'production') return;
+/**
+ * 挂载 Swagger UI。`enabled` 由启动期配置传入（生产环境关闭），此处不读 process.env。
+ */
+export function mountOpenApi(app: INestApplication, options: { enabled?: boolean } = {}): void {
+  if (options.enabled === false) return;
   SwaggerModule.setup('api/docs', app, createOpenApiDocument(app), {
     swaggerOptions: { persistAuthorization: true },
   });
