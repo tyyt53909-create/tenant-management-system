@@ -1,8 +1,5 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-// 中文语言包：否则分页等组件显示英文（Total / 20 per page），见 docs/09 遗留项
-import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import App from './App.vue';
 import router from './router';
 import { useUserStore } from './stores/user';
@@ -17,7 +14,10 @@ const pinia = createPinia();
 
 app.use(pinia);
 app.use(router);
-app.use(ElementPlus, { locale: zhCn });
+
+// 注意：Element Plus 组件不再在此全量注册（原 app.use(ElementPlus) 会把整库打进首屏 JS）。
+// 组件与指令（含 v-loading）由 vite.config.ts 的 ElementPlusResolver 按需自动引入；
+// 中文语言包由 App.vue 的 <el-config-provider> 提供。
 
 // 刷新页面时恢复登录态（拉取当前用户），否则头部只显示兜底文案
 void useUserStore(pinia).init();
