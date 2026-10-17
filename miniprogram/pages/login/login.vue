@@ -103,10 +103,10 @@
           <!-- #ifdef H5 -->
           <view id="g_id_signin_container" class="google-official-btn"></view>
           <!-- #endif -->
-          <button 
-            v-if="!gisButtonLoaded"
-            class="btn-google" 
-            :disabled="googleLoading" 
+          <button
+            v-if="!gisButtonLoaded && mockEnabled"
+            class="btn-google"
+            :disabled="googleLoading"
             @tap="handleGoogleLogin"
           >
             <image class="google-icon-img" src="/static/google-icon.svg" mode="aspectFit"></image>
@@ -152,7 +152,10 @@ export default {
       loading: false,
       googleLoading: false,
       googleClientId: '',
-      gisButtonLoaded: false
+      gisButtonLoaded: false,
+      // 后端是否开启「模拟 Google 登录」开发者通道（T206：改由后端 GOOGLE_AUTH_MOCK 决定，
+      // 未开启时前端不再提供模拟入口，否则点下去只会拿到 503）
+      mockEnabled: false
     }
   },
   mounted() {
@@ -242,6 +245,7 @@ export default {
     async initGoogleGis() {
       try {
         const res = await getGoogleClientId()
+        this.mockEnabled = !!(res && res.mockEnabled === true)
         if (res && res.clientId && res.clientId.trim() !== '') {
           this.googleClientId = res.clientId
           const script = document.createElement('script')
@@ -286,12 +290,12 @@ export default {
       if (this.googleClientId && typeof window !== 'undefined' && window.google && window.google.accounts && window.google.accounts.id) {
         window.google.accounts.id.prompt((notification) => {
           if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            this.promptMockGoogleLogin()
+            this.fallbackGoogleLogin()
           }
         })
         return
       }
-      this.promptMockGoogleLogin()
+      this.fallbackGoogleLogin()
       // #endif
 
       // #ifndef H5
@@ -300,6 +304,19 @@ export default {
         content: 'Google 账号登录支持网页端 (H5) 与独立 App 环境',
         showCancel: false
       })
+      // #endif
+    },
+    /**
+     * GIS 不可用时的兜底：只有后端开了模拟通道才走模拟登录，否则明确提示，
+     * 不要发出必然被后端拒绝（503）的 mock token（T206）。
+     */
+    fallbackGoogleLogin() {
+      // #ifdef H5
+      if (this.mockEnabled) {
+        this.promptMockGoogleLogin()
+        return
+      }
+      uni.showToast({ title: 'Google 登录暂不可用，请使用邮箱验证码登录', icon: 'none' })
       // #endif
     },
     promptMockGoogleLogin() {
