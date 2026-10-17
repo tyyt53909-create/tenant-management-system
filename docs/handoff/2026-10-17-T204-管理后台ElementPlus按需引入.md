@@ -88,5 +88,6 @@ T203 已用可复现方法（同一机器、同一 `node_modules`、临时 workt
 ## 六、提交记录
 
 - 分支：`feature/T204-admin-ondemand`（基于 `caf2287`）
+- 主要提交：`b1ebeec` perf(admin): Element Plus 按需引入，首屏 JS 降 88% (T204)
 - 验证基线：`caf2287`（T203 顶）
 - **未推送、未合并**（T202 → T203 → T204 三级叠加，建议按序合并）
