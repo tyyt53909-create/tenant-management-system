@@ -8,12 +8,18 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { TenantCapabilityService } from './tenant-capability.service.js';
 import { UpdateTenantAccountDto } from './dto/update-tenant-account.dto.js';
 import { UpdateTenantCapabilitiesDto } from './dto/update-tenant-capabilities.dto.js';
+import type { AuthUser } from '../../common/decorators/current-user.decorator.js';
+
+interface RequestWithUser extends Partial<ExpressRequest> {
+  user?: AuthUser;
+}
 
 @Controller('tenants/:id')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,11 +42,11 @@ export class TenantCapabilitiesController {
   updateAccount(
     @Param('id') tenantId: string,
     @Body() dto: UpdateTenantAccountDto,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
   ) {
     const actorId = req.user?.userId || req.user?.id || 'admin';
     const ip = req.ip || req.socket?.remoteAddress || '127.0.0.1';
-    const userAgent = req.headers?.['user-agent'] || '';
+    const userAgent = (req.headers?.['user-agent'] as string) || '';
     return this.capabilityService.updateAccount(tenantId, dto.isActive, actorId, ip, userAgent);
   }
 
@@ -59,11 +65,11 @@ export class TenantCapabilitiesController {
   updateCapabilities(
     @Param('id') tenantId: string,
     @Body() dto: UpdateTenantCapabilitiesDto,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
   ) {
     const actorId = req.user?.userId || req.user?.id || 'admin';
     const ip = req.ip || req.socket?.remoteAddress || '127.0.0.1';
-    const userAgent = req.headers?.['user-agent'] || '';
+    const userAgent = (req.headers?.['user-agent'] as string) || '';
     return this.capabilityService.replaceCapabilities(
       tenantId,
       dto.denied,

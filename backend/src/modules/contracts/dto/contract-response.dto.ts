@@ -10,7 +10,7 @@ export class ContractResponseDto {
   paymentDay: number;
   startDate: Date;
   endDate: Date;
-  lateFeeRule: any;
+  lateFeeRule: Record<string, unknown>;
   status: string;
   createdAt: Date;
   updatedAt: Date;

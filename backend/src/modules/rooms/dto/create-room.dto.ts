@@ -30,7 +30,7 @@ export class CreateRoomDto {
   area?: number;
 
   @IsOptional()
-  facilities?: any; // JSON 格式的设施信息
+  facilities?: Record<string, unknown> | unknown[]; // JSON 格式的设施信息
 
   @IsString()
   @IsOptional()

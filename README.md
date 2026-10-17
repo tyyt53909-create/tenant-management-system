@@ -1,45 +1,106 @@
-# 租客管理系统
+# 租客管理系统 (Tenant Management System)
 
-> 完整的租赁管理解决方案
+> 企业级公寓与租客全生命周期数字化管理系统，涵盖多楼栋房源管理、电子合同、自动化账单、滞纳金核销、预付充值、水电读数计费、报修维保、清洁任务流转与退租结算。
 
-## 项目结构
+---
+
+## 🏗️ 架构概览
+
+本系统采用现代前后端分离与移动端协同架构，后端支持多实例水平扩展，共享状态下沉至 Redis，核心业务具备幂等性与字段级加密防护。
+
+```mermaid
+flowchart TD
+    subgraph Client["客户端层 (Client Layer)"]
+        A["🖥️ 管理后台 (frontend-admin)<br/>Vue 3 + Element Plus + Vite<br/>Port: 5173 / 8080"]
+        B["📱 租客小程序 (miniprogram)<br/>uni-app (Vue 3) + 微信小程序"]
+        C["🌐 官网/看房落地页 (landing)<br/>纯静态轻量展示"]
+    end
+
+    subgraph Gateway["接入与反向代理 (Gateway / Nginx)"]
+        G["Nginx / 安全反向代理<br/>SSL / Gzip / Rate Limit / Security Headers"]
+    end
+
+    subgraph Backend["服务端层 (Backend Cluster)"]
+        S1["NestJS 12 应用实例 1<br/>Port: 3100"]
+        S2["NestJS 12 应用实例 2<br/>Port: 3101"]
+        SCHED["分布式定时任务 (Redlock 选主互斥)<br/>账单生成 / 滞纳金计算 / 催缴提醒"]
+    end
+
+    subgraph Storage["数据与中间件层 (Data & Middleware)"]
+        DB[("PostgreSQL 16<br/>26 张表 / 幂等约束 / 审计日志")]
+        RDS[("Redis 6+<br/>Token 黑名单 / OTP / 频控 / 分布式锁")]
+        OSS["阿里云 OSS / 本地存储适配器<br/>合同凭证 / 维修与抄表图片"]
+    end
+
+    A --> G
+    B --> G
+    C --> G
+    G --> S1
+    G --> S2
+    S1 --> DB
+    S1 --> RDS
+    S1 --> OSS
+    S2 --> DB
+    S2 --> RDS
+    S2 --> OSS
+    SCHED --> DB
+    SCHED --> RDS
+```
+
+---
+
+## 🧭 项目目录结构
 
 ```
-tenant-management-system/
-├── backend/          # NestJS 后端
-├── frontend-admin/   # Vue3 管理后台（待创建）
-├── miniprogram/      # uni-app 小程序（待创建）
-├── docs/             # 项目文档
-├── scripts/          # 开发脚本
-└── docker-compose.yml
+tenant-system/
+├── backend/                  # NestJS 12 + Prisma 5.22 + TypeScript 5.9 后端
+│   ├── src/                  # 业务源码 (auth, rooms, tenants, contracts, bills, meters...)
+│   ├── prisma/               # Prisma Schema (26 张表) 与数据库迁移
+│   └── test/                 # 单元测试、集成测试与 e2e 测试 (Vitest)
+├── frontend-admin/           # Vue 3.5 + Element Plus + Vite 8 管理后台
+│   ├── src/                  # 视图、组件、Pinia Store、路由、OpenAPI 类型
+│   └── e2e/                  # Playwright 关键业务流程端到端 UI 自动化测试
+├── miniprogram/              # uni-app (Vue 3.4) 微信小程序租客端
+│   ├── pages/                # 账单、报修、合同、个人中心、登录
+│   └── api/                  # 按业务领域解耦的轻量 API 请求层
+├── landing/                  # 官方看房与品牌落地页静态工件
+├── docker/                   # 生产 Nginx 配置、反向代理与安全标头
+├── docs/                     # 📚 架构设计、数据模型、API 规范与交接记录 (已编目于 docs/INDEX.md)
+├── tasks/                    # 📋 任务开发书与执行记录 (T001 ~ T201)
+├── scripts/                  # 运维、测试基线、数据库灾备与文档门禁脚本
+├── docker-compose.yml        # 本地基础服务开发环境 (PostgreSQL 16 + Redis 6)
+├── docker-compose.prod.yml   # 生产一键编排配置 (后端、后台、数据库、Redis)
+├── AGENTS.md                 # AI 与团队协作开发总规范
+├── STATUS.md                 # 项目状态与指标跟踪看板
+└── README.md                 # 项目主指南（本文档）
 ```
 
-## 快速开始
+---
 
-### 前置要求
+## ⚡ 15 分钟快速上手（本地三端启动）
 
-- Node.js 20.x
-- Docker & Docker Compose
-- Git
+### 1. 环境准备
 
-### 1. 克隆项目
+- **Node.js**: `20.x` LTS
+- **Docker & Docker Compose**: 运行中
+- **包管理器**: `npm` (v10+)
+- **微信开发者工具**（可选，调试小程序时需安装）
+
+### 2. 启动基础服务（PostgreSQL + Redis）
+
+在仓库根目录执行：
 
 ```bash
-git clone <repository-url>
-cd tenant-management-system
-```
-
-### 2. 启动开发环境
-
-```bash
-# 一键启动所有服务（PostgreSQL + Redis）
-./scripts/dev-start.sh
-
-# 或手动启动
 docker-compose up -d
 ```
 
-### 3. 初始化后端
+默认端口与服务分配：
+| 服务 | 容器内端口 | 宿主机端口 | 用户名 / 密码 / 库名 |
+|------|-----------|-----------|--------------------|
+| **PostgreSQL 16** | `5432` | `5432` (或环境变量映射 `5434`) | `postgres` / `postgres` / `tenant_system` |
+| **Redis 6+** | `6379` | `6379` | 无密码（开发环境） |
+
+### 3. 启动后端服务 (Backend)
 
 ```bash
 cd backend
@@ -50,79 +111,152 @@ npm install
 # 配置环境变量
 cp .env.example .env
 
-# 运行数据库迁移
-npm run prisma:migrate
+# 执行 Prisma 数据库迁移与数据种子
+npx prisma migrate dev
+npx prisma db seed
 
-# 启动开发服务器
+# 启动开发服务器（热更新模式）
 npm run start:dev
 ```
 
-访问: http://localhost:3000
+- **后端主服务地址**: [http://localhost:3100](http://localhost:3100)
+- **OpenAPI / Swagger 文档**: [http://localhost:3100/api/docs](http://localhost:3100/api/docs)
+- **健康检查接口**: [http://localhost:3100/api/health](http://localhost:3100/api/health)
+- **默认管理员凭据**:
+  - 用户名：`admin@example.com`
+  - 密码：`Admin@123`
 
-### 4. 停止开发环境
+### 4. 启动管理后台 (Frontend Admin)
 
-```bash
-# 一键停止
-./scripts/dev-stop.sh
-
-# 或手动停止
-docker-compose down
-```
-
-## Docker 服务
-
-| 服务 | 端口 | 说明 |
-|------|------|------|
-| PostgreSQL | 5432 | 主数据库 |
-| Redis | 6379 | 缓存和会话 |
-
-### 常用 Docker 命令
+新开终端窗口：
 
 ```bash
-# 查看服务状态
-docker-compose ps
+cd frontend-admin
 
-# 查看日志
-docker-compose logs -f
+# 安装依赖
+npm install
 
-# 查看特定服务日志
-docker-compose logs -f postgres
-
-# 重启服务
-docker-compose restart
-
-# 清理数据（⚠️ 会删除所有数据）
-docker-compose down -v
+# 启动开发服务器
+npm run dev
 ```
 
-## 开发指南
+- **管理后台访问地址**: [http://localhost:5173](http://localhost:5173)
+- 登录后即可访问房源、租客、合同、账单、批量抄表、凭证核销与仪表板。
 
-详见各子项目的 README：
-- [后端开发指南](./backend/README.md)
-- [前端开发指南](./frontend-admin/README.md)（待创建）
-- [小程序开发指南](./miniprogram/README.md)（待创建）
+### 5. 启动租客小程序 (Miniprogram)
 
-## 文档
+新开终端窗口：
 
-- [项目计划书](./docs/00-项目计划书.md)
-- [架构设计](./docs/01-架构设计.md)
-- [数据模型](./docs/02-数据模型.md)
-- [更多文档](./docs/INDEX.md)
+```bash
+cd miniprogram
 
-## 常见问题
+# 安装依赖
+npm ci
 
-### Docker 启动失败
+# 启动微信小程序构建监听
+npm run dev:mp-weixin
+```
 
-1. 检查 Docker 是否运行：`docker info`
-2. 检查端口是否被占用：`lsof -i :5432` 和 `lsof -i :6379`
-3. 查看错误日志：`docker-compose logs`
+- 打开 **微信开发者工具**，导入项目目录：`miniprogram/dist/dev/mp-weixin`。
+- AppID 可填个人测试号；在微信开发者工具中勾选「不校验合法域名、web-view (业务域名)、TLS 版本以及 HTTPS 证书」即可直连 `http://localhost:3100/api`。
 
-### 数据库连接失败
+---
 
-1. 确认 Docker 服务已启动：`docker-compose ps`
-2. 确认 `.env` 中的数据库配置正确
-3. 检查数据库健康状态：`docker-compose exec postgres pg_isready`
+## 🛠️ 常用开发与测试命令
 
-## 许可证
+### 后端 (backend/)
 
-Private
+```bash
+# 运行全部单元测试 (Vitest)
+npm test
+
+# 运行覆盖率检查与门禁 (分支覆盖率 ≥80%，核心结算 ≥90%)
+npm run test:cov
+
+# 运行代码规范检查 (oxlint)
+npm run lint
+
+# 运行后端真实数据库端到端测试
+npm run test:e2e
+
+# 自动从 Swagger 导出 openapi.json
+npm run openapi:export
+
+# 执行 100 并发 k6 压力基线测试 (要求 P95 < 300ms, 错误率 < 0.1%)
+npm run test:perf
+```
+
+### 管理后台 (frontend-admin/)
+
+```bash
+# TypeScript 类型检查 (严格模式)
+npm run type-check
+
+# 代码规范检查 (oxlint + ESLint)
+npm run lint
+
+# 组件单元测试
+npm test
+
+# 从后端 OpenAPI 规范自动重新生成前端 API 类型
+npm run generate:api
+
+# 执行 Playwright 端到端关键业务流程 UI 自动化测试
+npm run test:e2e
+```
+
+### 小程序 (miniprogram/)
+
+```bash
+# 执行小程序自动化测试
+npm test
+
+# 生产环境编译打包
+npm run build:mp-weixin
+```
+
+### 文档治理与一致性门禁 (根目录)
+
+```bash
+# 运行文档元信息与索引一致性检查
+node scripts/check-docs.js
+
+# 自动生成 STATUS.md 真实度量数据
+node scripts/generate-status.mjs
+```
+
+---
+
+## 🚢 生产环境部署
+
+系统提供开箱即用的多阶段无 root Docker 镜像与安全编排配置：
+
+```bash
+# 1. 准备生产环境变量
+cp backend/.env.example backend/.env.production
+
+# 2. 一键启动全栈生产容器（Postgres + Redis + Backend + Frontend-Admin Nginx）
+docker-compose -f docker-compose.prod.yml up -d
+
+# 3. 执行生产数据库迁移
+docker-compose -f docker-compose.prod.yml run --rm backend-migration
+```
+
+- **后端容器**: 基于 Alpine Linux，体积 ≤ 250MB，使用普通用户 `node` 运行，内置 `/api/health` 存活探针。
+- **前端后台容器**: 基于 Nginx Alpine，预配置安全响应头（X-Frame-Options、CSP、HSTS）、Gzip 静态压缩及 `/api` 反向代理。
+- 更多灾难备份恢复演练与运维操作，详见 [部署与运维指南 (docs/12-部署与运维.md)](./docs/12-部署与运维.md)。
+
+---
+
+## 📚 开发规范与治理
+
+- [AI 与工程师开发总规范 (AGENTS.md)](./AGENTS.md)：包含分支策略、Worktree 工作流、安全红线与提交规范。
+- [全局文档唯一索引 (docs/INDEX.md)](./docs/INDEX.md)：所有设计与交接记录的唯一登记册。
+- [项目进度跟踪 (STATUS.md)](./STATUS.md)：系统指标、测试覆盖率与开发进度实时看板。
+- [架构设计与优化计划 (docs/13-架构与现有代码优化计划.md)](./docs/13-架构与现有代码优化计划.md)：OPT-01 ~ OPT-28 演进全记录。
+
+---
+
+## 📄 许可证
+
+Private / Proprietary. All rights reserved.

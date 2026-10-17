@@ -145,35 +145,11 @@
     </el-dialog>
 
     <!-- 房态流转（乐观锁） -->
-    <el-dialog v-model="statusDialogVisible" title="房态流转" width="460px">
-      <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
-        <el-descriptions-item label="房源">{{ statusRow?.roomNumber }}</el-descriptions-item>
-        <el-descriptions-item label="版本号">v{{ statusRow?.version }}</el-descriptions-item>
-        <el-descriptions-item label="当前房态">{{ roomStatusLabel(statusRow?.status) }}</el-descriptions-item>
-        <el-descriptions-item label="当前清洁">{{ cleanStatusLabel(statusRow?.cleanStatus) }}</el-descriptions-item>
-      </el-descriptions>
-      <el-form label-width="110px">
-        <el-form-item label="目标房态">
-          <el-select v-model="statusForm.status">
-            <el-option label="空置" value="VACANT" />
-            <el-option label="已预订" value="RESERVED" />
-            <el-option label="已租" value="OCCUPIED" />
-            <el-option label="维护中" value="MAINTENANCE" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="目标清洁状态">
-          <el-select v-model="statusForm.cleanStatus">
-            <el-option label="已清洁" value="CLEAN" />
-            <el-option label="待清洁" value="PENDING_CLEAN" />
-            <el-option label="清洁中" value="CLEANING" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="statusDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="statusSubmitting" @click="handleStatusSubmit">确定</el-button>
-      </template>
-    </el-dialog>
+    <RoomStatusDialog
+      v-model="statusDialogVisible"
+      :room="statusRow"
+      @success="handleStatusSuccess"
+    />
   </div>
 </template>
 
@@ -188,6 +164,7 @@ import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
 import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import PropertyDetailPanel from '@/components/common/PropertyDetailPanel.vue';
 import EntitySelect from '@/components/common/EntitySelect.vue';
+import RoomStatusDialog from './components/RoomStatusDialog.vue';
 import type { FormInstance, FormRules } from 'element-plus';
 import {
   ALL_ROOMS_LIMIT,
@@ -196,7 +173,6 @@ import {
   fetchAllRooms,
   getRooms,
   updateRoom,
-  updateRoomStatus,
 } from '@/api/rooms';
 import type { CleanStatus, Room, RoomStatus } from '@/types';
 import {
@@ -226,12 +202,7 @@ const currentVersion = ref(0);
 
 // 房态流转（乐观锁）
 const statusDialogVisible = ref(false);
-const statusSubmitting = ref(false);
 const statusRow = ref<Room | null>(null);
-const statusForm = reactive<{ status: '' | RoomStatus; cleanStatus: '' | CleanStatus }>({
-  status: '',
-  cleanStatus: '',
-});
 
 const queryForm = reactive<{
   roomNumber: string;
@@ -396,30 +367,12 @@ const handleEdit = (row: Room) => {
 // 房态流转
 const handleStatus = (row: Room) => {
   statusRow.value = row;
-  statusForm.status = row.status;
-  statusForm.cleanStatus = row.cleanStatus;
   statusDialogVisible.value = true;
 };
 
-const handleStatusSubmit = async () => {
-  const row = statusRow.value;
-  if (!row) return;
-  statusSubmitting.value = true;
-  try {
-    await updateRoomStatus(row.id, {
-      status: statusForm.status || undefined,
-      cleanStatus: statusForm.cleanStatus || undefined,
-      version: row.version,
-    });
-    ElMessage.success('房态已更新');
-    statusDialogVisible.value = false;
-    fetchData();
-    void detailPanel.value?.reload();
-  } catch {
-    // 请求拦截器已提示（非法流转 400 / 版本冲突 409）
-  } finally {
-    statusSubmitting.value = false;
-  }
+const handleStatusSuccess = () => {
+  fetchData();
+  void detailPanel.value?.reload();
 };
 
 const handleDelete = async (row: Room) => {

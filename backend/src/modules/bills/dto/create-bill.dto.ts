@@ -25,5 +25,5 @@ export class CreateBillDto {
   dueDate: string;
 
   @IsOptional()
-  snapshot?: any; // JSON 快照（合同信息）
+  snapshot?: Record<string, unknown>; // JSON 快照（合同信息）
 }

@@ -1,3 +1,16 @@
+---
+status: draft
+owner_tier: human
+applies_to:
+  - docs/**
+  - AGENTS.md
+last_verified: 2026-10-11
+verified_commit: null
+supersedes: null
+superseded_by: null
+version: 1.0
+---
+
 # 文档治理与 Git 协作体系方案草稿
 
 > 提交给负责人审阅
@@ -117,8 +130,8 @@ applies_to:
 
 | 路径 | 标题 | 类型 | 状态 | 创建日期 | 完成日期 |
 |------|------|------|------|----------|----------|
-| [tasks/T001-脚手架搭建.md](./tasks/T001-脚手架搭建.md) | 脚手架搭建 | 任务书 | active | 2026-10-12 | - |
-| [handoff/2026-10-12-T001.md](./handoff/2026-10-12-T001.md) | T001 交接记录 | 交接记录 | archived | 2026-10-12 | 2026-10-12 |
+| [tasks/T001-后端脚手架.md](../tasks/T001-后端脚手架.md) | 后端脚手架 | 任务书 | active | 2026-10-11 | 2026-10-11 |
+| [handoff/2026-10-11-T001-后端脚手架.md](./handoff/2026-10-11-T001-后端脚手架.md) | T001 交接记录 | 交接记录 | archived | 2026-10-11 | 2026-10-11 |
 
 ## 已归档文档
 
@@ -482,7 +495,7 @@ jobs:
 ## 🔗 关联任务
 
 - 任务编号：T001
-- 任务书：[T001-脚手架搭建](../docs/tasks/T001-脚手架搭建.md)
+- 任务书：[T001-后端脚手架](../tasks/T001-后端脚手架.md)
 - 相关 Issue：#123
 
 ---

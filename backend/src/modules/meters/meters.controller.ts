@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { MetersService } from './meters.service.js';
 import { MetersSimulatorService } from './meters-simulator.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
@@ -13,6 +14,8 @@ import { RunSimulationDto } from './dto/run-simulation.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
+import type { ExportMeterReadingsQuery } from './meter-usage-query.service.js';
 
 @Controller('meters')
 @UseGuards(JwtAuthGuard)
@@ -26,8 +29,9 @@ export class MetersController {
   @Post('simulator/run')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  runSimulation(@Request() req: any, @Body() dto: RunSimulationDto) {
-    return this.metersSimulatorService.runSimulation(dto, req.user.userId);
+  runSimulation(@CurrentUser() userParam: CurrentUserParam, @Body() dto: RunSimulationDto) {
+    const user = resolveAuthUser(userParam);
+    return this.metersSimulatorService.runSimulation(dto, user.userId);
   }
 
   @Post()
@@ -49,8 +53,9 @@ export class MetersController {
   @Post('batch-readings')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  createBatchReadings(@Request() req: any, @Body() dto: BatchMeterReadingsDto) {
-    return this.metersService.createBatchReadings(dto, req.user.userId);
+  createBatchReadings(@CurrentUser() userParam: CurrentUserParam, @Body() dto: BatchMeterReadingsDto) {
+    const user = resolveAuthUser(userParam);
+    return this.metersService.createBatchReadings(dto, user.userId);
   }
 
   // 批量周期结算水电表（仅 ADMIN）
@@ -58,17 +63,18 @@ export class MetersController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   settleBatch(
-    @Request() req: any,
+    @CurrentUser() userParam: CurrentUserParam,
     @Body() dto: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string },
   ) {
-    return this.metersService.settleBatch(dto, req.user.userId);
+    const user = resolveAuthUser(userParam);
+    return this.metersService.settleBatch(dto, user.userId);
   }
 
   // 抄表台账 CSV 导出（仅 ADMIN）
   @Get('readings/export')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  async exportReadings(@Query() query: any, @Res({ passthrough: true }) res: any) {
+  async exportReadings(@Query() query: ExportMeterReadingsQuery, @Res({ passthrough: true }) res: Response) {
     const csv = await this.metersService.exportReadings(query);
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -97,11 +103,12 @@ export class MetersController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   createReading(
-    @Request() req: any,
+    @CurrentUser() userParam: CurrentUserParam,
     @Param('id') id: string,
     @Body() dto: CreateMeterReadingDto,
   ) {
-    return this.metersService.createReading(id, dto, req.user.userId);
+    const user = resolveAuthUser(userParam);
+    return this.metersService.createReading(id, dto, user.userId);
   }
 
   // 讀數歷史（分頁）
@@ -117,11 +124,12 @@ export class MetersController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   settleMeter(
-    @Request() req: any,
+    @CurrentUser() userParam: CurrentUserParam,
     @Param('id') id: string,
     @Body() dto: SettleMeterDto,
   ) {
-    return this.metersService.settleMeter(id, dto, req.user.userId);
+    const user = resolveAuthUser(userParam);
+    return this.metersService.settleMeter(id, dto, user.userId);
   }
 
   // 查询水电表未结算用量及预估金额（仅 ADMIN）

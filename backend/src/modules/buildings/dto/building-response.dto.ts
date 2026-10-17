@@ -3,7 +3,7 @@ export class BuildingResponseDto {
   name: string;
   address: string | null;
   floors: number;
-  metadata: any;
+  metadata: Record<string, unknown>;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

@@ -76,7 +76,7 @@ test('HTTP conflict preserves status and validation messages', async () => {
 })
 test('401 clears all session keys and redirects to login', async () => {
   storage.set('refresh_token', 'refresh'); storage.set('user_role', 'CLEANER')
-  replies.push({ status: 401, data: {} })
+  replies.push({ status: 401, data: {} }, { status: 401, data: {} })
   await assert.rejects(request.get('/test'))
   assert.equal(storage.size, 0)
   assert.deepEqual(navigation, ['/pages/login/login'])
@@ -217,9 +217,12 @@ test('missing version cannot submit a cleaning mutation', async () => {
 })
 test('logout clears role and tokens and leaves work page', () => {
   storage.set('user_role', 'CLEANER'); storage.set('refresh_token', 'refresh')
+  replies.push({ data: { message: '已登出' } })
   const vm = ready(); vm.logout()
   assert.equal(storage.size, 0)
   assert.equal(vm.authorized, false)
+  assert.equal(calls.at(-1).data.refreshToken, 'refresh')
+  assert.ok(String(calls.at(-1).url).endsWith('/auth/logout'))
   clearSession()
 })
 test('cleaner login goes directly to work page', async () => {

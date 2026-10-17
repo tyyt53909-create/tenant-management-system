@@ -1,0 +1,125 @@
+name: Backend E2E
+
+# OPT-24 / T197：后端端到端回归（vitest e2e-spec + scripts/e2e-mvp 27 项断言），失败阻断合并。
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'scripts/e2e-mvp/**'
+      - '.github/workflows/backend-e2e.yml'
+
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'scripts/e2e-mvp/**'
+      - '.github/workflows/backend-e2e.yml'
+
+  workflow_dispatch:
+
+jobs:
+  backend-e2e:
+    name: E2E regression (vitest + e2e-mvp)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_SECRET: test-jwt-secret
+      ENCRYPTION_KEY: test-encryption-key-32-bytes!!
+      NODE_ENV: test
+      PORT: 3000
+      API_BASE: http://127.0.0.1:3000/api
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: 安装依赖
+        working-directory: backend
+        run: npm ci
+
+      - name: 生成 Prisma Client
+        working-directory: backend
+        run: npm run prisma:generate
+
+      - name: 数据库迁移
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: 初始化种子数据
+        working-directory: backend
+        run: npm run prisma:seed
+
+      - name: 运行 vitest e2e-spec
+        working-directory: backend
+        run: npm run test:e2e
+
+      - name: 构建后端
+        working-directory: backend
+        run: npm run build
+
+      - name: 启动后端服务
+        working-directory: backend
+        run: |
+          nohup node dist/main > /tmp/backend-e2e.log 2>&1 &
+          echo $! > /tmp/backend-e2e.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3000/api/health > /dev/null; then
+              echo "后端已就绪"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "后端 60s 内未就绪" >&2
+          cat /tmp/backend-e2e.log
+          exit 1
+
+      - name: 运行 e2e-mvp 验收脚本
+        run: node scripts/e2e-mvp/run.mjs
+
+      - name: 停止后端服务
+        if: always()
+        run: kill $(cat /tmp/backend-e2e.pid) 2>/dev/null || true
+
+      - name: 上传后端日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-e2e-log
+          path: /tmp/backend-e2e.log

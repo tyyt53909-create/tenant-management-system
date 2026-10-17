@@ -42,7 +42,7 @@ export default {
         this.bills = refresh ? records : [...this.bills, ...records.filter(item => !this.bills.some(old => old.id === item.id))]
         this.hasMore = results.some(res => res.meta.page < res.meta.totalPages)
       } catch (err) {
-        if (err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
+        if (err?.code === 'CAPABILITY_DENIED' || err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
           this.blocked = true
           this.error = ''
         } else {

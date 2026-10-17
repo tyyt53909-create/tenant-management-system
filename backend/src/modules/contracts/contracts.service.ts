@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import type { Prisma, PaymentCycle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateContractDto } from './dto/create-contract.dto.js';
 import { UpdateContractDto } from './dto/update-contract.dto.js';
@@ -37,11 +38,11 @@ export class ContractsService {
         contractNumber,
         rentAmount: dto.rentAmount,
         depositAmount: dto.depositAmount,
-        paymentCycle: dto.paymentCycle as any,
+        paymentCycle: dto.paymentCycle as PaymentCycle,
         paymentDay: dto.paymentDay,
         startDate: new Date(dto.startDate),
         endDate: new Date(dto.endDate),
-        lateFeeRule: dto.lateFeeRule || {},
+        lateFeeRule: (dto.lateFeeRule || {}) as Prisma.InputJsonValue,
       },
     });
   }
@@ -86,11 +87,11 @@ export class ContractsService {
         contractNumber,
         rentAmount: dto.rentAmount ?? original.rentAmount,
         depositAmount: dto.depositAmount ?? original.depositAmount,
-        paymentCycle: (dto.paymentCycle ?? original.paymentCycle) as any,
+        paymentCycle: (dto.paymentCycle ?? original.paymentCycle) as PaymentCycle,
         paymentDay: dto.paymentDay ?? original.paymentDay,
         startDate,
         endDate,
-        lateFeeRule: dto.lateFeeRule ?? original.lateFeeRule ?? {},
+        lateFeeRule: (dto.lateFeeRule ?? original.lateFeeRule ?? {}) as Prisma.InputJsonValue,
         status: 'DRAFT',
         renewedFromId: original.id,
       },
@@ -102,7 +103,7 @@ export class ContractsService {
     const { page = 1, limit = 20, status, tenantId, roomId, buildingId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.ContractWhereInput = {};
     if (status) where.status = status;
     if (tenantId) where.tenantId = tenantId;
     if (roomId) where.roomId = roomId;
@@ -158,14 +159,14 @@ export class ContractsService {
       throw new NotFoundException('合同不存在');
     }
 
-    const updateData: any = {};
+    const updateData: Prisma.ContractUpdateInput = {};
     if (dto.rentAmount !== undefined) updateData.rentAmount = dto.rentAmount;
     if (dto.depositAmount !== undefined) updateData.depositAmount = dto.depositAmount;
     if (dto.paymentCycle) updateData.paymentCycle = dto.paymentCycle;
     if (dto.paymentDay !== undefined) updateData.paymentDay = dto.paymentDay;
     if (dto.startDate) updateData.startDate = new Date(dto.startDate);
     if (dto.endDate) updateData.endDate = new Date(dto.endDate);
-    if (dto.lateFeeRule) updateData.lateFeeRule = dto.lateFeeRule;
+    if (dto.lateFeeRule) updateData.lateFeeRule = dto.lateFeeRule as Prisma.InputJsonValue;
     if (dto.status) updateData.status = dto.status;
 
     return this.prisma.contract.update({
@@ -194,7 +195,7 @@ export class ContractsService {
       return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
     }
 
-    const where: any = { tenantId };
+    const where: Prisma.ContractWhereInput = { tenantId };
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([

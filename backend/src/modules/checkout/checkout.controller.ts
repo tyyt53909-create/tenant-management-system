@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { CheckoutService } from './checkout.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
@@ -8,6 +9,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
 import { CapabilityGuard } from '../../common/guards/capability.guard.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('checkout')
 @UseGuards(JwtAuthGuard)
@@ -25,7 +27,7 @@ export class CheckoutController {
   @Get('export')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  async exportCheckouts(@Query() query: any, @Res({ passthrough: true }) res: any) {
+  async exportCheckouts(@Query() query: QueryCheckoutsDto, @Res({ passthrough: true }) res: Response) {
     const csv = await this.checkoutService.exportCheckouts(query);
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -38,9 +40,11 @@ export class CheckoutController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('ADMIN', 'TENANT')
   @RequireCapability('tenant.checkout.read')
-  findAll(@Request() req: any, @Query() query: QueryCheckoutsDto) {
-    if (req.user?.role === 'TENANT') {
-      return this.checkoutService.findByTenant(req.user?.tenantId, query);
+  findAll(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryCheckoutsDto) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId || user.userId || '';
+      return this.checkoutService.findByTenant(tenantId, query);
     }
     return this.checkoutService.findAll(query);
   }
@@ -50,8 +54,9 @@ export class CheckoutController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('ADMIN', 'TENANT')
   @RequireCapability('tenant.checkout.read')
-  getVoucher(@Request() req: any, @Param('id') id: string) {
-    const tenantId = req.user?.role === 'TENANT' ? req.user?.tenantId : undefined;
+  getVoucher(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.role === 'TENANT' ? user.tenantId : undefined;
     return this.checkoutService.getVoucher(id, tenantId);
   }
 
@@ -60,9 +65,10 @@ export class CheckoutController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('ADMIN', 'TENANT')
   @RequireCapability('tenant.checkout.read')
-  findOne(@Request() req: any, @Param('id') id: string) {
-    if (req.user?.role === 'TENANT') {
-      return this.checkoutService.findOneForTenant(id, req.user?.tenantId);
+  findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      return this.checkoutService.findOneForTenant(id, user.tenantId);
     }
     return this.checkoutService.findOne(id);
   }

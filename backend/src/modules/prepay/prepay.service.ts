@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import type { Prisma, PrepayTransactionType, RelatedType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreatePrepayAccountDto } from './dto/create-prepay-account.dto.js';
 import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
@@ -36,7 +37,7 @@ export class PrepayService {
     const { page = 1, limit = 20, tenantId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.PrepayAccountWhereInput = {};
     if (tenantId) where.tenantId = tenantId;
 
     const [data, total] = await Promise.all([
@@ -82,7 +83,7 @@ export class PrepayService {
     const account = await this.prisma.prepayAccount.findUnique({ where: { id } });
     if (!account) throw new NotFoundException('预付账户不存在');
 
-    const updateData: any = {};
+    const updateData: Prisma.PrepayAccountUpdateInput = {};
     if (dto.lowBalanceThreshold !== undefined) updateData.lowBalanceThreshold = dto.lowBalanceThreshold;
 
     return this.prisma.prepayAccount.update({ where: { id }, data: updateData });
@@ -123,7 +124,7 @@ export class PrepayService {
   }
 
   // 租客查看自己的交易记录
-  async findTransactionsByTenant(tenantId: string, query: any) {
+  async findTransactionsByTenant(tenantId: string, query?: Partial<QueryPrepayTransactionsDto>) {
     const { page = 1, limit = 20 } = query ?? {};
     const skip = (page - 1) * limit;
 
@@ -160,7 +161,7 @@ export class PrepayService {
   }
 
   // 管理员查看所有交易
-  async findAllTransactions(query: any) {
+  async findAllTransactions(query: QueryPrepayTransactionsDto) {
     const { page = 1, limit = 20 } = query;
     const skip = (page - 1) * limit;
 
@@ -235,11 +236,11 @@ export class PrepayService {
       const transaction = await tx.prepayTransaction.create({
         data: {
           accountId,
-          type: dto.type as any,
+          type: dto.type as PrepayTransactionType,
           amount: signedAmount,
           balanceAfter: updated.balanceCache,
           relatedId: dto.relatedId,
-          relatedType: dto.relatedType as any,
+          relatedType: dto.relatedType ? (dto.relatedType as RelatedType) : undefined,
           description: dto.description,
           operatorId,
         },
@@ -301,14 +302,15 @@ export class PrepayService {
   /**
    * 预付账户交易流水 CSV 导出
    */
-  async exportTransactions(query: any) {
-    const where: any = {};
+  async exportTransactions(query: Partial<QueryPrepayTransactionsDto>) {
+    const where: Prisma.PrepayTransactionWhereInput = {};
     if (query.accountId) where.accountId = query.accountId;
-    if (query.type) where.type = query.type;
+    if (query.type) where.type = query.type as PrepayTransactionType;
     if (query.startDate || query.endDate) {
-      where.createdAt = {};
-      if (query.startDate) where.createdAt.gte = new Date(query.startDate);
-      if (query.endDate) where.createdAt.lte = new Date(query.endDate);
+      where.createdAt = {
+        ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+        ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+      };
     }
 
     const transactions = await this.prisma.prepayTransaction.findMany({
@@ -340,7 +342,8 @@ export class PrepayService {
       ADJUSTMENT: '调账',
     };
 
-    const columns: CsvColumn[] = [
+    type ExportTxItem = (typeof transactions)[number];
+    const columns: CsvColumn<ExportTxItem>[] = [
       { header: '流水号', key: 'id' },
       { header: '房间号', formatter: (t) => roomMap.get(t.account?.roomId || '') || '' },
       { header: '租客姓名', formatter: (t) => t.account?.tenant?.name || '' },
@@ -348,7 +351,7 @@ export class PrepayService {
       { header: '交易类型', formatter: (t) => typeLabelMap[t.type] || t.type },
       { header: '变动金额(元)', formatter: (t) => centsToYuanString(t.amount) },
       { header: '变动后余额(元)', formatter: (t) => centsToYuanString(t.balanceAfter) },
-      { header: '第三方交易号', key: 'transactionNumber' },
+      { header: '第三方交易号', formatter: (t) => ((t as Record<string, unknown>).transactionNumber as string) || t.relatedId || '' },
       { header: '说明', key: 'description' },
       { header: '经办人', key: 'operatorId' },
       { header: '时间', formatter: (t) => (t.createdAt ? new Date(t.createdAt).toLocaleString('zh-CN') : '') },

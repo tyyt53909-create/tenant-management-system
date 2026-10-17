@@ -5,6 +5,7 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { NotificationPriority } from '../notifications/dto/create-notification.dto.js';
@@ -64,7 +65,7 @@ export class RoomsService {
         floor: dto.floor,
         roomType: dto.roomType,
         area: dto.area,
-        facilities: dto.facilities,
+        facilities: dto.facilities as Prisma.InputJsonValue,
         description: dto.description,
         status: 'VACANT', // 默认空闲
         cleanStatus: 'CLEAN', // 默认已清洁
@@ -77,7 +78,7 @@ export class RoomsService {
     const skip = (page - 1) * limit;
 
     // 构建查询条件
-    const where: any = {};
+    const where: Prisma.RoomWhereInput = {};
 
     if (buildingId) {
       where.buildingId = buildingId;
@@ -239,8 +240,12 @@ export class RoomsService {
     await this.assertTransitionAllowed(room, targetStatus, targetCleanStatus);
 
     // 4. 更新（乐观锁：提供 version 时校验；每次成功更新 version 递增）
-    const { version: expectedVersion, ...fields } = dto;
-    const data = { ...fields, version: { increment: 1 } };
+    const { version: expectedVersion, facilities, ...fields } = dto;
+    const data: Prisma.RoomUncheckedUpdateInput = {
+      ...fields,
+      ...(facilities !== undefined ? { facilities: facilities as Prisma.InputJsonValue } : {}),
+      version: { increment: 1 },
+    };
 
     if (expectedVersion !== undefined) {
       const result = await this.prisma.room.updateMany({
