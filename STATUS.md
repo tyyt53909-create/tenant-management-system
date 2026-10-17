@@ -2,7 +2,7 @@
 
 > 最后更新: 2026-10-17
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: `feature/T203-tech-debt-closure` 分支当前提交 `83ceede`（T001~T202 全量完成）
+> 进度基准: `feature/T204-admin-ondemand` 分支当前提交 `caf2287`（T001~T204 全量完成）
 > 整体进度: **100%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
 > 质量状态: 后端 (79 文件 780 测例)、管理后台 (12 文件 49 测例 + Playwright 6 流程)、小程序 (108 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
 
@@ -14,13 +14,13 @@
 |------|-----|------|
 | **当前阶段** | 阶段0~阶段4 全量收官；架构优化计划 M1~M4 全部完成 | 房态状态机、滞纳金核销、水电表MQTT模拟器、预付闭环、OTP/限流加固、生产编排与灾备演练全量交付 |
 | **整体进度** | **100%** | 唯一事实来源：五阶段进度严格加权均值 100% |
-| **活跃任务** | T202 | 计划收口与度量看板实测化（架构优化计划验收项收口） |
-| **已完成任务** | T001~T173 全量 + T174~T202 | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 全部 28 项优化 |
+| **活跃任务** | T204 | 管理后台 Element Plus 按需引入（OPT-19#3 达标） |
+| **已完成任务** | T001~T173 全量 + T174~T204 | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 全部 28 项优化 |
 | **阻塞问题** | 0 | 无阻塞 |
 | **数据模型** | 28 张实体表 | Prisma schema 实际 model 严密对齐 |
 | **OpenAPI 路由** | 121 条路由 | 全自动化生成规范，类型 100% 导出前端 |
 | **自动化测试** | 937 测例全绿 | 后端 780 + 小程序 108 + 前端 49，100% 通过率 |
-| **验收缺口** | 2 项 | OPT-02#4（`docs/06` 为 human 文档，需人工补 §10 节号指引）、OPT-19#3（首屏 JS 实测未降：1064→1065 KB，需引入 Element Plus 按需加载）；详见 `docs/13` 与 T203 交接记录 |
+| **验收缺口** | 1 项 | OPT-02#4（`docs/06` 为 human 文档，需人工补 §10 节号指引）；OPT-19#3 已于 T204 达标（首屏 JS −88%）。详见 `docs/13` 与 T204 交接记录 |
 | **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
 
 ---
@@ -85,7 +85,8 @@
 ## 💬 最新更新
 
 ### 2026-10-17
-- ✅ **T203 技术债与验证缺口收口**：`process.env` 收敛至 config 层（`src/` 非 config 层 0 处实际读取，新增 `bootstrap.config.ts`）；`check-docs.js` 出现 ❌ 改为 exit 1，文档门禁在 CI 真正生效；首屏 JS 体积完成前后实测（1064→1065 KB，**确认未达标**并记录原因）；`ENCRYPTION_KEY` 生产必填补测试。
+- ✅ **T204 管理后台 Element Plus 按需引入（OPT-19#3 达标）**：`unplugin-vue-components` + `ElementPlusResolver` 按需引入元件与指令，`main.ts` 不再全量注册，语言包改由 `el-config-provider` 提供；实测首屏 JS 1069 KB → **125 KB（−88.3%）**，16/16 路由零组件解析告警。
+- ✅ **T203 技术债与验证缺口收口**：`process.env` 收敛至 config 层（`src/` 非 config 层 0 处实际读取，新增 `bootstrap.config.ts`）；`check-docs.js` 出现 ❌ 改为 exit 1，文档门禁在 CI 真正生效；首屏 JS 体积完成前后实测；`ENCRYPTION_KEY` 生产必填补测试。
 - ✅ **T202 计划收口与度量看板实测化**：`generate-status.mjs` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；`check-docs.js` 新增 `.env.example` 与部署文档变量清单一致性校验（OPT-07）；修复 `scoped-where` 类型错误（原致 `nest build` 失败）、`openapi.json` 漂移与 `ENCRYPTION_KEY` 运行时缺陷。
 - ✅ **T201 文档与代码一致性收口 (OPT-28)**：编写 `scripts/generate-status.mjs` 自动化度量脚本，实现 STATUS.md 单一进度指标自动生成；升级 `scripts/check-docs.js` 增加 28 张数据表与 120 条 OpenAPI 路由一致性硬门禁；补齐 49 份历史文档 YAML 元信息头部，死链清零，docs-check 达成 0 ❌ 错误、0 ⚠️ 警告。
 - ✅ **T200 仓库卫生与分支治理 (OPT-27)**：清理已合并的 29 个旧分支与无效 worktree；归档根目录 8 份游离文档；重构主指南 `README.md`。
@@ -103,7 +104,7 @@
 | 项目 | 非测试代码行数 | 统计命令 |
 |------|----------------|----------|
 | 后端（NestJS） | 14833 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
-| 网页后台（Vue3） | 20761 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
+| 网页后台（Vue3） | 20766 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
 | 小程序（uni-app） | 6496 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
 
 - **数据模型**：`grep -c '^model ' backend/prisma/schema.prisma` = **28**（与 docs/02 严格一致）
@@ -114,8 +115,8 @@
   - 微信小程序：**108** 个测试用例全绿
   - **总计测试用例**：**937** 个测试，100% 通过率
 - **文档体系**：
-  - 核心文档与交接记录：**99** 份（CI 范围，docs/INDEX.md 100% 编目）
-  - 任务书：**74** 个任务书文件
+  - 核心文档与交接记录：**100** 份（CI 范围，docs/INDEX.md 100% 编目）
+  - 任务书：**75** 个任务书文件
 
 ---
 
