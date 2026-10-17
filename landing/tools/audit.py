@@ -1,8 +1,9 @@
 """对比度审计 + 移动端留白复查。"""
 import json
+import os
 from playwright.sync_api import sync_playwright
 
-BASE = "http://127.0.0.1:5180/index.html"
+BASE = os.environ.get("LANDING_BASE", "http://127.0.0.1:5180/index.html")
 
 AUDIT = """() => {
   const lum = (c) => {
@@ -15,6 +16,13 @@ AUDIT = """() => {
     return { c: [p[0], p[1], p[2]], a: p.length > 3 ? p[3] : 1 };
   };
   const bgOf = (el) => {
+    // 选中态的底色画在兄弟节点上（.switch__thumb / .gallery__ink 这类绝对定位滑块），
+    // 祖先回溯看不到，会误判成白底白字。先取同容器内带背景的绝对定位兄弟节点。
+    if (el.classList.contains('is-on') && el.parentElement) {
+      const ink = [...el.parentElement.children].find((c) =>
+        c !== el && getComputedStyle(c).position === 'absolute');
+      if (ink) { const b = parse(getComputedStyle(ink).backgroundColor); if (b && b.a > 0.92) return b.c; }
+    }
     let n = el;
     while (n && n !== document.documentElement) {
       const b = parse(getComputedStyle(n).backgroundColor);
@@ -25,7 +33,9 @@ AUDIT = """() => {
   };
   const ratio = (a, b) => { const l1 = lum(a), l2 = lum(b); const hi = Math.max(l1, l2), lo = Math.min(l1, l2); return (hi + 0.05) / (lo + 0.05); };
   const out = [];
-  const sel = 'p, li, h1, h2, h3, dt, dd, figcaption, summary, code, .kicker, .brand__text b, .brand__text i, .nav__links a, .float, .btn, .switch__btn, .gallery__tab, .chips li, .card__ico, .role__badge, .flow__chain, .flow__no, .stack__list b, .stack__list span, .foot__legal, .foot__nav a, .stats dd, .steps b, .steps span, .role li, .ticks li, .cta__trust li, .mp-card__hd b, .mp-bill__l i, .mp-ticket p';
+  // 说明：.mp-* 是手机 mockup 内部的示意内容（role=img + aria-label 描述），
+  // 属于图片性质，与真实截图一样不参与对比度审计。
+  const sel = 'p, li, h1, h2, h3, dt, dd, figcaption, summary, code, .kicker, .brand__text strong, .brand__text small, .nav__links a, .float, .btn, .switch__opt, .gallery__tabs button, .chips li, .role__badge, .role li, .cap span, .cap p, .flow__no, .flow h3, .flow p, .stack__col b, .stack__col span, .status__note dd, .foot__legal, .foot__links a, .stats dd, .steps b, .steps span, .cta__trust li, .shot figcaption';
   document.querySelectorAll(sel).forEach((el) => {
     if (el.offsetParent === null) return;
     const t = (el.textContent || '').trim();
@@ -62,9 +72,11 @@ with sync_playwright() as p:
     mp.evaluate("document.documentElement.style.scrollBehavior='auto'"); mp.wait_for_timeout(800)
     gaps = mp.evaluate("""() => {
       const c = document.querySelector('.hero__copy'), s = document.querySelector('.stage');
+      const r = (el) => { const b = el.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), w: Math.round(b.width), h: Math.round(b.height) }; };
       return { copyBottom: Math.round(c.getBoundingClientRect().bottom), stageTop: Math.round(s.getBoundingClientRect().top),
                stageH: Math.round(s.getBoundingClientRect().height),
-               browsers: [...document.querySelectorAll('.stage__browser')].map(e => ({ p: e.dataset.stage, disp: getComputedStyle(e).display, pos: getComputedStyle(e).position })) };
+               // 手机屏高会随宽度变窄而暴涨；窄屏应改为静态排版，绝不能是 absolute 压住上方文案
+               phones: [...document.querySelectorAll('.stage__phone')].map(e => ({ pos: getComputedStyle(e).position, box: r(e) })) };
     }""")
     print("MOBILE gap:", json.dumps(gaps, ensure_ascii=False))
     b.close()

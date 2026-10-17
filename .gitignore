@@ -58,6 +58,8 @@ Desktop.ini
 .vscode/
 .idea/
 .codex/
+# 各 AI 会话的临时工作树（也放在 .claude/ 下，不能入库）
+.claude/worktrees/
 *.swp
 *.swo
 *~

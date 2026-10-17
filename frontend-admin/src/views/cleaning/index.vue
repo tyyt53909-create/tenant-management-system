@@ -56,7 +56,7 @@
       >
         <el-table-column label="楼栋" width="150">
           <template #default="{ row }">
-            {{ row.building?.name || row.buildingId }}
+            {{ row.building?.name || '—' }}
           </template>
         </el-table-column>
         <el-table-column prop="roomNumber" label="房间号" width="140" />
