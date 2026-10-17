@@ -1,4 +1,4 @@
-const PRODUCTION_REQUIRED = ['DATABASE_URL', 'JWT_SECRET'] as const;
+const PRODUCTION_REQUIRED = ['DATABASE_URL', 'JWT_SECRET', 'ENCRYPTION_KEY'] as const;
 
 const INSECURE_JWT_SECRETS = new Set(['your-jwt-secret-change-this-in-production']);
 
@@ -28,7 +28,6 @@ export function checkEnvironment(env: Record<string, unknown>): EnvCheck {
     else warnings.push(message);
   }
 
-  if (!read(env, 'ENCRYPTION_KEY')) warnings.push('未设置可选项 ENCRYPTION_KEY');
   if (!read(env, 'UPLOAD_DIR')) warnings.push('未设置可选项 UPLOAD_DIR，将使用默认 uploads 目录');
   if (!read(env, 'GOOGLE_CLIENT_ID')) warnings.push('未设置可选项 GOOGLE_CLIENT_ID');
   if (!read(env, 'REDIS_HOST')) warnings.push('未设置可选项 REDIS_HOST');

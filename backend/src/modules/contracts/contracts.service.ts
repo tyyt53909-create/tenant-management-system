@@ -191,6 +191,7 @@ export class ContractsService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
+    // 此处 where 需按可选筛选条件增量赋值；Prisma 的联合过滤类型无法在填入普通 string 后再收窄，故保留 any（OPT-17 已注释豁免）
     const where: any = scopedWhere(tenantId);
     if (status) where.status = status;
 

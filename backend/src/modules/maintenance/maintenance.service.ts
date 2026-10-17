@@ -20,8 +20,9 @@ export class MaintenanceService {
         throw new BadRequestException('租客账号未绑定租客档案，请联系管理员');
       }
 
+      // 统一走范围助手：tenantId 为空时直接 403，不让 Prisma 把 undefined 当作「不过滤」
       const contract = await this.prisma.contract.findFirst({
-        where: { tenantId: user.tenantId, status: 'ACTIVE' },
+        where: scopedWhere(user.tenantId, { status: 'ACTIVE' as const }),
       });
 
       if (!contract) {
@@ -86,6 +87,7 @@ export class MaintenanceService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
+    // 此处 where 需按可选筛选条件增量赋值；Prisma 的联合过滤类型无法在填入普通 string 后再收窄，故保留 any（OPT-17 已注释豁免）
     const where: any = scopedWhere(tenantId);
     if (status) where.status = status;
 
