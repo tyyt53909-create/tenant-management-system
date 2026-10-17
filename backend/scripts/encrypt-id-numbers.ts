@@ -5,19 +5,21 @@
  * 发现同一证件号哈希对应多条记录时，不写任何数据并退出。
  *
  * 加密：
- *   cd backend && FIELD_ENCRYPTION_KEY='...' npx tsx scripts/encrypt-id-numbers.ts
+ *   cd backend && ENCRYPTION_KEY='...' npx tsx scripts/encrypt-id-numbers.ts
  *
  * 回滚：把 v1 密文解回明文，并清空 idNumberHash。只在可信环境执行。
- *   cd backend && FIELD_ENCRYPTION_KEY='...' npx tsx scripts/encrypt-id-numbers.ts --rollback
+ *   cd backend && ENCRYPTION_KEY='...' npx tsx scripts/encrypt-id-numbers.ts --rollback
  *
- * 回滚后数据库重新保存明文。确认不再需要密文之前，不要删除 FIELD_ENCRYPTION_KEY。
+ * 回滚后数据库重新保存明文。确认不再需要密文之前，不要删除 ENCRYPTION_KEY。
+ * 变量名与 backend/.env.example、docker-compose.prod.yml、docs/12 §1.1 一致；
+ * 旧名 FIELD_ENCRYPTION_KEY 仍兼容。
  */
 import { PrismaClient } from '@prisma/client';
 import { resolveFieldKey } from '../src/common/crypto/field-crypto.js';
 import { buildIdNumberMigration } from '../src/common/crypto/id-number-migration.js';
 
 const rollback = process.argv.includes('--rollback');
-const key = resolveFieldKey(process.env.FIELD_ENCRYPTION_KEY);
+const key = resolveFieldKey(process.env.ENCRYPTION_KEY ?? process.env.FIELD_ENCRYPTION_KEY);
 const prisma = new PrismaClient();
 
 const rows = await prisma.tenantRegistration.findMany({

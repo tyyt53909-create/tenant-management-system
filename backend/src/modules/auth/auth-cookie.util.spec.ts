@@ -3,33 +3,36 @@ import {
   setRefreshTokenCookie,
   clearRefreshTokenCookie,
   extractRefreshToken,
+  refreshTokenCookieOptions,
   REFRESH_TOKEN_COOKIE_NAME,
-  REFRESH_TOKEN_COOKIE_OPTIONS,
 } from './auth-cookie.util.js';
 
 describe('auth-cookie.util', () => {
   it('setRefreshTokenCookie 应使用安全属性设置 Cookie', () => {
     const res = { cookie: vi.fn() } as any;
-    setRefreshTokenCookie(res, 'test-refresh-token');
+    setRefreshTokenCookie(res, 'test-refresh-token', true);
 
-    expect(res.cookie).toHaveBeenCalledWith(
-      REFRESH_TOKEN_COOKIE_NAME,
-      'test-refresh-token',
-      REFRESH_TOKEN_COOKIE_OPTIONS,
-    );
-    expect(REFRESH_TOKEN_COOKIE_OPTIONS.httpOnly).toBe(true);
-    expect(REFRESH_TOKEN_COOKIE_OPTIONS.path).toBe('/api/auth');
-    expect(REFRESH_TOKEN_COOKIE_OPTIONS.sameSite).toBe('strict');
+    const options = refreshTokenCookieOptions(true);
+    expect(res.cookie).toHaveBeenCalledWith(REFRESH_TOKEN_COOKIE_NAME, 'test-refresh-token', options);
+    expect(options.httpOnly).toBe(true);
+    expect(options.path).toBe('/api/auth');
+    expect(options.sameSite).toBe('strict');
+  });
+
+  it('secure 标志完全由调用方决定（不再读模块加载时的 NODE_ENV）', () => {
+    expect(refreshTokenCookieOptions(true).secure).toBe(true);
+    expect(refreshTokenCookieOptions(false).secure).toBe(false);
   });
 
   it('clearRefreshTokenCookie 应清除 HttpOnly Cookie', () => {
     const res = { clearCookie: vi.fn() } as any;
-    clearRefreshTokenCookie(res);
+    clearRefreshTokenCookie(res, true);
 
     expect(res.clearCookie).toHaveBeenCalledWith(
       REFRESH_TOKEN_COOKIE_NAME,
       expect.objectContaining({
         httpOnly: true,
+        secure: true,
         path: '/api/auth',
         sameSite: 'strict',
       }),

@@ -156,12 +156,9 @@ export class EmailOtpService {
   }
 
   private readConfig(key: string): string | undefined {
+    // ConfigService 本身会回退到 process.env，这里不必再手写兜底
     const value = this.configService.get<string>(key);
-    if (typeof value === 'string' && value.length > 0) {
-      return value;
-    }
-    const fromEnv = process.env[key];
-    return typeof fromEnv === 'string' && fromEnv.length > 0 ? fromEnv : undefined;
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
   }
 
   /** 生产日志不得出现本次验证码。只抹掉已知的这一组码，避免误伤其它数字。 */

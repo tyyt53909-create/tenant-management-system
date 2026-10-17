@@ -1878,6 +1878,52 @@
         ]
       }
     },
+    "/api/tenants/{id}/id-number": {
+      "get": {
+        "operationId": "TenantsController_revealIdNumber",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Tenants"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/tenants/{id}": {
       "get": {
         "operationId": "TenantsController_findOne",
@@ -2977,19 +3023,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -7070,6 +7112,11 @@
           },
           "expiredAt": {
             "type": "string"
+          },
+          "dedupKey": {
+            "type": "string",
+            "description": "同一用户、同一业务事件的去重键。不传则允许重复。",
+            "maxLength": 200
           }
         },
         "required": [

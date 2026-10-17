@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MetersService } from './meters.service.js';
 import { MetersSimulatorService } from './meters-simulator.service.js';
 import { MetersController } from './meters.controller.js';
@@ -31,9 +32,9 @@ import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.
     MetersSimulatorService,
     {
       provide: METER_ADAPTER,
-      inject: [PrismaService],
-      useFactory: (prisma: PrismaService) =>
-        process.env.METER_MODE === 'simulator'
+      inject: [PrismaService, ConfigService],
+      useFactory: (prisma: PrismaService, configService: ConfigService) =>
+        configService.get<string>('METER_MODE') === 'simulator'
           ? new SimulatorMeterAdapter(prisma)
           : new ManualMeterAdapter(prisma),
     },
