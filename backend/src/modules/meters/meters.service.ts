@@ -70,7 +70,11 @@ export class MetersService {
   }
 
   /** 水電讀數登記 */
-  async createReading(meterId: string, dto: CreateMeterReadingDto, operatorId: string) {
+  async createReading(
+    meterId: string,
+    dto: Omit<CreateMeterReadingDto, 'source'> & { source?: 'MANUAL' | 'DEVICE' | 'SIMULATED' },
+    operatorId: string,
+  ) {
     return this.readingService.createReading(meterId, dto, operatorId);
   }
 

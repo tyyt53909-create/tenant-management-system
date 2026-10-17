@@ -710,6 +710,11 @@ describe('MetersService', () => {
       expect(result.completion.totalMeters).toBe(2);
       expect(result.completion.pendingMeters).toBe(0);
       expect(result.completion.status).toBe('DONE');
+      expect(prisma.meterReading.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ source: { not: 'SIMULATED' } }),
+        }),
+      );
     });
   });
 
@@ -719,10 +724,15 @@ describe('MetersService', () => {
       await expect(service.settleMeter('m-no', {}, operatorId)).rejects.toThrow(NotFoundException);
     });
 
-    it('无读数记录：400', async () => {
+    it('无读数记录：400，且不把模拟读数当作可结算读数', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
       prisma.meterReading.findFirst.mockResolvedValue(null);
       await expect(service.settleMeter(meterId, {}, operatorId)).rejects.toThrow(BadRequestException);
+      expect(prisma.meterReading.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ source: { not: 'SIMULATED' } }),
+        }),
+      );
     });
 
     it('已结算读数无新增用量：settled=false, usage=0', async () => {

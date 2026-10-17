@@ -138,6 +138,7 @@ enum MeterType {
 enum ReadingSource {
   MANUAL // 手动录入
   DEVICE // 智能设备（第二阶段）
+  SIMULATED // 虚拟表模拟器，不计入用量统计和结算
 }
 
 // 报修类别
@@ -464,6 +465,9 @@ model Bill {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// 租金账单为 RENT:{contractId}:{period}。空值表示允许重复，例如同一账期的多笔水电补缴。
+  dedupKey String? @unique
+
   paymentRecords PaymentRecord[]
   lateFees       LateFee[]
 
@@ -762,6 +766,9 @@ model Notification {
 
   data Json?
 
+  /// 系统通知的确定性去重键。空值允许重复，例如没有关联对象的人工通知。
+  dedupKey String? @unique
+
   createdAt DateTime  @default(now())
   expiredAt DateTime?
 
@@ -818,7 +825,9 @@ model TenantRegistration {
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
   idType   IdType
-  idNumber String
+  /// AES-256-GCM 密文，格式 v1:<iv>:<tag>:<data>。查重用 idNumberHash，不存明文。
+  idNumber     String
+  idNumberHash String? @unique
 
   status       RegistrationStatus @default(NOT_REGISTERED)
   registeredAt DateTime?

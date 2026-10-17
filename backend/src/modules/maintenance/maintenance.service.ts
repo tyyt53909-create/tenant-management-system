@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
 import { QueryMaintenanceDto } from './dto/query-maintenance.dto.js';
+import { scopedWhere } from '../../common/utils/scoped-where.js';
 
 @Injectable()
 export class MaintenanceService {
@@ -85,12 +86,7 @@ export class MaintenanceService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
-    // 防御：tenantId 缺失时返回空列表，绝不退化为全库查询
-    if (!tenantId) {
-      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
-    }
-
-    const where: Prisma.MaintenanceRequestWhereInput = { tenantId };
+    const where: any = scopedWhere(tenantId);
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -111,9 +107,10 @@ export class MaintenanceService {
 
   /** 租客查询单条工单（仅限自己的） */
   async findOneForTenant(id: string, tenantId: string) {
+    const scope = scopedWhere(tenantId);
     const request = await this.prisma.maintenanceRequest.findUnique({ where: { id }, include: { photos: true } });
 
-    if (!request || request.tenantId !== tenantId) {
+    if (!request || request.tenantId !== scope.tenantId) {
       throw new NotFoundException('报修工单不存在');
     }
 

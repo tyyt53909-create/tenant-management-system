@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateNotificationDto } from './dto/create-notification.dto.js';
 import { QueryNotificationsDto } from './dto/query-notifications.dto.js';
 import { NotificationDispatcher } from './channels/notification-dispatcher.js';
+import { scopedWhere } from '../../common/utils/scoped-where.js';
 
 @Injectable()
 export class NotificationsService {
@@ -27,6 +28,7 @@ export class NotificationsService {
       priority: dto.priority ?? 'NORMAL',
       data: dto.data,
       expiredAt: dto.expiredAt ? new Date(dto.expiredAt) : undefined,
+      dedupKey: dto.dedupKey,
     });
   }
 
@@ -34,7 +36,7 @@ export class NotificationsService {
     const { page = 1, limit = 20, unreadOnly,readState,q } = query;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = { userId };
+    const where: Record<string, unknown> = scopedWhere(userId, {}, 'userId');
     if (unreadOnly) where.isRead = false;
     if(readState)where.isRead=readState==='READ';
     if(q?.trim())where.OR=[{title:{contains:q.trim(),mode:'insensitive'}},{body:{contains:q.trim(),mode:'insensitive'}}];
@@ -47,7 +49,7 @@ export class NotificationsService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.notification.count({ where: where as never }),
-      this.prisma.notification.count({ where: { userId, isRead: false } }),
+      this.prisma.notification.count({ where: scopedWhere(userId, { isRead: false }, 'userId') }),
     ]);
 
     return {
@@ -57,14 +59,17 @@ export class NotificationsService {
   }
 
   async unreadCount(userId: string) {
-    const count = await this.prisma.notification.count({ where: { userId, isRead: false } });
+    const count = await this.prisma.notification.count({
+      where: scopedWhere(userId, { isRead: false }, 'userId'),
+    });
     return { unreadCount: count };
   }
 
   async markRead(id: string, userId: string) {
+    const scope = scopedWhere(userId, {}, 'userId');
     const notification = await this.prisma.notification.findUnique({ where: { id } });
     if (!notification) throw new NotFoundException('通知不存在');
-    if (notification.userId !== userId) throw new ForbiddenException('无权操作他人通知');
+    if (notification.userId !== scope.userId) throw new ForbiddenException('无权操作他人通知');
 
     return this.prisma.notification.update({
       where: { id },
@@ -74,16 +79,17 @@ export class NotificationsService {
 
   async markAllRead(userId: string) {
     const result = await this.prisma.notification.updateMany({
-      where: { userId, isRead: false },
+      where: scopedWhere(userId, { isRead: false }, 'userId'),
       data: { isRead: true, readAt: new Date() },
     });
     return { message: '已全部标记已读', count: result.count };
   }
 
   async remove(id: string, userId: string) {
+    const scope = scopedWhere(userId, {}, 'userId');
     const notification = await this.prisma.notification.findUnique({ where: { id } });
     if (!notification) throw new NotFoundException('通知不存在');
-    if (notification.userId !== userId) throw new ForbiddenException('无权删除他人通知');
+    if (notification.userId !== scope.userId) throw new ForbiddenException('无权删除他人通知');
 
     await this.prisma.notification.delete({ where: { id } });
     return { message: '通知已删除' };

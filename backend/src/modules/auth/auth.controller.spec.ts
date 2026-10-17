@@ -940,7 +940,9 @@ describe('AuthController', () => {
       expect(tenantCapabilityService.getEffectiveCapabilities).toHaveBeenCalledWith('tenant-user-1');
     });
 
-    it('非租客身份（如 ADMIN）获取个人资料时，返回空 capabilities 数组', async () => {
+    it('非租客身份（如 ADMIN）获取个人资料时，返回空 capabilities 数组和关闭的模拟器开关', async () => {
+      const previous = process.env.FEATURE_METER_SIMULATOR;
+      delete process.env.FEATURE_METER_SIMULATOR;
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
         id: 'admin-user-1',
         email: 'admin@example.com',
@@ -951,7 +953,11 @@ describe('AuthController', () => {
       const result = await controller.getMe({ user: { userId: 'admin-user-1' } });
       expect(result.id).toBe('admin-user-1');
       expect(result.capabilities).toEqual([]);
+      expect(result.features).toEqual({ meterSimulator: false });
       expect(tenantCapabilityService.getEffectiveCapabilities).not.toHaveBeenCalled();
+
+      if (previous === undefined) delete process.env.FEATURE_METER_SIMULATOR;
+      else process.env.FEATURE_METER_SIMULATOR = previous;
     });
 
     it('用户不存在时抛出 UnauthorizedException', async () => {

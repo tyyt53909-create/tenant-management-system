@@ -6,6 +6,7 @@ import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
 import { QueryCheckoutsDto } from './dto/query-checkouts.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
+import { scopedWhere } from '../../common/utils/scoped-where.js';
 
 const CHECKOUT_STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿',
@@ -107,7 +108,7 @@ export class CheckoutService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.CheckoutRecordWhereInput = { contract: { tenantId } };
+    const where: any = { contract: scopedWhere(tenantId) };
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -132,12 +133,13 @@ export class CheckoutService {
 
   /** 租客查看单条退租记录（需验证归属，越权按 404 处理） */
   async findOneForTenant(id: string, tenantId?: string) {
+    const scope = scopedWhere(tenantId);
     const record = await this.prisma.checkoutRecord.findUnique({
       where: { id },
       include: { contract: { select: { tenantId: true } }, room: true, items: true },
     });
 
-    if (!record || !tenantId || record.contract.tenantId !== tenantId) {
+    if (!record || record.contract.tenantId !== scope.tenantId) {
       throw new NotFoundException('退租记录不存在');
     }
 

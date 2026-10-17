@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { TenantsService } from './tenants.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
@@ -26,6 +26,17 @@ export class TenantsController {
   @Roles('ADMIN')
   findAll(@Query() query: QueryTenantsDto) {
     return this.tenantsService.findAll(query);
+  }
+
+  @Get(':id/id-number')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  revealIdNumber(@Request() req: any, @Param('id') id: string) {
+    return this.tenantsService.revealIdNumber(id, {
+      userId: req.user.userId,
+      ip: req.ip ?? 'unknown',
+      userAgent: req.headers?.['user-agent'] ?? 'unknown',
+    });
   }
 
   // 租客详情：管理者看全部；租客仅可看自己（越权按 404 处理）

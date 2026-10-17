@@ -2,7 +2,7 @@
 
 > 最后更新: 2026-10-17
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: `main` 分支当前提交 `27e1a91`（T001~T201 全量完成）
+> 进度基准: `develop` 分支当前提交 `489d39f`（T001~T201 全量完成）
 > 整体进度: **100%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
 > 质量状态: 后端 (72/72 文件 740 测例)、管理后台 (35 测例 + Playwright 5 流程)、小程序 (108 测例) 全数通过，0 oxlint 错误，0 docs-check 报错
 
@@ -99,8 +99,8 @@
 
 | 项目 | 非测试代码行数 | 统计命令 |
 |------|----------------|----------|
-| 后端（NestJS） | 14231 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
-| 网页后台（Vue3） | 20688 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
+| 后端（NestJS） | 14727 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
+| 网页后台（Vue3） | 20719 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
 | 小程序（uni-app） | 6496 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
 
 - **数据模型**：`grep -c '^model ' backend/prisma/schema.prisma` = **28**（与 docs/02 严格一致）
@@ -111,8 +111,8 @@
   - 微信小程序：**108** 个测试用例全绿
   - **总计测试用例**：**883** 个测试，100% 通过率
 - **文档体系**：
-  - 核心文档与交接记录：**92** 份（CI 范围，docs/INDEX.md 100% 编目）
-  - 任务书：**67** 个任务书文件
+  - 核心文档与交接记录：**97** 份（CI 范围，docs/INDEX.md 100% 编目）
+  - 任务书：**72** 个任务书文件
 
 ---
 

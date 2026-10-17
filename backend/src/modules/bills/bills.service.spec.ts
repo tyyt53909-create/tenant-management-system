@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { BillsService } from './bills.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -658,7 +658,42 @@ describe('BillsService', () => {
           amount: 100000,
           dueDate: expect.any(Date),
           snapshot: {},
+          dedupKey: 'RENT:contract-1:2026-11',
         }),
+      });
+    });
+
+    it('create：并发写入同一租金账单时返回已存在记录，而不是 500', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.bill.create.mockRejectedValue({ code: 'P2002' });
+      prisma.bill.findUnique.mockResolvedValue({ id: 'bill-existing', period: '2026-11' });
+
+      const result = await service.create({
+        contractId: 'contract-1',
+        billType: 'RENT',
+        period: '2026-11',
+        amount: 100000,
+        dueDate: '2026-11-05',
+      } as any);
+
+      expect(result.alreadyExists).toBe(true);
+      expect(result.id).toBe('bill-existing');
+    });
+
+    it('create：水电补缴不占用租金去重键', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.bill.create.mockResolvedValue({ id: billId });
+
+      await service.create({
+        contractId: 'contract-1',
+        billType: 'UTILITY',
+        period: '2026-11',
+        amount: 3000,
+        dueDate: '2026-11-05',
+      } as any);
+
+      expect(prisma.bill.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ dedupKey: null }),
       });
     });
 
@@ -1003,9 +1038,7 @@ describe('BillsService', () => {
       );
       expect(result.meta).toEqual({ page: 1, limit: 20, total: 0, totalPages: 0 });
 
-      await expect(service.findByTenant('', {} as any)).resolves.toEqual({
-        data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
-      });
+      await expect(service.findByTenant('', {} as any)).rejects.toThrow(ForbiddenException);
     });
 
     it('findByTenant：同时传入状态和账单类型筛选', async () => {

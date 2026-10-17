@@ -10,6 +10,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import appConfig from './config/app.config.js';
 import databaseConfig from './config/database.config.js';
+import { validateEnvironment } from './config/env.validation.js';
 import jwtConfig from './config/jwt.config.js';
 import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
@@ -38,6 +39,7 @@ import { HealthModule } from './modules/health/health.module.js';
       isGlobal: true,
       load: [appConfig, databaseConfig, jwtConfig],
       envFilePath: '.env',
+      validate: validateEnvironment,
     }),
     RedisModule,
     ThrottlerModule.forRootAsync({

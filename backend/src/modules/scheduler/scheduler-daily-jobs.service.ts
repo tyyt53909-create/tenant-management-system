@@ -11,6 +11,7 @@ import {
   daysBetween,
   formatDate,
   formatAmount,
+  getBusinessDateParts,
 } from './scheduler.util.js';
 
 @Injectable()
@@ -79,6 +80,8 @@ export class SchedulerDailyJobsService {
           '合同已到期',
           `您的合同已于 ${formatDate(contract.endDate)} 到期`,
           'NORMAL',
+          { contractId: contract.id },
+          `CONTRACT_EXPIRED:${contract.tenant.userId}:${contract.id}`,
         );
       }
     }
@@ -129,6 +132,7 @@ export class SchedulerDailyJobsService {
           `您有账单逾期 ${overdueDays} 天，请尽快缴费`,
           'URGENT',
           { billId: bill.id },
+          `BILL_OVERDUE:${userId}:${bill.id}`,
         );
       }
     }
@@ -185,7 +189,7 @@ export class SchedulerDailyJobsService {
       });
       if (existing) continue;
 
-      await this.notify(userId, title, body, priority, { billId: bill.id });
+      await this.notify(userId, title, body, priority, { billId: bill.id }, `BILL_REMINDER:${userId}:${bill.id}:${title}`);
       sent++;
     }
 
@@ -247,12 +251,15 @@ export class SchedulerDailyJobsService {
       const userId = account.tenant?.userId;
       if (!userId) continue;
 
+      const { year, month, day } = getBusinessDateParts(today);
+      const dayKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       await this.notify(
         userId,
         '预付余额不足提醒',
         `您的预付账户余额 ¥${formatAmount(account.balanceCache)} 已低于提醒阈值 ¥${formatAmount(account.lowBalanceThreshold)}，请及时充值`,
         'NORMAL',
         { prepayAccountId: account.id },
+        `LOW_BALANCE:${userId}:${account.id}:${dayKey}`,
       );
 
       await this.prisma.prepayAccount.update({
@@ -272,9 +279,17 @@ export class SchedulerDailyJobsService {
     body: string,
     priority: 'NORMAL' | 'URGENT',
     data?: Record<string, unknown>,
+    dedupKey?: string,
   ) {
     try {
-      await this.notificationsService.create({ userId, title, body, priority: priority as NotificationPriority, data });
+      await this.notificationsService.create({
+        userId,
+        title,
+        body,
+        priority: priority as NotificationPriority,
+        data,
+        dedupKey,
+      });
     } catch (error) {
       this.logger.warn(`通知发送失败（userId=${userId}）：${(error as Error).message}`);
     }

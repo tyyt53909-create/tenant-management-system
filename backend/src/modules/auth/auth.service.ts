@@ -13,6 +13,7 @@ import { EmailOtpService } from './email-otp.service.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -342,6 +343,9 @@ export class AuthService {
     return {
       ...user,
       capabilities,
+      features: {
+        meterSimulator: isMeterSimulatorEnabled(),
+      },
     };
   }
 

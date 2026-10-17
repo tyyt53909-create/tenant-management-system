@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrepayService } from './prepay.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -442,10 +442,7 @@ describe('PrepayService', () => {
         data: [],
         meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
       });
-      await expect(service.findTransactionsByTenant('')).resolves.toEqual({
-        data: [],
-        meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
-      });
+      await expect(service.findTransactionsByTenant('')).rejects.toThrow(ForbiddenException);
       expect(prisma.prepayAccount.findFirst).toHaveBeenCalledTimes(1);
     });
 

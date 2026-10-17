@@ -20,7 +20,7 @@
           <el-button @click="handleReset">重置</el-button>
           <el-button type="primary" @click="handleCreate">新增水电表</el-button>
           <el-button type="success" @click="batchDialogVisible = true">批量抄表</el-button>
-          <el-button type="warning" plain @click="simulatorDialogVisible = true">⚡ 虚拟表模拟器</el-button>
+          <el-button v-if="meterSimulatorEnabled" type="warning" plain @click="simulatorDialogVisible = true">⚡ 虚拟表模拟器</el-button>
           <el-button :loading="exporting" @click="handleExportCsv">导出台账</el-button>
         </el-form-item>
       </el-form>
@@ -186,6 +186,7 @@
 
     <!-- 虚拟水电表模拟器组件（方案 A） -->
     <MeterSimulatorDialog
+      v-if="meterSimulatorEnabled"
       v-model:visible="simulatorDialogVisible"
       :meters="tableData"
       @success="fetchData"
@@ -195,6 +196,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useUserStore } from '@/stores/user';
+import { showMeterSimulator } from '@/utils/feature-flags';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
@@ -224,6 +227,8 @@ const currentMeter = ref<Meter | null>(null);
 
 const batchDialogVisible = ref(false);
 const simulatorDialogVisible = ref(false);
+const userStore = useUserStore();
+const meterSimulatorEnabled = computed(() => showMeterSimulator(userStore.user));
 
 const readingsDialogVisible = ref(false);
 const readingsLoading = ref(false);

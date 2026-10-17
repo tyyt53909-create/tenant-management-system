@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CheckoutService } from './checkout.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -214,15 +214,9 @@ describe('CheckoutService', () => {
       );
     });
 
-    it('租客账号未绑定档案（tenantId 缺失）→ 404', async () => {
-      prisma.checkoutRecord.findUnique.mockResolvedValue({
-        id: recordId,
-        contract: { tenantId: 'tenant-1' },
-      });
-
-      await expect(service.findOneForTenant(recordId, undefined)).rejects.toThrow(
-        NotFoundException,
-      );
+    it('租客账号未绑定档案（tenantId 缺失）→ 403，且不查库', async () => {
+      await expect(service.findOneForTenant(recordId, undefined)).rejects.toThrow(ForbiddenException);
+      expect(prisma.checkoutRecord.findUnique).not.toHaveBeenCalled();
     });
   });
 

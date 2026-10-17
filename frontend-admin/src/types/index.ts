@@ -15,6 +15,9 @@ export interface User {
   phone?: string;
   role: 'ADMIN' | 'TENANT';
   createdAt: string;
+  features?: {
+    meterSimulator?: boolean;
+  };
 }
 
 /** 房态（与后端 RoomStatus 枚举一致） */
@@ -51,6 +54,8 @@ export interface Tenant {
   phone: string;
   email: string;
   idNumber: string;
+  /** 列表和详情只给脱敏值，明文走单独的查看接口。 */
+  idNumberMasked?: string | null;
   emergencyContact?: string;
   emergencyPhone?: string;
   isActive?:boolean;

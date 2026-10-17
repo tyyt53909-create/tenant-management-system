@@ -29,4 +29,10 @@ export class CreateNotificationDto {
 
   @IsOptional()
   expiredAt?: string;
+
+  /** 同一用户、同一业务事件的去重键。不传则允许重复。 */
+  @IsString()
+  @IsOptional()
+  @MaxLength(200, { message: '去重键最多200字符' })
+  dedupKey?: string;
 }

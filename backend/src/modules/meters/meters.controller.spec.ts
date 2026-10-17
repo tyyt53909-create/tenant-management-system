@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MetersController } from './meters.controller.js';
 import { MetersService } from './meters.service.js';
@@ -189,7 +190,23 @@ describe('MetersController', () => {
     expect(service.settleBatch).toHaveBeenCalledWith(dto, 'admin-1');
   });
 
-  it('runSimulation：透传模拟器 DTO 与操作人', async () => {
+  it('runSimulation：开关关闭时返回 404，不执行模拟', async () => {
+    const previous = process.env.FEATURE_METER_SIMULATOR;
+    delete process.env.FEATURE_METER_SIMULATOR;
+    const run = vi.spyOn(simulatorService, 'runSimulation');
+
+    expect(() =>
+      controller.runSimulation({ user: { userId: 'admin-1' } }, { scenario: 'DAILY_HOURLY' } as any),
+    ).toThrow(NotFoundException);
+    expect(run).not.toHaveBeenCalled();
+
+    if (previous === undefined) delete process.env.FEATURE_METER_SIMULATOR;
+    else process.env.FEATURE_METER_SIMULATOR = previous;
+  });
+
+  it('runSimulation：开关打开时透传模拟器 DTO 与操作人', async () => {
+    const previous = process.env.FEATURE_METER_SIMULATOR;
+    process.env.FEATURE_METER_SIMULATOR = 'true';
     const dto = { scenario: 'DAILY_HOURLY' } as any;
     vi.spyOn(simulatorService, 'runSimulation').mockResolvedValue({ success: true, scenario: 'DAILY_HOURLY', message: 'ok' } as any);
 
@@ -197,5 +214,8 @@ describe('MetersController', () => {
 
     expect(result.success).toBe(true);
     expect(simulatorService.runSimulation).toHaveBeenCalledWith(dto, 'admin-1');
+
+    if (previous === undefined) delete process.env.FEATURE_METER_SIMULATOR;
+    else process.env.FEATURE_METER_SIMULATOR = previous;
   });
 });

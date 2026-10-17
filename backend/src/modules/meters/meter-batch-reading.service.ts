@@ -3,6 +3,7 @@ import type { Prisma, ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
+import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterBatchReadingService {
@@ -345,7 +346,7 @@ export class MeterBatchReadingService {
         }
 
         const usage = Math.round((item.currentReading - previousReading) * 100) / 100;
-        const shouldAutoSettle = item.autoSettle !== undefined ? item.autoSettle : (source !== 'DEVICE');
+        const shouldAutoSettle = settlesByDefault(source, item.autoSettle);
 
         let billableUsage = usage;
         if (shouldAutoSettle) {

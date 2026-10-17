@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res, NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
 import { MetersService } from './meters.service.js';
 import { MetersSimulatorService } from './meters-simulator.service.js';
@@ -16,6 +16,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 import type { ExportMeterReadingsQuery } from './meter-usage-query.service.js';
+import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
 
 @Controller('meters')
 @UseGuards(JwtAuthGuard)
@@ -30,6 +31,9 @@ export class MetersController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   runSimulation(@CurrentUser() userParam: CurrentUserParam, @Body() dto: RunSimulationDto) {
+    if (!isMeterSimulatorEnabled()) {
+      throw new NotFoundException();
+    }
     const user = resolveAuthUser(userParam);
     return this.metersSimulatorService.runSimulation(dto, user.userId);
   }

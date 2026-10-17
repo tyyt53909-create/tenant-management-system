@@ -103,7 +103,7 @@ export class MetersSimulatorService {
           {
             currentReading: currentVal,
             readingTime: startBaseTime.toISOString(),
-            source: 'DEVICE',
+            source: 'SIMULATED',
             isInitial: true,
             notes: '[SIMULATOR] 模拟器注册初始底数',
           },
@@ -159,7 +159,7 @@ export class MetersSimulatorService {
           {
             currentReading: currentVal,
             readingTime: pointTime.toISOString(),
-            source: 'DEVICE',
+            source: 'SIMULATED',
             autoSettle: !!dto.autoSettle,
             messageId: msgId,
             notes: `[SIM_DAILY_HOURLY] 第${h + 1}小时仿真读数（${h}:00）`,
@@ -231,7 +231,7 @@ export class MetersSimulatorService {
           {
             currentReading: currentVal,
             readingTime: startBaseTime.toISOString(),
-            source: 'DEVICE',
+            source: 'SIMULATED',
             isInitial: true,
             notes: '[SIMULATOR] 模拟器注册时间穿梭初始底数',
           },
@@ -268,7 +268,7 @@ export class MetersSimulatorService {
           {
             currentReading: currentVal,
             readingTime: pointTime.toISOString(),
-            source: 'DEVICE',
+            source: 'SIMULATED',
             autoSettle: !!dto.autoSettle,
             messageId: msgId,
             notes: `[SIM_TIME_TRAVEL] 第${d + 1}/${days}天仿真读数`,

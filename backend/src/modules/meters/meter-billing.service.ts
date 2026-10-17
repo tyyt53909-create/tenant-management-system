@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
-import { METER_TYPE_LABEL } from './meter-types.constants.js';
+import { METER_TYPE_LABEL, NOT_SIMULATED } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterBillingService {
@@ -137,6 +137,7 @@ export class MeterBillingService {
       where: {
         meterId,
         readingTime: { lte: settleUntil },
+        source: NOT_SIMULATED,
       },
       orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
     });
@@ -158,6 +159,7 @@ export class MeterBillingService {
       where: {
         meterId,
         readingTime: { lte: latestReading.readingTime },
+        source: NOT_SIMULATED,
         OR: [
           { notes: { contains: '[SETTLED]' } },
           { notes: { contains: '[INITIAL]' } },
@@ -184,7 +186,7 @@ export class MeterBillingService {
       baselineVal = Number(lastSettledReading.currentReading);
     } else {
       const earliest = await this.prisma.meterReading.findFirst({
-        where: { meterId },
+        where: { meterId, source: NOT_SIMULATED },
         orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
       });
       baselineVal = earliest ? Number(earliest.currentReading) : 0;
@@ -237,6 +239,7 @@ export class MeterBillingService {
         where: {
           meterId,
           readingTime: { lte: settleUntil },
+          source: NOT_SIMULATED,
         },
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
@@ -249,6 +252,7 @@ export class MeterBillingService {
         where: {
           meterId,
           readingTime: { lte: latestReading.readingTime },
+          source: NOT_SIMULATED,
           OR: [
             { notes: { contains: '[SETTLED]' } },
             { notes: { contains: '[INITIAL]' } },
@@ -272,7 +276,7 @@ export class MeterBillingService {
         baselineVal = Number(lastSettledReading.currentReading);
       } else {
         const earliest = await tx.meterReading.findFirst({
-          where: { meterId },
+          where: { meterId, source: NOT_SIMULATED },
           orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
         });
         baselineVal = earliest ? Number(earliest.currentReading) : 0;

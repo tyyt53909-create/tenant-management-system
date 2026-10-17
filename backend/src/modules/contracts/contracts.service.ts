@@ -10,6 +10,7 @@ import { CreateContractDto } from './dto/create-contract.dto.js';
 import { UpdateContractDto } from './dto/update-contract.dto.js';
 import { QueryContractsDto } from './dto/query-contracts.dto.js';
 import { RenewContractDto } from './dto/renew-contract.dto.js';
+import { scopedWhere } from '../../common/utils/scoped-where.js';
 
 @Injectable()
 export class ContractsService {
@@ -190,12 +191,7 @@ export class ContractsService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
-    // 防御：tenantId 缺失时返回空列表，绝不退化为全库查询
-    if (!tenantId) {
-      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
-    }
-
-    const where: Prisma.ContractWhereInput = { tenantId };
+    const where: any = scopedWhere(tenantId);
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -225,9 +221,7 @@ export class ContractsService {
 
   // 租客查看单个合同（需验证归属）
   async findOneForTenant(id: string, tenantId: string) {
-    if (!tenantId) {
-      throw new NotFoundException('合同不存在');
-    }
+    const scope = scopedWhere(tenantId);
 
     const contract = await this.prisma.contract.findUnique({
       where: { id },
@@ -243,7 +237,7 @@ export class ContractsService {
     }
 
     // 验证合同是否属于该租客
-    if (contract.tenantId !== tenantId) {
+    if (contract.tenantId !== scope.tenantId) {
       throw new NotFoundException('合同不存在');
     }
 

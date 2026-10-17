@@ -9,6 +9,9 @@ import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { LateFeeUtil, LateFeeRule } from './utils/late-fee.util.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
+import { scopedWhere } from '../../common/utils/scoped-where.js';
+import { isUniqueConstraintError } from '../../common/utils/prisma-error.js';
+import { rentBillDedupKey } from '../../common/utils/duplicate-keys.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
 import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 import { BillPaymentService } from './bill-payment.service.js';
@@ -120,18 +123,32 @@ export class BillsService {
 
     // 生成账单编号
     const billNumber = `B${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const dedupKey = dto.billType === 'RENT' ? rentBillDedupKey(dto.contractId, dto.period) : null;
 
-    return this.prisma.bill.create({
-      data: {
-        contractId: dto.contractId,
-        billNumber,
-        billType: dto.billType as BillType,
-        period: dto.period,
-        amount: dto.amount,
-        dueDate: new Date(dto.dueDate),
-        snapshot: dto.snapshot ? (dto.snapshot as Prisma.InputJsonValue) : {},
-      },
-    });
+    try {
+      const bill = await this.prisma.bill.create({
+        data: {
+          contractId: dto.contractId,
+          billNumber,
+          billType: dto.billType as BillType,
+          period: dto.period,
+          amount: dto.amount,
+          dueDate: new Date(dto.dueDate),
+          snapshot: dto.snapshot ? (dto.snapshot as Prisma.InputJsonValue) : {},
+          dedupKey,
+        },
+      });
+      return { ...bill, alreadyExists: false as const };
+    } catch (error) {
+      if (!dedupKey || !isUniqueConstraintError(error)) {
+        throw error;
+      }
+      const existing = await this.prisma.bill.findUnique({ where: { dedupKey } });
+      if (!existing) {
+        throw error;
+      }
+      return { ...existing, alreadyExists: true as const };
+    }
   }
 
   async findAll(query: QueryBillsDto) {
@@ -245,16 +262,8 @@ export class BillsService {
     const { page = 1, limit = 20, status, billType } = query;
     const skip = (page - 1) * limit;
 
-    // 防御：tenantId 缺失时绝不能退化为「不过滤」。
-    // Prisma 会把 { tenantId: undefined } 当作无此条件，从而返回全库数据。
-    if (!tenantId) {
-      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
-    }
-
-    const where: Prisma.BillWhereInput = {
-      contract: {
-        tenantId,
-      },
+    const where: any = {
+      contract: scopedWhere(tenantId),
     };
     if (status) where.status = status;
     if (billType) where.billType = billType;
@@ -289,10 +298,7 @@ export class BillsService {
 
   // 租客查看单个账单（需验证归属）
   async findOneForTenant(id: string, tenantId: string) {
-    // 防御：无租客身份一律按不存在处理（越权不暴露存在性）
-    if (!tenantId) {
-      throw new NotFoundException('账单不存在');
-    }
+    const scope = scopedWhere(tenantId);
 
     const bill = await this.prisma.bill.findUnique({
       where: { id },
@@ -318,7 +324,7 @@ export class BillsService {
     }
 
     // 验证账单是否属于该租客
-    if (bill.contract.tenantId !== tenantId) {
+    if (bill.contract.tenantId !== scope.tenantId) {
       throw new NotFoundException('账单不存在');
     }
 

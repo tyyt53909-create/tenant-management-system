@@ -33,6 +33,26 @@ describe('NotificationsService', () => {
     prisma = module.get<PrismaService>(PrismaService);
   });
 
+  it('同一去重键冲突时返回已有通知', async () => {
+    vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({ id: 'user-1' } as any);
+    vi.spyOn(prisma.notification, 'create').mockRejectedValue({ code: 'P2002' });
+    vi.spyOn(prisma.notification, 'findUnique').mockResolvedValue({
+      id: 'n-existing',
+      userId: 'user-1',
+      dedupKey: 'BILL_OVERDUE:user-1:bill-1',
+    } as any);
+
+    const result = (await service.create({
+      userId: 'user-1',
+      title: '账单逾期提醒',
+      body: '请缴费',
+      dedupKey: 'BILL_OVERDUE:user-1:bill-1',
+      data: { billId: 'bill-1' },
+    })) as any;
+
+    expect(result.id).toBe('n-existing');
+  });
+
   it('创建通知时接收用户不存在应抛错', async () => {
     vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
     await expect(

@@ -94,6 +94,11 @@ describe('MetersSimulatorService', () => {
       expect(res.meterResults![0].startReading).toBe(120.0);
       expect(res.meterResults![0].endReading).toBeGreaterThan(120.0);
       expect(metersService.createReading).toHaveBeenCalledTimes(24);
+      expect(metersService.createReading).toHaveBeenCalledWith(
+        'meter-001',
+        expect.objectContaining({ source: 'SIMULATED' }),
+        expect.any(String),
+      );
     });
 
     it('表计无历史记录时自动注册初始底数并生成 24 小时读数', async () => {

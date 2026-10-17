@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
+import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterReadingService {
@@ -23,11 +24,15 @@ export class MeterReadingService {
    * - 支持采集与结算拆分（autoSettle）
    * - 房间关联预付账户时根据单价自动扣费；余额不足差额生成 UTILITY 补缴账单
    */
-  async createReading(meterId: string, dto: CreateMeterReadingDto, operatorId: string) {
+  async createReading(
+    meterId: string,
+    dto: Omit<CreateMeterReadingDto, 'source'> & { source?: 'MANUAL' | 'DEVICE' | 'SIMULATED' },
+    operatorId: string,
+  ) {
     const readingTime = dto.readingTime ? new Date(dto.readingTime) : new Date();
     const source = dto.source || 'MANUAL';
-    // 采集与结算拆分：手工录入默认自动结算，智能设备上传默认仅采集（除非显式指定 autoSettle: true）
-    const shouldAutoSettle = dto.autoSettle !== undefined ? dto.autoSettle : (source !== 'DEVICE');
+    // 手工录入默认结算。设备上报和模拟器读数默认只采集。
+    const shouldAutoSettle = settlesByDefault(source, dto.autoSettle);
 
     return this.prisma.$transaction(async (tx) => {
       const meter = await tx.meter.findUnique({ where: { id: meterId } });

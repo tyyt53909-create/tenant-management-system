@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
-import { METER_TYPE_LABEL } from './meter-types.constants.js';
+import { METER_TYPE_LABEL, NOT_SIMULATED } from './meter-types.constants.js';
 
 export interface ExportMeterReadingsQuery {
   meterId?: string;
@@ -108,6 +108,7 @@ export class MeterUsageQueryService {
             where: {
               meterId: { in: activeMeterIds },
               readingTime: { gte: monthStart, lt: monthEnd },
+              source: NOT_SIMULATED,
             },
             select: {
               meterId: true,
@@ -123,6 +124,7 @@ export class MeterUsageQueryService {
             where: {
               meterId: { in: activeMeterIds },
               readingTime: { gte: prevMonthStart, lt: prevMonthEnd },
+              source: NOT_SIMULATED,
             },
             select: {
               meterId: true,
@@ -198,6 +200,7 @@ export class MeterUsageQueryService {
             where: {
               meterId: { in: activeMeterIds },
               readingTime: { gte: trendStart, lt: trendEnd },
+              source: NOT_SIMULATED,
             },
             select: {
               meterId: true,

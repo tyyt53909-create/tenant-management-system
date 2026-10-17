@@ -2,12 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { TENANT_PUBLIC_SELECT, TenantsService } from './tenants.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CryptoService } from '../../common/crypto/crypto.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 describe('TenantsService', () => {
   let service: TenantsService;
   let prisma: PrismaService;
+  let crypto: { maskStored: ReturnType<typeof vi.fn>; decrypt: ReturnType<typeof vi.fn> };
+  let auditLog: { log: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    crypto = { maskStored: vi.fn((value: string) => `masked:${value}`), decrypt: vi.fn() };
+    auditLog = { log: vi.fn() };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TenantsService,
@@ -22,8 +28,14 @@ describe('TenantsService', () => {
               update: vi.fn(),
               delete: vi.fn(),
             },
+            tenantRegistration: {
+              findMany: vi.fn().mockResolvedValue([]),
+              findUnique: vi.fn(),
+            },
           },
         },
+        { provide: CryptoService, useValue: crypto },
+        { provide: AuditLogService, useValue: auditLog },
       ],
     }).compile();
 
@@ -257,6 +269,51 @@ describe('TenantsService', () => {
       expect(args.select).not.toHaveProperty('registration');
       expect(args.select).not.toHaveProperty('idNumber');
       expect(args.select.user).toEqual({ select: { id: true, email: true, role: true } });
+    });
+
+    it('列表和详情只附带脱敏证件号，响应里没有明文', async () => {
+      vi.spyOn(prisma.tenant, 'findMany').mockResolvedValue([{ id: 'tenant-1', name: '张三' }] as any);
+      vi.spyOn(prisma.tenant, 'count').mockResolvedValue(1);
+      vi.spyOn(prisma.tenantRegistration, 'findMany').mockResolvedValue([
+        { tenantId: 'tenant-1', idNumber: 'v1:cipher' },
+      ] as any);
+      crypto.maskStored.mockReturnValue('4401**********1234');
+
+      const listed = await service.findAll({ page: 1, limit: 20 });
+      expect(listed.data[0].idNumberMasked).toBe('4401**********1234');
+      expect(JSON.stringify(listed)).not.toContain('v1:cipher');
+
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({ id: 'tenant-1', name: '张三' } as any);
+      const detail = await service.findOne('tenant-1');
+      expect(detail.idNumberMasked).toBe('4401**********1234');
+      expect(JSON.stringify(detail)).not.toContain('v1:cipher');
+    });
+
+    it('查看明文写 VIEW_ID_NUMBER，审计内容不含证件号', async () => {
+      vi.spyOn(prisma.tenantRegistration, 'findUnique').mockResolvedValue({
+        id: 'reg-1',
+        idType: 'ID_CARD',
+        idNumber: 'v1:cipher',
+      } as any);
+      crypto.decrypt.mockReturnValue('440101199001011234');
+
+      const result = await service.revealIdNumber('tenant-1', {
+        userId: 'admin-1',
+        ip: '127.0.0.1',
+        userAgent: 'vitest',
+      });
+
+      expect(result).toEqual({ idNumber: '440101199001011234', idType: 'ID_CARD' });
+      expect(auditLog.log).toHaveBeenCalledWith({
+        userId: 'admin-1',
+        action: 'VIEW_ID_NUMBER',
+        entityType: 'TenantRegistration',
+        entityId: 'reg-1',
+        changes: { tenantId: 'tenant-1' },
+        ip: '127.0.0.1',
+        userAgent: 'vitest',
+      });
+      expect(JSON.stringify(auditLog.log.mock.calls[0][0].changes)).not.toContain('440101199001011234');
     });
 
     it('白名单常量本身不含敏感字段（含证件号）', () => {

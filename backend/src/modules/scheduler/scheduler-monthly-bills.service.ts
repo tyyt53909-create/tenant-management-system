@@ -54,7 +54,7 @@ export class SchedulerMonthlyBillsService {
 
         const dueDate = new Date(Date.UTC(year, month - 1, Math.min(contract.paymentDay, 28)));
 
-        await this.billsService.create({
+        const bill = await this.billsService.create({
           contractId: contract.id,
           billType: BillType.RENT,
           period,
@@ -66,6 +66,10 @@ export class SchedulerMonthlyBillsService {
             contractNumber: contract.contractNumber,
           },
         });
+        if (bill.alreadyExists) {
+          summary.skipped++;
+          continue;
+        }
         summary.generated++;
 
         if (contract.tenant?.userId) {
@@ -74,6 +78,8 @@ export class SchedulerMonthlyBillsService {
             '收租提醒',
             `您有新的租金账单（${period}），金额 ¥${formatAmount(contract.rentAmount)}，请于 ${formatDate(dueDate)} 前缴纳`,
             'NORMAL',
+            { billId: bill.id },
+            `RENT_BILL:${contract.tenant.userId}:${period}`,
           );
           summary.notified++;
         }
@@ -93,9 +99,17 @@ export class SchedulerMonthlyBillsService {
     body: string,
     priority: 'NORMAL' | 'URGENT',
     data?: Record<string, unknown>,
+    dedupKey?: string,
   ) {
     try {
-      await this.notificationsService.create({ userId, title, body, priority: priority as NotificationPriority, data });
+      await this.notificationsService.create({
+        userId,
+        title,
+        body,
+        priority: priority as NotificationPriority,
+        data,
+        dedupKey,
+      });
     } catch (error) {
       this.logger.warn(`通知发送失败（userId=${userId}）：${(error as Error).message}`);
     }

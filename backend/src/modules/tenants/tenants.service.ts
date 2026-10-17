@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
+import { CryptoService } from '../../common/crypto/crypto.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
 import { QueryTenantsDto } from './dto/query-tenants.dto.js';
@@ -29,7 +31,11 @@ export const TENANT_PUBLIC_SELECT = {
 
 @Injectable()
 export class TenantsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crypto: CryptoService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   async create(dto: CreateTenantDto) {
     // 1. 检查手机号唯一性
@@ -99,8 +105,13 @@ export class TenantsService {
       this.prisma.tenant.count({ where }),
     ]);
 
+    const masks = await this.maskedIdNumbers(data.map((tenant) => tenant.id));
+
     return {
-      data,
+      data: data.map((tenant) => ({
+        ...tenant,
+        idNumberMasked: masks.get(tenant.id) ?? null,
+      })),
       meta: {
         page,
         limit,
@@ -130,7 +141,40 @@ export class TenantsService {
       throw new NotFoundException('租客不存在');
     }
 
-    return tenant;
+    const masks = await this.maskedIdNumbers([tenant.id]);
+    return {
+      ...tenant,
+      idNumberMasked: masks.get(tenant.id) ?? null,
+    };
+  }
+
+  /**
+   * 查看证件号明文。只允许管理员调用。审计记录不保存明文。
+   */
+  async revealIdNumber(
+    tenantId: string,
+    actor: { userId: string; ip: string; userAgent: string },
+  ) {
+    const registration = await this.prisma.tenantRegistration.findUnique({
+      where: { tenantId },
+      select: { id: true, idNumber: true, idType: true },
+    });
+    if (!registration) {
+      throw new NotFoundException('未登记证件号');
+    }
+
+    const idNumber = this.crypto.decrypt(registration.idNumber);
+    await this.auditLogService.log({
+      userId: actor.userId,
+      action: 'VIEW_ID_NUMBER',
+      entityType: 'TenantRegistration',
+      entityId: registration.id,
+      changes: { tenantId },
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+
+    return { idNumber, idType: registration.idType };
   }
 
   /**
@@ -207,5 +251,20 @@ export class TenantsService {
     });
 
     return { message: '租客已删除' };
+  }
+
+  private async maskedIdNumbers(tenantIds: string[]) {
+    const masks = new Map<string, string>();
+    if (tenantIds.length === 0) {
+      return masks;
+    }
+    const rows = await this.prisma.tenantRegistration.findMany({
+      where: { tenantId: { in: tenantIds } },
+      select: { tenantId: true, idNumber: true },
+    });
+    for (const row of rows) {
+      masks.set(row.tenantId, this.crypto.maskStored(row.idNumber));
+    }
+    return masks;
   }
 }
