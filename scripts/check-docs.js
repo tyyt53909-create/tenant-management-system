@@ -26,7 +26,16 @@ function log(message, color = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
+/**
+ * ❌ 错误计数器。
+ * 以前 `error()` 只打印不上报，CI 用 `DOCS_STRICT_MODE=false` 跑时门禁事实上不生效
+ * （PR 上出现 ❌ 也照样绿）。现在只要出现 ❌，脚本就以非零退出，让 CI 真正拦住。
+ * 注意：这里不启用 STRICT_MODE，避免「代码改动必须同步文档」的启发式误伤正常 PR。
+ */
+let errorCount = 0;
+
 function error(message) {
+  errorCount += 1;
   log(`❌ ${message}`, 'red');
 }
 
@@ -397,7 +406,13 @@ function main() {
     checkEnvVarConsistency();
     checkCodeDocSync();
     checkStaleDocuments();
-    
+
+    if (errorCount > 0) {
+      console.log('\n');
+      log(`❌ 文档检查失败：共 ${errorCount} 项错误（修复后重跑 node scripts/check-docs.js）`, 'red');
+      process.exit(1);
+    }
+
     console.log('\n✅ 文档检查完成！\n');
     process.exit(0);
   } catch (err) {
@@ -431,6 +446,10 @@ if (args.includes('--stale')) {
   console.log('\n🔍 开始检查过期文档...\n');
   try {
     checkStaleDocuments();
+    if (errorCount > 0) {
+      log(`❌ 过期检查失败：共 ${errorCount} 项错误`, 'red');
+      process.exit(1);
+    }
     console.log('\n✅ 过期检查完成！\n');
     process.exit(0);
   } catch (err) {

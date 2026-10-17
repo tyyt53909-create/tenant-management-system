@@ -27,6 +27,12 @@ type RequestWithId = Request & { requestId?: string };
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  /**
+   * `nodeEnv` 由启动期配置传入（config 层解析 NODE_ENV），此处不读 process.env。
+   * 默认值仅为单测直接 `new AllExceptionsFilter()` 时兜底。
+   */
+  constructor(private readonly nodeEnv = 'development') {}
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const response = http.getResponse<Response>();
@@ -36,7 +42,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       response.setHeader('X-Request-Id', requestId);
     }
 
-    const mapped = toErrorResponse(exception, requestId, process.env.NODE_ENV);
+    const mapped = toErrorResponse(exception, requestId, this.nodeEnv);
     if (mapped.status >= 500) {
       this.logger.error(summarizeException(exception, requestId));
     }

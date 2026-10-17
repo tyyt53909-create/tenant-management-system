@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { BadRequestException, ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthController } from './auth.controller.js';
 import { InviteCodeService } from './invite-code.service.js';
@@ -86,6 +87,8 @@ describe('AuthController', () => {
             $transaction: vi.fn(),
           },
         },
+        // Cookie 的 Secure 标志由 ConfigService 决定（生产环境 true）
+        { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'development' }) },
       ],
     }).compile();
 

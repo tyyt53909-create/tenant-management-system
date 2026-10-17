@@ -211,7 +211,7 @@ const content = `# 项目状态跟踪
 | **数据模型** | ${modelCount} 张实体表 | Prisma schema 实际 model 严密对齐 |
 | **OpenAPI 路由** | ${routeCount} 条路由 | 全自动化生成规范，类型 100% 导出前端 |
 | **自动化测试** | ${totalTests} 测例全绿 | 后端 ${backendTests} + 小程序 ${miniprogramTests} + 前端 ${frontendTests}，100% 通过率 |
-| **验收缺口** | 3 项 | OPT-02#4（\`docs/06\` 为 human 文档，需人工补 §10 节号指引）、OPT-07#2（\`src/\` 非 config 层仍有 16 处 \`process.env\`，待决策）、OPT-19#3（首屏 JS 体积无优化前后实测）；详见 \`docs/13\` 与 T202 交接记录 |
+| **验收缺口** | 2 项 | OPT-02#4（\`docs/06\` 为 human 文档，需人工补 §10 节号指引）、OPT-19#3（首屏 JS 实测未降：1064→1065 KB，需引入 Element Plus 按需加载）；详见 \`docs/13\` 与 T203 交接记录 |
 | **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
 
 ---
@@ -276,7 +276,8 @@ const content = `# 项目状态跟踪
 ## 💬 最新更新
 
 ### ${dateStr}
-- ✅ **T202 计划收口与度量看板实测化**：\`generate-status.mjs\` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；\`check-docs.js\` 新增 \`.env.example\` 与部署文档变量清单一致性校验（OPT-07）；补上 OPT-06 遗留的范围助手调用与 \`AGENTS.md\` 范围查询规则。
+- ✅ **T203 技术债与验证缺口收口**：\`process.env\` 收敛至 config 层（\`src/\` 非 config 层 0 处实际读取，新增 \`bootstrap.config.ts\`）；\`check-docs.js\` 出现 ❌ 改为 exit 1，文档门禁在 CI 真正生效；首屏 JS 体积完成前后实测（1064→1065 KB，**确认未达标**并记录原因）；\`ENCRYPTION_KEY\` 生产必填补测试。
+- ✅ **T202 计划收口与度量看板实测化**：\`generate-status.mjs\` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；\`check-docs.js\` 新增 \`.env.example\` 与部署文档变量清单一致性校验（OPT-07）；修复 \`scoped-where\` 类型错误（原致 \`nest build\` 失败）、\`openapi.json\` 漂移与 \`ENCRYPTION_KEY\` 运行时缺陷。
 - ✅ **T201 文档与代码一致性收口 (OPT-28)**：编写 \`scripts/generate-status.mjs\` 自动化度量脚本，实现 STATUS.md 单一进度指标自动生成；升级 \`scripts/check-docs.js\` 增加 28 张数据表与 120 条 OpenAPI 路由一致性硬门禁；补齐 49 份历史文档 YAML 元信息头部，死链清零，docs-check 达成 0 ❌ 错误、0 ⚠️ 警告。
 - ✅ **T200 仓库卫生与分支治理 (OPT-27)**：清理已合并的 29 个旧分支与无效 worktree；归档根目录 8 份游离文档；重构主指南 \`README.md\`。
 - ✅ **T199 备份恢复演练与性能基线 (OPT-26)**：完成 PostgreSQL 灾备演练（RTO 2.4s、RPO 0）；完成 100 并发 k6 压力基线实测（P95 66.75ms、0 错误）。

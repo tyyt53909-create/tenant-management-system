@@ -41,11 +41,11 @@ export class CryptoService {
   }
 
   private key(): Buffer {
+    // ConfigService 本身会回退到 process.env；旧名仅作兼容别名
     const configured = this.configService.get<string>('ENCRYPTION_KEY');
     const raw =
       (typeof configured === 'string' && configured.trim() !== '' ? configured : undefined) ??
-      process.env.ENCRYPTION_KEY ??
-      process.env.FIELD_ENCRYPTION_KEY;
+      this.configService.get<string>('FIELD_ENCRYPTION_KEY');
     return resolveFieldKey(raw);
   }
 }

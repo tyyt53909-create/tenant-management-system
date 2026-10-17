@@ -169,11 +169,10 @@ export class FilesService {
   }
 
   private storageEnv(): StorageEnv {
+    // ConfigService 本身会回退到 process.env，这里不必再手写 process.env 兜底
     const read = (name: string) => {
       const configured = this.configService.get<string>(name);
-      if (typeof configured === 'string' && configured.trim()) return configured.trim();
-      const fromProcess = process.env[name];
-      return fromProcess?.trim() || undefined;
+      return typeof configured === 'string' && configured.trim() ? configured.trim() : undefined;
     };
     return {
       STORAGE_DRIVER: read('STORAGE_DRIVER'),

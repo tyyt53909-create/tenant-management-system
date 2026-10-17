@@ -2,9 +2,9 @@
 
 > 最后更新: 2026-10-17
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: `feature/T202-plan-closure-metrics` 分支当前提交 `8795d78`（T001~T202 全量完成）
+> 进度基准: `feature/T203-tech-debt-closure` 分支当前提交 `83ceede`（T001~T202 全量完成）
 > 整体进度: **100%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
-> 质量状态: 后端 (78 文件 771 测例)、管理后台 (12 文件 49 测例 + Playwright 6 流程)、小程序 (108 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
+> 质量状态: 后端 (79 文件 780 测例)、管理后台 (12 文件 49 测例 + Playwright 6 流程)、小程序 (108 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
 
 ---
 
@@ -19,8 +19,8 @@
 | **阻塞问题** | 0 | 无阻塞 |
 | **数据模型** | 28 张实体表 | Prisma schema 实际 model 严密对齐 |
 | **OpenAPI 路由** | 121 条路由 | 全自动化生成规范，类型 100% 导出前端 |
-| **自动化测试** | 928 测例全绿 | 后端 771 + 小程序 108 + 前端 49，100% 通过率 |
-| **验收缺口** | 3 项 | OPT-02#4（`docs/06` 为 human 文档，需人工补 §10 节号指引）、OPT-07#2（`src/` 非 config 层仍有 16 处 `process.env`，待决策）、OPT-19#3（首屏 JS 体积无优化前后实测）；详见 `docs/13` 与 T202 交接记录 |
+| **自动化测试** | 937 测例全绿 | 后端 780 + 小程序 108 + 前端 49，100% 通过率 |
+| **验收缺口** | 2 项 | OPT-02#4（`docs/06` 为 human 文档，需人工补 §10 节号指引）、OPT-19#3（首屏 JS 实测未降：1064→1065 KB，需引入 Element Plus 按需加载）；详见 `docs/13` 与 T203 交接记录 |
 | **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
 
 ---
@@ -85,13 +85,14 @@
 ## 💬 最新更新
 
 ### 2026-10-17
-- ✅ **T202 计划收口与度量看板实测化**：`generate-status.mjs` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；`check-docs.js` 新增 `.env.example` 与部署文档变量清单一致性校验（OPT-07）；补上 OPT-06 遗留的范围助手调用与 `AGENTS.md` 范围查询规则。
+- ✅ **T203 技术债与验证缺口收口**：`process.env` 收敛至 config 层（`src/` 非 config 层 0 处实际读取，新增 `bootstrap.config.ts`）；`check-docs.js` 出现 ❌ 改为 exit 1，文档门禁在 CI 真正生效；首屏 JS 体积完成前后实测（1064→1065 KB，**确认未达标**并记录原因）；`ENCRYPTION_KEY` 生产必填补测试。
+- ✅ **T202 计划收口与度量看板实测化**：`generate-status.mjs` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；`check-docs.js` 新增 `.env.example` 与部署文档变量清单一致性校验（OPT-07）；修复 `scoped-where` 类型错误（原致 `nest build` 失败）、`openapi.json` 漂移与 `ENCRYPTION_KEY` 运行时缺陷。
 - ✅ **T201 文档与代码一致性收口 (OPT-28)**：编写 `scripts/generate-status.mjs` 自动化度量脚本，实现 STATUS.md 单一进度指标自动生成；升级 `scripts/check-docs.js` 增加 28 张数据表与 120 条 OpenAPI 路由一致性硬门禁；补齐 49 份历史文档 YAML 元信息头部，死链清零，docs-check 达成 0 ❌ 错误、0 ⚠️ 警告。
 - ✅ **T200 仓库卫生与分支治理 (OPT-27)**：清理已合并的 29 个旧分支与无效 worktree；归档根目录 8 份游离文档；重构主指南 `README.md`。
 - ✅ **T199 备份恢复演练与性能基线 (OPT-26)**：完成 PostgreSQL 灾备演练（RTO 2.4s、RPO 0）；完成 100 并发 k6 压力基线实测（P95 66.75ms、0 错误）。
 - ✅ **T198 生产部署工件 (OPT-25)**：生产容器编排 `docker-compose.prod.yml` 与非 root 镜像。
 - ✅ **T197 e2e 与 UI 自动化测试 (OPT-24)**：Playwright 6 条核心流程（5 个 spec）与后端 e2e 接入 CI。
-- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，771 测例全绿。
+- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，780 测例全绿。
 
 ---
 
@@ -101,20 +102,20 @@
 
 | 项目 | 非测试代码行数 | 统计命令 |
 |------|----------------|----------|
-| 后端（NestJS） | 14754 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
+| 后端（NestJS） | 14833 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
 | 网页后台（Vue3） | 20761 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
 | 小程序（uni-app） | 6496 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
 
 - **数据模型**：`grep -c '^model ' backend/prisma/schema.prisma` = **28**（与 docs/02 严格一致）
 - **OpenAPI 路由**：`backend/openapi.json` = **121** 条路由
 - **自动化测试**（实测：`npm test` 于 `backend/`、`frontend-admin/`、`miniprogram/` 分别执行后解析）：
-  - 后端 Vitest：**78** 个测试文件，**771** 个测例全绿
+  - 后端 Vitest：**79** 个测试文件，**780** 个测例全绿
   - 管理后台：**12** 个测试文件，**49** 个单元测试 + **6** 条 Playwright e2e 核心流程全绿
   - 微信小程序：**108** 个测试用例全绿
-  - **总计测试用例**：**928** 个测试，100% 通过率
+  - **总计测试用例**：**937** 个测试，100% 通过率
 - **文档体系**：
-  - 核心文档与交接记录：**98** 份（CI 范围，docs/INDEX.md 100% 编目）
-  - 任务书：**73** 个任务书文件
+  - 核心文档与交接记录：**99** 份（CI 范围，docs/INDEX.md 100% 编目）
+  - 任务书：**74** 个任务书文件
 
 ---
 

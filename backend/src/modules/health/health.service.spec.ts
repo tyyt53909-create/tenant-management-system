@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
@@ -45,6 +46,8 @@ describe('健康检查', () => {
             client: redisReady ? { ping: () => Promise.resolve('PONG') } : null,
           },
         },
+        // UPLOAD_DIR 由 ConfigService 读取（其本身回退到 process.env，本档用 env 注入临时目录）
+        ConfigService,
       ],
     }).compile();
     app = module.createNestApplication();
