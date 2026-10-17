@@ -1,11 +1,72 @@
 import { API_BASE_URL } from './api-config.js'
 
+// 并发 401 共用同一次刷新（T208）：首屏多个请求同时 401 时各自发一次刷新，会互相把对方的
+// refresh token 轮换掉。后端对同一 token 只让一个赢，输的那个若直接清空存储，会把赢家刚
+// 写入的新令牌一并清掉 → 用户被强制登出。这里让同一运行时的并发刷新共用一次请求。
+let refreshPromise = null
+
+function clearSessionAndRedirect() {
+  uni.removeStorageSync('access_token')
+  uni.removeStorageSync('refresh_token')
+  uni.removeStorageSync('user_role')
+  uni.reLaunch({ url: '/pages/login/login' })
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * 后端对同一 refresh token 只允许一个请求轮换成功，输的那个在宽限窗口内会拿到
+ * 「刷新令牌正在轮换中」——这是并发竞态，不是令牌失效（T208）。
+ */
+function isRotationRace(error) {
+  const message = error && error.message
+  return typeof message === 'string' && message.includes('正在轮换中')
+}
+
+/** 刷新令牌；同一运行时的并发调用共用同一个 promise。 */
+function refreshTokens() {
+  if (!refreshPromise) {
+    const base = new Promise((resolve, reject) => {
+      const refreshToken = uni.getStorageSync('refresh_token')
+      if (!refreshToken) {
+        reject(new Error('登录已过期'))
+        return
+      }
+      uni.request({
+        url: API_BASE_URL + '/auth/refresh',
+        method: 'POST',
+        timeout: 15000,
+        data: { refreshToken },
+        header: { 'Content-Type': 'application/json' },
+        success: (res) => {
+          if (res.statusCode >= 200 && res.statusCode < 300 && res.data && res.data.accessToken) {
+            uni.setStorageSync('access_token', res.data.accessToken)
+            if (res.data.refreshToken) uni.setStorageSync('refresh_token', res.data.refreshToken)
+            resolve(res.data.accessToken)
+            return
+          }
+          const error = new Error((res.data && res.data.message) || '登录已过期')
+          error.statusCode = res.statusCode
+          reject(error)
+        },
+        fail: () => reject(new Error('刷新请求失败')),
+      })
+    })
+    refreshPromise = base.finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
+}
+
 // 请求拦截器
 const request = (options) => {
   return new Promise((resolve, reject) => {
     // 获取 token
     const token = uni.getStorageSync('access_token')
-    
+
     uni.request({
       url: API_BASE_URL + options.url,
       method: options.method || 'GET',
@@ -29,42 +90,26 @@ const request = (options) => {
           const path = (options.url || '').split('?')[0]
           const canRefresh = refreshToken && !options._authRetried && !/\/auth\/(login|register|refresh)$/.test(path)
           if (!canRefresh) {
-            uni.removeStorageSync('access_token')
-            uni.removeStorageSync('refresh_token')
-            uni.removeStorageSync('user_role')
-            uni.reLaunch({ url: '/pages/login/login' })
+            clearSessionAndRedirect()
             reject(new Error('登录已过期'))
             return
           }
-          uni.request({
-            url: API_BASE_URL + '/auth/refresh',
-            method: 'POST',
-            timeout: 15000,
-            data: { refreshToken },
-            header: { 'Content-Type': 'application/json' },
-            success: (refreshRes) => {
-              const nextAccess = refreshRes.data?.accessToken
-              const nextRefresh = refreshRes.data?.refreshToken
-              if (refreshRes.statusCode < 200 || refreshRes.statusCode >= 300 || !nextAccess) {
-                uni.removeStorageSync('access_token')
-                uni.removeStorageSync('refresh_token')
-                uni.removeStorageSync('user_role')
-                uni.reLaunch({ url: '/pages/login/login' })
-                reject(new Error('登录已过期'))
-                return
+          refreshTokens()
+            .then(() => request({ ...options, _authRetried: true }).then(resolve, reject))
+            .catch(async (error) => {
+              // H5 多标签等跨运行时的并发轮换：赢家已把新令牌写入共享存储，
+              // 稍等后用新令牌重试一次，不要把整份会话清掉（T208）
+              if (isRotationRace(error) && !options._authRetried) {
+                await sleep(300)
+                const latest = uni.getStorageSync('access_token')
+                if (latest && latest !== token) {
+                  request({ ...options, _authRetried: true }).then(resolve, reject)
+                  return
+                }
               }
-              uni.setStorageSync('access_token', nextAccess)
-              if (nextRefresh) uni.setStorageSync('refresh_token', nextRefresh)
-              request({ ...options, _authRetried: true }).then(resolve, reject)
-            },
-            fail: () => {
-              uni.removeStorageSync('access_token')
-              uni.removeStorageSync('refresh_token')
-              uni.removeStorageSync('user_role')
-              uni.reLaunch({ url: '/pages/login/login' })
+              clearSessionAndRedirect()
               reject(new Error('登录已过期'))
-            },
-          })
+            })
         } else {
           const message = errorText(res.data)
           uni.showToast({

@@ -53,19 +53,53 @@ function errorText(data: { code?: string; message?: unknown; details?: unknown }
   return '请求失败';
 }
 
+/**
+ * 后端判定「该 refresh token 正被另一个并发请求轮换」时返回的错误。
+ *
+ * 多标签页（或前后端同源的多个窗口）会同时带着同一份旧 cookie 发刷新请求：
+ * 只有一个能赢，输的那个在宽限窗口内会拿到这条消息（T208）。此时服务端**没有**
+ * 撤销会话家族，赢家也已经把新的 refresh cookie 写回浏览器 —— 只是本标签页这次
+ * 请求发出的还是旧 cookie。短暂等待后用新 cookie 重试一次即可成功。
+ */
+function isRotationRace(error: unknown): boolean {
+  const message = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+  return typeof message === 'string' && message.includes('正在轮换中');
+}
+
+const ROTATION_RETRY_DELAY_MS = 300;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function postRefresh(): Promise<string> {
+  const response = await axios.post(
+    `${API_BASE_URL}/auth/refresh`,
+    {},
+    { withCredentials: true, timeout: 15000 },
+  );
+  const token = response.data?.accessToken;
+  if (typeof token !== 'string' || !token) throw new Error('刷新响应缺少 accessToken');
+  return token;
+}
+
 export function refreshAccessToken(): Promise<string> {
   if (!refreshPromise) {
-    refreshPromise = axios
-      .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true, timeout: 15000 })
-      .then((response) => {
-        const token = response.data?.accessToken;
-        if (typeof token !== 'string' || !token) throw new Error('刷新响应缺少 accessToken');
-        setAccessToken(token);
-        return token;
-      })
-      .finally(() => {
-        refreshPromise = null;
-      });
+    refreshPromise = (async () => {
+      let token: string;
+      try {
+        token = await postRefresh();
+      } catch (error) {
+        // 只对「并发轮换」这一种失败重试；其它错误（cookie 过期、被撤销）照旧抛出去
+        if (!isRotationRace(error)) throw error;
+        await delay(ROTATION_RETRY_DELAY_MS);
+        token = await postRefresh();
+      }
+      setAccessToken(token);
+      return token;
+    })().finally(() => {
+      refreshPromise = null;
+    });
   }
   return refreshPromise;
 }
