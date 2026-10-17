@@ -6,7 +6,7 @@ export class BillResponseDto {
   period: string;
   amount: number;
   paidAmount: number;
-  snapshot: any;
+  snapshot: Record<string, unknown>;
   dueDate: Date;
   status: string;
   createdAt: Date;

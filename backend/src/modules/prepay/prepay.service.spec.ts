@@ -410,4 +410,137 @@ describe('PrepayService', () => {
       expect(csv).toContain('tx-101,601,周八,13500000008,充值,500.00,688.00,REC20261014-001,微信充值,admin');
     });
   });
+
+  describe('分支覆盖补充', () => {
+    it('findAll：无租客筛选且账户为空时跳过房间查询', async () => {
+      prisma.prepayAccount.findMany.mockResolvedValue([]);
+      prisma.prepayAccount.count.mockResolvedValue(0);
+
+      const result = await service.findAll({ page: 1, limit: 10 } as any);
+
+      expect(prisma.prepayAccount.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+      expect(prisma.room.findMany).not.toHaveBeenCalled();
+      expect(result).toEqual({ data: [], meta: { page: 1, limit: 10, total: 0, totalPages: 0 } });
+    });
+
+    it('update：未传低余额阈值时提交空更新数据', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId });
+      prisma.prepayAccount.update.mockResolvedValue({ id: accountId });
+
+      await service.update(accountId, {} as any);
+
+      expect(prisma.prepayAccount.update).toHaveBeenCalledWith({
+        where: { id: accountId },
+        data: {},
+      });
+    });
+
+    it('租客交易查询：缺省 query 和缺省 tenantId 均安全返回空结果', async () => {
+      await expect(service.findTransactionsByTenant('tenant-1')).resolves.toEqual({
+        data: [],
+        meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
+      });
+      await expect(service.findTransactionsByTenant('')).resolves.toEqual({
+        data: [],
+        meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
+      });
+      expect(prisma.prepayAccount.findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    it('流水写入：保留 relatedType，且缺失 relatedType 时置为 undefined', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId, balanceCache: 1000 });
+      prisma.prepayAccount.update.mockResolvedValue({ id: accountId, balanceCache: 2000 });
+      prisma.prepayTransaction.create.mockResolvedValue({ id: 'tx-related' });
+
+      await service.recordTransaction(
+        accountId,
+        { type: 'RECHARGE', amount: 1000, relatedId: 'related-1', relatedType: 'BILL' } as any,
+        operatorId,
+      );
+      expect(prisma.prepayTransaction.create).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({ relatedId: 'related-1', relatedType: 'BILL' }),
+      });
+
+      await service.recordTransaction(
+        accountId,
+        { type: 'RECHARGE', amount: 1000, relatedId: 'related-2' } as any,
+        operatorId,
+      );
+      expect(prisma.prepayTransaction.create).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({ relatedId: 'related-2', relatedType: undefined }),
+      });
+    });
+
+    it('导出：分别应用账户、类型、起止日期过滤', async () => {
+      prisma.prepayTransaction.findMany.mockResolvedValue([]);
+
+      await service.exportTransactions({
+        accountId,
+        type: 'REFUND',
+        startDate: '2026-01-02T00:00:00.000Z',
+        endDate: '2026-01-03T00:00:00.000Z',
+      } as any);
+
+      expect(prisma.prepayTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            accountId,
+            type: 'REFUND',
+            createdAt: {
+              gte: new Date('2026-01-02T00:00:00.000Z'),
+              lte: new Date('2026-01-03T00:00:00.000Z'),
+            },
+          },
+        }),
+      );
+      expect(prisma.room.findMany).not.toHaveBeenCalled();
+    });
+
+    it('导出：只提供结束日期，并处理缺失关联字段、未知类型及缺失时间', async () => {
+      prisma.prepayTransaction.findMany.mockResolvedValue([
+        {
+          id: 'tx-sparse',
+          type: 'CUSTOM',
+          amount: 1,
+          balanceAfter: 1,
+          relatedId: 'related-fallback',
+          account: { roomId: 'room-sparse', tenant: {} },
+        },
+        {
+          id: 'tx-unlinked',
+          type: 'ADJUSTMENT',
+          amount: 0,
+          balanceAfter: 0,
+          account: null,
+          createdAt: null,
+        },
+      ]);
+      prisma.room.findMany.mockResolvedValue([]);
+
+      const csv = await service.exportTransactions({ endDate: '2026-01-03' });
+
+      expect(prisma.prepayTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { createdAt: { lte: new Date('2026-01-03') } } }),
+      );
+      expect(prisma.room.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['room-sparse'] } },
+        select: { id: true, roomNumber: true },
+      });
+      expect(csv).toContain('tx-sparse,,,,CUSTOM');
+      expect(csv).toContain('related-fallback');
+      expect(csv).toContain('tx-unlinked,,,,调账');
+    });
+
+    it('导出：无交易且仅提供开始日期时跳过房间查询', async () => {
+      prisma.prepayTransaction.findMany.mockResolvedValue([]);
+      await service.exportTransactions({ startDate: '2026-01-01' });
+
+      expect(prisma.prepayTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { createdAt: { gte: new Date('2026-01-01') } } }),
+      );
+      expect(prisma.room.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

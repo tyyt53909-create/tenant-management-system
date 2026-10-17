@@ -98,16 +98,18 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding } from '@/api/buildings';
 import type { Building } from '@/types';
+import { usePagedTable } from '@/composables';
 
-const loading = ref(false);
+const { loading, tableData, pagination, fetchData } = usePagedTable<Building>({
+  fetchApi: (params) => getBuildings(params),
+});
+
 const submitLoading = ref(false);
 const dialogVisible = ref(false);
 const dialogTitle = ref('新增楼栋');
 const formRef = ref<FormInstance>();
-const tableData = ref<Building[]>([]);
 const currentEditId = ref('');
 
-const pagination = reactive({ page: 1, limit: 20, total: 0 });
 const formData = reactive({
   name: '',
   address: '',
@@ -118,23 +120,11 @@ const formData = reactive({
   landlordWechat: '',
   serviceHours: '',
 });
+
 const rules = {
   name: [{ required: true, message: '请输入楼栋名称', trigger: 'blur' }],
   address: [{ required: true, message: '请输入地址', trigger: 'blur' }],
   totalFloors: [{ required: true, message: '请输入总楼层', trigger: 'blur' }],
-};
-
-const fetchData = async () => {
-  loading.value = true;
-  try {
-    const response = await getBuildings({ page: pagination.page, limit: pagination.limit });
-    tableData.value = response.data;
-    pagination.total = response.meta.total;
-  } catch (error) {
-    ElMessage.error('获取数据失败');
-  } finally {
-    loading.value = false;
-  }
 };
 
 const handleCreate = () => {

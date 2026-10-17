@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateBuildingDto } from './dto/create-building.dto.js';
 import { UpdateBuildingDto } from './dto/update-building.dto.js';
@@ -9,11 +10,12 @@ export class BuildingsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateBuildingDto) {
-    const data: any = { ...dto };
-    if (data.totalFloors !== undefined && data.floors === undefined) {
-      data.floors = data.totalFloors;
-    }
-    delete data.totalFloors;
+    const { totalFloors, ...rest } = dto;
+    const data: Prisma.BuildingCreateInput = {
+      ...rest,
+      metadata: rest.metadata ? (rest.metadata as Prisma.InputJsonValue) : undefined,
+      floors: rest.floors ?? totalFloors ?? 1,
+    };
     return this.prisma.building.create({
       data,
     });
@@ -23,7 +25,7 @@ export class BuildingsService {
     const { page = 1, limit = 20, isActive } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.BuildingWhereInput = {};
     if (isActive !== undefined) {
       where.isActive = isActive;
     }
@@ -76,11 +78,12 @@ export class BuildingsService {
       throw new NotFoundException('楼栋不存在');
     }
 
-    const data: any = { ...dto };
-    if (data.totalFloors !== undefined && data.floors === undefined) {
-      data.floors = data.totalFloors;
-    }
-    delete data.totalFloors;
+    const { totalFloors, metadata, ...rest } = dto;
+    const data: Prisma.BuildingUpdateInput = {
+      ...rest,
+      ...(metadata !== undefined ? { metadata: metadata as Prisma.InputJsonValue } : {}),
+      ...(totalFloors !== undefined && rest.floors === undefined ? { floors: totalFloors } : {}),
+    };
 
     return this.prisma.building.update({
       where: { id },

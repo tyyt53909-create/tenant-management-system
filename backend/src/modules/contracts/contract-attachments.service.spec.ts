@@ -10,7 +10,7 @@ describe('合同扫描件归属与保存', () => {
   const png = { originalname:'合同第一页.png', mimetype:'image/png', size:8, buffer:Buffer.from([137,80,78,71,13,10,26,10]) };
   beforeEach(() => {
     prisma={contract:{findUnique:vi.fn().mockResolvedValue({id:'c1',tenantId:'tenant-1'})},contractAttachment:{findMany:vi.fn().mockResolvedValue([{id:'a1',fileName:'合同.png'}]),create:vi.fn().mockResolvedValue({id:'a1',fileName:'合同.png',fileSize:8,mimeType:'image/png'}),findFirst:vi.fn().mockResolvedValue({id:'a1',contractId:'c1',type:'CONTRACT_SCAN',fileUrl:'/api/files/photo.png',mimeType:'image/png',fileName:'合同.png'})}};
-    files={save:vi.fn().mockResolvedValue({url:'/api/files/photo.png',fileName:'合同.png',fileSize:8,mimeType:'image/png'}),filePath:vi.fn().mockReturnValue('/storage/photo.png')};
+    files={save:vi.fn().mockResolvedValue({url:'/api/files/photo.png',fileName:'合同.png',fileSize:8,mimeType:'image/png'}),read:vi.fn().mockResolvedValue(Buffer.from('png'))};
     service=new ContractAttachmentsService(prisma,files);
   });
   it('管理员上传的图片保存为关联当前合同的扫描件',async()=>{
@@ -46,7 +46,8 @@ describe('合同扫描件归属与保存', () => {
     expect(files.save).not.toHaveBeenCalled();
   });
   it('图片下载要求附件属于请求的合同',async()=>{
-    await expect(service.file('c1','a1',tenant)).resolves.toMatchObject({path:'/storage/photo.png',mimeType:'image/png'});
+    await expect(service.file('c1','a1',tenant)).resolves.toMatchObject({mimeType:'image/png',body:Buffer.from('png')});
+    expect(files.read).toHaveBeenCalledWith('photo.png');
     expect(prisma.contractAttachment.findFirst).toHaveBeenCalledWith({where:{id:'a1',contractId:'c1',type:'CONTRACT_SCAN'}});
     prisma.contractAttachment.findFirst.mockResolvedValue(null);
     await expect(service.file('c1','another',tenant)).rejects.toThrow(NotFoundException);
@@ -56,6 +57,6 @@ describe('合同扫描件归属与保存', () => {
       prisma.contractAttachment.findFirst.mockResolvedValue({fileUrl:'/api/files/a.png',mimeType:'image/png',fileName:'a',...patch});
       await expect(service.file('c1','a1',tenant)).rejects.toThrow(NotFoundException);
     }
-    expect(files.filePath).not.toHaveBeenCalled();
+    expect(files.read).not.toHaveBeenCalled();
   });
 });

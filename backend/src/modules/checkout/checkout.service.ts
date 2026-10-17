@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import type { Prisma, CheckoutItemType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
@@ -44,10 +45,10 @@ export class CheckoutService {
         await tx.checkoutItem.createMany({
           data: dto.items.map((item) => ({
             checkoutId: record.id,
-            itemType: item.itemType as any,
+            itemType: item.itemType as CheckoutItemType,
             description: item.description,
             amount: item.amount,
-            calculation: item.calculation ?? undefined,
+            calculation: item.calculation ? (item.calculation as Prisma.InputJsonValue) : undefined,
             isAdjusted: item.isAdjusted ?? false,
             adjustReason: item.adjustReason,
           })),
@@ -65,7 +66,7 @@ export class CheckoutService {
     const { page = 1, limit = 20, status, contractId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.CheckoutRecordWhereInput = {};
     if (status) where.status = status;
     if (contractId) where.contractId = contractId;
 
@@ -106,7 +107,7 @@ export class CheckoutService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = { contract: { tenantId } };
+    const where: Prisma.CheckoutRecordWhereInput = { contract: { tenantId } };
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -147,7 +148,7 @@ export class CheckoutService {
     const record = await this.prisma.checkoutRecord.findUnique({ where: { id } });
     if (!record) throw new NotFoundException('退租记录不存在');
 
-    const updateData: any = {};
+    const updateData: Prisma.CheckoutRecordUpdateInput = {};
     if (dto.status) {
       updateData.status = dto.status;
       if (dto.status === 'COMPLETED') updateData.processedAt = new Date();
@@ -169,10 +170,10 @@ export class CheckoutService {
           await tx.checkoutItem.createMany({
             data: dto.items.map((item) => ({
               checkoutId: id,
-              itemType: item.itemType as any,
+              itemType: item.itemType as CheckoutItemType,
               description: item.description,
               amount: item.amount,
-              calculation: item.calculation ?? undefined,
+              calculation: item.calculation ? (item.calculation as Prisma.InputJsonValue) : undefined,
               isAdjusted: item.isAdjusted ?? false,
               adjustReason: item.adjustReason,
             })),
@@ -197,14 +198,15 @@ export class CheckoutService {
   /**
    * 退租记录 CSV 导出
    */
-  async exportCheckouts(query: any) {
-    const where: any = {};
+  async exportCheckouts(query: Partial<QueryCheckoutsDto>) {
+    const where: Prisma.CheckoutRecordWhereInput = {};
     if (query.status) where.status = query.status;
     if (query.contractId) where.contractId = query.contractId;
     if (query.startDate || query.endDate) {
-      where.checkoutDate = {};
-      if (query.startDate) where.checkoutDate.gte = new Date(query.startDate);
-      if (query.endDate) where.checkoutDate.lte = new Date(query.endDate);
+      where.checkoutDate = {
+        ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+        ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+      };
     }
 
     const checkouts = await this.prisma.checkoutRecord.findMany({
@@ -222,7 +224,8 @@ export class CheckoutService {
       take: 5000,
     });
 
-    const columns: CsvColumn[] = [
+    type ExportCheckoutItem = (typeof checkouts)[number];
+    const columns: CsvColumn<ExportCheckoutItem>[] = [
       { header: '退租记录ID', key: 'id' },
       { header: '房间号', formatter: (c) => c.room?.roomNumber || '' },
       { header: '租客姓名', formatter: (c) => c.contract?.tenant?.name || '' },

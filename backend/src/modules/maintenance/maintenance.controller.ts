@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { MaintenanceService } from './maintenance.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
@@ -8,6 +8,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
 import { CapabilityGuard } from '../../common/guards/capability.guard.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('maintenance')
 @UseGuards(JwtAuthGuard)
@@ -18,8 +19,9 @@ export class MaintenanceController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.maintenance.create')
-  create(@Request() req: any, @Body() createMaintenanceDto: CreateMaintenanceDto) {
-    return this.maintenanceService.create(createMaintenanceDto, req.user);
+  create(@CurrentUser() userParam: CurrentUserParam, @Body() createMaintenanceDto: CreateMaintenanceDto) {
+    const user = resolveAuthUser(userParam);
+    return this.maintenanceService.create(createMaintenanceDto, user);
   }
 
   @Get()
@@ -34,17 +36,21 @@ export class MaintenanceController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT')
   @RequireCapability('tenant.maintenance.read')
-  findMy(@Request() req: any, @Query() query: QueryMaintenanceDto) {
-    return this.maintenanceService.findByTenant(req.user.tenantId, query);
+  findMy(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryMaintenanceDto) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.tenantId || user.userId || '';
+    return this.maintenanceService.findByTenant(tenantId, query);
   }
 
   @Get(':id')
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.maintenance.read')
-  findOne(@Request() req: any, @Param('id') id: string) {
-    if (req.user.role === 'TENANT') {
-      return this.maintenanceService.findOneForTenant(id, req.user.tenantId);
+  findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId || user.userId || '';
+      return this.maintenanceService.findOneForTenant(id, tenantId);
     }
     return this.maintenanceService.findOne(id);
   }

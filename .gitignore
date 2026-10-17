@@ -12,6 +12,7 @@ out/
 .next/
 .nuxt/
 .cache/
+*.tsbuildinfo
 
 # 环境变量（敏感信息）
 .env

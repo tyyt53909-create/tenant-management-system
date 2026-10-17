@@ -74,6 +74,15 @@ jobs:
         working-directory: backend
         run: npx tsc --noEmit
       
+      - name: 检查 OpenAPI 与前端类型
+        working-directory: backend
+        run: npm run openapi:check
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+          NODE_ENV: test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
       - name: 运行单元测试
         working-directory: backend
         env:

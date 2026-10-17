@@ -3,6 +3,7 @@ export interface CsvColumn<T>{label:string;value:(row:T)=>unknown}
 export function csvCell(value:unknown){
   if(value==null)return '""';
   let text=String(value);
+  // oxlint-disable-next-line no-control-regex
   if(typeof value==='string' && (/^[\s\u0000-\u001f]*[=+\-@]/.test(text)||/^[\t\r]/.test(text)))text=`'${text}`;
   return `"${text.replace(/"/g,'""')}"`;
 }

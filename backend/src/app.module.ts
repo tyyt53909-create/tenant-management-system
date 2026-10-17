@@ -1,5 +1,11 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { createThrottleModuleOptions } from './config/throttle.config.js';
+import { RedisModule } from './redis/redis.module.js';
+import { RedisService } from './redis/redis.service.js';
+import { RedisThrottlerStorage } from './redis/redis-throttler.storage.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import appConfig from './config/app.config.js';
@@ -24,6 +30,7 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
 import { PublicModule } from './modules/public/public.module.js';
 import { StatisticsModule } from './modules/statistics/statistics.module.js';
 import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-capabilities.module.js';
+import { HealthModule } from './modules/health/health.module.js';
 
 @Module({
   imports: [
@@ -32,7 +39,19 @@ import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-c
       load: [appConfig, databaseConfig, jwtConfig],
       envFilePath: '.env',
     }),
+    RedisModule,
+    ThrottlerModule.forRootAsync({
+      imports: [RedisModule],
+      inject: [RedisService],
+      useFactory: async (redis: RedisService) => {
+        await redis.connect();
+        return createThrottleModuleOptions(
+          redis.ready && redis.client ? new RedisThrottlerStorage(redis.client) : undefined,
+        );
+      },
+    }),
     PrismaModule,
+    HealthModule,
     TenantCapabilitiesModule,
     AuthModule,
     RoomsModule,
@@ -55,6 +74,6 @@ import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-c
     StatisticsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

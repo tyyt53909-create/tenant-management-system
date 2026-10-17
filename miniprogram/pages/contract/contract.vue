@@ -157,7 +157,7 @@ export default {
           await this.loadAttachments()
         }
       } catch (err) {
-        if (err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
+        if (err?.code === 'CAPABILITY_DENIED' || err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
           this.blocked = true
           this.error = ''
         } else {

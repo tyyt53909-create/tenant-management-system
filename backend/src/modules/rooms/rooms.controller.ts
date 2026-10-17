@@ -7,7 +7,6 @@ import {
   Param,
   Delete,
   Query,
-  Request,
   UseGuards,
 } from '@nestjs/common';
 import { RoomsService } from './rooms.service.js';
@@ -19,6 +18,7 @@ import { QueryRoomsDto } from './dto/query-rooms.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('rooms')
 @UseGuards(JwtAuthGuard)
@@ -33,14 +33,16 @@ export class RoomsController {
   }
 
   @Get()
-  findAll(@Request() req: any, @Query() query: QueryRoomsDto) {
+  findAll(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryRoomsDto) {
+    const user = resolveAuthUser(userParam);
     // 保洁仅可见待清洁房间、租客仅可见自己租住的房间（服务端固定过滤，docs/03-权限矩阵.md）
-    return this.roomsService.findAll(query, req.user?.role, req.user?.tenantId);
+    return this.roomsService.findAll(query, user.role, user.tenantId);
   }
 
   @Get(':id')
-  findOne(@Request() req: any, @Param('id') id: string) {
-    return this.roomsService.findOne(id, req.user?.role, req.user?.tenantId);
+  findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    return this.roomsService.findOne(id, user.role, user.tenantId);
   }
 
   @Patch(':id/status')

@@ -184,7 +184,7 @@ export default {
         this.blocked = false
         this.bill = await getBillDetail(this.id)
       } catch (err) {
-        if (err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
+        if (err?.code === 'CAPABILITY_DENIED' || err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
           this.blocked = true
           this.error = ''
         } else {

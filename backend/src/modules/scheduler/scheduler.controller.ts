@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards } from '@nestjs/common';
+import { Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { SchedulerService } from './scheduler.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -18,7 +18,7 @@ export class SchedulerController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   runDaily() {
-    return this.schedulerService.runDaily();
+    return this.schedulerService.rerun('daily-jobs', 'MANUAL');
   }
 
   /** 手动触发月度账单生成 */
@@ -26,6 +26,14 @@ export class SchedulerController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   runMonthlyBills() {
-    return this.schedulerService.generateMonthlyBills();
+    return this.schedulerService.rerun('monthly-bill-generation', 'MANUAL');
+  }
+
+  /** 按任务名手动重跑。另一个实例正在跑时返回 SKIPPED。 */
+  @Post('jobs/:name/run')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  runJob(@Param('name') name: string) {
+    return this.schedulerService.rerun(name, 'MANUAL');
   }
 }

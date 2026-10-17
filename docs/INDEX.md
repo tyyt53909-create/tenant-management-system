@@ -1,11 +1,11 @@
 # 文档索引
 
 > 本文档是所有项目文档的唯一注册表
-> 最后更新: 2026-10-15
-> 文档总数: 53 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 1、draft 2、archived 3、未标注元信息 47（元信息补齐建议见 09-待确认清单）
-> 归档文档: 3 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 57 份（含本索引与归档）
-> 任务书: 34 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 最后更新: 2026-10-17
+> 文档总数: 80 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 1、draft 2、archived 3、未标注元信息 47（元信息补齐建议见 09-待确认清单；该分类口径本次未重算）
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 92 份（含本索引与归档）
+> 任务书: 57 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -21,10 +21,10 @@
 |------|------|------|------|----------|----------|----------|------|
 | [00-项目计划书.md](./00-项目计划书.md) | 项目计划书 | 过程类 | draft | human | 全项目 | - | 阶段划分、里程碑、风险清单 |
 | [01-架构设计.md](./01-架构设计.md) | 架构设计 | 事实来源类 | draft | strong | src/\*\* | - | 总体架构、模块边界、扩展点 |
-| [02-数据模型.md](./02-数据模型.md) | 数据模型 | 事实来源类 | draft | strong | backend/prisma/schema.prisma | 2026-10-15 | 实体关系图、26张表设计（`grep -c '^model '` = 26，T173 引入 UserCapabilityOverride） |
+| [02-数据模型.md](./02-数据模型.md) | 数据模型 | 事实来源类 | active | strong | backend/prisma/schema.prisma | 2026-10-17 | 实体关系图、28张表设计（`grep -c '^model '` = 28，对齐 InviteCode 与 JobRun） |
 | [03-权限矩阵.md](./03-权限矩阵.md) | 权限矩阵 | 事实来源类 | draft | strong | src/common/guards/\*\* | 2026-10-15 | 角色权限、数据隔离、§7.3 租客账号能力开关与登入控制 (T173) |
 | [04-状态机.md](./04-状态机.md) | 状态机设计 | 事实来源类 | draft | strong | src/modules/\*\*/\*.service.ts | - | 5个核心状态机流转规则 |
-| [05-接口规范.md](./05-接口规范.md) | 接口规范 | 事实来源类 | draft | strong | src/modules/\*\*/\*.controller.ts | 2026-10-15 | RESTful规范、错误码、接口清单、/tenants/:id/account 与 capabilities 接口 (T173) |
+| [05-接口规范.md](./05-接口规范.md) | 接口规范 | 事实来源类 | draft | strong | src/modules/\*\*/\*.controller.ts | 2026-10-16 | RESTful规范、错误码、接口清单；§10 限流按 T175 落地 |
 | [06-安全与合规清单.md](./06-安全与合规清单.md) | 安全与合规 | 决策类 | draft | human | 全项目 | - | 个人信息保护、备份、合规要求 |
 | [07-测试策略.md](./07-测试策略.md) | 测试策略 | 决策类 | draft | strong | src/\*\*/\*.spec.ts | - | 单元/集成/E2E测试策略 |
 | [08-任务拆分总览.md](./08-任务拆分总览.md) | 任务拆分总览 | 过程类 | draft | strong | tasks/\*\* | 2026-10-11 | 阶段规划、依赖关系、排期 |
@@ -33,7 +33,8 @@
 | [11-小程序构建与配置.md](./11-小程序构建与配置.md) | 小程序构建与配置 | 事实来源类 | active | medium | miniprogram/\*\* | 2026-10-13 | 安装、开发/生产 API 配置、产物位置与风险界线 |
 | [10-主题系统架构.md](./10-主题系统架构.md) | 主题系统架构 | 事实来源类 | draft | medium | miniprogram/theme/\*\*、miniprogram/utils/theme.js | 2026-10-13 | ⚠️ 仍描述 Vuex 版架构，T146 后需人工复核更新 |
 | [主题系统-完成总结.md](./主题系统-完成总结.md) | 主题系统完成总结 | 过程类 | draft | medium | miniprogram/\*\* | 2026-10-13 | ⚠️ T146 前的历史记录，含已废弃的 Vuex 说明 |
-| [12-部署与运维.md](./12-部署与运维.md) | 部署与运维 | 事实来源类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\*、docker-compose.yml | 2026-10-13 | 环境变量清单、生产 compose 要求、备份恢复步骤、上线前置 |
+| [12-部署与运维.md](./12-部署与运维.md) | 部署与运维 | 事实来源类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\*、docker-compose.yml | 2026-10-16 | 环境变量清单；T174 OTP 开关与 SMTP，T175 限流与 TRUST_PROXY |
+| [13-架构与现有代码优化计划.md](./13-架构与现有代码优化计划.md) | 架构与现有代码优化计划 | 过程类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\* | 2026-10-15 | OPT-01～OPT-28，不加新业务功能 |
 
 ---
 
@@ -49,6 +50,29 @@
 
 ## 3. 任务与交接
 
+- [2026-10-17-T201-文档与代码一致性收口.md](./handoff/2026-10-17-T201-文档与代码一致性收口.md)：T201 / OPT-28，文档与代码一致性收口（生成 STATUS.md 脚本、表数与路由数硬门禁、补齐元信息头部、死链清零）。
+- [2026-10-17-T200-仓库卫生与分支治理.md](./handoff/2026-10-17-T200-仓库卫生与分支治理.md)：T200 / OPT-27，仓库卫生与分支治理（清理 29 个旧分支与 worktree、8 份游离文档归档至 archive、去除 tsbuildinfo、收敛 AI 技能目录、全新重写 README.md）。
+- [2026-10-17-T199-备份恢复演练与性能基线.md](./handoff/2026-10-17-T199-备份恢复演练与性能基线.md)：T199 / OPT-26，备份恢复演练（RTO 2.4s、RPO 0丢失）与 100 并发 k6 性能基线（P95 66.75ms、0 错误）。
+- [2026-10-17-T198-生产部署工件.md](./handoff/2026-10-17-T198-生产部署工件.md)：T198 / OPT-25，生产部署工件（多阶段 Dockerfile、非 root 运行、Nginx 静态反代与 gzip、docker-compose.prod 编排、release.yml 镜像发布）。
+- [2026-10-17-T197-e2e与UI测试.md](./handoff/2026-10-17-T197-e2e与UI测试.md)：T197 / OPT-24，e2e 接入 CI（backend-e2e + admin-ui）与 Playwright 5 流程（3 轮 7/7），附带结算弹窗空指针修复。
+- [2026-10-17-T196-覆盖率门禁.md](./handoff/2026-10-17-T196-覆盖率门禁.md)：T196 / OPT-23，覆盖率阈值门禁（全局 85/72，结算 8 文件分支 ≥90，740 用例全绿）。
+- [2026-10-17-T195-管理后台CI.md](./handoff/2026-10-17-T195-管理后台CI.md)：T195 / OPT-22，管理后台 CI 接入与门禁（oxlint、vue-tsc、vitest、vite build 四道门禁与阻断验证）。
+- [2026-10-17-T194-小程序API层重构与真实联调.md](./handoff/2026-10-17-T194-小程序API层重构与真实联调.md)：T194 / OPT-21，小程序 API 层重构与真实联调（按领域拆分 7 模块、JSDoc 规范、统一错误码、弱网容错）。
+- [2026-10-16-T193-管理后台Token存储加固.md](./handoff/2026-10-16-T193-管理后台Token存储加固.md)：T193 / OPT-20，管理后台 Token 存储加固（HttpOnly Cookie、内存 access token、CSP/安全头）。
+- [2026-10-16-T192-管理后台大组件拆分与composable.md](./handoff/2026-10-16-T192-管理后台大组件拆分与composable.md)：T192 / OPT-19，管理后台大组件拆分与 composable 抽象（抽离 composable、全仓 .vue 文件 <=500 行）。
+- [2026-10-16-T191-清理死代码与独立邀请码表治理.md](./handoff/2026-10-16-T191-清理死代码与独立邀请码表治理.md)：T191 / OPT-18，删除 BuildingGuard、独立 InviteCode 表与批量邀请码全生命周期治理。
+- [2026-10-16-T190-类型安全治理.md](./handoff/2026-10-16-T190-类型安全治理.md)：T190 / OPT-17，类型安全治理，消除 unsafe raw query、@CurrentUser、非测试 any 降至 0。
+- [2026-10-16-T189-拆分超大服务与控制器.md](./handoff/2026-10-16-T189-拆分超大服务与控制器.md)：T189 / OPT-16，超大服务与控制器拆分、移除 controller PrismaService 注入。
+- [2026-10-16-T188-OpenAPI与前端类型生成.md](./handoff/2026-10-16-T188-OpenAPI与前端类型生成.md)：T188 / OPT-15，OpenAPI 生成、前端类型导出与 CI 检查。
+- [2026-10-16-T187-扩展点.md](./handoff/2026-10-16-T187-扩展点.md)：T187 / OPT-14，通知渠道、水电表适配器和线下支付接口。
+- [2026-10-16-T186-文件存储.md](./handoff/2026-10-16-T186-文件存储.md)：T186 / OPT-13，本地与 S3 存储适配、缩略图和文件头校验。
+- [2026-10-16-T185-结构化日志与健康检查.md](./handoff/2026-10-16-T185-结构化日志与健康检查.md)：T185 / OPT-12，JSON 访问日志与 /health、/health/ready。
+- [2026-10-16-T184-统一错误码.md](./handoff/2026-10-16-T184-统一错误码.md)：T184 / OPT-11，统一错误响应、Prisma 错误映射与前端按错误码提示。
+- [2026-10-16-T183-定时任务锁.md](./handoff/2026-10-16-T183-定时任务锁.md)：T183 / OPT-10，定时任务咨询锁、JobRun 与 180 天通知清理。
+- [2026-10-16-T182-Refresh-Token轮换.md](./handoff/2026-10-16-T182-Refresh-Token轮换.md)：T182 / OPT-09，刷新轮换、重复使用失效、登出撤销。
+- [2026-10-16-T181-Redis共享状态.md](./handoff/2026-10-16-T181-Redis共享状态.md)：T181 / OPT-08，OTP 与限流计数接入 Redis。
+- [2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)：T175 / OPT-02，全局限流与登录、验证码等敏感接口收紧。
+- [2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)：T174 / OPT-01，万能码改为显式开关，验证码 5 次错误作废，生产环境不把验证码写入日志。
 - [2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)：T173 租客账号能力开关、UserCapabilityOverride 数据模型、管理后台抽屉第四 Tab 与小程序优雅降级交付证据。
 - [2026-10-13-T164-qiju-theme.md](./handoff/2026-10-13-T164-qiju-theme.md)：双端齐居主题重构与样式统一记录。
 - [2026-10-13-T165-交互收口与质量复核.md](./handoff/2026-10-13-T165-交互收口与质量复核.md)：用户质量反馈后的详情、关联选择、失败重试、租客筛选与照片收口；记录逐页操作证据及未完成边界。
@@ -177,11 +201,57 @@
 | [T170](../tasks/T170-邮箱验证码登录与邀请码延迟绑定.md) | 邮箱验证码登录与邀请码延迟绑定（OTP免密/Google零门槛/个人中心延迟绑定房源） | 强 | completed | 2026-10-14 |
 | [T171](../tasks/T171-工作台水电使用概览.md) | 首页工作台水电使用概览（UTILITIES / USAGE OVERVIEW，楼栋月份筛选/四卡片/六个月用量趋势） | 强 | completed | 2026-10-15 |
 | [T173](../tasks/T173-租客账号能力开关.md) | 租客账号能力开关（登录禁用即时失效/细粒度功能屏蔽/审计日志/双端降级） | 强 | completed | 2026-10-15 |
+| [T174](../tasks/T174-OTP验证码安全加固.md) | OTP 验证码安全加固（OPT-01：万能码显式开关 / 5 次错误作废 / 生产不记录验证码） | 强 | completed | 2026-10-15 |
+| [T175](../tasks/T175-接口限流.md) | 全局与敏感接口限流（OPT-02：100 次/分钟/IP，认证 10 次/分钟，验证码 5 次/小时/邮箱） | 强 | completed | 2026-10-16 |
+| [T181](../tasks/T181-Redis共享状态.md) | Redis 共享状态（OPT-08：OTP 与限流计数，生产连不上拒绝启动） | 强 | completed | 2026-10-16 |
+| [T182](../tasks/T182-Refresh-Token轮换.md) | Refresh Token 轮换与撤销（OPT-09：重复使用失效、登出、禁用账号清会话） | 强 | completed | 2026-10-16 |
+| [T183](../tasks/T183-定时任务锁.md) | 定时任务多实例锁与 JobRun（OPT-10：咨询锁、执行记录、180 天通知清理） | 强 | completed | 2026-10-16 |
+| [T184](../tasks/T184-统一错误码.md) | 全局异常过滤器与统一错误码（OPT-11：code/requestId、Prisma 409/404、前端按错误码提示） | 强 | completed | 2026-10-16 |
+| [T185](../tasks/T185-结构化日志与健康检查.md) | 结构化日志与健康检查（OPT-12：JSON 访问日志、/health、/health/ready） | 强 | completed | 2026-10-16 |
+| [T186](../tasks/T186-文件存储.md) | 文件存储抽象与缩略图（OPT-13：local/s3、EXIF 清理、文件头校验） | 强 | completed | 2026-10-16 |
+| [T187](../tasks/T187-扩展点.md) | 扩展点接口（OPT-14：通知渠道、水电表适配器、线下支付） | 强 | completed | 2026-10-16 |
+| [T188](../tasks/T188-OpenAPI与前端类型生成.md) | OpenAPI 与前端类型自动生成（OPT-15：118 条路由、openapi-typescript、CI 门禁） | 强 | completed | 2026-10-16 |
+| [T189](../tasks/T189-拆分超大服务与控制器.md) | 拆分超大 service / controller（OPT-16：服务拆分、去 controller 注入 Prisma、<500行） | 强 | completed | 2026-10-16 |
+| [T190](../tasks/T190-类型安全治理.md) | 类型安全治理（OPT-17：消除 unsafe raw query、@CurrentUser、去 any ≤15） | 强 | completed | 2026-10-16 |
+| [T191](../tasks/T191-清理死代码与独立邀请码表治理.md) | 清理死代码与独立邀请码表治理（OPT-18：删除 BuildingGuard、独立 InviteCode 表、批量邀请码） | 强 | completed | 2026-10-16 |
+| [T192](../tasks/T192-管理后台大组件拆分与composable.md) | 管理后台大组件拆分与 composable 抽象（OPT-19：抽离 composable、拆分超大页面至 <=500 行） | 强 | completed | 2026-10-16 |
+| [T193](../tasks/T193-管理后台Token存储加固.md) | 管理后台 Token 存储加固与安全响应头（OPT-20：HttpOnly Cookie、内存 Token、CSP/安全响应头） | 强 | completed | 2026-10-16 |
+| [T194](../tasks/T194-小程序API层重构与真实联调.md) | 小程序 API 层重构与真实联调（OPT-21：按领域解耦为 7 个模块、JSDoc 注解、统一错误码、弱网友好交互） | 强 | completed | 2026-10-17 |
+| [T195](../tasks/T195-管理后台CI.md) | 管理后台 CI 接入与门禁（OPT-22：oxlint / vue-tsc / vitest / vite build 四道门禁） | 普通 | completed | 2026-10-17 |
+| [T196](../tasks/T196-覆盖率门禁.md) | 覆盖率门禁（OPT-23：全局语句 85/分支 72，结算 8 文件分支 ≥90） | 强 | completed | 2026-10-17 |
+| [T197](../tasks/T197-e2e与UI测试.md) | e2e 接入 CI + 后台 Playwright 关键流程（OPT-24：backend-e2e/admin-ui 双 job + 5 流程） | 强 | completed | 2026-10-17 |
+| [T198](../tasks/T198-生产部署工件.md) | 生产部署工件（OPT-25：多阶段 Dockerfile、Nginx 反代、docker-compose.prod、release.yml） | 强 | completed | 2026-10-17 |
+| [T199](../tasks/T199-备份恢复演练与性能基线.md) | 备份恢复演练与性能基线（OPT-26：pg_dump/restore 2.4s RTO、k6 100并发基线 P95 66.75ms、0错误） | 强 | completed | 2026-10-17 |
+| [T200](../tasks/T200-仓库卫生与分支治理.md) | 仓库卫生与分支治理（OPT-27：清理 29 个旧分支/worktree、8 份历史文档归档至 archive、去 tsbuildinfo、重构 README） | 普通 | completed | 2026-10-17 |
+| [T201](../tasks/T201-文档与代码一致性收口.md) | 文档与代码一致性收口（OPT-28：generate-status.mjs 脚本、表数/路由数门禁、元信息补齐、死链清零） | 普通 | completed | 2026-10-17 |
 
-**交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)
+**交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)、[2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)、[2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)
 
 ### 3.4 交接记录
 
+- [2026-10-17-T201-文档与代码一致性收口.md](./handoff/2026-10-17-T201-文档与代码一致性收口.md)：T201 / OPT-28，文档与代码一致性收口（生成 STATUS.md 脚本、表数与路由数硬门禁、补齐元信息头部、死链清零）。
+- [2026-10-17-T200-仓库卫生与分支治理.md](./handoff/2026-10-17-T200-仓库卫生与分支治理.md)：T200 / OPT-27，仓库卫生与分支治理（清理 29 个旧分支与 worktree、8 份游离文档归档至 archive、去除 tsbuildinfo、收敛 AI 技能目录、全新重写 README.md）。
+- [2026-10-17-T199-备份恢复演练与性能基线.md](./handoff/2026-10-17-T199-备份恢复演练与性能基线.md)：T199 / OPT-26，备份恢复演练（RTO 2.4s、RPO 0丢失）与 100 并发 k6 性能基线（P95 66.75ms、0 错误）。
+- [2026-10-17-T198-生产部署工件.md](./handoff/2026-10-17-T198-生产部署工件.md)：T198 / OPT-25，生产部署工件（多阶段 Dockerfile、非 root 运行、Nginx 静态反代与 gzip、docker-compose.prod 编排、release.yml 镜像发布）。
+- [2026-10-17-T197-e2e与UI测试.md](./handoff/2026-10-17-T197-e2e与UI测试.md)：T197 / OPT-24，e2e 接入 CI（backend-e2e + admin-ui）与 Playwright 5 流程（3 轮 7/7），附带结算弹窗空指针修复。
+- [2026-10-17-T196-覆盖率门禁.md](./handoff/2026-10-17-T196-覆盖率门禁.md)：T196 / OPT-23，覆盖率阈值门禁（全局 85/72，结算 8 文件分支 ≥90，740 用例全绿）。
+- [2026-10-17-T195-管理后台CI.md](./handoff/2026-10-17-T195-管理后台CI.md)：T195 / OPT-22，管理后台 CI 接入与门禁（oxlint、vue-tsc、vitest、vite build 四道门禁与阻断验证）。
+- [2026-10-17-T194-小程序API层重构与真实联调.md](./handoff/2026-10-17-T194-小程序API层重构与真实联调.md)：T194 / OPT-21，小程序 API 层重构与真实联调（按领域拆分 7 模块、JSDoc 规范、统一错误码、弱网容错）。
+- [2026-10-16-T193-管理后台Token存储加固.md](./handoff/2026-10-16-T193-管理后台Token存储加固.md)：T193 / OPT-20，管理后台 Token 存储加固（HttpOnly Cookie、内存 access token、CSP/安全头）。
+- [2026-10-16-T192-管理后台大组件拆分与composable.md](./handoff/2026-10-16-T192-管理后台大组件拆分与composable.md)：T192 / OPT-19，管理后台大组件拆分与 composable 抽象（抽离 composable、全仓 .vue 文件 <=500 行）。
+- [2026-10-16-T191-清理死代码与独立邀请码表治理.md](./handoff/2026-10-16-T191-清理死代码与独立邀请码表治理.md)：T191 / OPT-18，删除 BuildingGuard、独立 InviteCode 表与批量邀请码全生命周期治理。
+- [2026-10-16-T190-类型安全治理.md](./handoff/2026-10-16-T190-类型安全治理.md)：T190 / OPT-17，类型安全治理，消除 unsafe raw query、@CurrentUser、非测试 any 降至 0。
+- [2026-10-16-T189-拆分超大服务与控制器.md](./handoff/2026-10-16-T189-拆分超大服务与控制器.md)：T189 / OPT-16，超大服务与控制器拆分、移除 controller PrismaService 注入。
+- [2026-10-16-T188-OpenAPI与前端类型生成.md](./handoff/2026-10-16-T188-OpenAPI与前端类型生成.md)：T188 / OPT-15，OpenAPI 生成、前端类型导出与 CI 检查。
+- [2026-10-16-T187-扩展点.md](./handoff/2026-10-16-T187-扩展点.md)：T187 / OPT-14，通知渠道、水电表适配器和线下支付接口。
+- [2026-10-16-T186-文件存储.md](./handoff/2026-10-16-T186-文件存储.md)：T186 / OPT-13，本地与 S3 存储适配、缩略图和文件头校验。
+- [2026-10-16-T185-结构化日志与健康检查.md](./handoff/2026-10-16-T185-结构化日志与健康检查.md)：T185 / OPT-12，JSON 访问日志与 /health、/health/ready。
+- [2026-10-16-T184-统一错误码.md](./handoff/2026-10-16-T184-统一错误码.md)：T184 / OPT-11，统一错误响应、Prisma 错误映射与前端按错误码提示。
+- [2026-10-16-T183-定时任务锁.md](./handoff/2026-10-16-T183-定时任务锁.md)：T183 / OPT-10，定时任务咨询锁、JobRun 与 180 天通知清理。
+- [2026-10-16-T182-Refresh-Token轮换.md](./handoff/2026-10-16-T182-Refresh-Token轮换.md)：T182 / OPT-09，刷新轮换、重复使用失效、登出撤销。
+- [2026-10-16-T181-Redis共享状态.md](./handoff/2026-10-16-T181-Redis共享状态.md)：T181 / OPT-08，OTP 与限流计数接入 Redis。
+- [2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)：T175 / OPT-02，全局限流与登录、验证码等敏感接口收紧。
+- [2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)：T174 / OPT-01，万能码改为显式开关，验证码 5 次错误作废，生产环境不把验证码写入日志。
 - [2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)：T173 租客账号能力开关、UserCapabilityOverride 数据模型、管理后台抽屉第四 Tab 与小程序优雅降级交付证据。
 - [2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)：T171 工作台水电概览卡片、楼栋月份筛选与 6 个月趋势图交付证据。
 - [2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)：T170 邮箱验证码登录、Google 免门槛入驻与应用内延迟绑定房源邀请码交付证据。
@@ -256,6 +326,14 @@
 | [archive/T001-完成总结.md](./archive/T001-完成总结.md) | T001 后端脚手架完成总结 | - | - | 骨架阶段任务完成总结，保留原地 |
 | [archive/T002-T003-完成总结.md](./archive/T002-T003-完成总结.md) | T002-T003 基础设施配置完成总结 | - | - | 骨架阶段任务完成总结，保留原地 |
 | [archive/T101-完成总结.md](./archive/T101-完成总结.md) | T101 Prisma Schema 定义完成总结 | - | - | 骨架阶段任务完成总结，保留原地 |
+| [archive/T164_SUMMARY.md](./archive/T164_SUMMARY.md) | T164 样式与UI修复小结 | 2026-10-17 | - | 历史开发过程小结，归档至 archive |
+| [archive/T164_UI_POLISH.md](./archive/T164_UI_POLISH.md) | T164 UI打磨记录 | 2026-10-17 | - | 历史开发过程记录，归档至 archive |
+| [archive/T164_UI_REPLACEMENT.md](./archive/T164_UI_REPLACEMENT.md) | T164 UI替换记录 | 2026-10-17 | - | 历史开发过程记录，归档至 archive |
+| [archive/T165_ADMIN_THEME.md](./archive/T165_ADMIN_THEME.md) | T165 后台主题迁移记录 | 2026-10-17 | - | 历史开发过程记录，归档至 archive |
+| [archive/今日开发总结-2026-10-11.md](./archive/今日开发总结-2026-10-11.md) | 今日开发总结-2026-10-11 | 2026-10-17 | - | 初期开发总结，归档至 archive |
+| [archive/今日开发最终总结-2026-10-11.md](./archive/今日开发最终总结-2026-10-11.md) | 今日开发最终总结-2026-10-11 | 2026-10-17 | - | 初期开发总结，归档至 archive |
+| [archive/計劃.md](./archive/計劃.md) | 初期计划草稿 | 2026-10-17 | 00-项目计划书.md | 早期草案，归档至 archive |
+| [archive/项目完成总结.md](./archive/项目完成总结.md) | 项目完成总结（早期） | 2026-10-17 | - | 早期阶段总结，归档至 archive |
 
 > 归档目录不参与 CI 的 INDEX 一致性检查（脚本忽略 `docs/archive/**`），此处登记以便检索。
 
