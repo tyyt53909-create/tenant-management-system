@@ -24,7 +24,7 @@
         :empty-text="emptyText"
         :default-sort="{ prop: 'createdAt', order: 'descending' }"
       >
-        <el-table-column prop="name" label="租客" min-width="215" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row)"><span class="record-avatar">{{ row.name?.slice(0,1) }}</span><span><strong>{{ row.name }}</strong><small>{{ row.phone || '尚未填写电话' }}</small></span></button></template></el-table-column>
+        <el-table-column prop="name" label="租客" min-width="215" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row as Tenant)"><span class="record-avatar">{{ row.name?.slice(0,1) }}</span><span><strong>{{ row.name }}</strong><small>{{ row.phone || '尚未填写电话' }}</small></span></button></template></el-table-column>
         <el-table-column label="关联房源" min-width="145"><template #default="{row}"><strong>{{ row.contracts?.[0]?.room?.roomNumber || '暂无生效租约' }}</strong><small class="table-subline">{{ row.contracts?.[0]?.contractNumber || '可查看历史合同' }}</small></template></el-table-column>
         <el-table-column label="入住 / 到期" width="150"><template #default="{row}">{{ row.contracts?.[0]?.startDate?.slice(0,10) || '—' }}<small class="table-subline">{{ row.contracts?.[0]?.endDate?.slice(0,10) || '未记录当前租期' }}</small></template></el-table-column>
         <el-table-column label="预付余额合计" width="140"><template #default="{row}"><strong>{{ row.prepayAccounts?.length ? formatMoney(row.prepayAccounts.reduce((sum:number,account:any)=>sum+account.balanceCache,0)) : '未开通账户' }}</strong><small class="table-subline">{{ row.prepayAccounts?.length ? `${row.prepayAccounts.length} 个账户` : '不显示为零元' }}</small></template></el-table-column>
@@ -36,7 +36,7 @@
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="openDetail(row)">查看档案</el-button><el-dropdown><el-button text aria-label="更多租客操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleEdit(row)">编辑资料</el-dropdown-item><el-dropdown-item @click="handleDelete(row)">删除档案</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+            <el-button type="primary" link @click="openDetail(row as Tenant)">查看档案</el-button><el-dropdown><el-button text aria-label="更多租客操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleEdit(row as Tenant)">编辑资料</el-dropdown-item><el-dropdown-item @click="handleDelete(row as Tenant)">删除档案</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </template>
         </el-table-column>
       </el-table>

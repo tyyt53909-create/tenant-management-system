@@ -131,7 +131,7 @@
             link
             size="small"
             :disabled="row.status !== 'UNUSED'"
-            @click="handleRevoke(row)"
+            @click="handleRevoke(row as InviteCode)"
           >
             作废
           </el-button>
