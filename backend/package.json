@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "build": "nest build",
+    "postbuild": "node scripts/fix-swagger-imports.mjs",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
@@ -18,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
+    "test:perf": "k6 run ../scripts/perf-baseline.k6.js",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "prisma:generate": "prisma generate",
