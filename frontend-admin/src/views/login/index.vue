@@ -49,7 +49,7 @@
         <div class="oauth-section">
           <div id="google-signin-btn" class="google-gis-container"></div>
           <button
-            v-if="!hasGoogleClientId"
+            v-if="mockEnabled"
             type="button"
             class="google-btn"
             :disabled="googleLoading"
@@ -84,10 +84,13 @@ const loginFormRef = ref<FormInstance>();
 const loading = ref(false);
 const googleLoading = ref(false);
 const hasGoogleClientId = ref(false);
+// 后端是否开启「模拟 Google 登录」开发者通道（T206：改由后端 GOOGLE_AUTH_MOCK 决定）
+const mockEnabled = ref(false);
 
+// 仅在开发模式预填种子账号，避免把默认口令随生产 bundle 发布（T206，AGENTS.md §8.1）
 const loginForm = reactive({
-  identifier: 'admin@example.com',
-  password: 'Admin@123',
+  identifier: import.meta.env.DEV ? 'admin@example.com' : '',
+  password: import.meta.env.DEV ? 'Admin@123' : '',
 });
 
 const rules: FormRules = {
@@ -128,7 +131,7 @@ const handleGoogleCredential = async (idToken: string) => {
 };
 
 const handleGoogleClick = async () => {
-  if (hasGoogleClientId.value) return;
+  if (!mockEnabled.value) return;
 
   // 当尚未在 .env 配置真实 Google Client ID 时，提供开发者快速通道
   try {
@@ -138,7 +141,7 @@ const handleGoogleClick = async () => {
       {
         confirmButtonText: '确定登录',
         cancelButtonText: '取消',
-        inputValue: loginForm.identifier || 'admin@example.com',
+        inputValue: loginForm.identifier || '',
         inputPlaceholder: '请输入测试 Gmail / 邮箱',
       }
     );
@@ -154,6 +157,7 @@ const handleGoogleClick = async () => {
 onMounted(async () => {
   try {
     const res = await getGoogleClientId();
+    mockEnabled.value = res?.mockEnabled === true;
     if (res?.clientId && res.clientId.trim() !== '') {
       hasGoogleClientId.value = true;
       const script = document.createElement('script');

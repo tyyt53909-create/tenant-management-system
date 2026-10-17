@@ -33,8 +33,8 @@ export const getCurrentUser = (): Promise<User> => {
   return request.get('/auth/me');
 };
 
-// 获取 Google Client ID
-export const getGoogleClientId = (): Promise<{ clientId: string }> => {
+// 获取 Google Client ID（mockEnabled 表示后端是否开启了模拟登录开发者通道，T206）
+export const getGoogleClientId = (): Promise<{ clientId: string; mockEnabled?: boolean }> => {
   return request.get('/auth/google/client-id');
 };
 
