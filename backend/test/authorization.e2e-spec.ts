@@ -27,6 +27,7 @@ import { PrepayService } from '../src/modules/prepay/prepay.service.js';
 import { MetersController } from '../src/modules/meters/meters.controller.js';
 import { MetersService } from '../src/modules/meters/meters.service.js';
 import { MetersSimulatorService } from '../src/modules/meters/meters-simulator.service.js';
+import { MeterReconciliationService } from '../src/modules/meters/meter-reconciliation.service.js';
 import { NotificationsService } from '../src/modules/notifications/notifications.service.js';
 import { PrismaService } from '../src/modules/prisma/prisma.service.js';
 import { RoomsController } from '../src/modules/rooms/rooms.controller.js';
@@ -182,6 +183,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         { provide: BuildingsService, useValue: { findAll: vi.fn(), findOne: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() } },
         { provide: MetersService, useValue: { findAll: vi.fn(), findOne: vi.fn(), createReading: vi.fn(), findReadings: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() } },
         { provide: MetersSimulatorService, useValue: { runSimulation: vi.fn() } },
+        { provide: MeterReconciliationService, useValue: { reconcile: vi.fn().mockResolvedValue({ period: '2026-01', rows: [], summary: {} }) } },
         // 能力守卫放行（能力拒绝由 tenant-capability 专属测试覆盖；本文件聚焦服务层隔离）
         {
           provide: PrepayService,
@@ -391,6 +393,22 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
       expect(res.status).toBe(200); // 服务在本 e2e 里被 mock；重点是下面这行的范围参数
       expect(app.get(BillsService).findByTenant).toHaveBeenCalledWith('', expect.anything());
+    });
+  });
+
+  describe('水电对账（T218）', () => {
+    it('未登录 → 401', async () => {
+      await request(app.getHttpServer()).get('/meters/reconciliation').expect(401);
+    });
+
+    it('CLEANER 与 TENANT → 403', async () => {
+      for (const role of ['CLEANER', 'TENANT']) {
+        await as(request(app.getHttpServer()).get('/meters/reconciliation'), role).expect(403);
+      }
+    });
+
+    it('ADMIN → 200', async () => {
+      await as(request(app.getHttpServer()).get('/meters/reconciliation?period=2026-01'), 'ADMIN').expect(200);
     });
   });
 

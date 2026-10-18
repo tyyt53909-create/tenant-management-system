@@ -4178,6 +4178,77 @@
         ]
       }
     },
+    "/api/meters/reconciliation": {
+      "get": {
+        "operationId": "MetersController_reconcile",
+        "parameters": [
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "description": "账期 YYYY-MM；不传时默认上个月",
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "meterType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ELECTRICITY",
+                "WATER",
+                "GAS"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "水电对账（T218）：读数 / 扣费 / 账单三方交叉核对，只读。\n只有管理员可用；租客只在自己的账单里看到扣费结果。",
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/meters/simulator/run": {
       "post": {
         "operationId": "MetersController_runSimulation",

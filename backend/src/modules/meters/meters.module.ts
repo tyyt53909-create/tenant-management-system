@@ -12,6 +12,7 @@ import { MeterReadingService } from './meter-reading.service.js';
 import { MeterBatchReadingService } from './meter-batch-reading.service.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterUsageQueryService } from './meter-usage-query.service.js';
+import { MeterReconciliationService } from './meter-reconciliation.service.js';
 import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.js';
 
 @Module({
@@ -22,6 +23,7 @@ import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.
     MeterReadingService,
     MeterBatchReadingService,
     MeterUsageQueryService,
+    MeterReconciliationService,
     MeterAnomalySimulationRunner,
     {
       provide: MeterService,
@@ -48,6 +50,7 @@ import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.
     MeterBatchReadingService,
     MeterBillingService,
     MeterUsageQueryService,
+    MeterReconciliationService,
   ],
 })
 export class MetersModule {}

@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MetersController } from './meters.controller.js';
 import { MetersService } from './meters.service.js';
 import { MetersSimulatorService } from './meters-simulator.service.js';
+import { MeterReconciliationService } from './meter-reconciliation.service.js';
 
 describe('MetersController', () => {
   let controller: MetersController;
@@ -37,6 +38,10 @@ describe('MetersController', () => {
           useValue: {
             runSimulation: vi.fn(),
           },
+        },
+        {
+          provide: MeterReconciliationService,
+          useValue: { reconcile: vi.fn() },
         },
       ],
     }).compile();
