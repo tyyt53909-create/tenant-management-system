@@ -56,17 +56,17 @@
                 <div class="items-panel__head">
                   <span>
                     <strong>结算明细</strong>
-                    <span v-if="itemsOf(row).length">（共 {{ itemsOf(row).length }} 项）</span>
+                    <span v-if="itemsOf(row as CheckoutRecord).length">（共 {{ itemsOf(row as CheckoutRecord).length }} 项）</span>
                   </span>
-                  <span v-if="itemsOf(row).length" class="items-panel__summary">
-                    退还合计：<span class="amount-refund">¥{{ formatMoney(refundTotalOf(row)) }}</span>
+                  <span v-if="itemsOf(row as CheckoutRecord).length" class="items-panel__summary">
+                    退还合计：<span class="amount-refund">¥{{ formatMoney(refundTotalOf(row as CheckoutRecord)) }}</span>
                     &nbsp;|&nbsp;
-                    扣除合计：<span class="amount-deduction">¥{{ formatMoney(deductionTotalOf(row)) }}</span>
+                    扣除合计：<span class="amount-deduction">¥{{ formatMoney(deductionTotalOf(row as CheckoutRecord)) }}</span>
                   </span>
                 </div>
                 <el-table
-                  v-if="itemsOf(row).length"
-                  :data="itemsOf(row)"
+                  v-if="itemsOf(row as CheckoutRecord).length"
+                  :data="itemsOf(row as CheckoutRecord)"
                   size="small"
                   border
                   v-loading="detailLoading[row.id]"
@@ -115,8 +115,8 @@
         </el-table-column>
         <el-table-column label="明细项数" width="110">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="toggleDetail(row)">
-              {{ itemsOf(row).length ? `${itemsOf(row).length} 项明细` : '查看明细' }}
+            <el-button link type="primary" size="small" @click="toggleDetail(row as CheckoutRecord)">
+              {{ itemsOf(row as CheckoutRecord).length ? `${itemsOf(row as CheckoutRecord).length} 项明细` : '查看明细' }}
             </el-button>
           </template>
         </el-table-column>
@@ -131,9 +131,9 @@
         <el-table-column prop="notes" label="备注" min-width="150" show-overflow-tooltip />
         <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
-            <el-button type="info" link @click="handleOpenVoucher(row)">结算单</el-button>
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="info" link @click="handleOpenVoucher(row as CheckoutRecord)">结算单</el-button>
+            <el-button type="primary" link @click="handleEdit(row as CheckoutRecord)">编辑</el-button>
+            <el-button type="danger" link @click="handleDelete(row as CheckoutRecord)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

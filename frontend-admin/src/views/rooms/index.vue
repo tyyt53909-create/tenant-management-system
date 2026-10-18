@@ -50,9 +50,9 @@
         :row-class-name="({row}:any)=>detailVisible && row.id===detailId ? 'detail-selected-row' : ''"
         :empty-text="emptyText"
       >
-        <el-table-column prop="roomNumber" label="房源与户型" min-width="225" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row)"><span class="record-glyph"><el-icon><House /></el-icon></span><span><strong>{{ row.roomNumber }}</strong><small>{{ roomTypeMap[row.roomType] }} · {{ row.area == null ? '面积未记录' : `${row.area} m²` }} · {{ row.building?.name || '未关联楼栋' }} / {{ row.floor }} 楼</small></span></button></template></el-table-column>
-        <el-table-column label="租约月租" width="125"><template #default="{row}"><strong>{{ leaseOf(row) ? formatMoney(leaseOf(row)!.rentAmount) : '—' }}</strong><small class="table-subline">{{ leaseOf(row)?.status==='DRAFT' ? '预订关联草稿' : leaseOf(row) ? '元 / 月' : '未关联生效租约' }}</small></template></el-table-column>
-        <el-table-column label="入住关联" min-width="150"><template #default="{row}"><strong>{{ leaseOf(row)?.tenant?.name || '暂无当前租客' }}</strong><small class="table-subline">{{ leaseOf(row) ? leaseOf(row)!.contractNumber : '请核对房态与租约' }}</small></template></el-table-column>
+        <el-table-column prop="roomNumber" label="房源与户型" min-width="225" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row as Room)"><span class="record-glyph"><el-icon><House /></el-icon></span><span><strong>{{ row.roomNumber }}</strong><small>{{ roomTypeMap[row.roomType] }} · {{ row.area == null ? '面积未记录' : `${row.area} m²` }} · {{ row.building?.name || '未关联楼栋' }} / {{ row.floor }} 楼</small></span></button></template></el-table-column>
+        <el-table-column label="租约月租" width="125"><template #default="{row}"><strong>{{ leaseOf(row as Room) ? formatMoney(leaseOf(row as Room)!.rentAmount) : '—' }}</strong><small class="table-subline">{{ leaseOf(row as Room)?.status==='DRAFT' ? '预订关联草稿' : leaseOf(row as Room) ? '元 / 月' : '未关联生效租约' }}</small></template></el-table-column>
+        <el-table-column label="入住关联" min-width="150"><template #default="{row}"><strong>{{ leaseOf(row as Room)?.tenant?.name || '暂无当前租客' }}</strong><small class="table-subline">{{ leaseOf(row as Room) ? leaseOf(row as Room)!.contractNumber : '请核对房态与租约' }}</small></template></el-table-column>
         <el-table-column prop="status" label="房态" width="90">
           <template #default="{ row }">
             <el-tag :type="roomStatusTagType(row.status)">
@@ -60,7 +60,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="最近待收日期" width="130"><template #default="{row}">{{ leaseOf(row)?.bills?.[0]?.dueDate?.slice(0,10) || '—' }}<small v-if="leaseOf(row) && !leaseOf(row)?.bills?.length" class="table-subline">无未缴清账单</small></template></el-table-column>
+        <el-table-column label="最近待收日期" width="130"><template #default="{row}">{{ leaseOf(row as Room)?.bills?.[0]?.dueDate?.slice(0,10) || '—' }}<small v-if="leaseOf(row as Room) && !leaseOf(row as Room)?.bills?.length" class="table-subline">无未缴清账单</small></template></el-table-column>
         <el-table-column prop="cleanStatus" label="清洁状态" width="105">
           <template #default="{ row }">
             <el-tag :type="cleanStatusTagType(row.cleanStatus)" effect="light">
@@ -70,8 +70,8 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="openDetail(row)">详情</el-button>
-            <el-dropdown><el-button text aria-label="更多房源操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleStatus(row)">房态变更</el-dropdown-item><el-dropdown-item @click="handleEdit(row)">编辑房源</el-dropdown-item><el-dropdown-item @click="handleDelete(row)">删除房源</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+            <el-button type="primary" link @click="openDetail(row as Room)">详情</el-button>
+            <el-dropdown><el-button text aria-label="更多房源操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleStatus(row as Room)">房态变更</el-dropdown-item><el-dropdown-item @click="handleEdit(row as Room)">编辑房源</el-dropdown-item><el-dropdown-item @click="handleDelete(row as Room)">删除房源</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </template>
         </el-table-column>
       </el-table>

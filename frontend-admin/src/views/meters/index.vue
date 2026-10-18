@@ -61,11 +61,11 @@
         </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link :disabled="!row.isActive" @click="handleReading(row)">读数</el-button>
-            <el-button type="warning" link :disabled="!row.isActive" @click="handleOpenSettle(row)">结算</el-button>
-            <el-button type="primary" link @click="handleViewReadings(row)">记录</el-button>
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="success" link :disabled="!row.isActive" @click="handleReading(row as Meter)">读数</el-button>
+            <el-button type="warning" link :disabled="!row.isActive" @click="handleOpenSettle(row as Meter)">结算</el-button>
+            <el-button type="primary" link @click="handleViewReadings(row as Meter)">记录</el-button>
+            <el-button type="primary" link @click="handleEdit(row as Meter)">编辑</el-button>
+            <el-button type="danger" link @click="handleDelete(row as Meter)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

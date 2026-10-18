@@ -85,7 +85,7 @@
               type="primary"
               link
               :loading="actingId === row.id"
-              @click="handleStartCleaning(row)"
+              @click="handleStartCleaning(row as Room)"
             >
               开始清洁
             </el-button>
@@ -94,7 +94,7 @@
               type="success"
               link
               :loading="actingId === row.id"
-              @click="handleFinishCleaning(row)"
+              @click="handleFinishCleaning(row as Room)"
             >
               完成清洁
             </el-button>

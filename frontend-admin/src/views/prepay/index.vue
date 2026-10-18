@@ -30,10 +30,10 @@
         </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link @click="handleTransaction(row)">充值/扣费</el-button>
-            <el-button type="primary" link @click="handleViewTransactions(row)">流水</el-button>
-            <el-button type="warning" link @click="handleEditThreshold(row)">阈值</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="success" link @click="handleTransaction(row as PrepayAccount)">充值/扣费</el-button>
+            <el-button type="primary" link @click="handleViewTransactions(row as PrepayAccount)">流水</el-button>
+            <el-button type="warning" link @click="handleEditThreshold(row as PrepayAccount)">阈值</el-button>
+            <el-button type="danger" link @click="handleDelete(row as PrepayAccount)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -227,7 +227,8 @@ const typeMap: Record<string, string> = {
   REFUND: '退款',
   ADJUSTMENT: '调整',
 };
-const typeBadgeMap: Record<string, string> = {
+// el-tag 的 type 只接受这几个字面量：标注成 string 会在启用组件 dts 后被 vue-tsc 拒绝（T205）。
+const typeBadgeMap: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
   RECHARGE: 'success',
   DEDUCTION: 'warning',
   REFUND: 'danger',
