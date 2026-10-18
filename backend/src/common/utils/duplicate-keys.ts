@@ -65,3 +65,28 @@ function readRelatedId(data: unknown): string | null {
   }
   return null;
 }
+
+export interface ContractRow {
+  id: string;
+  roomId: string;
+  status: string;
+}
+
+/**
+ * 同一房源上「未结束」的合同（DRAFT/ACTIVE）最多只能有一份。
+ *
+ * 上线部分唯一索引（`idx_contracts_room_id_unfinished`）前的重复检查：
+ * 两份未结束合同会让同一房间重复出账（月账单幂等键是 contractId+period，不含 roomId）。
+ */
+export function findDuplicateUnfinishedContracts(rows: ContractRow[]): DuplicateGroup[] {
+  const groups = new Map<string, string[]>();
+  for (const row of rows) {
+    if (row.status !== 'DRAFT' && row.status !== 'ACTIVE') continue;
+    const ids = groups.get(row.roomId) ?? [];
+    ids.push(row.id);
+    groups.set(row.roomId, ids);
+  }
+  return [...groups.entries()]
+    .filter(([, ids]) => ids.length > 1)
+    .map(([key, ids]) => ({ key, ids }));
+}
