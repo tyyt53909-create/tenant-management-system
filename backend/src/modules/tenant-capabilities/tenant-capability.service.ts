@@ -1,11 +1,14 @@
 import {
+  Inject,
   Injectable,
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { JwtAuthService } from '../auth/jwt.service.js';
 import {
   TENANT_CAPABILITIES,
   isValidCapabilityCode,
@@ -17,6 +20,7 @@ export class TenantCapabilityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    @Optional() @Inject(JwtAuthService) private readonly jwtAuthService?: JwtAuthService,
   ) {}
 
   /**
@@ -146,6 +150,10 @@ export class TenantCapabilityService {
         where: { id: tenant.user.id },
         data: { isActive },
       });
+
+      if (!isActive) {
+        await this.jwtAuthService?.revokeUserSessions(tenant.user.id);
+      }
 
       await this.auditLogService.log({
         userId: actorId,

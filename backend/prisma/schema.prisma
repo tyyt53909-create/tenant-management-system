@@ -138,6 +138,7 @@ enum MeterType {
 enum ReadingSource {
   MANUAL // 手动录入
   DEVICE // 智能设备（第二阶段）
+  SIMULATED // 虚拟表模拟器，不计入用量统计和结算
 }
 
 // 报修类别
@@ -199,10 +200,30 @@ enum UserRole {
   TENANT // 租客
 }
 
+// 邀请码状态
+enum InviteCodeStatus {
+  UNUSED // 未使用
+  USED // 已使用
+  REVOKED // 已作废
+}
+
 // 通知优先级
 enum NotificationPriority {
   NORMAL // 普通
   URGENT // 紧急
+}
+
+// 定时任务执行记录
+enum JobRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum JobTrigger {
+  CRON
+  MANUAL
 }
 
 // 设备类型
@@ -337,8 +358,6 @@ model User {
 
   role UserRole
 
-  inviteCode      String?   @unique
-  inviteExpiredAt DateTime?
   invitedBy       String?
 
   isActive    Boolean   @default(true)
@@ -353,10 +372,12 @@ model User {
   deviceTokens        DeviceToken[]
   capabilityOverrides UserCapabilityOverride[]
 
+  createdInviteCodes  InviteCode[]             @relation("CreatedInviteCodes")
+  usedInviteCode      InviteCode?              @relation("UsedInviteCode")
+
   @@index([email])
   @@index([phone])
   @@index([googleId])
-  @@index([inviteCode])
   @@index([role, isActive])
   @@map("users")
 }
@@ -443,6 +464,9 @@ model Bill {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// 租金账单为 RENT:{contractId}:{period}。空值表示允许重复，例如同一账期的多笔水电补缴。
+  dedupKey String? @unique
 
   paymentRecords PaymentRecord[]
   lateFees       LateFee[]
@@ -742,12 +766,29 @@ model Notification {
 
   data Json?
 
+  /// 系统通知的确定性去重键。空值允许重复，例如没有关联对象的人工通知。
+  dedupKey String? @unique
+
   createdAt DateTime  @default(now())
   expiredAt DateTime?
 
   @@index([userId, isRead])
   @@index([createdAt])
   @@map("notifications")
+}
+
+// 定时任务执行记录。多实例靠数据库咨询锁互斥，这里只留下结果。
+model JobRun {
+  id           String       @id @default(cuid())
+  jobName      String
+  status       JobRunStatus @default(RUNNING)
+  trigger      JobTrigger
+  errorSummary String?      @db.Text
+  startedAt    DateTime     @default(now())
+  finishedAt   DateTime?
+
+  @@index([jobName, startedAt])
+  @@map("job_runs")
 }
 
 // 20. AuditLog（审计日志）
@@ -784,7 +825,9 @@ model TenantRegistration {
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
   idType   IdType
-  idNumber String
+  /// AES-256-GCM 密文，格式 v1:<iv>:<tag>:<data>。查重用 idNumberHash，不存明文。
+  idNumber     String
+  idNumberHash String? @unique
 
   status       RegistrationStatus @default(NOT_REGISTERED)
   registeredAt DateTime?
@@ -865,4 +908,29 @@ model UserCapabilityOverride {
   @@unique([userId, capability])
   @@index([userId])
   @@map("user_capability_overrides")
+}
+
+// 26. InviteCode（邀请码记录）
+model InviteCode {
+  id        String           @id @default(cuid())
+  code      String           @unique
+  role      UserRole         @default(TENANT)
+  status    InviteCodeStatus @default(UNUSED)
+  notes     String?
+
+  creatorId String?
+  creator   User?            @relation("CreatedInviteCodes", fields: [creatorId], references: [id], onDelete: SetNull)
+
+  usedById  String?          @unique
+  usedBy    User?            @relation("UsedInviteCode", fields: [usedById], references: [id], onDelete: SetNull)
+  usedAt    DateTime?
+
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([code])
+  @@index([status])
+  @@index([creatorId])
+  @@map("invite_codes")
 }

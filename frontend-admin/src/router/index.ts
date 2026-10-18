@@ -114,23 +114,29 @@ const routes: RouteRecordRaw[] = [
   },
 ];
 
+import { useUserStore } from '@/stores/user';
+
 const router = createRouter({
   history: createWebHistory(),
   routes,
 });
 
 // 路由守卫
-router.beforeEach((to) => {
-  const token = localStorage.getItem('access_token');
-
+router.beforeEach(async (to) => {
   // 公开路由（登录页、公开看房页）无需鉴权
   if (to.path === '/login' || to.meta?.public) {
     return true;
-  } else if (!token) {
-    return '/login';
-  } else {
-    return true;
   }
+
+  const userStore = useUserStore();
+  if (!userStore.token) {
+    const success = await userStore.restoreSession();
+    if (!success) {
+      return '/login';
+    }
+  }
+
+  return true;
 });
 
 export default router;

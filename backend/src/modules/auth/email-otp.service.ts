@@ -1,21 +1,28 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Inject, Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
+import {
+  MemoryOtpStore,
+  OTP_MAX_FAILED_ATTEMPTS,
+  OTP_STORE,
+  type OtpRecord,
+  type OtpStore,
+} from './otp-store.js';
 
-interface OtpRecord {
-  code: string;
-  expiresAt: number;
-  lastSentAt: number;
-}
+const DEV_BYPASS_CODE = '123456';
 
 @Injectable()
 export class EmailOtpService {
   private readonly logger = new Logger(EmailOtpService.name);
-  private readonly otpStore = new Map<string, OtpRecord>();
+  private readonly otpStore: OtpStore;
   private transporter: Transporter | null = null;
   private readonly fromAddress: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() @Inject(OTP_STORE) otpStore?: OtpStore,
+  ) {
+    this.otpStore = otpStore ?? new MemoryOtpStore();
     const host = this.configService.get<string>('SMTP_HOST');
     const port = this.configService.get<number>('SMTP_PORT') || 465;
     const user = this.configService.get<string>('SMTP_USER');
@@ -30,6 +37,8 @@ export class EmailOtpService {
         auth: { user, pass },
       });
       this.logger.log(`SMTP 邮件服务已就绪: ${host}:${port}`);
+    } else if (this.isProduction()) {
+      this.logger.error('生产环境未配置 SMTP，邮箱验证码发送已禁用');
     } else {
       this.logger.log('未配置 SMTP 凭据，验证码将在开发模式控制台打印输出');
     }
@@ -37,8 +46,14 @@ export class EmailOtpService {
 
   async sendCode(email: string): Promise<{ cooldown: number }> {
     const normalizedEmail = email.toLowerCase().trim();
+
+    if (!this.transporter && this.isProduction()) {
+      this.logger.error(`生产环境未配置 SMTP，已拒绝向 ${normalizedEmail} 发送验证码`);
+      throw new BadRequestException('邮件服务未配置，无法发送验证码');
+    }
+
     const now = Date.now();
-    const existing = this.otpStore.get(normalizedEmail);
+    const existing = await this.otpStore.get(normalizedEmail);
 
     // 60 秒防刷频冷却限制
     if (existing && now - existing.lastSentAt < 60 * 1000) {
@@ -50,13 +65,14 @@ export class EmailOtpService {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = now + 5 * 60 * 1000; // 5 分钟有效
 
-    this.otpStore.set(normalizedEmail, {
+    const record: OtpRecord = {
       code,
       expiresAt,
       lastSentAt: now,
-    });
+      failedAttempts: 0,
+    };
+    await this.otpStore.set(normalizedEmail, record);
 
-    // 发送邮件或打印控制台
     if (this.transporter) {
       try {
         await this.transporter.sendMail({
@@ -75,9 +91,14 @@ export class EmailOtpService {
           `,
         });
         this.logger.log(`验证码邮件已成功投递至: ${normalizedEmail}`);
-      } catch (err: any) {
-        this.logger.error(`邮件投递失败: ${err.message}`);
-        // 开发模式下记录备用日志
+      } catch (err: unknown) {
+        const reason = err instanceof Error ? err.message : 'unknown';
+        if (this.isProduction()) {
+          await this.otpStore.delete(normalizedEmail);
+          this.logger.error(this.redactCode(`邮件投递失败，已作废本次验证码: ${reason}`, code));
+          throw new BadRequestException('验证码邮件发送失败，请稍后重试');
+        }
+        this.logger.error(`邮件投递失败: ${reason}`);
         this.logger.warn(`[DEV FALLBACK] 验证码为: ${code}`);
       }
     } else {
@@ -87,31 +108,64 @@ export class EmailOtpService {
     return { cooldown: 60 };
   }
 
-  verifyCode(email: string, code: string): boolean {
+  async verifyCode(email: string, code: string): Promise<boolean> {
     const normalizedEmail = email.toLowerCase().trim();
     const trimmedCode = (code || '').trim();
 
-    // 本地开发与测试环境支持万能码 123456
-    if (process.env.NODE_ENV !== 'production' && trimmedCode === '123456') {
+    // 万能码必须同时满足：显式打开开关，且 NODE_ENV 正好是 development。
+    // 未设置 NODE_ENV、test、production 一律拒绝，避免漏配环境变量留下后门。
+    if (trimmedCode === DEV_BYPASS_CODE && this.isDevBypassEnabled()) {
       return true;
     }
 
-    const record = this.otpStore.get(normalizedEmail);
+    const record = await this.otpStore.get(normalizedEmail);
     if (!record) {
       return false;
     }
 
-    if (Date.now() > record.expiresAt) {
-      this.otpStore.delete(normalizedEmail);
+    if (Date.now() > record.expiresAt || this.failedAttempts(record) >= OTP_MAX_FAILED_ATTEMPTS) {
+      await this.otpStore.delete(normalizedEmail);
       return false;
     }
 
     if (record.code !== trimmedCode) {
+      const failedAttempts = this.failedAttempts(record) + 1;
+      if (failedAttempts >= OTP_MAX_FAILED_ATTEMPTS) {
+        await this.otpStore.delete(normalizedEmail);
+      } else {
+        await this.otpStore.set(normalizedEmail, { ...record, failedAttempts });
+      }
       return false;
     }
 
     // 验证成功后单次失效
-    this.otpStore.delete(normalizedEmail);
+    await this.otpStore.delete(normalizedEmail);
     return true;
+  }
+
+  private failedAttempts(record: OtpRecord): number {
+    return record.failedAttempts ?? 0;
+  }
+
+  private isProduction(): boolean {
+    return this.readConfig('NODE_ENV') === 'production';
+  }
+
+  private isDevBypassEnabled(): boolean {
+    return this.readConfig('NODE_ENV') === 'development' && this.readConfig('OTP_DEV_BYPASS') === 'true';
+  }
+
+  private readConfig(key: string): string | undefined {
+    // ConfigService 本身会回退到 process.env，这里不必再手写兜底
+    const value = this.configService.get<string>(key);
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  }
+
+  /** 生产日志不得出现本次验证码。只抹掉已知的这一组码，避免误伤其它数字。 */
+  private redactCode(message: string, code: string): string {
+    if (!this.isProduction()) {
+      return message;
+    }
+    return message.split(code).join('[redacted]');
   }
 }

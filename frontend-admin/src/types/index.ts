@@ -1,16 +1,23 @@
-// 用户类型
+import type { components } from './api.generated';
+
+type ApiSchemas = components['schemas'];
+
+/** 登录请求体，来自 OpenAPI 的 LoginDto。 */
+export type LoginForm = ApiSchemas['LoginDto'];
+
+/** 注册请求体，来自 OpenAPI 的 RegisterDto。 */
+export type RegisterForm = ApiSchemas['RegisterDto'];
+
+// 用户类型。这是页面使用的形状，不是请求 DTO。
 export interface User {
   id: string;
   email: string;
   phone?: string;
   role: 'ADMIN' | 'TENANT';
   createdAt: string;
-}
-
-// 登录表单（后端 LoginDto 字段名为 identifier，支持邮箱或手机号）
-export interface LoginForm {
-  identifier: string; // email 或 phone
-  password: string;
+  features?: {
+    meterSimulator?: boolean;
+  };
 }
 
 /** 房态（与后端 RoomStatus 枚举一致） */
@@ -18,15 +25,6 @@ export type RoomStatus = 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
 
 /** 清洁状态（与后端 CleanStatus 枚举一致） */
 export type CleanStatus = 'CLEAN' | 'PENDING_CLEAN' | 'CLEANING';
-
-// 注册表单
-export interface RegisterForm {
-  email: string;
-  phone: string;
-  password: string;
-  name: string;
-  inviteCode: string;
-}
 
 // 房源
 export interface Room {
@@ -56,6 +54,8 @@ export interface Tenant {
   phone: string;
   email: string;
   idNumber: string;
+  /** 列表和详情只给脱敏值，明文走单独的查看接口。 */
+  idNumberMasked?: string | null;
   emergencyContact?: string;
   emergencyPhone?: string;
   isActive?:boolean;
@@ -353,4 +353,21 @@ export interface QueryParams {
   page?: number;
   limit?: number;
   [key: string]: any;
+}
+
+// 邀请码
+export interface InviteCode {
+  id: string;
+  code: string;
+  role: 'ADMIN' | 'TENANT';
+  status: 'UNUSED' | 'USED' | 'REVOKED';
+  notes?: string | null;
+  creatorId?: string | null;
+  creator?: { id: string; email: string; phone?: string | null };
+  usedById?: string | null;
+  usedBy?: { id: string; email: string; phone?: string | null };
+  usedAt?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

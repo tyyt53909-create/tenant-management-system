@@ -123,52 +123,19 @@
       </div>
     </div>
 
-    <!-- 近六个月用量趋势图 -->
-    <div class="trend-panel">
-      <div class="trend-header">
-        <div class="trend-title">近六個月用量趨勢</div>
-        <div class="trend-tabs">
-          <button
-            :class="['tab-btn', activeType === 'ELECTRICITY' ? 'active' : '']"
-            @click="activeType = 'ELECTRICITY'"
-          >
-            用電 · kWh
-          </button>
-          <button
-            :class="['tab-btn', activeType === 'WATER' ? 'active' : '']"
-            @click="activeType = 'WATER'"
-          >
-            用水 · m³
-          </button>
-        </div>
-      </div>
-
-      <transition name="stat-fade" mode="out-in">
-        <div :key="activeType" class="trend-stat">
-          <span class="stat-number">{{ currentStat.value }}</span>
-          <span class="stat-label">{{ currentStat.unit }} · {{ currentStat.monthLabel }}</span>
-          <span :class="['stat-mom', currentStat.isUp ? 'up' : 'down']">
-            {{ currentStat.isUp ? '↑' : '↓' }} {{ Math.abs(currentStat.rate) }}%
-          </span>
-        </div>
-      </transition>
-
-      <div class="trend-chart">
-        <EChart :option="chartOption" height="220px" />
-      </div>
-    </div>
+    <!-- 近六个月用量趋势图 (拆分子组件) -->
+    <UtilitiesTrendPanel :overview="overview" :selected-month="selectedMonth" />
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { Odometer, TrendCharts, Wallet, Calendar, ArrowRight } from '@element-plus/icons-vue';
-import EChart from '@/components/common/EChart.vue';
 import { getUtilitiesOverview, type UtilitiesOverviewData } from '@/api/meters';
 import { getBuildings } from '@/api/buildings';
 import type { Building } from '@/types';
-import type { EChartsOption } from 'echarts';
+import UtilitiesTrendPanel from './UtilitiesTrendPanel.vue';
 
 const router = useRouter();
 
@@ -181,7 +148,6 @@ const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart
 const selectedMonth = ref<string>(defaultMonth);
 
 const overview = ref<UtilitiesOverviewData | null>(null);
-const activeType = ref<'ELECTRICITY' | 'WATER'>('ELECTRICITY');
 
 function formatNumber(num: number): string {
   if (num >= 1000) {
@@ -193,138 +159,6 @@ function formatNumber(num: number): string {
 function formatCents(cents: number): string {
   return (cents / 100).toFixed(2);
 }
-
-const currentStat = computed(() => {
-  const monthName = selectedMonth.value ? `${parseInt(selectedMonth.value.split('-')[1], 10)}月` : '10月';
-  if (activeType.value === 'ELECTRICITY') {
-    const usage = overview.value?.electricity.usage ?? 827;
-    const rate = overview.value?.electricity.momRate ?? 7.7;
-    return {
-      value: formatNumber(usage),
-      unit: '度',
-      monthLabel: monthName,
-      rate,
-      isUp: rate >= 0,
-    };
-  } else {
-    const usage = overview.value?.water.usage ?? 32.6;
-    const rate = overview.value?.water.momRate ?? 7.9;
-    return {
-      value: formatNumber(usage),
-      unit: 'm³',
-      monthLabel: monthName,
-      rate,
-      isUp: rate >= 0,
-    };
-  }
-});
-
-const chartOption = computed<EChartsOption>(() => {
-  const trend = overview.value?.trend || [];
-  const xData = trend.map((t) => t.label);
-  const isElec = activeType.value === 'ELECTRICITY';
-  const seriesData = trend.map((t) => (isElec ? t.electricityUsage : t.waterUsage));
-  const mainColor = isElec ? '#b87648' : '#768168';
-  const unitStr = isElec ? '度 (kWh)' : '噸 (m³)';
-
-  return {
-    animation: true,
-    animationDuration: 750,
-    animationEasing: 'cubicOut',
-    animationDurationUpdate: 550,
-    animationEasingUpdate: 'cubicInOut',
-    color: [mainColor],
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: {
-        type: 'line',
-        lineStyle: {
-          color: '#d6cfc2',
-          width: 1,
-          type: 'dashed',
-        },
-      },
-      backgroundColor: 'rgba(255, 254, 250, 0.96)',
-      borderColor: '#e8e3d8',
-      borderWidth: 1,
-      padding: [8, 12],
-      textStyle: { color: '#2c2a29' },
-      extraCssText: 'box-shadow: 0 8px 24px rgba(54, 45, 26, 0.08); border-radius: 8px;',
-      formatter: (params: any) => {
-        if (!params || !params[0]) return '';
-        const p = params[0];
-        const item = trend[p.dataIndex];
-        const costStr = item ? (isElec ? (item.electricityCost / 100).toFixed(2) : (item.waterCost / 100).toFixed(2)) : '0.00';
-        return `
-          <div style="font-size:12px;padding:2px;">
-            <div style="font-weight:600;margin-bottom:4px;color:#2c2a29;">${p.name} · 用量</div>
-            <div style="color:#555;">${isElec ? '用電量' : '用水量'}：<b>${p.value}</b> ${unitStr}</div>
-            <div style="color:#888;margin-top:2px;">估算費用：¥${costStr}</div>
-          </div>
-        `;
-      },
-    },
-    grid: {
-      left: 12,
-      right: 18,
-      top: 20,
-      bottom: 10,
-      containLabel: true,
-    },
-    xAxis: {
-      type: 'category',
-      data: xData,
-      boundaryGap: false,
-      axisLine: { lineStyle: { color: '#e9e5dd' } },
-      axisTick: { show: false },
-      axisLabel: { color: '#8b897f', fontSize: 11 },
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: '#f0ede5' } },
-      axisLabel: { color: '#8b897f', fontSize: 11 },
-    },
-    series: [
-      {
-        name: isElec ? '用电量' : '用水量',
-        type: 'line',
-        smooth: true,
-        showSymbol: true,
-        symbolSize: 6,
-        emphasis: {
-          scale: 1.5,
-          itemStyle: {
-            shadowBlur: 8,
-            shadowColor: 'rgba(0,0,0,0.18)',
-          },
-        },
-        data: seriesData,
-        lineStyle: {
-          width: 2.5,
-          color: mainColor,
-        },
-        itemStyle: {
-          color: mainColor,
-          borderColor: '#ffffff',
-          borderWidth: 1.5,
-        },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: isElec ? 'rgba(184, 118, 72, 0.28)' : 'rgba(118, 129, 104, 0.28)' },
-              { offset: 1, color: isElec ? 'rgba(184, 118, 72, 0.02)' : 'rgba(118, 129, 104, 0.02)' },
-            ],
-          },
-        },
-      },
-    ],
-  };
-});
 
 async function fetchData() {
   loading.value = true;
@@ -448,52 +282,30 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 1px 2px rgba(54, 45, 26, 0.02);
-}
-
-.action-btn .el-icon--right {
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .action-btn:hover {
-  background: #f6f3eb;
-  border-color: #b5ad9e;
+  background: #f7f4ec;
+  border-color: #c9c3b4;
   color: #1a1918;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(54, 45, 26, 0.06);
 }
 
-.action-btn:hover .el-icon--right {
-  transform: translateX(4px);
-}
-
-.action-btn:active {
-  transform: translateY(0);
-}
-
-/* 四大 KPI 卡片网格 (2x2) */
+/* KPI 网格 */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
-  margin: 22px 0;
+  margin: 24px 0 22px;
 }
 
 .kpi-card {
-  background: #fdfcfb;
-  border: 1px solid #ece8df;
+  background: #ffffff;
+  border: 1px solid #ebe7df;
   border-radius: 12px;
   padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-shadow: 0 4px 18px rgba(54, 45, 26, 0.015);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
   position: relative;
   overflow: hidden;
-  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1),
-              border-color 0.25s ease;
-  cursor: default;
 }
 
 .kpi-card:hover {
@@ -504,19 +316,19 @@ onMounted(() => {
 
 /* 顶部各颜色高光线条 */
 .water-card {
-  border-top: 3px solid #768168; /* 鼠尾草绿 */
+  border-top: 3px solid #768168;
 }
 
 .elec-card {
-  border-top: 3px solid #b87648; /* 暖琥珀色 */
+  border-top: 3px solid #b87648;
 }
 
 .cost-card {
-  border-top: 3px solid #6b8e78; /* 橄榄绿 */
+  border-top: 3px solid #6b8e78;
 }
 
 .progress-card {
-  border-top: 3px solid #ba6459; /* 陶土红 */
+  border-top: 3px solid #ba6459;
 }
 
 .kpi-title {
@@ -572,11 +384,11 @@ onMounted(() => {
 }
 
 .mom-rate.up {
-  color: #ba6459; /* 涨红 */
+  color: #ba6459;
 }
 
 .mom-rate.down {
-  color: #556b2f; /* 跌绿 */
+  color: #556b2f;
 }
 
 .dot {
@@ -603,115 +415,6 @@ onMounted(() => {
 .cost-split {
   font-size: 12px;
   color: #8c827a;
-}
-
-/* 底部趋势图版块 */
-.trend-panel {
-  background: #ffffff;
-  border: 1px solid #ebe7df;
-  border-radius: 12px;
-  padding: 20px;
-}
-
-.trend-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.trend-title {
-  font-size: 15px;
-  font-weight: 650;
-  color: #2c2a29;
-}
-
-.trend-tabs {
-  display: flex;
-  background: #f4f0e8;
-  padding: 3px;
-  border-radius: 8px;
-  gap: 2px;
-}
-
-.tab-btn {
-  background: transparent;
-  border: 0;
-  padding: 5px 14px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #767066;
-  cursor: pointer;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none;
-}
-
-.tab-btn:hover:not(.active) {
-  color: #2c2a29;
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.tab-btn:active {
-  transform: scale(0.96);
-}
-
-.tab-btn.active {
-  background: #ffffff;
-  color: #2c2a29;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
-}
-
-.stat-fade-enter-active,
-.stat-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.stat-fade-enter-from {
-  opacity: 0;
-  transform: translateY(4px);
-}
-
-.stat-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-.trend-stat {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.stat-number {
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  color: #2c2a29;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #8c827a;
-}
-
-.stat-mom {
-  font-size: 13px;
-  font-weight: 600;
-  margin-left: 4px;
-}
-
-.stat-mom.up {
-  color: #ba6459;
-}
-
-.stat-mom.down {
-  color: #556b2f;
-}
-
-.trend-chart {
-  margin-top: 4px;
 }
 
 /* 响应式适配 */

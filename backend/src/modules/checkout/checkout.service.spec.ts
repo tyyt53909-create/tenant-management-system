@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CheckoutService } from './checkout.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -214,15 +214,9 @@ describe('CheckoutService', () => {
       );
     });
 
-    it('租客账号未绑定档案（tenantId 缺失）→ 404', async () => {
-      prisma.checkoutRecord.findUnique.mockResolvedValue({
-        id: recordId,
-        contract: { tenantId: 'tenant-1' },
-      });
-
-      await expect(service.findOneForTenant(recordId, undefined)).rejects.toThrow(
-        NotFoundException,
-      );
+    it('租客账号未绑定档案（tenantId 缺失）→ 403，且不查库', async () => {
+      await expect(service.findOneForTenant(recordId, undefined)).rejects.toThrow(ForbiddenException);
+      expect(prisma.checkoutRecord.findUnique).not.toHaveBeenCalled();
     });
   });
 
@@ -356,7 +350,9 @@ describe('CheckoutService', () => {
         items: [
           {
             id: 'it-1',
-            itemType: 'CLEANING_FEE',
+            // T207：原先用不存在的 'CLEANING_FEE'（数据库里不可能出现），
+            // 恰好命中服务里同样错误的过滤清单，于是掩盖了 totalDeduction 恒为 0 的缺陷
+            itemType: 'OTHER_FEE',
             description: '深度保洁费',
             amount: 20000,
             isAdjusted: false,
@@ -377,6 +373,68 @@ describe('CheckoutService', () => {
       expect(voucher.netRefundInChinese).toBe('壹仟捌佰元整');
       expect(voucher.items).toHaveLength(1);
       expect(voucher.items[0].amountYuan).toBe('200.00');
+    });
+
+    it('租客无档案（tenantId 为空串）→ 404，不再 fail-open 返回他人结算单（T209）', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({
+        id: 'chk-x',
+        status: 'COMPLETED',
+        contract: { tenantId: 'tenant-real', tenant: { name: '别人' } },
+        items: [],
+      });
+
+      await expect(service.getVoucher('chk-x', '')).rejects.toThrow(NotFoundException);
+    });
+
+    it('totalRefund 为空时按明细重算：押金扣除与水电余额退还都计入（回归 T207）', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({
+        id: 'chk-2',
+        checkoutDate: new Date('2026-10-12'),
+        totalRefund: null,
+        status: 'PENDING',
+        processedBy: 'admin-1',
+        notes: null,
+        room: { roomNumber: '303', building: { name: '天河公寓' } },
+        contract: {
+          id: 'contract-2',
+          startDate: new Date('2025-08-01'),
+          endDate: new Date('2026-07-31'),
+          depositAmount: 300000,
+          tenant: { name: '钱七', phone: '13600000005' },
+        },
+        items: [
+          {
+            id: 'it-a',
+            itemType: 'DEPOSIT_DEDUCTION',
+            description: '墙面破损',
+            amount: 50000,
+            isAdjusted: false,
+            adjustReason: null,
+          },
+          {
+            id: 'it-b',
+            itemType: 'UTILITY_REFUND',
+            description: '水电预付余额退还',
+            amount: 12000,
+            isAdjusted: false,
+            adjustReason: null,
+          },
+          {
+            id: 'it-c',
+            itemType: 'RENT_REFUND',
+            description: '剩余租金',
+            amount: 8000,
+            isAdjusted: false,
+            adjustReason: null,
+          },
+        ],
+      });
+
+      const voucher = await service.getVoucher('chk-2');
+
+      // 扣款 50000 必须被算进去（修复前恒为 0），退款侧要含 UTILITY_REFUND（12000 + 8000）
+      expect(voucher.totalDeduction).toBe(50000);
+      expect(voucher.netRefund).toBe(300000 + 20000 - 50000);
     });
 
     it('租客越权读取他人退租凭单抛出 NotFoundException', async () => {

@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { BillsService } from './bills.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
@@ -10,6 +11,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
 import { CapabilityGuard } from '../../common/guards/capability.guard.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
@@ -27,7 +29,7 @@ export class BillsController {
   @Get('export')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  async exportBills(@Query() query: any, @Res({ passthrough: true }) res: any) {
+  async exportBills(@Query() query: QueryBillsDto, @Res({ passthrough: true }) res: Response) {
     const csv = await this.billsService.exportBills(query);
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -47,10 +49,12 @@ export class BillsController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.bill.read')
-  findMy(@Request() req: any, @Query() query: QueryBillsDto) {
+  findMy(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryBillsDto) {
+    const user = resolveAuthUser(userParam);
     // 租客只能查看自己的账单
-    if (req.user.role === 'TENANT') {
-      return this.billsService.findByTenant(req.user.tenantId, query);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId ?? '';
+      return this.billsService.findByTenant(tenantId, query);
     }
     // 管理员可以看所有
     return this.billsService.findAll(query);
@@ -69,8 +73,11 @@ export class BillsController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('ADMIN', 'TENANT')
   @RequireCapability('tenant.bill.read')
-  getReceipt(@Request() req: any, @Param('id') id: string) {
-    const tenantId = req.user?.role === 'TENANT' ? req.user?.tenantId : undefined;
+  getReceipt(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    // 租客角色一律传 tenantId（无租客档案时为空串）：服务端据此 fail-closed，
+    // 不能传 undefined —— 那会跳过归属校验（T209）
+    const tenantId = user.role === 'TENANT' ? (user.tenantId ?? '') : undefined;
     return this.billsService.getReceipt(id, tenantId);
   }
 
@@ -78,10 +85,12 @@ export class BillsController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.bill.read')
-  findOne(@Request() req: any, @Param('id') id: string) {
+  findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
     // 租客需要验证是否是自己的账单
-    if (req.user.role === 'TENANT') {
-      return this.billsService.findOneForTenant(id, req.user.tenantId);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId ?? '';
+      return this.billsService.findOneForTenant(id, tenantId);
     }
     return this.billsService.findOne(id);
   }
@@ -97,8 +106,9 @@ export class BillsController {
   @Post(':id/payments')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  addPayment(@Request() req: any, @Param('id') id: string, @Body() dto: CreatePaymentDto) {
-    return this.billsService.addPayment(id, dto, req.user.userId);
+  addPayment(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string, @Body() dto: CreatePaymentDto) {
+    const user = resolveAuthUser(userParam);
+    return this.billsService.addPayment(id, dto, user.userId);
   }
 
   // 账单收款流水（管理者）
@@ -113,8 +123,9 @@ export class BillsController {
   @Post(':id/late-fees')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  addLateFee(@Request() req: any, @Param('id') id: string, @Body() dto: CreateLateFeeDto) {
-    return this.billsService.addLateFee(id, dto, req.user.userId);
+  addLateFee(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string, @Body() dto: CreateLateFeeDto) {
+    const user = resolveAuthUser(userParam);
+    return this.billsService.addLateFee(id, dto, user.userId);
   }
 
   // 滞纳金记录（管理者，含计算过程）

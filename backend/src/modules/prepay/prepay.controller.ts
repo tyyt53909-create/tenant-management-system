@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { PrepayService } from './prepay.service.js';
 import { CreatePrepayAccountDto } from './dto/create-prepay-account.dto.js';
 import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
@@ -10,6 +11,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
 import { CapabilityGuard } from '../../common/guards/capability.guard.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('prepay-accounts')
 @UseGuards(JwtAuthGuard)
@@ -35,9 +37,11 @@ export class PrepayController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.prepay.read')
-  findMy(@Request() req: any) {
-    if (req.user.role === 'TENANT') {
-      return this.prepayService.findByTenant(req.user.tenantId);
+  findMy(@CurrentUser() userParam: CurrentUserParam) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId ?? '';
+      return this.prepayService.findByTenant(tenantId);
     }
     return this.prepayService.findAll({});
   }
@@ -46,7 +50,7 @@ export class PrepayController {
   @Get('transactions/export')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  async exportTransactions(@Query() query: any, @Res({ passthrough: true }) res: any) {
+  async exportTransactions(@Query() query: QueryPrepayTransactionsDto, @Res({ passthrough: true }) res: Response) {
     const csv = await this.prepayService.exportTransactions(query);
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -59,9 +63,11 @@ export class PrepayController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.prepay.read')
-  findTransactions(@Request() req: any, @Query() query: QueryPrepayTransactionsDto) {
-    if (req.user.role === 'TENANT') {
-      return this.prepayService.findTransactionsByTenant(req.user.tenantId, query);
+  findTransactions(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryPrepayTransactionsDto) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId ?? '';
+      return this.prepayService.findTransactionsByTenant(tenantId, query);
     }
     // 管理员查看所有交易
     return this.prepayService.findAllTransactions(query);
@@ -80,11 +86,12 @@ export class PrepayController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   createTransaction(
-    @Request() req: any,
+    @CurrentUser() userParam: CurrentUserParam,
     @Param('id') id: string,
     @Body() dto: CreatePrepayTransactionDto,
   ) {
-    return this.prepayService.recordTransaction(id, dto, req.user.userId);
+    const user = resolveAuthUser(userParam);
+    return this.prepayService.recordTransaction(id, dto, user.userId);
   }
 
   @Get(':id')

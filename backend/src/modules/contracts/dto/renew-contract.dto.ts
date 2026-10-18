@@ -57,5 +57,5 @@ export class RenewContractDto {
 
   /** 滞纳金规则；默认沿用原合同 */
   @IsOptional()
-  lateFeeRule?: any;
+  lateFeeRule?: Record<string, unknown>;
 }

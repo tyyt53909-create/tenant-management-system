@@ -26,7 +26,16 @@ function log(message, color = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
+/**
+ * ❌ 错误计数器。
+ * 以前 `error()` 只打印不上报，CI 用 `DOCS_STRICT_MODE=false` 跑时门禁事实上不生效
+ * （PR 上出现 ❌ 也照样绿）。现在只要出现 ❌，脚本就以非零退出，让 CI 真正拦住。
+ * 注意：这里不启用 STRICT_MODE，避免「代码改动必须同步文档」的启发式误伤正常 PR。
+ */
+let errorCount = 0;
+
 function error(message) {
+  errorCount += 1;
   log(`❌ ${message}`, 'red');
 }
 
@@ -273,6 +282,117 @@ function checkStaleDocuments() {
   }
 }
 
+// 6. 检查数据模型表数与 schema.prisma 一致性 (OPT-28)
+function checkSchemaModelCount() {
+  info('检查数据模型文档与 schema.prisma 一致性...');
+  const schemaPath = path.join(__dirname, '../backend/prisma/schema.prisma');
+  const dataModelDocPath = path.join(__dirname, '../docs/02-数据模型.md');
+
+  if (!fs.existsSync(schemaPath)) {
+    warn('backend/prisma/schema.prisma 不存在，跳过模型数检查');
+    return;
+  }
+  if (!fs.existsSync(dataModelDocPath)) {
+    error('docs/02-数据模型.md 不存在');
+    if (STRICT_MODE) process.exit(1);
+    return;
+  }
+
+  const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+  const actualModels = (schemaContent.match(/^model\s+\w+/gm) || []).length;
+
+  const docContent = fs.readFileSync(dataModelDocPath, 'utf-8');
+  const docModelMatch = docContent.match(/实际为\s*\*\*(\d+)\s*张表\*\*/);
+  if (!docModelMatch) {
+    warn('docs/02-数据模型.md 未找到表数统计标记 (格式：实际为 **X 张表**)');
+  } else {
+    const docModels = parseInt(docModelMatch[1], 10);
+    if (docModels !== actualModels) {
+      error(`数据模型文档表数 (${docModels}) 与 schema.prisma 实际模型数 (${actualModels}) 不一致`);
+      if (STRICT_MODE) process.exit(1);
+    } else {
+      success(`数据模型表数与 schema.prisma 严格一致 (${actualModels} 张表)`);
+    }
+  }
+}
+
+// 7. 检查 OpenAPI 路由一致性 (OPT-28)
+function checkOpenApiRoutes() {
+  info('检查 OpenAPI 路由定义一致性...');
+  const openapiPath = path.join(__dirname, '../backend/openapi.json');
+  if (!fs.existsSync(openapiPath)) {
+    info('backend/openapi.json 不存在，跳过 OpenAPI 路由检查');
+    return;
+  }
+
+  try {
+    const spec = JSON.parse(fs.readFileSync(openapiPath, 'utf-8'));
+    let count = 0;
+    const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
+    for (const p of Object.values(spec.paths || {})) {
+      for (const m of Object.keys(p)) {
+        if (methods.includes(m.toLowerCase())) count++;
+      }
+    }
+    if (count > 0) {
+      success(`OpenAPI 路由数校验一致 (${count} 条路由已定义)`);
+    } else {
+      warn('OpenAPI 路由数解析为 0');
+    }
+  } catch (err) {
+    warn(`OpenAPI 检查解析失败: ${err.message}`);
+  }
+}
+
+// 8. 检查 backend/.env.example 与 docs/12 §1.1 变量清单一致性 (OPT-07)
+function checkEnvVarConsistency() {
+  info('检查 .env.example 与部署文档变量清单一致性...');
+  const envExamplePath = path.join(__dirname, '../backend/.env.example');
+  const deployDocPath = path.join(__dirname, '../docs/12-部署与运维.md');
+
+  if (!fs.existsSync(envExamplePath)) {
+    warn('backend/.env.example 不存在，跳过环境变量检查');
+    return;
+  }
+  if (!fs.existsSync(deployDocPath)) {
+    warn('docs/12-部署与运维.md 不存在，跳过环境变量检查');
+    return;
+  }
+
+  // .env.example 里登记过的键（含被注释的 `# SMTP_HOST=` 形式：注释本身也是登记）
+  const exampleVars = new Set(
+    (fs.readFileSync(envExamplePath, 'utf-8').match(/^\s*#?\s*[A-Z][A-Z0-9_]*=/gm) || []).map((line) =>
+      line.replace(/^\s*#?\s*/, '').replace('=', ''),
+    ),
+  );
+
+  // docs/12 §1.1 表格中所有反引号包裹的大写变量名
+  const docContent = fs.readFileSync(deployDocPath, 'utf-8');
+  const sectionMatch = docContent.match(/### 1\.1[\s\S]*?(?=\n### |\n## )/);
+  if (!sectionMatch) {
+    warn('docs/12-部署与运维.md 未找到 §1.1 后端环境变量清单');
+    return;
+  }
+  const documentedVars = new Set(
+    (sectionMatch[0].match(/`[A-Z][A-Z0-9_]{2,}`/g) || []).map((token) => token.replace(/`/g, '')),
+  );
+
+  const missingInExample = [...documentedVars].filter((name) => !exampleVars.has(name)).sort();
+  const missingInDoc = [...exampleVars].filter((name) => !documentedVars.has(name)).sort();
+
+  if (missingInExample.length === 0 && missingInDoc.length === 0) {
+    success(`.env.example 与部署文档变量清单一致 (${exampleVars.size} 项)`);
+    return;
+  }
+  if (missingInExample.length > 0) {
+    error(`docs/12 §1.1 已登记但 backend/.env.example 缺失: ${missingInExample.join(', ')}`);
+  }
+  if (missingInDoc.length > 0) {
+    error(`backend/.env.example 已登记但 docs/12 §1.1 未登记: ${missingInDoc.join(', ')}`);
+  }
+  if (STRICT_MODE) process.exit(1);
+}
+
 // 主函数
 function main() {
   console.log('\n🔍 开始检查文档...\n');
@@ -281,9 +401,18 @@ function main() {
     checkIndexConsistency();
     checkMetadata();
     checkInternalLinks();
+    checkSchemaModelCount();
+    checkOpenApiRoutes();
+    checkEnvVarConsistency();
     checkCodeDocSync();
     checkStaleDocuments();
-    
+
+    if (errorCount > 0) {
+      console.log('\n');
+      log(`❌ 文档检查失败：共 ${errorCount} 项错误（修复后重跑 node scripts/check-docs.js）`, 'red');
+      process.exit(1);
+    }
+
     console.log('\n✅ 文档检查完成！\n');
     process.exit(0);
   } catch (err) {
@@ -301,6 +430,7 @@ if (args.includes('--help') || args.includes('-h')) {
 选项:
   --help, -h        显示帮助信息
   --strict          启用严格模式（代码变更需同步文档）
+  --stale           仅检查过期文档（>30天未核对）
 
 环境变量:
   DOCS_STRICT_MODE  设置为 'true' 启用严格模式
@@ -310,6 +440,22 @@ if (args.includes('--help') || args.includes('-h')) {
 
 if (args.includes('--strict')) {
   process.env.DOCS_STRICT_MODE = 'true';
+}
+
+if (args.includes('--stale')) {
+  console.log('\n🔍 开始检查过期文档...\n');
+  try {
+    checkStaleDocuments();
+    if (errorCount > 0) {
+      log(`❌ 过期检查失败：共 ${errorCount} 项错误`, 'red');
+      process.exit(1);
+    }
+    console.log('\n✅ 过期检查完成！\n');
+    process.exit(0);
+  } catch (err) {
+    error(`检查过期文档出错: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 main();

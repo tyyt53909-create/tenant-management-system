@@ -1,5 +1,5 @@
 import { IsOptional, IsInt, IsBoolean, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class QueryBuildingsDto {
   @IsInt()
@@ -17,6 +17,7 @@ export class QueryBuildingsDto {
 
   @IsBoolean()
   @IsOptional()
-  @Type(() => Boolean)
+  // 不能用 @Type(() => Boolean)：class-transformer 会把字符串 "false" 转成 true（?isActive=false 反被当成筛选启用）
+  @Transform(({ value }) => value === true || value === 'true')
   isActive?: boolean;
 }

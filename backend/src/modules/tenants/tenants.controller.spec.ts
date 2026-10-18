@@ -19,6 +19,7 @@ describe('TenantsController', () => {
             findOneForTenant: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
+            revealIdNumber: vi.fn(),
           },
         },
       ],
@@ -101,6 +102,26 @@ describe('TenantsController', () => {
       expect(result.id).toBe('tenant-123');
       expect(spyForTenant).toHaveBeenCalledWith('tenant-123', 'tenant-123');
       expect(spyFindOne).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revealIdNumber', () => {
+    it('把管理员、来源 IP 和 User-Agent 交给服务', async () => {
+      vi.spyOn(service, 'revealIdNumber').mockResolvedValue({
+        idNumber: '440101199001011234',
+        idType: 'ID_CARD',
+      } as any);
+
+      await controller.revealIdNumber(
+        { user: { userId: 'admin-1' }, ip: '10.0.0.8', headers: { 'user-agent': 'browser' } },
+        'tenant-1',
+      );
+
+      expect(service.revealIdNumber).toHaveBeenCalledWith('tenant-1', {
+        userId: 'admin-1',
+        ip: '10.0.0.8',
+        userAgent: 'browser',
+      });
     });
   });
 

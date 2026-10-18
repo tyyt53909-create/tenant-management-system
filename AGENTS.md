@@ -171,7 +171,7 @@ tenant-system/
 |------|------|------|
 | **变量** | 小驼峰 | `userName`, `roomList` |
 | **函数** | 小驼峰，动词开头 | `createRoom()`, `findAllRooms()` |
-| **类** | 大驼峰 | `RoomsService`, `BuildingGuard` |
+| **类** | 大驼峰 | `RoomsService`, `RolesGuard` |
 | **接口** | 大驼峰，I 前缀（可选） | `IUser`, `CreateRoomDto` |
 | **枚举** | 大驼峰 | `RoomStatus`, `UserRole` |
 | **枚举值** | 大写下划线 | `ROOM_STATUS.VACANT` |
@@ -554,6 +554,20 @@ npm --prefix miniprogram test
 | ❌ 修改 owner_tier=human 的文档 | 人工维护文档 | 提交建议，等待人工修改 |
 | ❌ 跳过 INDEX.md 登记 | 文档未登记就提交 | 先登记再提交 |
 | ❌ 猜测文档与代码的差异 | 不确定谁是正确的 | 记录不一致，通知人工 |
+
+### 8.4 数据范围查询（越权防护）
+
+| 禁止行为 | 说明 | 正确做法 |
+|----------|------|----------|
+| ❌ 手写范围过滤 | 直接写 `where: { tenantId: user.tenantId }` | 使用 `scopedWhere()` 范围助手（`backend/src/common/utils/scoped-where.ts`） |
+| ❌ 让范围键变成 undefined | `{ tenantId: undefined }` 会被 Prisma 当作没有该条件，退化成全表查询 | 范围 id 为空时由助手抛 `ForbiddenException`，查询不发出 |
+| ❌ 只靠前端隐藏 | 前端不显示 ≠ 后端已拦截 | 后端每个租客端查询都必须经过范围助手 |
+
+**规则**：
+1. 所有租客端（`TENANT` / `CLEANER`）查询一律透过 `scopedWhere(scopeId, where?, field?)` 产生范围条件；`grep 'tenantId: user\.'` 必须为 0 处。
+2. 范围 id 缺失时直接 403，不得回退成「查全部」。
+3. 新增租客端 GET 路由时，必须同步加入 `backend/test/authorization.e2e-spec.ts` 的越权矩阵（3 种角色 × 有/无租客档案）。
+4. 本规则自 OPT-06（T179）起生效。
 
 ---
 

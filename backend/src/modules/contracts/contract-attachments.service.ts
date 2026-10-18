@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { FilesService } from '../files/files.service.js';
+import { FilesService, type UploadedFileInput } from '../files/files.service.js';
 import { isUtf8 } from 'node:buffer';
 import { extname } from 'node:path';
 
@@ -27,10 +27,10 @@ export class ContractAttachmentsService {
     return attachments.map(item => ({ ...item, downloadUrl: `/api/contracts/${encodeURIComponent(contractId)}/attachments/${encodeURIComponent(item.id)}/file` }));
   }
 
-  async upload(contractId: string, file: any, actor: ContractFileActor) {
+  async upload(contractId: string, file: UploadedFileInput, actor: ContractFileActor) {
     if (actor.role !== 'ADMIN') throw new NotFoundException('合同不存在');
     await this.assertAccess(contractId, actor);
-    if (!file?.buffer || !['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) throw new BadRequestException('合同图片仅支持 JPG、PNG、WebP');
+    if (!file?.buffer || !file.mimetype || !['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) throw new BadRequestException('合同图片仅支持 JPG、PNG、WebP');
     const data: Buffer = file.buffer;
     const valid = file.mimetype === 'image/png'
       ? data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
@@ -51,7 +51,7 @@ export class ContractAttachmentsService {
     const saved = await this.files.save({ ...file, originalname: extension ? fileName : `${fileName}${allowedExtensions[0]}` }, actor);
     const attachment = await this.prisma.contractAttachment.create({ data: {
       contractId, type: 'CONTRACT_SCAN', fileName, fileUrl: saved.url,
-      fileSize: saved.fileSize, mimeType: saved.mimeType, uploadedBy: actor.userId!,
+      fileSize: saved.fileSize ?? file.size ?? 0, mimeType: saved.mimeType, uploadedBy: actor.userId!,
     } });
     return { id: attachment.id, fileName: attachment.fileName, fileSize: attachment.fileSize, mimeType: attachment.mimeType,
       createdAt: attachment.createdAt, downloadUrl: `/api/contracts/${encodeURIComponent(contractId)}/attachments/${encodeURIComponent(attachment.id)}/file` };
@@ -63,6 +63,7 @@ export class ContractAttachmentsService {
     if (!attachment || !['image/jpeg', 'image/png', 'image/webp'].includes(attachment.mimeType)) throw new NotFoundException('合同图片不存在');
     const match = /^\/api\/files\/([A-Za-z0-9._-]+)$/.exec(attachment.fileUrl);
     if (!match || match[1]!.includes('..')) throw new NotFoundException('合同图片不存在');
-    return { path: this.files.filePath(match[1]!), mimeType: attachment.mimeType, fileName: attachment.fileName };
+    const body = await this.files.read(match[1]!);
+    return { body, mimeType: attachment.mimeType, fileName: attachment.fileName };
   }
 }

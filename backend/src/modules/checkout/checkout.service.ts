@@ -1,10 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import type { Prisma, CheckoutItemType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
 import { QueryCheckoutsDto } from './dto/query-checkouts.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
+import { scopedWhere } from '../../common/utils/scoped-where.js';
+import { isDeductionItemType, isRefundItemType } from './checkout-item-types.js';
 
 const CHECKOUT_STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿',
@@ -44,10 +47,10 @@ export class CheckoutService {
         await tx.checkoutItem.createMany({
           data: dto.items.map((item) => ({
             checkoutId: record.id,
-            itemType: item.itemType as any,
+            itemType: item.itemType as CheckoutItemType,
             description: item.description,
             amount: item.amount,
-            calculation: item.calculation ?? undefined,
+            calculation: item.calculation ? (item.calculation as Prisma.InputJsonValue) : undefined,
             isAdjusted: item.isAdjusted ?? false,
             adjustReason: item.adjustReason,
           })),
@@ -65,7 +68,7 @@ export class CheckoutService {
     const { page = 1, limit = 20, status, contractId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.CheckoutRecordWhereInput = {};
     if (status) where.status = status;
     if (contractId) where.contractId = contractId;
 
@@ -106,7 +109,8 @@ export class CheckoutService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = { contract: { tenantId } };
+    // 此处 where 需按可选筛选条件增量赋值；Prisma 的联合过滤类型无法在填入普通 string 后再收窄，故保留 any（OPT-17 已注释豁免）
+    const where: any = { contract: scopedWhere(tenantId) };
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -131,12 +135,13 @@ export class CheckoutService {
 
   /** 租客查看单条退租记录（需验证归属，越权按 404 处理） */
   async findOneForTenant(id: string, tenantId?: string) {
+    const scope = scopedWhere(tenantId);
     const record = await this.prisma.checkoutRecord.findUnique({
       where: { id },
       include: { contract: { select: { tenantId: true } }, room: true, items: true },
     });
 
-    if (!record || !tenantId || record.contract.tenantId !== tenantId) {
+    if (!record || record.contract.tenantId !== scope.tenantId) {
       throw new NotFoundException('退租记录不存在');
     }
 
@@ -147,7 +152,7 @@ export class CheckoutService {
     const record = await this.prisma.checkoutRecord.findUnique({ where: { id } });
     if (!record) throw new NotFoundException('退租记录不存在');
 
-    const updateData: any = {};
+    const updateData: Prisma.CheckoutRecordUpdateInput = {};
     if (dto.status) {
       updateData.status = dto.status;
       if (dto.status === 'COMPLETED') updateData.processedAt = new Date();
@@ -169,10 +174,10 @@ export class CheckoutService {
           await tx.checkoutItem.createMany({
             data: dto.items.map((item) => ({
               checkoutId: id,
-              itemType: item.itemType as any,
+              itemType: item.itemType as CheckoutItemType,
               description: item.description,
               amount: item.amount,
-              calculation: item.calculation ?? undefined,
+              calculation: item.calculation ? (item.calculation as Prisma.InputJsonValue) : undefined,
               isAdjusted: item.isAdjusted ?? false,
               adjustReason: item.adjustReason,
             })),
@@ -197,14 +202,15 @@ export class CheckoutService {
   /**
    * 退租记录 CSV 导出
    */
-  async exportCheckouts(query: any) {
-    const where: any = {};
+  async exportCheckouts(query: Partial<QueryCheckoutsDto>) {
+    const where: Prisma.CheckoutRecordWhereInput = {};
     if (query.status) where.status = query.status;
     if (query.contractId) where.contractId = query.contractId;
     if (query.startDate || query.endDate) {
-      where.checkoutDate = {};
-      if (query.startDate) where.checkoutDate.gte = new Date(query.startDate);
-      if (query.endDate) where.checkoutDate.lte = new Date(query.endDate);
+      where.checkoutDate = {
+        ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+        ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+      };
     }
 
     const checkouts = await this.prisma.checkoutRecord.findMany({
@@ -222,7 +228,8 @@ export class CheckoutService {
       take: 5000,
     });
 
-    const columns: CsvColumn[] = [
+    type ExportCheckoutItem = (typeof checkouts)[number];
+    const columns: CsvColumn<ExportCheckoutItem>[] = [
       { header: '退租记录ID', key: 'id' },
       { header: '房间号', formatter: (c) => c.room?.roomNumber || '' },
       { header: '租客姓名', formatter: (c) => c.contract?.tenant?.name || '' },
@@ -261,17 +268,15 @@ export class CheckoutService {
       throw new NotFoundException('退租记录不存在');
     }
 
-    if (tenantId && (!record.contract || record.contract.tenantId !== tenantId)) {
+    // tenantId === undefined 才代表「管理员视图」；空串是「租客但无档案」，必须走比对（T209）
+    if (tenantId !== undefined && (!record.contract || record.contract.tenantId !== tenantId)) {
       throw new NotFoundException('退租记录不存在');
     }
 
     const depositAmount = record.contract?.depositAmount ?? 0;
-    const deductions = (record.items || []).filter((item) =>
-      ['DAMAGE_COMPENSATION', 'CLEANING_FEE', 'OVERDUE_FEE', 'OTHER_DEDUCTION'].includes(item.itemType),
-    );
-    const refunds = (record.items || []).filter((item) =>
-      ['DEPOSIT_REFUND', 'RENT_REFUND', 'OTHER_REFUND'].includes(item.itemType),
-    );
+    // 类别分组集中在 checkout-item-types.ts（与 Prisma 枚举对齐，T207）
+    const deductions = (record.items || []).filter((item) => isDeductionItemType(item.itemType));
+    const refunds = (record.items || []).filter((item) => isRefundItemType(item.itemType));
 
     const totalDeduction = deductions.reduce((sum, item) => sum + item.amount, 0);
     const totalRefundItem = refunds.reduce((sum, item) => sum + item.amount, 0);

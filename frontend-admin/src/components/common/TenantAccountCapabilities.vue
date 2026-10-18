@@ -90,56 +90,16 @@
           租客尚未注册账号，功能权限开关暂不可用。
         </div>
 
-        <!-- 功能分组列表 -->
+        <!-- 功能分组列表 (拆分组件) -->
         <div v-else class="capabilities-group-list">
-          <div
+          <CapabilityGroupCard
             v-for="group in capabilityGroups"
             :key="group.key"
-            class="group-card"
-          >
-            <div class="group-title">{{ group.label }}</div>
-            <div class="group-items">
-              <div
-                v-for="item in group.items"
-                :key="item.code"
-                class="capability-row"
-              >
-                <div class="row-info">
-                  <div class="name-status">
-                    <span class="cap-name">{{ item.name }}</span>
-                    <el-tag
-                      :type="isAllowed(item.code) ? 'success' : 'danger'"
-                      size="small"
-                    >
-                      {{ isAllowed(item.code) ? '预设允许' : '已屏蔽' }}
-                    </el-tag>
-                  </div>
-                  <div class="cap-desc">{{ item.description }}</div>
-
-                  <!-- 屏蔽原因输入（选填） -->
-                  <div v-if="!isAllowed(item.code)" class="reason-input-wrap">
-                    <el-input
-                      v-model="reasons[item.code]"
-                      placeholder="填写屏蔽原因（选填）"
-                      size="small"
-                      clearable
-                      maxlength="100"
-                    />
-                  </div>
-                </div>
-
-                <div class="row-switch">
-                  <el-switch
-                    :model-value="isAllowed(item.code)"
-                    active-text=""
-                    inactive-text=""
-                    inline-prompt
-                    @change="toggleCapability(item.code, $event)"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+            :group="group"
+            :denied-set="deniedSet"
+            :reasons="reasons"
+            @toggle="toggleCapability"
+          />
 
           <!-- 保存按钮与反馈 -->
           <div v-if="saveError" class="save-error-box">
@@ -187,6 +147,7 @@ import type {
   TenantCapabilityItem,
 } from '@/api/tenants';
 import { formatDateTime } from '@/utils/table';
+import CapabilityGroupCard from './capabilities/CapabilityGroupCard.vue';
 
 const props = defineProps<{
   tenantId: string;
@@ -211,10 +172,6 @@ const reasons = reactive<Record<string, string>>({});
 function formatTime(val?: string | null) {
   if (!val) return '—';
   return formatDateTime(val);
-}
-
-function isAllowed(code: string): boolean {
-  return !deniedSet.value.has(code);
 }
 
 function toggleCapability(code: string, active: any) {
@@ -242,11 +199,13 @@ const capabilityGroups = computed(() => {
   };
 
   const groupKeys = ['contract', 'bill', 'prepay', 'maintenance', 'checkout'];
-  return groupKeys.map((key) => ({
-    key,
-    label: groupMeta[key] || key,
-    items: catalog.filter((item: TenantCapabilityItem) => item.group === key),
-  })).filter((g) => g.items.length > 0);
+  return groupKeys
+    .map((key) => ({
+      key,
+      label: groupMeta[key] || key,
+      items: catalog.filter((item: TenantCapabilityItem) => item.group === key),
+    }))
+    .filter((g) => g.items.length > 0);
 });
 
 // 重置到当前已保存状态
@@ -411,19 +370,18 @@ watch(
   font-size: 14px;
 }
 
-.account-sub {
+.account-identity small {
+  color: var(--text-muted);
   font-size: 12px;
-  color: var(--text-secondary);
 }
 
 .account-meta-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  padding: 10px 0;
-  border-top: 1px dashed var(--border);
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
   border-bottom: 1px dashed var(--border);
-  margin-bottom: 12px;
 }
 
 .meta-item {
@@ -465,72 +423,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.group-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  background: var(--bg-card);
-}
-
-.group-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 10px;
-}
-
-.group-items {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.capability-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border-light, #f0eee8);
-}
-
-.capability-row:first-child {
-  border-top: none;
-  padding-top: 0;
-}
-
-.row-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.name-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 3px;
-}
-
-.cap-name {
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.cap-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.reason-input-wrap {
-  margin-top: 8px;
-}
-
-.row-switch {
-  flex-shrink: 0;
-  padding-top: 2px;
 }
 
 .save-error-box {

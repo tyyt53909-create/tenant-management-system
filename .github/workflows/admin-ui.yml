@@ -1,0 +1,153 @@
+name: Admin UI E2E
+
+# OPT-24 / T197：管理后台 Playwright 关键流程（登录 / 房源→合同 / 账单→收款 / 抄表→结算 / 退租结算）。
+# 真后端 + 构建后 preview，失败上传截图与 trace，失败阻断合并。
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'frontend-admin/**'
+      - 'backend/**'
+      - '.github/workflows/admin-ui.yml'
+
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'frontend-admin/**'
+      - 'backend/**'
+      - '.github/workflows/admin-ui.yml'
+
+  workflow_dispatch:
+
+jobs:
+  admin-ui:
+    name: Playwright critical flows
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_SECRET: test-jwt-secret
+      ENCRYPTION_KEY: ci-test-encryption-key-32-bytes!
+      NODE_ENV: test
+      BACKEND_PORT: 3000
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend-admin/package-lock.json
+
+      - name: 安装后端依赖
+        working-directory: backend
+        run: npm ci
+
+      - name: 生成 Prisma Client并迁移播种
+        working-directory: backend
+        run: |
+          npm run prisma:generate
+          npx prisma migrate deploy
+          npm run prisma:seed
+
+      - name: 构建并启动后端
+        working-directory: backend
+        run: |
+          npm run build
+          PORT=$BACKEND_PORT nohup node dist/main > /tmp/backend-ui-e2e.log 2>&1 &
+          echo $! > /tmp/backend-ui-e2e.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:$BACKEND_PORT/api/health > /dev/null; then
+              echo "后端已就绪"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "后端 60s 内未就绪" >&2
+          cat /tmp/backend-ui-e2e.log
+          exit 1
+
+      - name: 安装前端依赖
+        working-directory: frontend-admin
+        run: npm ci
+
+      - name: 启动前端 dev 服务（同源 /api 代理，避开跨域与 CSP 限制）
+        working-directory: frontend-admin
+        run: |
+          VITE_API_PROXY_TARGET=http://127.0.0.1:$BACKEND_PORT nohup npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > /tmp/admin-dev.log 2>&1 &
+          for i in $(seq 1 20); do
+            if curl -sf http://127.0.0.1:5173/ > /dev/null; then
+              echo "前端 dev 已就绪"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "前端 dev 60s 内未就绪" >&2
+          cat /tmp/admin-dev.log
+          exit 1
+
+      - name: 缓存 Playwright 浏览器
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('frontend-admin/package-lock.json') }}
+
+      - name: 安装 Playwright Chromium
+        working-directory: frontend-admin
+        run: npx playwright install --with-deps chromium
+
+      - name: 运行 Playwright 关键流程
+        working-directory: frontend-admin
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: http://127.0.0.1:5173
+          E2E_API_BASE_URL: http://127.0.0.1:3000/api
+
+      - name: 停止后端与前端 dev
+        if: always()
+        run: |
+          kill $(cat /tmp/backend-ui-e2e.pid) 2>/dev/null || true
+          pkill -f "vite.*5173" 2>/dev/null || true
+
+      - name: 上传测试报告与失败现场（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            frontend-admin/playwright-report/
+            frontend-admin/test-results/
+            /tmp/backend-ui-e2e.log

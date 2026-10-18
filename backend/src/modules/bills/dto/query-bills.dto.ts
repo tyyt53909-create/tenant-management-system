@@ -1,7 +1,7 @@
-import { IsOptional, IsInt, IsString, IsEnum, Min, Max } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-enum BillStatus {
+export enum BillStatus {
   PENDING = 'PENDING',
   PARTIAL = 'PARTIAL',
   PAID = 'PAID',
@@ -9,7 +9,7 @@ enum BillStatus {
   CANCELLED = 'CANCELLED',
 }
 
-enum BillType {
+export enum BillType {
   RENT = 'RENT',
   UTILITY = 'UTILITY',
   OTHER = 'OTHER',
@@ -31,13 +31,25 @@ export class QueryBillsDto {
 
   @IsEnum(BillStatus)
   @IsOptional()
-  status?: BillStatus;
+  status?: BillStatus | `${BillStatus}`;
 
   @IsEnum(BillType)
   @IsOptional()
-  billType?: BillType;
+  billType?: BillType | `${BillType}`;
 
   @IsString()
   @IsOptional()
   contractId?: string;
+
+  @IsString()
+  @IsOptional()
+  buildingId?: string;
+
+  @IsDateString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsDateString()
+  @IsOptional()
+  endDate?: string;
 }

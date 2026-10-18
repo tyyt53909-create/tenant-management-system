@@ -5,7 +5,7 @@ export class TenantResponseDto {
   email: string | null;
   emergencyContact: string | null;
   emergencyPhone: string | null;
-  tags: any;
+  tags: Record<string, unknown> | unknown[] | null;
   notes: string | null;
   isActive: boolean;
   userId: string | null;

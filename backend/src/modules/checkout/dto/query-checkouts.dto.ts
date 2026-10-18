@@ -1,7 +1,7 @@
-import { IsOptional, IsInt, IsString, IsEnum, Min, Max } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-enum CheckoutStatus {
+export enum CheckoutStatus {
   DRAFT = 'DRAFT',
   PENDING = 'PENDING',
   COMPLETED = 'COMPLETED',
@@ -24,9 +24,17 @@ export class QueryCheckoutsDto {
 
   @IsEnum(CheckoutStatus)
   @IsOptional()
-  status?: CheckoutStatus;
+  status?: CheckoutStatus | `${CheckoutStatus}`;
 
   @IsString()
   @IsOptional()
   contractId?: string;
+
+  @IsDateString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsDateString()
+  @IsOptional()
+  endDate?: string;
 }

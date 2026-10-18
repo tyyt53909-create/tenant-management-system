@@ -22,12 +22,8 @@ const ADMIN_IDENTIFIER = process.env.ADMIN_IDENTIFIER || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
 const CLEANER_IDENTIFIER = process.env.CLEANER_IDENTIFIER || 'cleaner@example.com';
 const CLEANER_PASSWORD = process.env.CLEANER_PASSWORD || 'Cleaner@123';
-// 租客注册需邀请码。当前代码库的 InviteCodeService.generateInviteCode 没有任何 HTTP 入口，
-// 因此只能使用 seed 写入管理员账号的既定邀请码（可用 INVITE_CODE 覆盖）。
-// 注意：邀请码由 seed 每次运行时重新生成（INVITE-<时间戳>），因此该默认值会随重新播种失效。
-// 可通过 INVITE_CODE 环境变量注入当前有效值，例如：
-//   INVITE_CODE=$(docker exec tenant-system-postgres-t140 psql -U tenant_user -d tenant_system -tAc \
-//     "SELECT \"inviteCode\" FROM users WHERE \"role\"='ADMIN' AND \"inviteCode\" IS NOT NULL LIMIT 1;")
+// 租客注册需邀请码：脚本优先用管理员身份 POST /auth/invite-codes 动态签发；
+// 签发失败时回退 INVITE_CODE 环境变量/默认值。
 const INVITE_CODE = process.env.INVITE_CODE || 'INVITE-1791879079690-S1L5BM';
 
 const results = [];
@@ -127,6 +123,8 @@ async function main() {
   });
 
   const adminUser = await api('GET', '/auth/me', { token: adminToken });
+  // 派单需要 assignedTo（docs/04 §4.3，T207 起服务端强制校验），用真实保洁账号的 userId
+  const cleanerUser = await api('GET', '/auth/me', { token: cleanerToken });
 
   // ---------- 步骤 2：创建房源 ----------
   const room = await step('2 创建房源', async () => {
@@ -146,8 +144,7 @@ async function main() {
   });
 
   // ---------- 步骤 3：创建租客并注册其登录账号 ----------
-  // 说明：注册接口需邀请码；当前代码库的 InviteCodeService.generateInviteCode
-  // 没有任何 HTTP 入口，因此脚本复用管理员账号上的既有邀请码（seed 会创建）。
+  // 说明：注册接口需邀请码；优先动态签发（POST /auth/invite-codes），失败回退默认值。
   let tenantUserEmail, tenantPassword = 'Tenant@123';
   const tenant = await step('3 创建租客并注册账号', async () => {
     const phone = '139' + uid.padStart(8, '0').slice(0, 8);
@@ -244,15 +241,21 @@ async function main() {
     expectStatus(activated, 200, '合同生效');
     assert(activated.data.status === 'ACTIVE', '合同应为 ACTIVE，实际 ' + activated.data.status);
 
-    // RESERVED+CLEAN -> OCCUPIED+CLEAN
-    const occupied = await api('PATCH', '/rooms/' + room.id + '/status', {
-      token: adminToken,
-      body: { status: 'OCCUPIED', version: reserved.data.version },
-    });
-    expectStatus(occupied, 200, '流转至 OCCUPIED');
-    assert(occupied.data.status === 'OCCUPIED', '应为 OCCUPIED，实际 ' + occupied.data.status);
-    room.version = occupied.data.version;
-    return { detail: 'DRAFT -> ACTIVE，房态 RESERVED -> OCCUPIED（version=' + occupied.data.version + '）' };
+    // 合同生效的副作用：按 docs/04 §2.3，房间随动 RESERVED+CLEAN -> OCCUPIED+CLEAN。
+    // T207 起 API 也实现该副作用（此前只有定时任务做），因此这里不再重复发一次房态流转
+    // —— 那会带着流转前的 version 撞乐观锁 409（T212 在 CI 上暴露）。改为断言副作用确实发生。
+    const afterActivate = await api('GET', '/rooms/' + room.id, { token: adminToken });
+    expectStatus(afterActivate, 200, '合同生效后读取房源');
+    assert(
+      afterActivate.data.status === 'OCCUPIED',
+      '合同生效后房间应随动为 OCCUPIED，实际 ' + afterActivate.data.status,
+    );
+    assert(
+      afterActivate.data.version > reserved.data.version,
+      '房间随动应使 version 递增，实际 ' + afterActivate.data.version + '（流转前 ' + reserved.data.version + '）',
+    );
+    room.version = afterActivate.data.version;
+    return { detail: 'DRAFT -> ACTIVE，房态随动 RESERVED -> OCCUPIED（version=' + afterActivate.data.version + '）' };
   });
 
   // ---------- 步骤 5：生成月度账单 ----------
@@ -351,6 +354,14 @@ async function main() {
       },
     });
     expectStatus(meter, 201, '创建电表');
+
+    // 首次读数按“初始底数”零计费入库（7db6342 设备首次底数零计费），不扣费
+    const first = await api('POST', '/meters/' + meter.data.id + '/readings', {
+      token: adminToken,
+      body: { currentReading: 100, readingTime: new Date(Date.now() - 60_000).toISOString() },
+    });
+    expectStatus(first, [200, 201], '登记初始底数');
+    assert(first.data.deduction && first.data.deduction.applied === false, '初始底数不应扣费');
 
     const res = await api('POST', '/meters/' + meter.data.id + '/readings', {
       token: adminToken,
@@ -459,7 +470,11 @@ async function main() {
     for (const status of ['ACKNOWLEDGED', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_CONFIRM', 'COMPLETED']) {
       const res = await api('PATCH', '/maintenance/' + maintenance.id, {
         token: adminToken,
-        body: { status, ...(status === 'COMPLETED' ? { resolution: '已更换水管' } : {}) },
+        body: {
+          status,
+          ...(status === 'ASSIGNED' ? { assignedTo: cleanerUser.data.id } : {}),
+          ...(status === 'COMPLETED' ? { resolution: '已更换水管' } : {}),
+        },
       });
       if (![200, 201].includes(res.status)) {
         // 记录实际可达状态，便于人工判断状态机

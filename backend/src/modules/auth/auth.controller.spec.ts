@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { BadRequestException, ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthController } from './auth.controller.js';
 import { InviteCodeService } from './invite-code.service.js';
@@ -10,6 +11,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { EmailOtpService } from './email-otp.service.js';
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
+import { AuthService } from './auth.service.js';
 import * as bcrypt from 'bcrypt';
 
 describe('AuthController', () => {
@@ -25,11 +27,16 @@ describe('AuthController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
+        AuthService,
         {
           provide: InviteCodeService,
           useValue: {
             validateInviteCode: vi.fn(),
             generateInviteCode: vi.fn(),
+            generateBatchInviteCodes: vi.fn(),
+            consumeInviteCode: vi.fn().mockResolvedValue(undefined),
+            findAll: vi.fn(),
+            revokeInviteCode: vi.fn(),
           },
         },
         {
@@ -38,12 +45,16 @@ describe('AuthController', () => {
             generateTokens: vi.fn(),
             verifyToken: vi.fn(),
             refreshAccessToken: vi.fn(),
+            rotateRefreshToken: vi.fn(),
+            revokeRefreshToken: vi.fn(),
+            revokeUserSessions: vi.fn(),
           },
         },
         {
           provide: GoogleAuthService,
           useValue: {
             getClientId: vi.fn().mockReturnValue('test-google-client-id'),
+            isMockEnabled: vi.fn().mockReturnValue(false),
             verifyIdToken: vi.fn(),
           },
         },
@@ -77,6 +88,8 @@ describe('AuthController', () => {
             $transaction: vi.fn(),
           },
         },
+        // Cookie 的 Secure 标志由 ConfigService 决定（生产环境 true）
+        { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'development' }) },
       ],
     }).compile();
 
@@ -242,13 +255,11 @@ describe('AuthController', () => {
         refreshToken: 'refresh-token',
       });
 
-      const { invitedByUpdate } = stubTransaction('user-invite');
+      stubTransaction('user-invite');
+      const consumeSpy = vi.spyOn(inviteCodeService, 'consumeInviteCode').mockResolvedValue(undefined as any);
       await controller.register({ ...dto, inviteCode: 'INVITE-ONCE' });
 
-      expect(invitedByUpdate).toHaveBeenCalledTimes(1);
-      const call = invitedByUpdate.mock.calls[0][0];
-      expect(call.where).toEqual({ id: 'admin-123' });
-      expect(call.data).toEqual({ inviteCode: null, inviteExpiredAt: null });
+      expect(consumeSpy).toHaveBeenCalledWith('INVITE-ONCE', 'user-invite', expect.anything());
     });
 
     it('提供 phone 时按用户输入写入租客档案', async () => {
@@ -301,7 +312,7 @@ describe('AuthController', () => {
       expect(result.expiryDays).toBe(30);
       expect(result.invitedBy).toBe('admin-1');
       expect(result.expiresAt).toBeInstanceOf(Date);
-      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 30);
+      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 30, undefined, 'TENANT');
     });
 
     it('未指定有效期时默认 365 天', async () => {
@@ -310,7 +321,7 @@ describe('AuthController', () => {
       const result = await controller.generateInviteCode(adminReq, {} as any);
 
       expect(result.expiryDays).toBe(365);
-      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 365);
+      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 365, undefined, 'TENANT');
     });
 
     it('生成的邀请码可直接用于注册', async () => {
@@ -329,11 +340,43 @@ describe('AuthController', () => {
       const registered = await controller.register({
         email: 'invited@example.com',
         password: 'password123',
-        inviteCode: generated.inviteCode,
+        inviteCode: generated.inviteCode!,
       });
 
       expect(registered.accessToken).toBe('access-token');
       expect(registered.user.email).toBe('stub@example.com');
+    });
+
+    it('管理员批量生成邀请码：调用 generateBatchInviteCodes', async () => {
+      vi.spyOn(inviteCodeService, 'generateBatchInviteCodes').mockResolvedValue(['INVITE-1', 'INVITE-2', 'INVITE-3']);
+
+      const result = await controller.generateInviteCode(adminReq, { count: 3, expiryDays: 90, notes: '批量3个' } as any);
+
+      expect(result.inviteCodes).toEqual(['INVITE-1', 'INVITE-2', 'INVITE-3']);
+      expect(result.count).toBe(3);
+      expect(result.expiryDays).toBe(90);
+      expect(result.invitedBy).toBe('admin-1');
+      expect(inviteCodeService.generateBatchInviteCodes).toHaveBeenCalledWith('admin-1', 3, 90, '批量3个', 'TENANT');
+    });
+
+    it('管理员查询邀请码列表：调用 inviteCodeService.findAll', async () => {
+      const mockResult = { data: [{ id: '1', code: 'INVITE-1' }], meta: { total: 1, page: 1, limit: 20, totalPages: 1 } };
+      vi.spyOn(inviteCodeService, 'findAll').mockResolvedValue(mockResult as any);
+
+      const res = await controller.listInviteCodes({ page: 1, limit: 20, status: 'UNUSED' } as any);
+
+      expect(res).toEqual(mockResult);
+      expect(inviteCodeService.findAll).toHaveBeenCalledWith({ page: 1, limit: 20, status: 'UNUSED' });
+    });
+
+    it('管理员作废邀请码：调用 inviteCodeService.revokeInviteCode', async () => {
+      const mockRevoked = { id: 'code-1', status: 'REVOKED' };
+      vi.spyOn(inviteCodeService, 'revokeInviteCode').mockResolvedValue(mockRevoked as any);
+
+      const res = await controller.revokeInviteCode(adminReq, 'code-1');
+
+      expect(res).toEqual(mockRevoked);
+      expect(inviteCodeService.revokeInviteCode).toHaveBeenCalledWith('code-1', 'admin-1');
     });
   });
 
@@ -453,16 +496,16 @@ describe('AuthController', () => {
         tokenType: 'REFRESH',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
-      vi.spyOn(jwtService, 'refreshAccessToken').mockResolvedValue('new-access-token');
+      vi.spyOn(jwtService, 'rotateRefreshToken').mockResolvedValue({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+      });
 
       const result = await controller.refresh(dto);
 
       expect(result.accessToken).toBe('new-access-token');
-      expect(jwtService.verifyToken).toHaveBeenCalledWith(dto.refreshToken);
-      expect(jwtService.refreshAccessToken).toHaveBeenCalledWith(
-        dto.refreshToken,
-        { sub: 'user-123', role: 'TENANT' },
-      );
+      expect(result.refreshToken).toBe('new-refresh-token');
+      expect(jwtService.rotateRefreshToken).toHaveBeenCalledWith(dto.refreshToken);
     });
 
     it('禁止使用 Access Token 刷新 Token', async () => {
@@ -508,11 +551,80 @@ describe('AuthController', () => {
 
       await expect(controller.refresh(dto)).rejects.toThrow(ForbiddenException);
     });
+
+    it('登出时撤销这枚 refresh token 所在的会话', async () => {
+      vi.spyOn(jwtService, 'revokeRefreshToken').mockResolvedValue(undefined);
+
+      await expect(controller.logout(dto)).resolves.toEqual({ message: '已登出' });
+      expect(jwtService.revokeRefreshToken).toHaveBeenCalledWith(dto.refreshToken);
+    });
+
+    it('通过 HttpOnly Cookie 传递 Refresh Token 刷新成功并更新 Cookie', async () => {
+      const mockUser = { id: 'user-123', role: 'TENANT', isActive: true };
+      vi.spyOn(jwtService, 'verifyToken').mockResolvedValue({
+        sub: 'user-123',
+        role: 'TENANT',
+        tokenType: 'REFRESH',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser as any);
+      vi.spyOn(jwtService, 'rotateRefreshToken').mockResolvedValue({
+        accessToken: 'rotated-access',
+        refreshToken: 'rotated-refresh',
+      });
+
+      const mockReq = { cookies: { refresh_token: 'cookie-refresh-token' } } as any;
+      const mockRes = { cookie: vi.fn(), clearCookie: vi.fn() } as any;
+
+      const result = await controller.refresh({}, mockReq, mockRes);
+      expect(result.accessToken).toBe('rotated-access');
+      expect(mockRes.cookie).toHaveBeenCalledWith(
+        'refresh_token',
+        'rotated-refresh',
+        expect.objectContaining({ httpOnly: true, path: '/api/auth' }),
+      );
+    });
+
+    it('Body 和 Cookie 均无 Refresh Token 时抛出 UnauthorizedException', async () => {
+      const mockReq = { cookies: {} } as any;
+      await expect(controller.refresh({}, mockReq)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('登出时清除 HttpOnly Cookie', async () => {
+      vi.spyOn(jwtService, 'revokeRefreshToken').mockResolvedValue(undefined);
+      const mockReq = { cookies: { refresh_token: 'cookie-refresh-token' } } as any;
+      const mockRes = { clearCookie: vi.fn() } as any;
+
+      await expect(controller.logout({}, mockReq, mockRes)).resolves.toEqual({ message: '已登出' });
+      expect(jwtService.revokeRefreshToken).toHaveBeenCalledWith('cookie-refresh-token');
+      expect(mockRes.clearCookie).toHaveBeenCalledWith(
+        'refresh_token',
+        expect.objectContaining({ httpOnly: true, path: '/api/auth' }),
+      );
+    });
+
+    it('登出所有设备时撤销该用户的全部会话并清除 Cookie', async () => {
+      vi.spyOn(jwtService, 'revokeUserSessions').mockResolvedValue(undefined);
+      const mockRes = { clearCookie: vi.fn() } as any;
+
+      await expect(
+        controller.logoutAll({ user: { userId: 'user-123' } }, mockRes),
+      ).resolves.toEqual({
+        message: '已登出所有设备',
+      });
+      expect(jwtService.revokeUserSessions).toHaveBeenCalledWith('user-123');
+      expect(mockRes.clearCookie).toHaveBeenCalledWith(
+        'refresh_token',
+        expect.objectContaining({ httpOnly: true, path: '/api/auth' }),
+      );
+    });
   });
 
   describe('googleAuth & google/client-id', () => {
     it('应该能正常获取 Google Client ID', () => {
-      expect(controller.getGoogleClientId()).toEqual({ clientId: 'test-google-client-id' });
+      expect(controller.getGoogleClientId()).toEqual({
+        clientId: 'test-google-client-id',
+        mockEnabled: false,
+      });
     });
 
     it('已有用户使用 Google 登录：匹配邮箱并自动关联 googleId', async () => {
@@ -687,7 +799,7 @@ describe('AuthController', () => {
 
     describe('loginWithEmailCode', () => {
       it('验证码错误应抛出 BadRequestException', async () => {
-        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(false);
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(false);
 
         await expect(
           controller.loginWithEmailCode({ email: 'test@example.com', code: '000000' }),
@@ -695,7 +807,7 @@ describe('AuthController', () => {
       });
 
       it('账号被禁用应抛出 ForbiddenException', async () => {
-        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
         vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({
           id: 'user-banned',
           email: 'banned@example.com',
@@ -708,7 +820,7 @@ describe('AuthController', () => {
       });
 
       it('已有正常用户验证码登录成功', async () => {
-        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
         const mockUser = {
           id: 'user-existing',
           email: 'exist@example.com',
@@ -739,7 +851,7 @@ describe('AuthController', () => {
       });
 
       it('新用户验证码登录应自动创建账户与租客记录', async () => {
-        vi.spyOn(emailOtpService, 'verifyCode').mockReturnValue(true);
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
         vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
 
         const mockNewUser = {
@@ -788,11 +900,12 @@ describe('AuthController', () => {
         ).rejects.toThrow(BadRequestException);
       });
 
-      it('邀请码有效应在事务中清空码并更新 user.invitedBy', async () => {
+      it('邀请码有效应在事务中核销码并更新 user.invitedBy', async () => {
         vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
           valid: true,
           invitedBy: 'admin-inviter',
         });
+        const consumeSpy = vi.spyOn(inviteCodeService, 'consumeInviteCode').mockResolvedValue(undefined as any);
 
         const userUpdate = vi.fn().mockResolvedValue({});
         vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
@@ -809,14 +922,9 @@ describe('AuthController', () => {
         );
 
         expect(res.success).toBe(true);
-        expect(userUpdate).toHaveBeenCalledTimes(2);
-        // 第一调用：使邀请码失效
-        expect(userUpdate).toHaveBeenNthCalledWith(1, {
-          where: { id: 'admin-inviter' },
-          data: { inviteCode: null, inviteExpiredAt: null },
-        });
-        // 第二调用：关联用户
-        expect(userUpdate).toHaveBeenNthCalledWith(2, {
+        expect(consumeSpy).toHaveBeenCalledWith('GOODCODE', 'tenant-user-1', expect.anything());
+        expect(userUpdate).toHaveBeenCalledTimes(1);
+        expect(userUpdate).toHaveBeenCalledWith({
           where: { id: 'tenant-user-1' },
           data: { invitedBy: 'admin-inviter' },
         });
@@ -839,7 +947,9 @@ describe('AuthController', () => {
       expect(tenantCapabilityService.getEffectiveCapabilities).toHaveBeenCalledWith('tenant-user-1');
     });
 
-    it('非租客身份（如 ADMIN）获取个人资料时，返回空 capabilities 数组', async () => {
+    it('非租客身份（如 ADMIN）获取个人资料时，返回空 capabilities 数组和关闭的模拟器开关', async () => {
+      const previous = process.env.FEATURE_METER_SIMULATOR;
+      delete process.env.FEATURE_METER_SIMULATOR;
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
         id: 'admin-user-1',
         email: 'admin@example.com',
@@ -850,7 +960,11 @@ describe('AuthController', () => {
       const result = await controller.getMe({ user: { userId: 'admin-user-1' } });
       expect(result.id).toBe('admin-user-1');
       expect(result.capabilities).toEqual([]);
+      expect(result.features).toEqual({ meterSimulator: false });
       expect(tenantCapabilityService.getEffectiveCapabilities).not.toHaveBeenCalled();
+
+      if (previous === undefined) delete process.env.FEATURE_METER_SIMULATOR;
+      else process.env.FEATURE_METER_SIMULATOR = previous;
     });
 
     it('用户不存在时抛出 UnauthorizedException', async () => {

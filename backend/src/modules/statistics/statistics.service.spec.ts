@@ -106,6 +106,40 @@ describe('StatisticsService（统计 P1 / T155）', () => {
       expect(res.summary.totalBilled).toBe(0);
     });
 
+    it('出账额排除已取消账单（T207：原先把 CANCELLED 也计入，收缴率被拉低）', async () => {
+      await service.overview({ period: 'MONTH' } as any);
+
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: { not: 'CANCELLED' } }),
+        }),
+      );
+    });
+
+    it('出租率按「区间末端」计算：历史区间用区间末，未到的区间以当下为准（T207）', async () => {
+      await service.overview({
+        period: 'CUSTOM',
+        startDate: '2026-01-01',
+        endDate: '2026-01-31',
+      } as any);
+
+      const where = prisma.contract.findMany.mock.calls.at(-1)[0].where;
+      // 历史区间：基准时刻是区间末端（在过去），而不是 now
+      expect(where.endDate.gte.getTime()).toBeLessThan(Date.now());
+      expect(where.startDate.lte.getTime()).toBeLessThanOrEqual(where.endDate.gte.getTime());
+      expect(where.status).toEqual({ in: ['ACTIVE', 'EXPIRED', 'RENEWED'] });
+    });
+
+    it('本月报表的占用基准落在当下（不会把月末当成未来空档）', async () => {
+      await service.overview({ period: 'MONTH' } as any);
+
+      const where = prisma.contract.findMany.mock.calls.at(-1)[0].where;
+      const asOf = where.endDate.gte.getTime();
+      const now = Date.now();
+      // 与当前时刻相差不超过 5 秒
+      expect(Math.abs(now - asOf)).toBeLessThan(5000);
+    });
+
     it('dimension=FLOOR 时按楼层分组并给出各层出租率', async () => {
       prisma.room.findMany.mockResolvedValue([
         { id: 'r1', floor: 1, roomNumber: '101' },

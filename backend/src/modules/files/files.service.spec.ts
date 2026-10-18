@@ -1,8 +1,21 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import sharp from 'sharp';
 import { FilesService } from './files.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+
+// 真实 PNG 夹具（**故意带 EXIF**）：原先内嵌的 1×1 base64 本身不合规（libpng 读不了），
+// 重编码清 EXIF 这条路径在测试里从未真正跑过 —— 夹具必须能被解码，测试才有意义（T209）
+const PNG = await sharp({
+  create: { width: 8, height: 8, channels: 3, background: { r: 10, g: 20, b: 30 } },
+})
+  .withMetadata({ exif: { IFD0: { Copyright: 'tenant-system-test', Software: 'T209' } } })
+  .png()
+  .toBuffer();
 
 /**
  * 文件归属与下载授权（T159 安全修复）。
@@ -13,8 +26,14 @@ import { PrismaService } from '../prisma/prisma.service.js';
 describe('FilesService', () => {
   let service: FilesService;
   let prisma: any;
+  let uploadDir: string;
+  const previousUpload = process.env.UPLOAD_DIR;
+  const previousDriver = process.env.STORAGE_DRIVER;
 
   beforeEach(async () => {
+    uploadDir = await mkdtemp(join(tmpdir(), 'files-'));
+    process.env.UPLOAD_DIR = uploadDir;
+    process.env.STORAGE_DRIVER = 'local';
     const prismaMock: any = { fileAsset: { create: vi.fn(), findUnique: vi.fn() } };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -28,8 +47,32 @@ describe('FilesService', () => {
     prisma = prismaMock;
   });
 
+  afterEach(async () => {
+    if (previousUpload === undefined) delete process.env.UPLOAD_DIR;
+    else process.env.UPLOAD_DIR = previousUpload;
+    if (previousDriver === undefined) delete process.env.STORAGE_DRIVER;
+    else process.env.STORAGE_DRIVER = previousDriver;
+    await rm(uploadDir, { recursive: true, force: true });
+  });
+
+  function pngFile(name = 'p.png') {
+    return { mimetype: 'image/png', size: PNG.length, originalname: name, buffer: PNG };
+  }
+
   it('无文件应抛错', async () => {
     await expect(service.save(undefined as any)).rejects.toThrow(BadRequestException);
+  });
+
+  it('落盘的 PNG 原图已清除 EXIF（T209：此前只对 JPEG 重编码）', async () => {
+    // 先确认测试前提：夹具本身确实是带 EXIF 的
+    expect((await sharp(PNG).metadata()).exif).toBeDefined();
+
+    const saved = await service.save(pngFile() as any);
+    const stored = await service.read(saved.key);
+
+    const meta = await sharp(stored).metadata();
+    expect(meta.format).toBe('png');
+    expect(meta.exif).toBeUndefined();
   });
 
   it('非图片类型应拒绝', async () => {
@@ -40,7 +83,7 @@ describe('FilesService', () => {
 
   it('超大文件应拒绝', async () => {
     await expect(
-      service.save({ mimetype: 'image/png', size: 11 * 1024 * 1024, originalname: 'a.png', buffer: Buffer.alloc(10) } as any),
+      service.save({ mimetype: 'image/png', size: 11 * 1024 * 1024, originalname: 'a.png', buffer: PNG } as any),
     ).rejects.toThrow('最大 10MB');
   });
 
@@ -53,10 +96,7 @@ describe('FilesService', () => {
   it('TENANT 上传 → 记录 uploadedBy 与 tenantId', async () => {
     prisma.fileAsset.create.mockResolvedValue({});
 
-    const res = await service.save(
-      { mimetype: 'image/png', size: 1024, originalname: 'p.png', buffer: Buffer.alloc(10) } as any,
-      { userId: 'u-1', role: 'TENANT', tenantId: 't-1' },
-    );
+    const res = await service.save(pngFile() as any, { userId: 'u-1', role: 'TENANT', tenantId: 't-1' });
 
     expect(res.url).toBe('/api/files/' + res.key);
     expect(prisma.fileAsset.create).toHaveBeenCalledWith({
@@ -67,10 +107,7 @@ describe('FilesService', () => {
   it('ADMIN 上传 → tenantId 为 null', async () => {
     prisma.fileAsset.create.mockResolvedValue({});
 
-    await service.save(
-      { mimetype: 'image/png', size: 1024, originalname: 'p.png', buffer: Buffer.alloc(10) } as any,
-      { userId: 'admin-1', role: 'ADMIN' },
-    );
+    await service.save(pngFile() as any, { userId: 'admin-1', role: 'ADMIN' });
 
     expect(prisma.fileAsset.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ uploadedBy: 'admin-1', tenantId: null }),
@@ -80,12 +117,45 @@ describe('FilesService', () => {
   it('归属登记失败不阻断上传（文件已落盘）', async () => {
     prisma.fileAsset.create.mockRejectedValue(new Error('db down'));
 
+    const res = await service.save(pngFile() as any, { userId: 'u-1', role: 'TENANT', tenantId: 't-1' });
+
+    expect(res.key).toBeTruthy();
+  });
+
+  it('把非图片内容伪装成 png 时拒绝，并且不写盘', async () => {
+    await expect(
+      service.save({
+        mimetype: 'image/png',
+        size: 28,
+        originalname: 'fake.png',
+        buffer: Buffer.from('<script>not a PNG</script>'),
+      } as any),
+    ).rejects.toThrow('不是有效的图片');
+    expect(prisma.fileAsset.create).not.toHaveBeenCalled();
+  });
+
+  it('上传后返回去掉 EXIF 的缩略图地址', async () => {
+    prisma.fileAsset.create.mockResolvedValue({});
+    const jpeg = await sharp({
+      create: { width: 16, height: 16, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    }).jpeg().withMetadata({
+      exif: {
+        IFD0: { ImageDescription: 'gps-test' },
+        GPS: { GPSLatitudeRef: 'N', GPSLatitude: '22/1 32/1 0/1', GPSLongitudeRef: 'E', GPSLongitude: '114/1 8/1 0/1' },
+      } as any,
+    }).toBuffer();
+
     const res = await service.save(
-      { mimetype: 'image/png', size: 1024, originalname: 'p.png', buffer: Buffer.alloc(10) } as any,
+      { mimetype: 'image/jpeg', size: jpeg.length, originalname: 'place.jpg', buffer: jpeg } as any,
       { userId: 'u-1', role: 'TENANT', tenantId: 't-1' },
     );
 
-    expect(res.key).toBeTruthy();
+    expect(res.thumbnail).toMatch(/\.thumb\.jpg$/);
+    const original = await service.read(res.key);
+    const thumb = await service.read(res.thumbnail!.replace('/api/files/', ''));
+    expect((await sharp(original).metadata()).exif).toBeUndefined();
+    expect((await sharp(thumb).metadata()).exif).toBeUndefined();
+    expect(thumb.includes(Buffer.from('gps-test'))).toBe(false);
   });
 
   // ── T159：下载授权 ──

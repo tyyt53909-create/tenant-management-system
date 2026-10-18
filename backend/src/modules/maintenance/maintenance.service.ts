@@ -1,8 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import type { Prisma, MaintenanceCategory, MaintenancePriority } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
 import { QueryMaintenanceDto } from './dto/query-maintenance.dto.js';
+import { scopedWhere } from '../../common/utils/scoped-where.js';
+import {
+  isMaintenanceTransitionAllowed,
+  maintenanceTransitionNeedsAssignee,
+  maintenanceTransitionSetsResolvedAt,
+} from './maintenance-transitions.js';
 
 @Injectable()
 export class MaintenanceService {
@@ -18,8 +25,9 @@ export class MaintenanceService {
         throw new BadRequestException('租客账号未绑定租客档案，请联系管理员');
       }
 
+      // 统一走范围助手：tenantId 为空时直接 403，不让 Prisma 把 undefined 当作「不过滤」
       const contract = await this.prisma.contract.findFirst({
-        where: { tenantId: user.tenantId, status: 'ACTIVE' },
+        where: scopedWhere(user.tenantId, { status: 'ACTIVE' as const }),
       });
 
       if (!contract) {
@@ -57,8 +65,8 @@ export class MaintenanceService {
           tenantId,
           title: dto.title,
           description: dto.description,
-          category: dto.category as any,
-          priority: dto.priority as any || 'NORMAL',
+          category: dto.category as MaintenanceCategory,
+          priority: (dto.priority as MaintenancePriority) || 'NORMAL',
         },
       });
 
@@ -84,12 +92,8 @@ export class MaintenanceService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
-    // 防御：tenantId 缺失时返回空列表，绝不退化为全库查询
-    if (!tenantId) {
-      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
-    }
-
-    const where: any = { tenantId };
+    // 此处 where 需按可选筛选条件增量赋值；Prisma 的联合过滤类型无法在填入普通 string 后再收窄，故保留 any（OPT-17 已注释豁免）
+    const where: any = scopedWhere(tenantId);
     if (status) where.status = status;
 
     const [data, total] = await Promise.all([
@@ -110,9 +114,10 @@ export class MaintenanceService {
 
   /** 租客查询单条工单（仅限自己的） */
   async findOneForTenant(id: string, tenantId: string) {
+    const scope = scopedWhere(tenantId);
     const request = await this.prisma.maintenanceRequest.findUnique({ where: { id }, include: { photos: true } });
 
-    if (!request || request.tenantId !== tenantId) {
+    if (!request || request.tenantId !== scope.tenantId) {
       throw new NotFoundException('报修工单不存在');
     }
 
@@ -123,7 +128,7 @@ export class MaintenanceService {
     const { page = 1, limit = 20, status, roomId, tenantId } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.MaintenanceRequestWhereInput = {};
     if (status) where.status = status;
     if (roomId) where.roomId = roomId;
     if (tenantId) where.tenantId = tenantId;
@@ -178,7 +183,24 @@ export class MaintenanceService {
       throw new NotFoundException('报修记录不存在');
     }
 
-    const updateData: any = {};
+    const statusChanged = dto.status !== undefined && dto.status !== request.status;
+    // 状态流转校验（docs/04 §4.3）。原先直接写任意 status：COMPLETED 可退回 SUBMITTED、
+    // 可直接跳到 ASSIGNED 而不填 assignedTo，resolution 还会在未完成时就写 resolvedAt（T207）。
+    if (statusChanged && !isMaintenanceTransitionAllowed(request.status, dto.status!)) {
+      throw new ConflictException(
+        `工单状态不允许从 ${request.status ?? '未知'} 变更为 ${dto.status}（合法流转见 docs/04-状态机.md §4.3）`,
+      );
+    }
+    if (
+      dto.status !== undefined &&
+      maintenanceTransitionNeedsAssignee(dto.status) &&
+      !dto.assignedTo &&
+      !request.assignedTo
+    ) {
+      throw new BadRequestException('派单必须指定 assignedTo');
+    }
+
+    const updateData: Prisma.MaintenanceRequestUpdateInput = {};
     if (dto.status) updateData.status = dto.status;
     if (dto.assignedTo) {
       updateData.assignedTo = dto.assignedTo;
@@ -186,6 +208,12 @@ export class MaintenanceService {
     }
     if (dto.resolution) {
       updateData.resolution = dto.resolution;
+    }
+    // resolvedAt 只在「确认完成」时写；未完成就填 resolution 不应留下已完成的痕迹
+    if (
+      (statusChanged && maintenanceTransitionSetsResolvedAt(dto.status!)) ||
+      (!statusChanged && request.status === 'COMPLETED' && dto.resolution !== undefined)
+    ) {
       updateData.resolvedAt = new Date();
     }
 

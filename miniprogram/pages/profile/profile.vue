@@ -147,7 +147,7 @@
 import QIcon from '../../components/QIcon.vue'
 import ContactCardModal from '../../components/ContactCardModal.vue'
 import { getUserInfo, getUnreadCount, bindInviteCode } from '../../api/index.js'
-import { clearSession, openHome } from '../../utils/session.js'
+import { logoutSession, openHome } from '../../utils/session.js'
 import { getLandlordContact, copyToClipboard, makePhoneCall } from '../../utils/contact.js'
 
 export default {
@@ -287,7 +287,7 @@ export default {
         content: '确认退出当前账户吗？',
         success: (res) => {
           if (res.confirm) {
-            clearSession()
+            logoutSession()
             uni.reLaunch({ url: '/pages/login/login' })
           }
         }

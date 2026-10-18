@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { BillsService } from './bills.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -89,7 +89,7 @@ describe('BillsService', () => {
     });
 
     it('并发防护：收款时对当前账单执行悲观行锁 FOR UPDATE', async () => {
-      prisma.$executeRawUnsafe = vi.fn().mockResolvedValue(1);
+      prisma.$queryRaw = vi.fn().mockResolvedValue([{ id: billId }]);
       prisma.bill.findUnique.mockResolvedValue({
         id: billId,
         amount: 100000,
@@ -111,9 +111,8 @@ describe('BillsService', () => {
         operatorId,
       );
 
-      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        expect.stringContaining('FOR UPDATE'),
-        billId,
+      expect(prisma.$queryRaw).toHaveBeenCalledWith(
+        expect.objectContaining({ strings: expect.arrayContaining([expect.stringContaining('FOR UPDATE')]) }),
       );
     });
 
@@ -659,8 +658,63 @@ describe('BillsService', () => {
           amount: 100000,
           dueDate: expect.any(Date),
           snapshot: {},
+          dedupKey: 'RENT:contract-1:2026-11',
         }),
       });
+    });
+
+    it('create：并发写入同一租金账单时返回已存在记录，而不是 500', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.bill.create.mockRejectedValue({ code: 'P2002' });
+      prisma.bill.findUnique.mockResolvedValue({ id: 'bill-existing', period: '2026-11' });
+
+      const result = await service.create({
+        contractId: 'contract-1',
+        billType: 'RENT',
+        period: '2026-11',
+        amount: 100000,
+        dueDate: '2026-11-05',
+      } as any);
+
+      expect(result.alreadyExists).toBe(true);
+      expect(result.id).toBe('bill-existing');
+    });
+
+    it('create：水电补缴不占用租金去重键', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.bill.create.mockResolvedValue({ id: billId });
+
+      await service.create({
+        contractId: 'contract-1',
+        billType: 'UTILITY',
+        period: '2026-11',
+        amount: 3000,
+        dueDate: '2026-11-05',
+      } as any);
+
+      expect(prisma.bill.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ dedupKey: null }),
+      });
+    });
+
+    it('findAll：buildingId 与账期区间同样生效（T209：此前这三个参数被静默忽略）', async () => {
+      prisma.bill.findMany.mockResolvedValue([]);
+      prisma.bill.count.mockResolvedValue(0);
+
+      await service.findAll({
+        buildingId: 'b-1',
+        startDate: '2026-10-01',
+        endDate: '2026-10-31',
+      } as any);
+
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            contract: { room: { buildingId: 'b-1' } },
+            dueDate: { gte: new Date('2026-10-01'), lte: new Date('2026-10-31') },
+          },
+        }),
+      );
     });
 
     it('findAll：status/billType/contractId 过滤 + 分页', async () => {
@@ -961,6 +1015,107 @@ describe('BillsService', () => {
 
       prisma.bill.findFirst.mockResolvedValue(null);
       await expect(service.recognizeVoucher('BILL-NOT-EXIST')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('T196-Ws1 分支覆盖补充', () => {
+    it('findOne：找到账单时返回查询结果', async () => {
+      const bill = { id: billId, status: 'PENDING', lateFees: [] };
+      prisma.bill.findUnique.mockResolvedValue(bill);
+
+      await expect(service.findOne(billId)).resolves.toBe(bill);
+    });
+
+    it('update：更新金额、已付金额及所有可选字段', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId });
+      prisma.bill.update.mockResolvedValue({ id: billId });
+
+      await service.update(billId, {
+        amount: 12000,
+        paidAmount: 3000,
+        status: 'PARTIAL',
+        dueDate: '2026-12-15',
+      } as any);
+
+      expect(prisma.bill.update).toHaveBeenCalledWith({
+        where: { id: billId },
+        data: {
+          amount: 12000,
+          paidAmount: 3000,
+          status: 'PARTIAL',
+          dueDate: new Date('2026-12-15'),
+        },
+      });
+    });
+
+    it('findByTenant：未传筛选时按租客过滤，缺失租客直接返回空页', async () => {
+      prisma.bill.findMany.mockResolvedValue([]);
+      prisma.bill.count.mockResolvedValue(0);
+
+      const result = await service.findByTenant('tenant-1', {} as any);
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { contract: { tenantId: 'tenant-1' } } }),
+      );
+      expect(result.meta).toEqual({ page: 1, limit: 20, total: 0, totalPages: 0 });
+
+      await expect(service.findByTenant('', {} as any)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('findByTenant：同时传入状态和账单类型筛选', async () => {
+      prisma.bill.findMany.mockResolvedValue([]);
+      prisma.bill.count.mockResolvedValue(0);
+
+      await service.findByTenant('tenant-1', { status: 'PENDING', billType: 'UTILITY' } as any);
+
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { contract: { tenantId: 'tenant-1' }, status: 'PENDING', billType: 'UTILITY' },
+        }),
+      );
+    });
+
+    it('exportBills：应用所有筛选日期，并覆盖 CSV 可空关联与未知标签', async () => {
+      prisma.bill.findMany.mockResolvedValue([
+        {
+          id: 'b-export', billNumber: 'B-EXPORT', billType: 'CUSTOM', period: '2026-10',
+          amount: 10000, paidAmount: 2000, status: 'CUSTOM_STATUS', dueDate: null, createdAt: null,
+          contract: null, lateFees: null,
+        },
+      ]);
+
+      const csv = await service.exportBills({
+        status: 'PENDING', billType: 'RENT', contractId: 'contract-1', buildingId: 'building-1',
+        startDate: '2026-10-01', endDate: '2026-10-31',
+      });
+
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: {
+          status: 'PENDING', billType: 'RENT', contractId: 'contract-1',
+          contract: { room: { buildingId: 'building-1' } },
+          dueDate: { gte: new Date('2026-10-01'), lte: new Date('2026-10-31') },
+        },
+      }));
+      expect(csv).toContain('B-EXPORT,,,,CUSTOM,2026-10,100.00,20.00,80.00,0.00,,CUSTOM_STATUS');
+    });
+
+    it('exportBills：仅结束日期时省略起始日期，已确认滞纳金正常导出', async () => {
+      prisma.bill.findMany.mockResolvedValue([
+        {
+          id: 'b-confirmed', billNumber: 'B-CONFIRMED', billType: 'RENT', period: '2026-10',
+          amount: 10000, paidAmount: 10000, status: 'PAID', dueDate: new Date('2026-10-10'),
+          createdAt: new Date('2026-10-01'),
+          contract: { tenant: { name: '租客', phone: '123' }, room: { roomNumber: 'A1' } },
+          lateFees: [{ suggestedAmount: 100, confirmedAmount: 200, settledAmount: 50,
+            overdueDays: 1, confirmedAt: new Date(), settledAt: null }],
+        },
+      ]);
+
+      const csv = await service.exportBills({ endDate: '2026-10-31' });
+
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { dueDate: { lte: new Date('2026-10-31') } },
+      }));
+      expect(csv).toContain('B-CONFIRMED,A1,租客,123,租金,2026-10,100.00,100.00,0.00,2.00,2026-10-10,已支付');
     });
   });
 });

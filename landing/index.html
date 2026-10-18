@@ -3,718 +3,613 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>租客管理系统 — 公寓与长租的一体化管理后台</title>
-<meta name="description" content="从签约到退租，把房源、租客、合同、账单、水电、报修、保洁收进一套系统。管理者用网页后台，租客与保洁用微信小程序。" />
-<!-- 社交分享：部署时把域名替换成实际地址 -->
+<title>栖居 · 收租、水电、报修、退租，收进同一本台账</title>
+<meta name="description" content="栖居是面向房东、二房东与公寓运营者的租客管理系统：房源房态、电子合同、账单收款、滞纳金核销、预付账户、水电计费、报修派单与退租结算，全链路留痕可对账。" />
+<meta name="theme-color" content="#f7f6f2" />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="租客管理系统 — 公寓与长租的一体化管理后台" />
-<meta property="og:description" content="收租、水电、报修、退租收进同一本台账：房态自动流转、欠费自动提醒、账目逐笔可追溯。" />
+<meta property="og:title" content="栖居 · 公寓与租客管理系统" />
+<meta property="og:description" content="收租、水电、报修、退租，收进同一本台账。管理后台 + 租客小程序 + 保洁工作台。" />
 <meta property="og:image" content="assets/shots/dashboard.jpg" />
-<meta property="og:locale" content="zh_CN" />
-<meta name="twitter:card" content="summary_large_image" />
-<link rel="preload" as="image" href="assets/shots/dashboard.jpg" fetchpriority="high" />
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"租客管理系统","applicationCategory":"BusinessApplication","operatingSystem":"Web, 微信小程序","description":"公寓、长租与二房东的一体化管理后台：房源与房态、合同、账单收款、滞纳金、预付账户、水电读数、报修工单、退租结算、通知、统计与保洁工作台。","featureList":["房源与房态状态机","合同管理","账单与收款","滞纳金与核销","预付账户流水","水电读数扣费","报修工单","退租结算","保洁工作台","公开看房页","统计报表"]}
-</script>
-<meta name="theme-color" content="#f7f8fa" />
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&display=swap" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&amp;display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"栖居","applicationCategory":"BusinessApplication","operatingSystem":"Web, WeChat Mini Program","description":"面向房东与公寓运营者的租客管理系统：房源、合同、账单、预付账户、水电计费、报修与退租结算。","featureList":["房源与房态","电子合同","账单与收款","滞纳金核销","预付账户","水电计费","报修派单","退租结算","公开看房页"]}
+</script>
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body>
+
 <a class="skip" href="#main">跳到主要内容</a>
 
-<header class="nav" id="nav">
-  <div class="wrap nav__in">
-    <a class="brand" href="#top" aria-label="租客管理系统 首页">
-      <span class="brand__mark" aria-hidden="true">寓</span>
-      <span class="brand__text">
-        <b>租客管理系统</b>
-        <i>公寓 · 长租 · 二房东</i>
+<header class="nav">
+  <div class="nav__inner wrap">
+    <a class="brand" href="#top" aria-label="栖居 · 租客与公寓管理系统">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="30" height="30"><path d="M7.6 25.2 24 11.6l16.4 13.6" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.2 24.6h21.6v11.2a2.2 2.2 0 0 1-2.2 2.2H15.4a2.2 2.2 0 0 1-2.2-2.2z" fill="currentColor"/></svg>
       </span>
+      <span class="brand__text"><strong>栖居</strong><small>租客与公寓管理系统</small></span>
     </a>
+
     <nav class="nav__links" aria-label="页面导航">
-      <a href="#capabilities">能力</a>
+      <a href="#roles">能力</a>
+      <a href="#flow">闭环</a>
       <a href="#screens">界面</a>
-      <a href="#money">资金</a>
       <a href="#stack">技术</a>
       <a href="#faq">常见问题</a>
     </nav>
-    <div class="switch" role="group" aria-label="切换浏览视角">
-      <button type="button" class="switch__btn" data-persona-btn="landlord" aria-pressed="true">房东 / 运营</button>
-      <button type="button" class="switch__btn" data-persona-btn="tenant" aria-pressed="false">租客</button>
+
+    <div class="switch" role="group" aria-label="切换查看视角">
       <span class="switch__thumb" aria-hidden="true"></span>
+      <button class="switch__opt is-on" type="button" data-persona-btn="landlord" aria-pressed="true">房东 / 运营</button>
+      <button class="switch__opt" type="button" data-persona-btn="tenant" aria-pressed="false">租客</button>
     </div>
+    <p class="sr-only" aria-live="polite" id="persona-status"></p>
   </div>
 </header>
-<p class="sr-only" role="status" aria-live="polite" id="persona-status"></p>
 
 <main id="main">
 
-<!-- ══════════════════════════════ HERO ══════════════════════════════ -->
-<section class="hero" id="top">
-  <div class="hero__bg" aria-hidden="true">
-    <span class="hero__grid"></span>
-    <span class="hero__glow hero__glow--brand"></span>
-    <span class="hero__glow hero__glow--indigo"></span>
-    <span class="hero__glow hero__glow--teal"></span>
-    <span class="hero__cursor" id="heroCursor"></span>
-  </div>
-  <div class="wrap hero__in">
-    <div class="hero__copy">
-      <p class="kicker">
-        <span data-p="landlord">房东 · 二房东 · 公寓运营</span>
-        <span data-p="tenant">租客 · 微信小程序</span>
-      </p>
+  <!-- 1 · 首屏 -->
+  <section class="hero" id="top">
+    <div class="hero__bg" aria-hidden="true"><span class="hero__grid"></span><span class="hero__glow hero__glow--a"></span><span class="hero__glow hero__glow--b"></span><span class="hero__glow hero__glow--c"></span><span class="hero__cursor"></span></div>
 
-      <h1 class="hero__title" data-p="landlord">
-        <span class="line"><span>收租、水电、报修、退租</span></span>
-        <span class="line"><span><em>收进同一本台账</em></span></span>
-      </h1>
-      <h1 class="hero__title" data-p="tenant">
-        <span class="line"><span>房租、水电、报修</span></span>
-        <span class="line"><span><em>手机上随时查得到</em></span></span>
-      </h1>
+    <div class="wrap hero__inner">
+      <div class="hero__copy">
+        <p class="kicker" data-p="landlord">房东 · 二房东 · 公寓运营</p>
+        <p class="kicker" data-p="tenant">租客 · 微信小程序</p>
 
-      <p class="hero__sub" data-p="landlord">
-        从签约到退租，房源、租客、合同、账单、水电、报修全程在线。房态自动流转，欠费自动提醒，
-        每一笔资金动作都留痕、可追溯、可对账。
-      </p>
-      <p class="hero__sub" data-p="tenant">
-        不用再问房东「我这个月交了多少」。账单明细、账户余额、报修进度、合同内容，
-        打开微信就能看到——并且只看得到你自己的。
-      </p>
+        <h1 class="hero__title" data-p="landlord">收租、水电、报修、退租<br /><em>收进同一本台账</em></h1>
+        <h1 class="hero__title" data-p="tenant">房租、水电、报修、退租<br /><em>一部手机看得清楚</em></h1>
 
-      <div class="hero__cta">
-        <div class="hero__cta-pair" data-p="landlord">
-          <a class="btn btn--solid" href="#start">免费试用管理后台</a>
-          <a class="btn btn--ghost" href="#capabilities">看看它怎么运转</a>
+        <p class="hero__sub" data-p="landlord">从签约到退租，房源、租客、合同、账单、水电、报修全程在线。房态自动流转，欠费自动提醒，每一笔资金动作都留痕、可追溯、可对账。</p>
+        <p class="hero__sub" data-p="tenant">合同、账单、报修进度、预付余额都在小程序里。不用翻聊天记录找历史账单，也不用反复问“处理到哪一步了”。</p>
+
+        <div class="hero__cta" data-p="landlord">
+          <a class="btn btn--primary" href="#start">免费试用管理后台</a>
+          <a class="btn btn--ghost" href="#flow">看看它怎么运转</a>
         </div>
-        <div class="hero__cta-pair" data-p="tenant">
-          <a class="btn btn--solid" href="#start">打开微信小程序</a>
-          <a class="btn btn--ghost" href="#viewing">先看看在租房源</a>
+        <div class="hero__cta" data-p="tenant">
+          <a class="btn btn--primary" href="#flow">看看住进来之后</a>
+          <a class="btn btn--ghost" href="#state">报修流程长什么样</a>
         </div>
       </div>
 
-    </div>
+      <div class="stage" data-p="landlord">
+        <figure class="stage__browser">
+          <div class="chrome" aria-hidden="true">
+            <span class="chrome__dots"><i></i><i></i><i></i></span>
+            <span class="chrome__url">管理后台 · 工作台</span>
+          </div>
+          <img src="assets/shots/dashboard.jpg" width="1600" height="1000" decoding="async" fetchpriority="high"
+               alt="栖居管理工作台：房源总数、租客档案、待缴账单与待处理报修四张指标卡，下方是运营日历、房源运营概况环形图与最近动态。" />
+        </figure>
 
-    <!-- 同一套系统的两面：切视角时前后互换 -->
-    <div class="stage" id="stage">
-      <figure class="stage__browser" data-stage="landlord">
-        <div class="chrome" aria-hidden="true">
-          <span class="chrome__dots"><i></i><i></i><i></i></span>
-          <span class="chrome__url">管理后台 · 仪表板</span>
+        <div class="stage__phone">
+          <!-- 租客端小程序首页 -->
+          <div class="phone" role="img" aria-label="租客端小程序首页：日期与问候、房源行、生活月历、待处理事项，以及账单、合同、报修、余额四个常用服务入口。">
+            <div class="phone__frame">
+              <div class="phone__screen">
+                <span class="phone__glare" aria-hidden="true"></span>
+                <div class="phone__island" aria-hidden="true"></div>
+                <div class="phone__status"><span>9:41</span><span class="phone__sys" aria-hidden="true"><i class="s-sig"></i><i class="s-wifi"></i><i class="s-bat"></i></span></div>
+                <div class="phone__capsule" aria-hidden="true">··· ⊙</div>
+                <div class="phone__body">
+
+                  <div class="mp-greet">
+                    <div>
+                      <span class="mp-eyebrow">10月18日 · 星期日</span>
+                      <strong class="mp-title">早上好，欢迎回家</strong>
+                    </div>
+                    <span class="mp-bell" aria-hidden="true"><i></i></span>
+                  </div>
+
+                  <div class="mp-room">
+                    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-5H9v5H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                    <span>云栖公寓 · A 座 · 302室</span><span class="mp-chev">›</span>
+                  </div>
+
+                  <div class="mp-card mp-cal">
+                    <div class="mp-card__hd"><strong>生活月历</strong><span class="mp-cal__nav">2026年10月 <b>‹</b><b>›</b></span></div>
+                    <div class="mp-cal__wk"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+                    <div class="mp-cal__grid">
+                      <i></i><i></i><i></i><span>1</span><span>2</span><span>3</span><span>4</span>
+                      <span>5<i></i></span><span>6<i></i></span><span>7<i></i></span><span>8<i></i></span><span>9<i></i></span><span>10<i></i></span><span>11<i></i></span>
+                      <span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span class="is-today">18</span>
+                      <span>19</span><span>20</span><span>21</span><span>22</span><span>23</span><span>24</span><span>25</span>
+                      <span>26</span><span>27</span><span>28</span><span>29</span><span>30</span><span>31</span>
+                    </div>
+                    <div class="mp-cal__ev">
+                      <span class="mp-cal__ico" aria-hidden="true"></span>
+                      <div><strong>10月18日 · 账单缴付提醒</strong><small>2026-10 · ¥1910.00</small></div>
+                      <span class="mp-chev">›</span>
+                    </div>
+                  </div>
+
+                  <div class="mp-card">
+                    <div class="mp-card__hd"><strong>待处理事项</strong><span class="mp-link">查看全部 ›</span></div>
+                    <div class="mp-row">
+                      <span class="mp-row__ico mp-row__ico--fix" aria-hidden="true"></span>
+                      <div><strong>热水器打不着火</strong><small>维修完成，待确认 · 查看处理进度</small></div>
+                      <span class="mp-chev">›</span>
+                    </div>
+                    <div class="mp-row">
+                      <span class="mp-row__ico mp-row__ico--bill" aria-hidden="true"></span>
+                      <div><strong>1 笔账单待缴付</strong><small>核对费用明细，安心安排生活</small></div>
+                      <span class="mp-chev">›</span>
+                    </div>
+                  </div>
+
+                  <div class="mp-svc">
+                    <div class="mp-card__hd"><strong>常用服务</strong></div>
+                    <div class="mp-svc__grid">
+                      <span><i class="mp-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 9h7M9 13h7M9 17h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i>账单</span>
+                      <span><i class="mp-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v18l-2.5-1.6L12 21l-2.5-1.6L7 21z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 8h4M10 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i>合同</span>
+                      <span><i class="mp-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 4.5a4.5 4.5 0 0 1-5.4 5.9L5 15.5V19h3.5l5.1-5.1a4.5 4.5 0 0 0 5.9-5.4l-2.9 2.9-2.1-2.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></i>报修</span>
+                      <span><i class="mp-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 10h17" stroke="currentColor" stroke-width="1.6"/></svg></i>余额</span>
+                    </div>
+                  </div>
+
+                </div>
+                <div class="phone__bar" aria-hidden="true"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <img src="assets/shots/dashboard.jpg" width="1600" height="1000" decoding="async" fetchpriority="high"
-             alt="管理后台仪表板：总房源 72 间、在租租客 63 位、活跃合同 63 份、待缴账单 20 张，近 6 个月收入趋势柱状图与房源状态分布饼图" />
+
+        <ul class="floats" aria-hidden="true">
+          <li class="float float--a"><b>保洁已完成</b><span>70 间</span></li>
+          <li class="float float--b"><b>待缴账单</b><span>20 张</span></li>
+          <li class="float float--c"><b>本月实收</b><span>¥169,295</span></li>
+        </ul>
+      </div>
+
+      <div class="stage stage--tenant" data-p="tenant">
+        <figure class="stage__browser">
+          <div class="chrome" aria-hidden="true">
+            <span class="chrome__dots"><i></i><i></i><i></i></span>
+            <span class="chrome__url">公开看房页 · 无需登录</span>
+          </div>
+          <img src="assets/shots/viewing.jpg" width="1600" height="838" decoding="async"
+               alt="公开看房页：可租空置房源以卡片列出，含实拍照片、楼栋房号、户型面积楼层与价格说明，顶部可按楼栋、房型与楼层筛选。" />
+        </figure>
+      </div>
+
+      <dl class="stats">
+        <div><dt>28</dt><dd>张数据表</dd></div>
+        <div><dt>20</dt><dd>个后端模块</dd></div>
+        <div><dt>976</dt><dd>项自动化测试</dd></div>
+        <div><dt>2</dt><dd>端在线（后台 + 小程序）</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 2 · 三种角色 + 能力索引 -->
+  <section class="sec" id="roles">
+    <div class="wrap">
+      <header class="head">
+        <p class="kicker">三种角色 / THREE ROLES</p>
+        <h2>管理者看得全，租客看得清，保洁看得懂</h2>
+        <p class="head__sub">同一套数据，三种查看方式。每类角色只看见自己该看见的那一部分。</p>
+      </header>
+
+      <div class="roles">
+        <article class="role">
+          <span class="role__badge">管理者</span>
+          <h3>房东与运营</h3>
+          <p>房源、合同、账单、水电、报修、退租在一屏里收口。权限按角色下发，证件号等敏感字段脱敏返回。</p>
+          <ul><li>多楼栋、多房型统一管理</li><li>账单与收款逐笔核销</li><li>滞纳金按合同规则自动建议</li></ul>
+        </article>
+        <article class="role">
+          <span class="role__badge">租客</span>
+          <h3>微信小程序</h3>
+          <p>合同、账单、报修进度、预付余额随时可查。缴付后生成带编号的纸质单据，转账备注一句话核销。</p>
+          <ul><li>账单明细与电子收据</li><li>报修每一步都看得见</li><li>余额与每一笔流水可核对</li></ul>
+        </article>
+        <article class="role">
+          <span class="role__badge">保洁</span>
+          <h3>现场工作台</h3>
+          <p>只看空置房源与清洁状态，开始清洁、完成清洁、上传照片。看不到租客账务与合同信息。</p>
+          <ul><li>待清洁 / 清洁中 / 已清洁</li><li>按楼栋与房号筛选</li><li>完成后回到可出租状态</li></ul>
+        </article>
+      </div>
+
+      <div class="caps">
+        <header class="head head--tight">
+          <p class="kicker">能力索引 / CAPABILITIES</p>
+          <h2 data-p="landlord">租房这门生意，需要的都在里面</h2>
+          <h2 data-p="tenant">住在这里，需要知道的都在里面</h2>
+          <p class="head__sub" data-p="landlord">九个模块覆盖「房、人、钱、修」全链路，彼此打通：抄表会扣费，欠费会生账单，退租会算押金。</p>
+          <p class="head__sub" data-p="tenant">九个入口把你和房子之间的事情说清楚，不用翻聊天记录找历史账单。</p>
+        </header>
+
+        <div class="caps__grid" data-cards="landlord">
+          <article class="cap"><span>01</span><h3>房源与房态</h3><p>空置、已预订、已出租、维护中四态流转，改房态要过状态机校验。</p></article>
+          <article class="cap"><span>02</span><h3>租客档案</h3><p>证件号字段级加密，列表只回脱敏值，检索走哈希索引。</p></article>
+          <article class="cap"><span>03</span><h3>电子合同</h3><p>签约、续签、附件上传，合同号唯一，续签链可追溯。</p></article>
+          <article class="cap"><span>04</span><h3>账单与收款</h3><p>月账单批量生成，收款按交易号幂等，重复提交不会重复入账。</p></article>
+          <article class="cap"><span>05</span><h3>滞纳金核销</h3><p>按合同规则给出建议金额，核销留痕，减免要写原因。</p></article>
+          <article class="cap"><span>06</span><h3>预付账户</h3><p>充值、扣费、退款、调整四类流水，余额与台账永远对得上。</p></article>
+          <article class="cap"><span>07</span><h3>水电计费</h3><p>抄表价目按时间生效，用量自动生成扣费单，支持 MQTT 物联网表。</p></article>
+          <article class="cap"><span>08</span><h3>报修派单</h3><p>七态工单，紧急度排序，处理说明与照片都留在工单上。</p></article>
+          <article class="cap"><span>09</span><h3>退租结算</h3><p>押金多退少补，结算单生成快照，退款走事务，事后不可篡改。</p></article>
+        </div>
+
+        <div class="caps__grid" data-cards="tenant">
+          <article class="cap"><span>01</span><h3>我的合同</h3><p>合同号、租期、租金、押金与付款日，一页看完。</p></article>
+          <article class="cap"><span>02</span><h3>账单明细</h3><p>费用拆分到项，已缴与待缴分开显示，逾期有标记。</p></article>
+          <article class="cap"><span>03</span><h3>缴付单据</h3><p>生成带编号的单据图片，发给房东即可快速识别核销。</p></article>
+          <article class="cap"><span>04</span><h3>报修进度</h3><p>已提交、已受理、已派单、处理中、待确认、已完成，每一步都有时间。</p></article>
+          <article class="cap"><span>05</span><h3>账户余额</h3><p>预付余额一眼看到，低于阈值会提示充值。</p></article>
+          <article class="cap"><span>06</span><h3>预付流水</h3><p>每一笔充值、扣费、退款都写明时间与金额。</p></article>
+          <article class="cap"><span>07</span><h3>电子收据</h3><p>缴费后留一张可保存的收据，不用再要纸质凭证。</p></article>
+          <article class="cap"><span>08</span><h3>通知提醒</h3><p>账单到期、逾期、报修进展，都推到手机里。</p></article>
+          <article class="cap"><span>09</span><h3>专属管家</h3><p>管家与房东的联系方式常驻首页，一键复制微信或拨号。</p></article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · 经营闭环 -->
+  <section class="sec sec--deep" id="flow">
+    <div class="wrap">
+      <header class="head">
+        <p class="kicker">经营闭环 / ONE LEDGER</p>
+        <h2 data-p="landlord">钱从哪进来、扣到哪去，<em>系统自己记得</em></h2>
+        <h2 data-p="tenant">每一笔钱，<em>都能自己对上账</em></h2>
+        <p class="head__sub" data-p="landlord">六步走完一个租期。每个资金动作都带幂等键与操作人，事后可回放到具体一笔。</p>
+        <p class="head__sub" data-p="tenant">你交了多少、扣了多少、还剩多少，系统里的数字和你手上的记录是同一个。</p>
+      </header>
+
+      <ol class="flows" data-p="landlord">
+        <li class="flow"><span class="flow__no">01</span><h3>签约</h3><p>合同号唯一，租金与押金写入快照；续签生成新合同并指向原合同。</p></li>
+        <li class="flow"><span class="flow__no">02</span><h3>建账单</h3><p>每月按合同批量生成租金账单，付款日与账期来自合同，不会各写各的。</p></li>
+        <li class="flow"><span class="flow__no">03</span><h3>收款核销</h3><p>收款带唯一交易号，重复提交返回 409；单笔账单可分批缴付。</p></li>
+        <li class="flow"><span class="flow__no">04</span><h3>抄表扣费</h3><p>抄表读数按生效价目计算，自动从预付账户扣费并写一条流水。</p></li>
+        <li class="flow"><span class="flow__no">05</span><h3>报修派单</h3><p>工单从提交走到完成，每一步状态变化都记录时间与处理人。</p></li>
+        <li class="flow"><span class="flow__no">06</span><h3>退租结算</h3><p>押金多退少补，结算项逐条列出，退款与补缴在同一事务里完成。</p></li>
+      </ol>
+
+      <ol class="flows" data-p="tenant">
+        <li class="flow"><span class="flow__no">01</span><h3>看合同</h3><p>租期、租金、押金、付款日写在合同里，随时打开核对。</p></li>
+        <li class="flow"><span class="flow__no">02</span><h3>收账单</h3><p>到期前收到提醒，费用拆到项，不会只给你一个总数。</p></li>
+        <li class="flow"><span class="flow__no">03</span><h3>缴付留单据</h3><p>生成带编号的单据，转账备注一句话，房东那边直接核销。</p></li>
+        <li class="flow"><span class="flow__no">04</span><h3>水电自动扣</h3><p>抄表后从预付余额扣费，扣了多少、为什么扣，流水里写清楚。</p></li>
+        <li class="flow"><span class="flow__no">05</span><h3>报修可追踪</h3><p>提交后能看到受理、派单、处理、完成，不用反复问。</p></li>
+        <li class="flow"><span class="flow__no">06</span><h3>退租对账</h3><p>押金退还与扣除逐项列出，确认后一笔结清。</p></li>
+      </ol>
+
+      <figure class="shot shot--deep">
+        <img src="assets/shots/bills.jpg" width="1600" height="1000" loading="lazy" decoding="async"
+             alt="账单与收款页：顶部是有效账单、应收、已收、未收与逾期五张指标卡，下方账单列表按房号与账期列出金额、已付金额、到期日、状态与滞纳金核销情况。" />
+        <figcaption data-p="landlord">账单列表：金额、状态、滞纳金与收款入口都在同一行，逾期核销有据可查。</figcaption>
+        <figcaption data-p="tenant">你在小程序里看到的每一笔，都是从这张台账同步出去的。</figcaption>
       </figure>
-
-      <figure class="stage__browser stage__browser--back" data-stage="tenant">
-        <div class="chrome" aria-hidden="true">
-          <span class="chrome__dots"><i></i><i></i><i></i></span>
-          <span class="chrome__url">公开看房页 · 无需登录</span>
-        </div>
-        <img src="assets/shots/viewing.jpg" width="1600" height="1000" decoding="async"
-             alt="公开看房页：六间空置房源的卡片列表，含真实照片、房型、面积、楼层与描述" />
-      </figure>
-
-      <div class="stage__phone" data-stage="both">
-        <div class="phone" role="img" aria-label="租客端微信小程序首页：顶部为租客姓名与房间号，中部为我的合同、账单缴费、在线报修、账户余额四个入口，下方为待办事项与最近账单">
-  <div class="phone__frame">
-    <div class="phone__screen">
-      <span class="phone__glare" aria-hidden="true"></span>
-      <div class="phone__island" aria-hidden="true"></div>
-      <div class="phone__status"><span>9:41</span><span class="phone__sys" aria-hidden="true"><i class="s-sig"></i><i class="s-wifi"></i><i class="s-bat"></i></span></div>
-      <div class="phone__nav"><span class="phone__home"></span><span class="phone__title">租客管理系统</span><span class="phone__capsule" aria-hidden="true">··· ⊙</span></div>
-      <div class="phone__body">
-        <div class="mp-head">
-          <span class="mp-avatar" aria-hidden="true">陈</span>
-          <span class="mp-id"><b>陈嘉怡</b><i>云栖公寓 · A 座 302</i></span>
-        </div>
-        <div class="mp-menu">
-          <span class="mp-menu__i"><i class="mp-ico mp-ico--doc" aria-hidden="true"></i>我的合同</span>
-          <span class="mp-menu__i"><i class="mp-ico mp-ico--bill" aria-hidden="true"></i>账单缴费</span>
-          <span class="mp-menu__i"><i class="mp-ico mp-ico--fix" aria-hidden="true"></i>在线报修</span>
-          <span class="mp-menu__i"><i class="mp-ico mp-ico--wallet" aria-hidden="true"></i>账户余额</span>
-        </div>
-        <div class="mp-card">
-          <div class="mp-card__hd"><b>待办事项</b></div>
-          <div class="mp-todo"><span><i aria-hidden="true">💰</i>1 笔账单待缴</span><em>去处理</em></div>
-          <div class="mp-todo"><span><i aria-hidden="true">🔧</i>1 个报修处理中</span><em>查看</em></div>
-        </div>
-        <div class="mp-card">
-          <div class="mp-card__hd"><b>最近账单</b><em>查看全部</em></div>
-          <div class="mp-bill"><span class="mp-bill__l"><b>租金</b><i>2026-10</i></span><span class="mp-bill__r"><b>¥1,910.00</b><i class="is-warn">待缴费</i></span></div>
-          <div class="mp-bill"><span class="mp-bill__l"><b>租金</b><i>2026-09</i></span><span class="mp-bill__r"><b>¥1,910.00</b><i class="is-ok">已缴清</i></span></div>
-          <div class="mp-bill"><span class="mp-bill__l"><b>水电费</b><i>2026-09</i></span><span class="mp-bill__r"><b>¥86.40</b><i class="is-ok">已缴清</i></span></div>
-        </div>
-      </div>
-      <div class="phone__bar" aria-hidden="true"></div>
     </div>
-  </div>
-</div>
-      </div>
+  </section>
 
-      <ul class="floats" data-p="landlord" aria-hidden="true">
-        <li class="float float--a"><i class="float__dot float__dot--ok"></i>保洁已完成 <b>70</b> 间</li>
-        <li class="float float--b"><i class="float__dot float__dot--warn"></i>待缴账单 <b>20</b> 张</li>
-        <li class="float float--c"><i class="float__dot"></i>本月实收 <b>¥169,295</b></li>
-      </ul>
-      <ul class="floats" data-p="tenant" aria-hidden="true">
-        <li class="float float--a"><i class="float__dot float__dot--warn"></i>本月应缴 <b>¥1,910.00</b></li>
-        <li class="float float--b"><i class="float__dot float__dot--ok"></i>报修处理中 <b>1</b> 个</li>
-        <li class="float float--c"><i class="float__dot"></i>房租账单 <b>1</b> 笔待缴</li>
-      </ul>
-    </div>
-
-    <dl class="stats">
-      <div><dt>25</dt><dd>张数据表</dd></div>
-      <div><dt>3</dt><dd>条资金闭环</dd></div>
-      <div><dt>17</dt><dd>个后端模块</dd></div>
-      <div><dt>2</dt><dd>端在线（后台 + 小程序）</dd></div>
-    </dl>
-  </div>
-</section>
-
-<!-- ══════════════════════════ 三种角色 ══════════════════════════ -->
-<section class="sec" id="roles">
-  <div class="wrap">
-    <header class="head">
-      <p class="kicker">一套系统 · 三种角色</p>
-      <h2>管理者看得全，租客看得清，保洁看得懂</h2>
-      <p class="head__sub">同一个数据库，三种角色各自只拿到该看的那部分。权限在服务端收口，前端藏起来不算数。</p>
-    </header>
-    <div class="roles">
-      <article class="role">
-        <span class="role__badge">网页后台</span>
-        <h3>管理者</h3>
-        <p>房态、合同、账单、水电、报修、退租、统计，一屏之内处理日常。</p>
-        <ul>
-          <li>房源 4 种房态流转，改动带乐观锁</li>
-          <li>按楼栋隔离，跨楼栋数据默认不可见</li>
-          <li>每一次增删改都写审计日志</li>
-        </ul>
-      </article>
-      <article class="role">
-        <span class="role__badge">微信小程序</span>
-        <h3>租客</h3>
-        <p>账单、余额、报修、合同，自助查完，少一轮来回沟通。</p>
-        <ul>
-          <li>账单与预存余额实时同步</li>
-          <li>报修上传照片，进度自己看</li>
-          <li>通知推送账单与逾期提醒</li>
-        </ul>
-      </article>
-      <article class="role">
-        <span class="role__badge">微信小程序</span>
-        <h3>保洁</h3>
-        <p>待清洁房间一张列表，接单、完成、拍照回传。</p>
-        <ul>
-          <li>只看得到待清洁与清洁中的房间</li>
-          <li>标记完成即回写房态为「已清洁」</li>
-          <li>可上传现场照片留证</li>
-        </ul>
-      </article>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════════════ 能力网格 ══════════════════════════ -->
-<section class="sec sec--tint" id="capabilities">
-  <div class="wrap">
-    <header class="head">
-      <p class="kicker" data-p="landlord">管理端能力</p>
-      <p class="kicker" data-p="tenant">租客端能力</p>
-      <h2 data-p="landlord">租房这门生意，需要的都在里面</h2>
-      <h2 data-p="tenant">住在这里，需要知道的都在里面</h2>
-      <p class="head__sub" data-p="landlord">九个模块覆盖「房、人、钱、修」全链路，彼此打通：抄表会扣费，欠费会生账单，退租会算押金。</p>
-      <p class="head__sub" data-p="tenant">九个入口把你和房子之间的事情说清楚，不用翻聊天记录找历史账单。</p>
-    </header>
-
-    <div class="cards" data-cards="landlord">
-      <article class="card"><span class="card__ico" aria-hidden="true">01</span><h3>房源与房态</h3><p>空置 / 预订 / 已租 / 维修四态流转，清洁状态独立跟进，房间附件与设施一处维护。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">02</span><h3>合同管理</h3><p>租期、租金、押金、付款周期、滞纳金规则一次录入，支持续签与提前终止。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">03</span><h3>账单与收款</h3><p>月度租金账单按期生成，收款登记支持现金 / 转账 / 微信 / 支付宝，交易号幂等防重复入账。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">04</span><h3>滞纳金</h3><p>按合同规则算出建议金额，人工确认或减免后才入账，不自动扣租客的钱。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">05</span><h3>预付账户</h3><p>充值、扣费、退款、调整四类流水，余额与流水逐笔对齐，低于阈值自动提醒。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">06</span><h3>水电读数</h3><p>抄表即按单价扣费，扣完余额不足会自动生成补缴账单，差额补缴闭环。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">07</span><h3>报修工单</h3><p>已提交 → 已受理 → 已派单 → 维修中 → 待确认 → 已完成，全程状态可查，最多 9 张照片。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">08</span><h3>退租结算</h3><p>押金退还与扣除、租金按天数折算、水电余额退还，逐项列出、逐项可调。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">09</span><h3>保洁与统计</h3><p>待清洁列表与任务分派，出租率、实收、收缴率、逾期与报修统计一屏看完。</p></article>
-    </div>
-
-    <div class="cards" data-cards="tenant">
-      <article class="card"><span class="card__ico" aria-hidden="true">01</span><h3>我的账单</h3><p>账期、金额、到期日、缴纳状态一目了然，已缴与待缴分开看。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">02</span><h3>账户余额</h3><p>水电预存余额，以及每一笔充值、扣费、退款的时间与事由。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">03</span><h3>在线报修</h3><p>拍照上传问题、选择类别与紧急程度，进度随处理实时更新。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">04</span><h3>我的合同</h3><p>租期、月租、押金、付款日与续签记录，随时可查。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">05</span><h3>通知提醒</h3><p>新账单、逾期提醒、报修进展，进小程序就能看到未读。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">06</span><h3>在线看房</h3><p>无需登录即可浏览空置房源的照片、房型、面积与楼层。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">07</span><h3>押金与退租</h3><p>结算项目逐条公开，扣了什么、退多少，写清楚。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">08</span><h3>主题与关怀</h3><p>标准 / 青春 / 关怀三套主题，字号可整体放大，长辈也能看清楚。</p></article>
-      <article class="card"><span class="card__ico" aria-hidden="true">09</span><h3>隐私边界</h3><p>只能看到自己的账单、合同与工单，其他租客的任何信息都拿不到。</p></article>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════════════ 产品界面 ══════════════════════════ -->
-<section class="sec" id="screens" data-p="landlord">
-  <div class="wrap">
-    <header class="head">
-      <p class="kicker">产品界面</p>
-      <h2>九个模块，共用同一套操作习惯</h2>
-      <p class="head__sub">
-        下面每一张都来自真实运行的管理后台（演示数据，非效果图）。切换标签看各模块的列表：
-        筛选、分页、批量操作的位置都一致，学会一个就会用全部。
-      </p>
-    </header>
-
-    <div class="gallery" data-gallery>
-      <div class="gallery__tabs" role="tablist" aria-label="切换查看的模块界面">
-        <span class="gallery__ink" aria-hidden="true"></span>
-        <button type="button" role="tab" class="gallery__tab" id="tab-dashboard" aria-controls="panel-dashboard" aria-selected="true" data-gallery-btn="dashboard">仪表板</button>
-        <button type="button" role="tab" class="gallery__tab" id="tab-rooms" aria-controls="panel-rooms" aria-selected="false" tabindex="-1" data-gallery-btn="rooms">房源管理</button>
-        <button type="button" role="tab" class="gallery__tab" id="tab-contracts" aria-controls="panel-contracts" aria-selected="false" tabindex="-1" data-gallery-btn="contracts">合同管理</button>
-        <button type="button" role="tab" class="gallery__tab" id="tab-bills" aria-controls="panel-bills" aria-selected="false" tabindex="-1" data-gallery-btn="bills">账单管理</button>
-        <button type="button" role="tab" class="gallery__tab" id="tab-prepay" aria-controls="panel-prepay" aria-selected="false" tabindex="-1" data-gallery-btn="prepay">预付账户</button>
-        <button type="button" role="tab" class="gallery__tab" id="tab-maintenance" aria-controls="panel-maintenance" aria-selected="false" tabindex="-1" data-gallery-btn="maintenance">报修管理</button>
-        <button type="button" role="tab" class="gallery__tab" id="tab-cleaning" aria-controls="panel-cleaning" aria-selected="false" tabindex="-1" data-gallery-btn="cleaning">保洁管理</button>
-        <button type="button" role="tab" class="gallery__tab" id="tab-statistics" aria-controls="panel-statistics" aria-selected="false" tabindex="-1" data-gallery-btn="statistics">统计报表</button>
-        <button type="button" role="tab" class="gallery__tab" id="tab-notifications" aria-controls="panel-notifications" aria-selected="false" tabindex="-1" data-gallery-btn="notifications">通知提醒</button>
-      </div>
-
-      <div class="gallery__stage">
-        <figure class="shot" role="tabpanel" id="panel-dashboard" aria-labelledby="tab-dashboard" data-gallery-panel="dashboard">
-          <img src="assets/shots/dashboard.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="仪表板：总房源 72 间、在租租客 63 位、活跃合同 63 份、待缴账单 20 张四张指标卡，下方为近 6 个月收入趋势柱状图与房源状态分布饼图" />
-        </figure>
-        <figure class="shot" role="tabpanel" id="panel-rooms" aria-labelledby="tab-rooms" data-gallery-panel="rooms">
-          <img src="assets/shots/rooms.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="房源管理列表：房间号、楼层、房型、面积、房态与清洁状态列，顶部有只看待清洁与保洁工作台入口" />
-        </figure>
-        <figure class="shot" role="tabpanel" id="panel-contracts" aria-labelledby="tab-contracts" data-gallery-panel="contracts">
-          <img src="assets/shots/contracts.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="合同管理列表：合同编号、租客、房间、起止日期、月租金、押金、付款周期与合同状态列" />
-        </figure>
-        <figure class="shot" role="tabpanel" id="panel-bills" aria-labelledby="tab-bills" data-gallery-panel="bills">
-          <img src="assets/shots/bills.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="账单管理列表：账单编号、类型、账期、应付金额、已付金额、到期日期、状态与滞纳金列，每行带收款、滞纳金、编辑操作" />
-        </figure>
-        <figure class="shot" role="tabpanel" id="panel-prepay" aria-labelledby="tab-prepay" data-gallery-panel="prepay">
-          <img src="assets/shots/prepay.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="预付账户列表：租客、房间、账户余额、余额提醒阈值、最近更新时间与状态列，每行带充值扣费、流水、阈值入口" />
-        </figure>
-        <figure class="shot" role="tabpanel" id="panel-maintenance" aria-labelledby="tab-maintenance" data-gallery-panel="maintenance">
-          <img src="assets/shots/maintenance.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="报修管理列表：标题、类别、优先级、状态、问题描述与创建时间列，共 14 条工单，顶部可按状态筛选" />
-        </figure>
-        <figure class="shot" role="tabpanel" id="panel-cleaning" aria-labelledby="tab-cleaning" data-gallery-panel="cleaning">
-          <img src="assets/shots/cleaning.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="保洁管理列表：待清洁、清洁中、已完成三个页签，表格列出楼栋、房间号、楼层、房态、清洁状态与最近完成时间" />
-        </figure>
-        <figure class="shot" role="tabpanel" id="panel-statistics" aria-labelledby="tab-statistics" data-gallery-panel="statistics">
-          <img src="assets/shots/statistics.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="统计报表：出账总额、实收总额、收缴率、出租率、逾期账单、新增报修六张指标卡，支持按时间与楼栋维度切换" />
-        </figure>
-        <figure class="shot" role="tabpanel" id="panel-notifications" aria-labelledby="tab-notifications" data-gallery-panel="notifications">
-          <img src="assets/shots/notifications.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-               alt="通知提醒列表：未读标记、优先级、标题、正文与时间列，每行带标记已读与删除入口" />
-        </figure>
-      </div>
-      <p class="gallery__hint">← 左右滑动查看完整界面</p>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════════════ 资金闭环（深色） ══════════════════════════ -->
-<section class="sec sec--dark" id="money">
-  <div class="wrap">
-    <header class="head">
-      <p class="kicker">资金闭环</p>
-      <h2 data-p="landlord">钱从哪进来、扣到哪去，系统自己记得</h2>
-      <h2 data-p="tenant">每一笔钱，都能自己对上账</h2>
-      <p class="head__sub" data-p="landlord">三条链路彼此咬合：账单收款、预付充值扣费、水电读数扣费。每个资金动作都带幂等键，重复提交不会重复入账。</p>
-      <p class="head__sub" data-p="tenant">你交了多少、扣了多少、还剩多少，系统里的数字和你手上的记录是同一个。</p>
-    </header>
-
-    <ol class="flows" data-cards="landlord">
-      <li class="flow">
-        <span class="flow__no">01</span>
-        <h3>账单收款</h3>
-        <p class="flow__chain">合同 → 月度账单 → 收款登记 → 状态联动</p>
-        <p>账单金额取自合同快照，收款后自动在待缴 / 部分缴 / 已缴清 / 逾期之间流转；重复的交易号会被拒绝。</p>
-      </li>
-      <li class="flow">
-        <span class="flow__no">02</span>
-        <h3>预付充值扣费</h3>
-        <p class="flow__chain">充值 → 余额 → 扣费 → 余额不足提醒 → 生成补缴账单</p>
-        <p>水电走预存制，扣费必须发生在余额之内；余额触到阈值先提醒，不够的部分转成一张待缴账单。</p>
-      </li>
-      <li class="flow">
-        <span class="flow__no">03</span>
-        <h3>水电读数扣费</h3>
-        <p class="flow__chain">抄表 → 用量 × 单价 → 自动扣费 → 差额补缴</p>
-        <p>本期读数减上期读数得到用量，乘单价后自动入流水，单价按生效日期留存历史，改价不影响旧账。</p>
-      </li>
-    </ol>
-
-    <ol class="flows" data-cards="tenant">
-      <li class="flow">
-        <span class="flow__no">01</span>
-        <h3>账单明细</h3>
-        <p class="flow__chain">账期 · 金额 · 到期日 · 状态</p>
-        <p>哪个月、多少钱、什么时候到期、交没交，四个字段说完整，不用翻群聊。</p>
-      </li>
-      <li class="flow">
-        <span class="flow__no">02</span>
-        <h3>余额与流水</h3>
-        <p class="flow__chain">充值 → 扣费 → 退款 → 余额</p>
-        <p>每一笔变动带时间、事由和变动后的余额，能一路推回到上一次充值。</p>
-      </li>
-      <li class="flow">
-        <span class="flow__no">03</span>
-        <h3>退租结算</h3>
-        <p class="flow__chain">押金 → 扣除项 → 折算租金 → 退款</p>
-        <p>扣了什么、按什么算，逐条列出来；退款走确认流程，不是一句话带过。</p>
-      </li>
-    </ol>
-
-    <figure class="shot shot--dark">
-      <img src="assets/shots/bills.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-           alt="账单管理列表：账单编号、类型、账期、应付金额、已付金额、到期日期、状态与滞纳金列，每行带收款、滞纳金、编辑操作" />
-      <figcaption data-p="landlord">账单列表：金额、状态、滞纳金与收款入口都在同一行。</figcaption>
-      <figcaption data-p="tenant">你在小程序里看到的每一笔，都是从这张台账同步出去的。</figcaption>
-    </figure>
-  </div>
-</section>
-
-<!-- ══════════════════════════ 房态 / 报修 ══════════════════════════ -->
-<section class="sec" id="state">
-  <div class="wrap">
-    <div class="split">
+  <!-- 4 · 状态机与工单流转 -->
+  <section class="sec" id="state">
+    <div class="wrap split">
       <div class="split__copy">
-        <p class="kicker" data-p="landlord">房态状态机</p>
-        <p class="kicker" data-p="tenant">报修全流程</p>
+        <p class="kicker" data-p="landlord">房态状态机 / ROOM LIFECYCLE</p>
+        <p class="kicker" data-p="tenant">报修全流程 / SERVICE FLOW</p>
         <h2 data-p="landlord">一个房间从空到满，<em>每一步都有据可依</em></h2>
         <h2 data-p="tenant">报修不是发个消息，<em>而是一条能追的工单</em></h2>
-        <p data-p="landlord">
-          房态不是随手改的字段。签约、入住、退租、报修停用各有前置条件，改动写在同一张流转表里，
-          保洁接单与完成会直接回写房态。
-        </p>
-        <p data-p="tenant">
-          提交后进入「已提交」，管理员受理、派单、维修，完成前还会回到你这里确认。
-          中间每一步的状态和照片都留在工单里。
-        </p>
+        <p data-p="landlord">房态不是随便改的一个下拉框。每次流转都要过校验：没有合同不能直接标已出租，有未结账单不会让你安静退租。</p>
+        <p data-p="tenant">提交之后，工单会依次经过受理、派单、处理与确认。每一步都有时间戳，处理说明和照片都留在工单上。</p>
 
-        <ol class="steps" data-cards="landlord">
-          <li><b>空置 · 已清洁</b><span>新建房间的初始态，可出租</span></li>
-          <li><b>预订</b><span>已签合同、尚未到入住日</span></li>
-          <li><b>已租</b><span>租客入住，合同生效</span></li>
-          <li><b>退租 → 待清洁</b><span>退租后自动转入待清洁</span></li>
-          <li><b>清洁中 → 已清洁</b><span>保洁接单与完成，回写房态</span></li>
+        <ol class="steps" data-p="landlord">
+          <li><b>空置</b><span>可带看、可预订；保洁完成才回到可租状态。</span></li>
+          <li><b>已预订</b><span>锁定房间，等待签约；预订到期可自动释放。</span></li>
+          <li><b>已出租</b><span>绑定了生效中的合同，账单从合同参数生成。</span></li>
+          <li><b>维护中</b><span>不计入可租，维修完成后回到空置或待清洁。</span></li>
         </ol>
-
-        <ol class="steps" data-cards="tenant">
-          <li><b>已提交</b><span>选类别、填描述、传照片</span></li>
-          <li><b>已受理 · 已派单</b><span>管理员确认并指派维修</span></li>
-          <li><b>维修中</b><span>师傅上门处理</span></li>
-          <li><b>待确认</b><span>修好了，等你确认</span></li>
-          <li><b>已完成</b><span>处理结果与时间留在工单里</span></li>
+        <ol class="steps" data-p="tenant">
+          <li><b>已提交</b><span>选择类别、紧急度，写下问题并上传照片。</span></li>
+          <li><b>已受理 → 已派单</b><span>管理者确认并安排处理人。</span></li>
+          <li><b>处理中 → 待确认</b><span>维修完成后等你确认实际结果。</span></li>
+          <li><b>已完成</b><span>工单归档，处理说明与照片可随时回看。</span></li>
         </ol>
       </div>
 
-      <div class="split__visual">
-        <div class="stacked-shots" data-card="landlord">
-          <figure class="shot">
-            <img src="assets/shots/rooms.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-                 alt="房源管理列表：房间号、楼层、房型、面积、房态与清洁状态列，顶部有只看待清洁与保洁工作台入口" />
-            <figcaption>房源列表：房态与清洁状态两列分开，筛选「只看待清洁」直达保洁工作台。</figcaption>
+      <div class="split__media" data-p="landlord">
+        <figure class="shot">
+          <img src="assets/shots/rooms.jpg" width="1600" height="1000" loading="lazy" decoding="async"
+               alt="房源管理页：按房态筛选的房源列表，每行显示房号、户型面积楼栋、租约月租、入住关联租客与合同号、房态与清洁状态。" />
+        </figure>
+        <figure class="shot">
+          <img src="assets/shots/maintenance.jpg" width="1600" height="1000" loading="lazy" decoding="async"
+               alt="报修工单页：待受理、跟进中、待确认、已完成与紧急未结单五张指标卡，下方是以卡片排布的工单，含类别、标题、描述、房号租客、提交时间与状态。" />
+        </figure>
+      </div>
+
+      <div class="split__media split__media--phone" data-p="tenant">
+        <!-- 租客端报修记录 -->
+        <div class="phone phone--sm" role="img" aria-label="租客端小程序报修记录：页面标题「让问题得到回应」，一条发起新报修按钮，下方三张工单卡片分别处于待确认、处理中与已完成状态。">
+          <div class="phone__frame">
+            <div class="phone__screen">
+              <span class="phone__glare" aria-hidden="true"></span>
+              <div class="phone__island" aria-hidden="true"></div>
+              <div class="phone__status"><span>9:41</span><span class="phone__sys" aria-hidden="true"><i class="s-sig"></i><i class="s-wifi"></i><i class="s-bat"></i></span></div>
+              <div class="phone__capsule" aria-hidden="true">··· ⊙</div>
+              <div class="phone__body">
+                <div class="mp-pagehead">
+                  <span class="mp-eyebrow">MAINTENANCE / 我的报修</span>
+                  <strong class="mp-title mp-title--page">让问题得到回应。</strong>
+                  <small class="mp-desc">从提交问题，到处理结束，每一步都看得见。</small>
+                </div>
+                <button class="mp-cta" type="button" tabindex="-1">＋ 发起新报修</button>
+                <div class="mp-card__hd mp-card__hd--list"><strong>报修记录</strong><span class="mp-link">刷新</span></div>
+                <div class="mp-ticket">
+                  <span class="mp-ticket__ico" aria-hidden="true"></span>
+                  <div class="mp-ticket__main">
+                    <div class="mp-ticket__hd"><strong>热水器打不着火</strong><span class="mp-pill mp-pill--warn">待确认</span></div>
+                    <small>家电维修 · 2026-10-11 09:30</small>
+                  </div>
+                  <span class="mp-chev">›</span>
+                </div>
+                <div class="mp-ticket">
+                  <span class="mp-ticket__ico" aria-hidden="true"></span>
+                  <div class="mp-ticket__main">
+                    <div class="mp-ticket__hd"><strong>卫生间水管渗水</strong><span class="mp-pill">处理中</span></div>
+                    <small>水管问题 · 2026-10-08 14:20</small>
+                  </div>
+                  <span class="mp-chev">›</span>
+                </div>
+                <div class="mp-ticket">
+                  <span class="mp-ticket__ico" aria-hidden="true"></span>
+                  <div class="mp-ticket__main">
+                    <div class="mp-ticket__hd"><strong>厨房插座没电</strong><span class="mp-pill mp-pill--quiet">已完成</span></div>
+                    <small>电路问题 · 2026-09-28 18:05</small>
+                  </div>
+                  <span class="mp-chev">›</span>
+                </div>
+              </div>
+              <div class="phone__bar" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · 真实界面 -->
+  <section class="sec sec--tint" id="screens" data-p="landlord">
+    <div class="wrap">
+      <header class="head">
+        <p class="kicker">真实界面 / REAL SCREENS</p>
+        <h2>九个模块，共用同一套操作习惯</h2>
+        <p class="head__sub">下面每一张都是真实运行截图，不是设计稿。数据来自独立的演示库，不碰生产环境。</p>
+      </header>
+
+      <div class="gallery">
+        <div class="gallery__tabs" role="tablist" aria-label="界面切换">
+          <span class="gallery__ink" aria-hidden="true"></span>
+          <button role="tab" id="tab-dashboard" aria-controls="panel-dashboard" aria-selected="true" tabindex="0" class="is-on">工作台</button>
+          <button role="tab" id="tab-rooms" aria-controls="panel-rooms" aria-selected="false" tabindex="-1">房源</button>
+          <button role="tab" id="tab-tenants" aria-controls="panel-tenants" aria-selected="false" tabindex="-1">租客</button>
+          <button role="tab" id="tab-contracts" aria-controls="panel-contracts" aria-selected="false" tabindex="-1">合同</button>
+          <button role="tab" id="tab-bills" aria-controls="panel-bills" aria-selected="false" tabindex="-1">账单</button>
+          <button role="tab" id="tab-maintenance" aria-controls="panel-maintenance" aria-selected="false" tabindex="-1">报修</button>
+          <button role="tab" id="tab-cleaning" aria-controls="panel-cleaning" aria-selected="false" tabindex="-1">保洁</button>
+          <button role="tab" id="tab-notifications" aria-controls="panel-notifications" aria-selected="false" tabindex="-1">通知</button>
+          <button role="tab" id="tab-viewing" aria-controls="panel-viewing" aria-selected="false" tabindex="-1">看房页</button>
+        </div>
+
+        <div class="gallery__panels">
+          <figure class="shot" role="tabpanel" id="panel-dashboard" aria-labelledby="tab-dashboard">
+            <img src="assets/shots/dashboard.jpg" width="1600" height="1000" decoding="async" alt="工作台：四张指标卡、运营日历、房源运营概况环形图、最近动态与收入趋势。" />
+            <figcaption><b>工作台</b>总览今天该处理什么：待缴账单、待处理报修、本月到期与最新动态。</figcaption>
           </figure>
-          <figure class="shot">
-            <img src="assets/shots/cleaning.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-                 alt="保洁管理列表：待清洁、清洁中、已完成三个页签，表格列出楼栋、房间号、楼层、房态、清洁状态与最近完成时间" />
-            <figcaption>保洁工作台：保洁只看到待清洁与清洁中的房间，标记完成即回写房态。</figcaption>
+          <figure class="shot" role="tabpanel" id="panel-rooms" aria-labelledby="tab-rooms" hidden>
+            <img src="assets/shots/rooms.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="房源管理：按房态筛选的房源列表，含户型、租金、入住租客、合同号与清洁状态。" />
+            <figcaption><b>房源</b>房态、租金与入住关系放在一眼能看懂的位置。</figcaption>
+          </figure>
+          <figure class="shot" role="tabpanel" id="panel-tenants" aria-labelledby="tab-tenants" hidden>
+            <img src="assets/shots/tenants.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="租客档案：租客列表含联系方式、房源、在租合同数与在租状态。" />
+            <figcaption><b>租客</b>档案与房源、合同、账单互相关联，证件号默认脱敏。</figcaption>
+          </figure>
+          <figure class="shot" role="tabpanel" id="panel-contracts" aria-labelledby="tab-contracts" hidden>
+            <img src="assets/shots/contracts.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="合同管理：合同号、租客、房源、租期、租金押金与状态，续签关系可追溯。" />
+            <figcaption><b>合同</b>签约、续签与终止都留快照，续签链可以一路回溯。</figcaption>
+          </figure>
+          <figure class="shot" role="tabpanel" id="panel-bills" aria-labelledby="tab-bills" hidden>
+            <img src="assets/shots/bills.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="账单与收款：应收、已收、未收与逾期指标，账单列表含金额、到期日、状态与滞纳金核销。" />
+            <figcaption><b>账单</b>收款按交易号幂等，滞纳金建议与核销记录同屏可见。</figcaption>
+          </figure>
+          <figure class="shot" role="tabpanel" id="panel-maintenance" aria-labelledby="tab-maintenance" hidden>
+            <img src="assets/shots/maintenance.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="报修工单：待受理、跟进中、待确认、已完成与紧急未结单指标，工单卡片含类别、描述、房号租客与状态。" />
+            <figcaption><b>报修</b>按紧急度排序，七态工单从提交一路走到完成。</figcaption>
+          </figure>
+          <figure class="shot" role="tabpanel" id="panel-cleaning" aria-labelledby="tab-cleaning" hidden>
+            <img src="assets/shots/cleaning.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="保洁任务：待清洁、清洁中、已清洁空房与空置房源指标，下方是待处理队列，可按楼栋与房号筛选。" />
+            <figcaption><b>保洁</b>保洁只看得到空置房源与清洁状态，不接触租客账务。</figcaption>
+          </figure>
+          <figure class="shot" role="tabpanel" id="panel-notifications" aria-labelledby="tab-notifications" hidden>
+            <img src="assets/shots/notifications.jpg" width="1600" height="1000" loading="lazy" decoding="async" alt="通知中心：全部、未读、已读通知列表，含逾期提醒、账单生成与报修通知，可按优先级标记。" />
+            <figcaption><b>通知</b>账单到期、逾期与报修进展，按优先级进同一个收件箱。</figcaption>
+          </figure>
+          <figure class="shot" role="tabpanel" id="panel-viewing" aria-labelledby="tab-viewing" hidden>
+            <img src="assets/shots/viewing.jpg" width="1600" height="838" loading="lazy" decoding="async" alt="公开看房页：可租空置房源卡片，含实拍照片、楼栋房号、户型、面积、楼层与价格说明，可按楼栋房型楼层筛选。" />
+            <figcaption><b>看房页</b>房源挂出去不用先给账号：免登录看房，只展示可租的空置房源。</figcaption>
           </figure>
         </div>
-        <div class="phone-wrap" data-card="tenant">
-          <div class="phone phone--sm" role="img" aria-label="租客端小程序报修列表：三张工单卡片，分别处于维修中、待确认与已完成状态，含类别与提交时间">
-  <div class="phone__frame">
-    <div class="phone__screen">
-      <span class="phone__glare" aria-hidden="true"></span>
-      <div class="phone__island" aria-hidden="true"></div>
-      <div class="phone__status"><span>9:41</span><span class="phone__sys" aria-hidden="true"><i class="s-sig"></i><i class="s-wifi"></i><i class="s-bat"></i></span></div>
-      <div class="phone__nav"><span class="phone__home"></span><span class="phone__title">在线报修</span><span class="phone__capsule" aria-hidden="true">··· ⊙</span></div>
-      <div class="phone__body">
-        <div class="mp-tabs"><b>全部</b><span>处理中</span><span>已完成</span></div>
-        <div class="mp-ticket">
-          <div class="mp-ticket__hd"><b>热水器打不着火</b><i class="mp-tag mp-tag--urgent">紧急</i></div>
-          <p>燃气热水器完全打不着火，目前无法洗澡。</p>
-          <div class="mp-ticket__ft"><span>电器 · 10-11 提交</span><em class="is-doing">维修中</em></div>
-        </div>
-        <div class="mp-ticket">
-          <div class="mp-ticket__hd"><b>卫生间水管渗水</b><i class="mp-tag">普通</i></div>
-          <p>洗手台下方水管接口处持续渗水，地面已经有积水。</p>
-          <div class="mp-ticket__ft"><span>水管 · 10-08 提交</span><em class="is-wait">待确认</em></div>
-        </div>
-        <div class="mp-ticket">
-          <div class="mp-ticket__hd"><b>厨房插座没电</b><i class="mp-tag">普通</i></div>
-          <p>厨房操作台左侧插座通电后没有反应，其他插座正常。</p>
-          <div class="mp-ticket__ft"><span>电路 · 09-28 提交</span><em class="is-ok">已完成</em></div>
-        </div>
-        <div class="mp-cta">＋ 提交报修</div>
-      </div>
-      <div class="phone__bar" aria-hidden="true"></div>
-    </div>
-  </div>
-</div>
-          <p class="phone-wrap__cap">报修工单：状态、类别、处理记录都在同一条里。</p>
-        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ══════════════════════════ 在线看房 ══════════════════════════ -->
-<section class="sec sec--tint" id="viewing">
-  <div class="wrap">
-    <div class="split split--flip">
-      <div class="split__copy">
-        <p class="kicker">公开看房页</p>
-        <h2 data-p="landlord">房源挂出去，<em>不用先给一个账号</em></h2>
-        <h2 data-p="tenant">还没定下来，<em>也能先看个明白</em></h2>
-        <p data-p="landlord">
-          公开接口只放空置且已清洁的房间，展示照片、房型、面积、楼层与描述，
-          不含任何租客信息，也不需要登录。
-        </p>
-        <p data-p="tenant">
-          把链接发给朋友或家人一起看，照片、面积、楼层、朝向都写清楚，
-          中意了再联系管理员约时间。
-        </p>
-        <ul class="ticks">
-          <li>无需登录即可浏览</li>
-          <li>只返回空置房源，不泄露在租信息</li>
-          <li>支持按楼栋、房型、楼层筛选</li>
-        </ul>
-      </div>
-      <figure class="shot">
-        <img src="assets/shots/viewing.jpg" width="1600" height="1000" loading="lazy" decoding="async"
-             alt="公开看房页：六间空置房源的卡片，包含客厅、卧室等真实照片，以及房型、面积、楼层和描述" />
-        <figcaption>空置房源卡片，访客看得见的是房子，看不见的是租客。</figcaption>
-      </figure>
-    </div>
-  </div>
-</section>
+  <!-- 6 · 技术底座 -->
+  <section class="sec" id="stack">
+    <div class="wrap">
+      <header class="head">
+        <p class="kicker">技术底座 / ENGINEERING</p>
+        <h2>数据在自己手里，<em>权限在服务端收口</em></h2>
+        <p class="head__sub">不是把前端藏起来就算权限。每个租客端查询都经服务端范围助手，范围 ID 缺失直接 403，不会退化成查全表。</p>
+      </header>
 
-<!-- ══════════════════════════ 技术底座（深色） ══════════════════════════ -->
-<section class="sec sec--dark" id="stack">
-  <div class="wrap">
-    <header class="head">
-      <p class="kicker">技术底座</p>
-      <h2>数据在自己手里，权限在服务端收口</h2>
-      <p class="head__sub">一套可以自托管的系统：本地 Docker Compose 起数据库就能跑，也可以部署到自己的云主机。</p>
-    </header>
-    <div class="stack">
-      <div class="stack__col">
-        <h3>技术选型</h3>
-        <ul class="stack__list">
-          <li><b>NestJS 12</b><span>TypeScript 严格模式的后端框架</span></li>
-          <li><b>Prisma + PostgreSQL 16</b><span>类型安全查询，25 张表</span></li>
-          <li><b>Redis</b><span>会话与缓存</span></li>
-          <li><b>Vue 3 + Element Plus</b><span>管理后台</span></li>
-          <li><b>uni-app 微信小程序</b><span>租客端与保洁端</span></li>
-        </ul>
-      </div>
-      <div class="stack__col">
-        <h3>安全与合规</h3>
-        <ul class="stack__list">
-          <li><b>JWT 鉴权 + 角色守卫</b><span>管理 / 租客 / 保洁三类角色分权</span></li>
-          <li><b>按楼栋隔离</b><span>跨楼栋数据默认不可见</span></li>
-          <li><b>审计日志</b><span>记录操作人、动作、前后变化与来源 IP</span></li>
-          <li><b>文件归属校验</b><span>上传登记归属，下载前校验，避免越权取件</span></li>
-          <li><b>生产环境种子守卫</b><span>默认账号不允许进入生产库</span></li>
-        </ul>
-      </div>
-      <div class="stack__col">
-        <h3>部署与上线</h3>
-        <ul class="stack__list">
-          <li><b>Docker Compose 或云服务</b><span>PostgreSQL 16 + Redis 起本地环境；生产指向 RDS / 云 Redis</span></li>
-          <li><b>迁移只前滚</b><span>生产用 prisma migrate deploy，不重置、不推送结构</span></li>
-          <li><b>密钥不进仓库</b><span>JWT_SECRET ≥32 字节、ENCRYPTION_KEY 32 字节，缺失即启动失败</span></li>
-          <li><b>备份</b><span>云数据库每日快照保留 30 天；上线前做一次恢复演练</span></li>
-          <li><b>上线自检</b><span>类型检查、oxlint、全量测试、端到端 27 项、文档检查</span></li>
-        </ul>
+      <div class="stack">
+        <div class="stack__col">
+          <h3>选型</h3>
+          <ul>
+            <li><b>NestJS 12</b><span>模块化后端，OpenAPI 类型导出前端</span></li>
+            <li><b>Prisma + PostgreSQL 16</b><span>类型安全查询，28 张表</span></li>
+            <li><b>Redis</b><span>会话、限流、分布式任务锁</span></li>
+            <li><b>Vue 3 + Element Plus</b><span>管理后台，组件按需引入</span></li>
+            <li><b>uni-app 微信小程序</b><span>租客端与保洁端</span></li>
+          </ul>
+        </div>
+        <div class="stack__col">
+          <h3>安全与合规</h3>
+          <ul>
+            <li><b>服务端 RBAC</b><span>角色守卫 + 租客端范围助手</span></li>
+            <li><b>字段级加密</b><span>证件号加密存储，检索走哈希</span></li>
+            <li><b>令牌轮换</b><span>刷新令牌原子轮换与重放检测</span></li>
+            <li><b>文件脱敏</b><span>上传校验类型并去除图片 EXIF</span></li>
+            <li><b>审计日志</b><span>关键变更记录操作人与时间</span></li>
+          </ul>
+        </div>
+        <div class="stack__col">
+          <h3>工程与运维</h3>
+          <ul>
+            <li><b>自动化测试</b><span>976 项用例 + 覆盖率门禁</span></li>
+            <li><b>端到端回归</b><span>6 条 Playwright 核心业务流程</span></li>
+            <li><b>容器化交付</b><span>多阶段构建、非 root 运行</span></li>
+            <li><b>备份与恢复</b><span>演练 RTO 2.4s、RPO 0</span></li>
+            <li><b>性能基线</b><span>100 并发 P95 66.75ms、0 错误</span></li>
+          </ul>
+        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ══════════════════════════ 项目现状 ══════════════════════════ -->
-<section class="sec" id="status">
-  <div class="wrap">
-    <header class="head">
-      <p class="kicker">项目现状</p>
-      <h2>现在能用到什么程度，写清楚</h2>
-      <p class="head__sub">正在往生产试用推进，下面是已经跑通和还没做的部分，不藏也不夸大。</p>
-    </header>
-    <div class="status">
-      <div class="status__col">
-        <h3><span class="dot dot--done" aria-hidden="true"></span>已跑通</h3>
-        <ul class="chips">
-          <li>房源与房态状态机</li><li>租客与合同</li><li>账单与收款</li><li>滞纳金与核销</li>
-          <li>预付账户流水</li><li>水电读数扣费</li><li>报修工单与多图</li><li>退租结算</li>
-          <li>通知提醒</li><li>定时任务</li><li>统计报表</li><li>公开看房页</li>
-          <li>保洁后端与小程序</li><li>主题系统</li>
-        </ul>
+  <!-- 7 · 项目现状 -->
+  <section class="sec sec--tint" id="status">
+    <div class="wrap">
+      <header class="head">
+        <p class="kicker">项目现状 / STATUS</p>
+        <h2>现在能用到什么程度，写清楚</h2>
+        <p class="head__sub">下面是已经跑通和还没做的部分，不藏也不夸大。当前没有阻塞项。</p>
+      </header>
+
+      <div class="status">
+        <div class="status__col">
+          <h3><span class="dot dot--done" aria-hidden="true"></span>已跑通</h3>
+          <ul class="chips">
+            <li>房源与房态状态机</li><li>租客与合同</li><li>账单与收款</li><li>滞纳金与核销</li>
+            <li>预付账户流水</li><li>水电读数扣费</li><li>智能水电表接入</li><li>报修工单与多图</li>
+            <li>保洁工作台</li><li>退租结算</li><li>通知提醒</li><li>定时任务与任务锁</li>
+            <li>统计报表</li><li>公开看房页</li><li>角色权限与数据隔离</li><li>审计日志</li>
+          </ul>
+        </div>
+        <div class="status__col">
+          <h3><span class="dot dot--wip" aria-hidden="true"></span>已交付的工程能力</h3>
+          <ul class="chips chips--wip">
+            <li>自动化测试覆盖率门禁</li>
+            <li>跨模块端到端回归</li>
+            <li>生产容器部署工件</li>
+            <li>备份恢复演练与性能基线</li>
+          </ul>
+          <h3 class="status__h3b"><span class="dot dot--plan" aria-hidden="true"></span>下一步</h3>
+          <ul class="chips chips--plan">
+            <li>在线支付</li>
+            <li>短信通知</li>
+            <li>电子签章</li>
+            <li>电子发票</li>
+            <li>存量数据导入</li>
+            <li>小程序真机验收</li>
+          </ul>
+
+          <div class="status__note">
+            <h4>当前实测口径</h4>
+            <dl>
+              <div><dt>28</dt><dd>张数据表</dd></div>
+              <div><dt>976</dt><dd>项自动化测试全绿</dd></div>
+              <div><dt>0</dt><dd>阻塞项</dd></div>
+              <div><dt>121</dt><dd>条 OpenAPI 路由</dd></div>
+            </dl>
+          </div>
+        </div>
       </div>
-      <div class="status__col">
-        <h3><span class="dot dot--wip" aria-hidden="true"></span>进行中</h3>
-        <ul class="chips chips--wip">
-          <li>自动化测试覆盖率门禁</li>
-          <li>跨模块端到端回归常态化</li>
-          <li>小程序真机验收</li>
-          <li>生产环境部署演练</li>
-        </ul>
-        <h3 class="status__h3b"><span class="dot dot--plan" aria-hidden="true"></span>规划中</h3>
-        <ul class="chips chips--plan">
-          <li>智能水电表接入</li>
-          <li>在线支付</li>
-          <li>短信通知</li>
-          <li>电子签章</li>
-          <li>电子发票</li>
-          <li>存量数据导入</li>
+    </div>
+  </section>
+
+  <!-- 8 · 常见问题 -->
+  <section class="sec" id="faq">
+    <div class="wrap">
+      <header class="head">
+        <p class="kicker">常见问题 / FAQ</p>
+        <h2>上线前最常被问到的几件事</h2>
+      </header>
+
+      <div class="faq">
+        <details class="faq__item">
+          <summary>数据放在哪里？能不能自己部署？</summary>
+          <p>整套系统可以部署在你自己的服务器上，PostgreSQL 与 Redis 都在你的网络里，对象存储可接阿里云 OSS 或本地磁盘。仓库里有多阶段的 Dockerfile 与生产编排文件，不依赖托管平台。</p>
+        </details>
+        <details class="faq__item">
+          <summary>租客需要装 App 吗？</summary>
+          <p>不需要。租客端是微信小程序，扫码或搜索进入，用手机号或邮箱验证码登录。合同、账单、报修、余额都在小程序里，不占手机存储。</p>
+        </details>
+        <details class="faq__item">
+          <summary>账单和收款怎么避免重复入账？</summary>
+          <p>收款请求必须带唯一交易号，服务端在同一事务里做幂等判断，重复提交返回 409 而不是再记一笔。账单支持部分缴付，已缴金额与状态由服务端计算。</p>
+        </details>
+        <details class="faq__item">
+          <summary>水电费怎么算？</summary>
+          <p>按表计读数与生效中的价目计算，价目支持按时间生效的历史版本。抄表后自动从预付余额扣费并写一条流水；智能表可通过 MQTT 上报读数，模拟读数会被单独标记、不参与结算。</p>
+        </details>
+        <details class="faq__item">
+          <summary>保洁能看到租客的账务吗？</summary>
+          <p>不能。保洁角色只有现场工作台：空置房源、清洁状态、开始与完成清洁、上传照片。合同与账务接口对保洁角色直接拒绝，不靠前端隐藏。</p>
+        </details>
+        <details class="faq__item">
+          <summary>多人同时改房态会冲突吗？</summary>
+          <p>不会。房态变更走状态机校验并带版本号，后提交的一方会收到冲突提示而不是覆盖前一个人的结果。定时任务在多实例下通过咨询锁选主，同一任务不会并行跑两遍。</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · CTA -->
+  <section class="sec sec--cta" id="start">
+    <div class="wrap">
+      <div class="cta">
+        <span class="cta__glow" aria-hidden="true"></span>
+        <p class="kicker">开始 / GET STARTED</p>
+        <h2 data-p="landlord">先把一栋楼跑起来</h2>
+        <h2 data-p="tenant">先把自己的账看明白</h2>
+        <p data-p="landlord">从录入一栋楼、几十间房开始：建合同、出账单、抄一次表，一天之内就能看到完整的资金闭环。</p>
+        <p data-p="tenant">合同、账单、报修进度和余额都在手机里，不用等房东回复，也不用翻聊天记录。</p>
+        <div class="cta__btns">
+          <a class="btn btn--primary" href="#top">回到顶部</a>
+          <a class="btn btn--ghost" href="#faq">还有问题？看 FAQ</a>
+        </div>
+        <ul class="cta__trust">
+          <li><b>28</b><span>张数据表</span></li>
+          <li><b>976</b><span>项自动化测试</span></li>
+          <li><b>RTO 2.4s</b><span>备份恢复演练</span></li>
         </ul>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ══════════════════════════ 常见问题 ══════════════════════════ -->
-<section class="sec sec--tint" id="faq">
-  <div class="wrap">
-    <header class="head">
-      <p class="kicker">常见问题</p>
-      <h2>上线前最常被问到的几件事</h2>
-      <p class="head__sub">答不上来的不写。下面是已经有确定答案的。</p>
-    </header>
-
-    <div class="faq">
-      <details class="faq__item">
-        <summary>数据放在哪里？可以自己部署吗？</summary>
-        <div class="faq__a">
-          <p>
-            可以自己部署。开发环境用 Docker Compose 起 PostgreSQL 16 与 Redis；生产可以指向阿里云 RDS、
-            Redis 与 OSS，也可以整套放在自己的服务器上。数据库和 Redis 不需要对公网暴露，
-            由 Nginx 终止 TLS 后只转发 <code>/api</code>。
-          </p>
-        </div>
-      </details>
-
-      <details class="faq__item">
-        <summary>这些功能现在真的能跑吗？</summary>
-        <div class="faq__a">
-          <p>
-            能跑，但边界写清楚：房源与房态状态机、租客与合同、账单收款、滞纳金与核销、预付账户流水、
-            水电读数扣费、报修工单、退租结算、通知、定时任务、统计报表、公开看房页、保洁两端都已跑通。
-            覆盖率门禁、真机验收和生产部署还在推进中，智能水电表、在线支付、短信、电子签章、
-            电子发票与存量数据导入都还没做——完整清单见上面的「项目现状」。
-          </p>
-        </div>
-      </details>
-
-      <details class="faq__item">
-        <summary>租客和保洁不会用怎么办？</summary>
-        <div class="faq__a">
-          <p>
-            用微信小程序，不用装 App、不用记新密码。登录后每个人只看得到自己那部分：租客看自己的账单、
-            余额、报修和合同，保洁只看待清洁与清洁中的房间。<code>关怀版</code>主题会把字号整体放大，
-            长辈也能看清楚。
-          </p>
-        </div>
-      </details>
-
-      <details class="faq__item">
-        <summary>能从 Excel 或旧系统把数据迁过来吗？</summary>
-        <div class="faq__a">
-          <p>
-            暂时不能批量导入，存量数据导入还在规划中。目前是在后台手工建立楼栋、房间与合同，
-            已经入住的租客按现有档案补录。如果你的存量规模较大，这件事需要在上线前单独排期。
-          </p>
-        </div>
-      </details>
-
-      <details class="faq__item">
-        <summary>欠费和滞纳金是怎么处理的？</summary>
-        <div class="faq__a">
-          <p>
-            系统按合同里约定的规则（宽限天数、按日比例或固定金额、封顶）算出<strong>建议</strong>金额，
-            需要人工确认或减免之后才会入账。它不会自动从租客账户扣钱，也不会自动生成一笔收款——
-            钱怎么收、收多少，决定权始终在人手上。
-          </p>
-        </div>
-      </details>
-
-      <details class="faq__item">
-        <summary>权限是前端藏一下，还是服务端真的拦？</summary>
-        <div class="faq__a">
-          <p>
-            服务端真的拦。角色守卫、按楼栋隔离、文件下载的归属校验都在后端；前端不显示只是顺手，
-            绕过前端直接调接口同样会被拒绝。每次增删改都会写审计日志，记录操作人、动作、
-            前后变化和来源 IP。
-          </p>
-        </div>
-      </details>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════════════ 终版 CTA ══════════════════════════ -->
-<section class="sec sec--cta" id="start">
-  <div class="wrap">
-    <div class="cta">
-      <div class="cta__glow" aria-hidden="true"></div>
-      <span class="brand__mark brand__mark--lg" aria-hidden="true">寓</span>
-      <h2 data-p="landlord">先把一栋楼跑起来</h2>
-      <h2 data-p="tenant">打开微信就能用</h2>
-      <p data-p="landlord">录入楼栋与房间，签下第一份合同，账单和水电就会自己接上。</p>
-      <p data-p="tenant">账单、余额、报修、合同，一个入口全部看到。</p>
-      <div class="cta__btns">
-        <a class="btn btn--solid btn--on-dark" href="#top" data-p="landlord">免费试用管理后台</a>
-        <a class="btn btn--ghost btn--on-dark" href="#capabilities" data-p="landlord">预约演示</a>
-        <a class="btn btn--solid btn--on-dark" href="#viewing" data-p="tenant">打开小程序</a>
-        <a class="btn btn--ghost btn--on-dark" href="#viewing" data-p="tenant">先看在租房源</a>
-      </div>
-      <ul class="cta__trust">
-        <li>数据可自托管</li>
-        <li>三类角色分权</li>
-        <li>操作全程留痕</li>
-      </ul>
-    </div>
-  </div>
-</section>
+  </section>
 
 </main>
 
 <footer class="foot">
-  <div class="wrap foot__in">
+  <div class="wrap foot__inner">
     <div class="foot__brand">
-      <span class="brand__mark" aria-hidden="true">寓</span>
-      <div>
-        <b>租客管理系统</b>
-        <p>公寓、长租与二房东的一体化管理后台，管理端用网页，租客与保洁用微信小程序。</p>
-      </div>
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="26" height="26"><path d="M7.6 25.2 24 11.6l16.4 13.6" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.2 24.6h21.6v11.2a2.2 2.2 0 0 1-2.2 2.2H15.4a2.2 2.2 0 0 1-2.2-2.2z" fill="currentColor"/></svg>
+      </span>
+      <span><strong>栖居</strong><small>每一处居所，都在有序运转</small></span>
     </div>
-    <nav class="foot__nav" aria-label="页脚导航">
-      <a href="#capabilities">能力</a>
-      <a href="#screens">界面</a>
-      <a href="#money">资金闭环</a>
-      <a href="#stack">技术底座</a>
-      <a href="#status">项目现状</a>
-      <a href="#faq">常见问题</a>
+    <nav class="foot__links" aria-label="页脚导航">
+      <a href="#roles">能力</a><a href="#flow">闭环</a><a href="#screens">界面</a><a href="#stack">技术</a><a href="#status">现状</a><a href="#faq">常见问题</a>
     </nav>
-    <p class="foot__legal">© 2026 租客管理系统 · 本页为产品介绍页，截图取自演示数据</p>
+    <p class="foot__legal">© 2026 栖居 · 租客与公寓管理系统</p>
   </div>
 </footer>
 

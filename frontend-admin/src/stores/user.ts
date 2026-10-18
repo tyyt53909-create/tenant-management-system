@@ -1,27 +1,29 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { User } from '@/types';
-import { login as loginApi, loginWithGoogle as loginWithGoogleApi, getCurrentUser } from '@/api/auth';
+import { login as loginApi, loginWithGoogle as loginWithGoogleApi, getCurrentUser, logout as logoutApi } from '@/api/auth';
+import { setAccessToken, getAccessToken, refreshAccessToken } from '@/utils/request';
 
 export const useUserStore = defineStore('user', () => {
   const user = ref<User | null>(null);
-  const token = ref<string | null>(localStorage.getItem('access_token'));
+  const token = ref<string | null>(getAccessToken());
+
+  const updateToken = (newToken: string | null) => {
+    token.value = newToken;
+    setAccessToken(newToken);
+  };
 
   // 密码登录
   const login = async (identifier: string, password: string) => {
     const response: any = await loginApi({ identifier, password });
-    token.value = response.accessToken;
-    localStorage.setItem('access_token', response.accessToken);
-    localStorage.setItem('refresh_token', response.refreshToken);
+    updateToken(response.accessToken);
     await fetchUserInfo();
   };
 
   // Google 登录
   const loginWithGoogleToken = async (idToken: string, inviteCode?: string) => {
     const response: any = await loginWithGoogleApi({ idToken, inviteCode });
-    token.value = response.accessToken;
-    localStorage.setItem('access_token', response.accessToken);
-    localStorage.setItem('refresh_token', response.refreshToken);
+    updateToken(response.accessToken);
     await fetchUserInfo();
     return response;
   };
@@ -36,21 +38,37 @@ export const useUserStore = defineStore('user', () => {
   };
 
   /**
-   * 应用启动时恢复登录态（T157）。
-   * 原先仅 login() 会拉取用户信息，导致刷新页面后 store 为空、
-   * 头部显示兜底文案「管理员」而不是真实邮箱。
+   * 应用启动或刷新页面时恢复登录态。
+   * access token 仅存内存，刷新页面时通过 HttpOnly Cookie 静默请求 /api/auth/refresh 恢复。
    */
-  const init = async () => {
-    if (!token.value) return;
-    await fetchUserInfo();
+  const restoreSession = async (): Promise<boolean> => {
+    try {
+      const newAccessToken = await refreshAccessToken();
+      updateToken(newAccessToken);
+      await fetchUserInfo();
+      return true;
+    } catch {
+      updateToken(null);
+      user.value = null;
+      return false;
+    }
   };
 
-  // 登出
+  const init = async () => {
+    if (token.value) {
+      await fetchUserInfo();
+    } else {
+      await restoreSession();
+    }
+  };
+
+  // 登出：清空内存态，调用服务端撤销会话与 HttpOnly Cookie
   const logout = () => {
     user.value = null;
-    token.value = null;
+    updateToken(null);
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    void logoutApi().catch(() => undefined);
   };
 
   return {
@@ -60,6 +78,7 @@ export const useUserStore = defineStore('user', () => {
     loginWithGoogleToken,
     logout,
     fetchUserInfo,
+    restoreSession,
     init,
   };
 });

@@ -9,13 +9,21 @@ import path from 'node:path';
 const requireFromAdmin = createRequire(new URL('../../frontend-admin/package.json', import.meta.url));
 const { defineConfig } = requireFromAdmin('vite');
 const vue = requireFromAdmin('@vitejs/plugin-vue').default;
+// 这个包通过 require 取回的就是函数本身（没有 .default 包装），与 ESM import 写法不同。
+const Components = requireFromAdmin('unplugin-vue-components/vite');
+const { ElementPlusResolver } = requireFromAdmin('unplugin-vue-components/resolvers');
 const adminRoot = fileURLToPath(new URL('../../frontend-admin/', import.meta.url));
 
 export default defineConfig({
   root: adminRoot,
   // 隔离 .env：不读 frontend-admin/.env.local（那里直连真实后端），改用 landing/tools/env/
   envDir: fileURLToPath(new URL('./env/', import.meta.url)),
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // 与 vite.config.ts 保持一致：T204 起 Element Plus 改为按需自动引入，
+    // 缺了这组插件 el-* 组件全部无法解析，截出来的页面是空的。
+    Components({ resolvers: [ElementPlusResolver({ importStyle: false })], dts: false }),
+  ],
   resolve: { alias: { '@': path.join(adminRoot, 'src') } },
   server: {
     host: '127.0.0.1',

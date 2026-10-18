@@ -62,7 +62,7 @@ export default {
         const res = await getMyMaintenance({ page: 1, limit: 50 })
         this.maintenanceList = res.data || []
       } catch (err) {
-        if (err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
+        if (err?.code === 'CAPABILITY_DENIED' || err?.message === 'CAPABILITY_DENIED' || err?.statusCode === 403) {
           this.readBlocked = true
           this.error = ''
         } else {

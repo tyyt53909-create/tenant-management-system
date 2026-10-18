@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { ContractsService } from './contracts.service.js';
 import { CreateContractDto } from './dto/create-contract.dto.js';
 import { UpdateContractDto } from './dto/update-contract.dto.js';
@@ -9,6 +9,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { RequireCapability } from '../../common/decorators/require-capability.decorator.js';
 import { CapabilityGuard } from '../../common/guards/capability.guard.js';
+import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 
 @Controller('contracts')
 @UseGuards(JwtAuthGuard)
@@ -34,9 +35,11 @@ export class ContractsController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.contract.read')
-  findMy(@Request() req: any, @Query() query: QueryContractsDto) {
-    if (req.user.role === 'TENANT') {
-      return this.contractsService.findByTenant(req.user.tenantId, query);
+  findMy(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryContractsDto) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId ?? '';
+      return this.contractsService.findByTenant(tenantId, query);
     }
     return this.contractsService.findAll(query);
   }
@@ -45,9 +48,11 @@ export class ContractsController {
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.contract.read')
-  findOne(@Request() req: any, @Param('id') id: string) {
-    if (req.user.role === 'TENANT') {
-      return this.contractsService.findOneForTenant(id, req.user.tenantId);
+  findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId ?? '';
+      return this.contractsService.findOneForTenant(id, tenantId);
     }
     return this.contractsService.findOne(id);
   }

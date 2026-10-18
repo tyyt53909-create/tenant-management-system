@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SchedulerService, SYSTEM_OPERATOR } from './scheduler.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -119,11 +119,47 @@ describe('SchedulerService（定时任务）', () => {
         where: { id: 'b-1' },
         data: { status: 'OVERDUE' },
       });
-      expect(billsService.addLateFee).toHaveBeenCalledWith('b-1', {}, SYSTEM_OPERATOR);
+      // 第 4 个参数是「业务日零点」：定时任务在凌晨执行，用真实 now 会把昨天的账单算成逾期 0 天（T208）
+      expect(billsService.addLateFee).toHaveBeenCalledWith(
+        'b-1',
+        {},
+        SYSTEM_OPERATOR,
+        new Date('2026-10-13T00:00:00.000Z'),
+      );
       expect(notifications.create).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'u-1', title: '账单逾期提醒', priority: 'URGENT' }),
       );
       expect(result).toEqual({ overdue: 1, suggested: 1 });
+    });
+
+    it('凌晨 01:00（上海）执行时仍按业务日算逾期天数并成功给出滞纳金建议（回归 T208）', async () => {
+      // 2026-10-13T17:00Z = 上海 10-14 01:00，业务日是 10-14
+      vi.setSystemTime(new Date('2026-10-13T17:00:00.000Z'));
+      prisma.bill.findMany.mockResolvedValue([
+        {
+          id: 'b-late',
+          amount: 100000,
+          paidAmount: 0,
+          dueDate: new Date('2026-10-13T00:00:00.000Z'), // 业务日上「昨天到期」→ 逾期 1 天
+          contract: { tenant: { userId: 'u-1' } },
+        },
+      ]);
+      billsService.addLateFee.mockResolvedValue({ id: 'lf-1' });
+
+      const result = await service.checkOverdueBills();
+
+      // 基准必须是业务日（10-14 零点），否则真实 now 的 UTC 日期还是 10-13 → 逾期 0 天
+      expect(billsService.addLateFee).toHaveBeenCalledWith(
+        'b-late',
+        {},
+        SYSTEM_OPERATOR,
+        new Date('2026-10-14T00:00:00.000Z'),
+      );
+      expect(notifications.create).toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining('逾期 1 天') }),
+      );
+      expect(result).toEqual({ overdue: 1, suggested: 1 });
+      vi.setSystemTime(FIXED_NOW);
     });
 
     it('滞纳金已确认（409）→ 跳过建议不中断，逾期流转与提醒照常', async () => {
@@ -219,6 +255,47 @@ describe('SchedulerService（定时任务）', () => {
 
       expect(sent).toBe(0);
       expect(notifications.create).not.toHaveBeenCalled();
+    });
+
+    it('去重键带节点维度：同一账单的第 1 天提醒不会挡掉第 3 天（回归 T208）', async () => {
+      prisma.bill.findMany.mockResolvedValue([
+        bill({ id: 'b-node', dueDate: new Date('2026-10-10T00:00:00.000Z') }), // 逾期 3 天
+      ]);
+      prisma.notification.findFirst.mockResolvedValue(null);
+
+      await service.sendBillReminders();
+
+      expect(notifications.create).toHaveBeenCalledWith(
+        expect.objectContaining({ dedupKey: expect.stringContaining('overdue-d3') }),
+      );
+    });
+
+    it('同日去重窗口取 UTC 自然日零点：凌晨执行时不再落在未来（回归 T208）', async () => {
+      vi.setSystemTime(new Date('2026-10-13T17:00:00.000Z')); // 上海 10-14 01:00
+      prisma.bill.findMany.mockResolvedValue([
+        bill({ id: 'b-today', dueDate: new Date('2026-10-14T00:00:00.000Z') }), // 业务日当天到期
+      ]);
+      prisma.notification.findFirst.mockResolvedValue(null);
+
+      await service.sendBillReminders();
+
+      // 此时刻的业务日零点是 10-14T00:00Z（未来）；UTC 自然日零点才是 10-13T00:00Z
+      expect(prisma.notification.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ createdAt: { gte: new Date('2026-10-13T00:00:00.000Z') } }),
+        }),
+      );
+      vi.setSystemTime(FIXED_NOW);
+    });
+
+    it('通知发送失败时不计入 sent（原先吞掉异常后仍 +1）', async () => {
+      prisma.bill.findMany.mockResolvedValue([bill({ id: 'b-fail' })]);
+      prisma.notification.findFirst.mockResolvedValue(null);
+      notifications.create.mockRejectedValueOnce(new Error('channel down'));
+
+      const sent = await service.sendBillReminders();
+
+      expect(sent).toBe(0);
     });
   });
 
@@ -321,6 +398,25 @@ describe('SchedulerService（定时任务）', () => {
       );
     });
 
+    it('单个合同失败不中止其余合同，且任务以失败收尾（回归 T208）', async () => {
+      prisma.contract.findMany.mockResolvedValue([
+        { ...contract, id: 'c-bad', contractNumber: 'CN-BAD' },
+        { ...contract, id: 'c-good', contractNumber: 'CN-GOOD' },
+      ]);
+      prisma.bill.findFirst.mockResolvedValue(null);
+      billsService.create.mockImplementation(async ({ contractId }: any) => {
+        if (contractId === 'c-bad') throw new Error('合同数据异常');
+        return { id: 'b-new' };
+      });
+
+      await expect(service.generateMonthlyBills()).rejects.toThrow(/1 个合同失败/);
+
+      // 失败的合同不影响后面的合同出账
+      expect(billsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ contractId: 'c-good' }),
+      );
+    });
+
     it('同账期已有账单 → 跳过（幂等）', async () => {
       prisma.contract.findMany.mockResolvedValue([contract]);
       prisma.bill.findFirst.mockResolvedValue({ id: 'b-existing' });
@@ -375,6 +471,23 @@ describe('SchedulerService（定时任务）', () => {
       expect(summary.errors[0]).toContain('合同自动流转失败');
       expect(summary.billsOverdue).toBe(0);
       expect(summary.remindersSent).toBe(0);
+    });
+  });
+
+  describe('cleanupExpiredNotifications', () => {
+    it('删除超过 180 天的通知', async () => {
+      prisma.notification.deleteMany = vi.fn().mockResolvedValue({ count: 3 });
+
+      await expect(service.cleanupExpiredNotifications()).resolves.toBe(3);
+      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
+        where: { createdAt: { lt: new Date(FIXED_NOW.getTime() - 180 * 86_400_000) } },
+      });
+    });
+  });
+
+  describe('rerun', () => {
+    it('未知任务名拒绝重跑', () => {
+      expect(() => service.rerun('nope', 'MANUAL')).toThrow(NotFoundException);
     });
   });
 });

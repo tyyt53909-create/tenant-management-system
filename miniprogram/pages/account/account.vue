@@ -78,7 +78,7 @@ export default {
         this.transactions = transactionsRes.data || []
         this.loaded=true
       } catch (error) {
-        if (error?.message === 'CAPABILITY_DENIED' || error?.statusCode === 403) {
+        if (error?.code === 'CAPABILITY_DENIED' || error?.message === 'CAPABILITY_DENIED' || error?.statusCode === 403) {
           this.blocked = true
           this.error = ''
         } else if (error.statusCode === 404) {
