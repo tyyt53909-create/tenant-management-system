@@ -36,4 +36,10 @@ export class QueryTenantsDto {
   @IsOptional()
   @Transform(({ value }) => value === true || value === 'true')
   isActive?: boolean;
+
+  /** 标签筛选（T215）：传标签 ID，返回带该标签的租客 */
+  @IsString()
+  @IsOptional()
+  @MaxLength(40)
+  tagId?: string;
 }
