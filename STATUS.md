@@ -2,9 +2,9 @@
 
 > 最后更新: 2026-10-17
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: `feature/T207-money-integrity` 分支当前提交 `0e244ba`（T001~T204 全量完成）
+> 进度基准: `fix/T208-refresh-rotation-race` 分支当前提交 `62f9edc`（T001~T204 全量完成）
 > 整体进度: **100%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
-> 质量状态: 后端 (81 文件 810 测例)、管理后台 (12 文件 49 测例 + Playwright 6 流程)、小程序 (108 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
+> 质量状态: 后端 (81 文件 823 测例)、管理后台 (12 文件 51 测例 + Playwright 6 流程)、小程序 (110 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
 
 ---
 
@@ -19,7 +19,7 @@
 | **阻塞问题** | 0 | 无阻塞 |
 | **数据模型** | 28 张实体表 | Prisma schema 实际 model 严密对齐 |
 | **OpenAPI 路由** | 121 条路由 | 全自动化生成规范，类型 100% 导出前端 |
-| **自动化测试** | 967 测例全绿 | 后端 810 + 小程序 108 + 前端 49，100% 通过率 |
+| **自动化测试** | 984 测例全绿 | 后端 823 + 小程序 110 + 前端 51，100% 通过率 |
 | **验收缺口** | 1 项 | OPT-02#4（`docs/06` 为 human 文档，需人工补 §10 节号指引）；OPT-19#3 已于 T204 达标（首屏 JS −88%）。详见 `docs/13` 与 T204 交接记录 |
 | **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
 
@@ -93,7 +93,7 @@
 - ✅ **T199 备份恢复演练与性能基线 (OPT-26)**：完成 PostgreSQL 灾备演练（RTO 2.4s、RPO 0）；完成 100 并发 k6 压力基线实测（P95 66.75ms、0 错误）。
 - ✅ **T198 生产部署工件 (OPT-25)**：生产容器编排 `docker-compose.prod.yml` 与非 root 镜像。
 - ✅ **T197 e2e 与 UI 自动化测试 (OPT-24)**：Playwright 6 条核心流程（5 个 spec）与后端 e2e 接入 CI。
-- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，810 测例全绿。
+- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，823 测例全绿。
 
 ---
 
@@ -103,20 +103,20 @@
 
 | 项目 | 非测试代码行数 | 统计命令 |
 |------|----------------|----------|
-| 后端（NestJS） | 15125 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
-| 网页后台（Vue3） | 20774 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
-| 小程序（uni-app） | 6496 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
+| 后端（NestJS） | 15324 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
+| 网页后台（Vue3） | 20855 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
+| 小程序（uni-app） | 6558 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
 
 - **数据模型**：`grep -c '^model ' backend/prisma/schema.prisma` = **28**（与 docs/02 严格一致）
 - **OpenAPI 路由**：`backend/openapi.json` = **121** 条路由
 - **自动化测试**（实测：`npm test` 于 `backend/`、`frontend-admin/`、`miniprogram/` 分别执行后解析）：
-  - 后端 Vitest：**81** 个测试文件，**810** 个测例全绿
-  - 管理后台：**12** 个测试文件，**49** 个单元测试 + **6** 条 Playwright e2e 核心流程全绿
-  - 微信小程序：**108** 个测试用例全绿
-  - **总计测试用例**：**967** 个测试，100% 通过率
+  - 后端 Vitest：**81** 个测试文件，**823** 个测例全绿
+  - 管理后台：**12** 个测试文件，**51** 个单元测试 + **6** 条 Playwright e2e 核心流程全绿
+  - 微信小程序：**110** 个测试用例全绿
+  - **总计测试用例**：**984** 个测试，100% 通过率
 - **文档体系**：
-  - 核心文档与交接记录：**102** 份（CI 范围，docs/INDEX.md 100% 编目）
-  - 任务书：**77** 个任务书文件
+  - 核心文档与交接记录：**103** 份（CI 范围，docs/INDEX.md 100% 编目）
+  - 任务书：**78** 个任务书文件
 
 ---
 

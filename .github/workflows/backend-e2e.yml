@@ -54,7 +54,7 @@ jobs:
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       JWT_SECRET: test-jwt-secret
-      ENCRYPTION_KEY: test-encryption-key-32-bytes!!
+      ENCRYPTION_KEY: ci-test-encryption-key-32-bytes!
       NODE_ENV: test
       PORT: 3000
       API_BASE: http://127.0.0.1:3000/api

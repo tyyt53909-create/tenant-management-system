@@ -1,6 +1,12 @@
 export interface RedisCommandClient {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string, expiryMode: 'PX', ttlMs: number): Promise<unknown>;
+  set(
+    key: string,
+    value: string,
+    expiryMode: 'PX',
+    ttlMs: number,
+    condition?: 'NX',
+  ): Promise<unknown>;
   del(key: string): Promise<number>;
   incr(key: string): Promise<number>;
   pexpire(key: string, ttlMs: number): Promise<number>;

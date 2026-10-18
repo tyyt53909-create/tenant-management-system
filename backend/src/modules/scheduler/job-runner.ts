@@ -31,20 +31,30 @@ export class MemoryJobLock implements JobLock {
 /**
  * PostgreSQL 事务级咨询锁。锁跟随事务连接，任务结束或回滚时自动释放。
  * 任务本体仍走连接池里的其他连接，因此连接池至少要有 2 个连接。
+ *
+ * 事务 timeout 必须显著大于任务时长：Prisma 交互式事务默认 5s 超时，
+ * 到点会回滚并立刻释放咨询锁，而任务本体还在背景跑 —— 「同一任务同时只有一个实例在跑」
+ * 就只在头 5 秒成立，且这次运行还会被记成 FAILED（T208）。
  */
+const LOCK_TRANSACTION_TIMEOUT_MS = 30 * 60 * 1000;
+const LOCK_TRANSACTION_MAX_WAIT_MS = 10 * 1000;
+
 export class PrismaAdvisoryJobLock implements JobLock {
   constructor(private readonly prisma: PrismaService) {}
 
   async tryWithLock<T>(jobName: string, job: () => Promise<T>): Promise<T | typeof JOB_SKIPPED> {
     let acquired = false;
-    const result = await this.prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        const rows = await tx.$queryRaw<Array<{ locked: boolean }>>`
         SELECT pg_try_advisory_xact_lock(hashtext('tenant-scheduler'), hashtext(${jobName})) AS locked
       `;
-      acquired = rows[0]?.locked === true;
-      if (!acquired) return undefined as T;
-      return job();
-    });
+        acquired = rows[0]?.locked === true;
+        if (!acquired) return undefined as T;
+        return job();
+      },
+      { timeout: LOCK_TRANSACTION_TIMEOUT_MS, maxWait: LOCK_TRANSACTION_MAX_WAIT_MS },
+    );
     return acquired ? result : JOB_SKIPPED;
   }
 }
