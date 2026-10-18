@@ -254,10 +254,11 @@ model Building {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rooms       Room[]
-  publicAreas PublicArea[]
-  contracts   Contract[]
-  meters      Meter[]
+  rooms              Room[]
+  publicAreas        PublicArea[]
+  contracts          Contract[]
+  meters             Meter[]
+  publicUtilityBills PublicUtilityBill[]
 
   @@index([isActive])
   @@map("buildings")
@@ -290,6 +291,7 @@ model Room {
   maintenanceRequests MaintenanceRequest[]
   checkoutRecords     CheckoutRecord[]
   photos              RoomPhoto[]
+  utilityAllocations  PublicUtilityAllocation[]
 
   @@unique([buildingId, floor, roomNumber])
   @@index([buildingId, status])
@@ -358,7 +360,7 @@ model User {
 
   role UserRole
 
-  invitedBy       String?
+  invitedBy String?
 
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
@@ -372,8 +374,8 @@ model User {
   deviceTokens        DeviceToken[]
   capabilityOverrides UserCapabilityOverride[]
 
-  createdInviteCodes  InviteCode[]             @relation("CreatedInviteCodes")
-  usedInviteCode      InviteCode?              @relation("UsedInviteCode")
+  createdInviteCodes InviteCode[] @relation("CreatedInviteCodes")
+  usedInviteCode     InviteCode?  @relation("UsedInviteCode")
 
   @@index([email])
   @@index([phone])
@@ -414,9 +416,10 @@ model Contract {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bills           Bill[]
-  attachments     ContractAttachment[]
-  checkoutRecords CheckoutRecord[]
+  bills                   Bill[]
+  attachments             ContractAttachment[]
+  checkoutRecords         CheckoutRecord[]
+  utilityAllocations      PublicUtilityAllocation[]
 
   @@index([buildingId, status])
   @@index([tenantId, status])
@@ -592,7 +595,8 @@ model Meter {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  readings MeterReading[]
+  readings           MeterReading[]
+  publicUtilityBills PublicUtilityBill[]
 
   @@unique([meterNumber])
   @@index([buildingId, meterType])
@@ -824,7 +828,7 @@ model TenantRegistration {
   tenantId String @unique
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  idType   IdType
+  idType       IdType
   /// AES-256-GCM 密文，格式 v1:<iv>:<tag>:<data>。查重用 idNumberHash，不存明文。
   idNumber     String
   idNumberHash String? @unique
@@ -912,25 +916,84 @@ model UserCapabilityOverride {
 
 // 26. InviteCode（邀请码记录）
 model InviteCode {
-  id        String           @id @default(cuid())
-  code      String           @unique
-  role      UserRole         @default(TENANT)
-  status    InviteCodeStatus @default(UNUSED)
-  notes     String?
+  id     String           @id @default(cuid())
+  code   String           @unique
+  role   UserRole         @default(TENANT)
+  status InviteCodeStatus @default(UNUSED)
+  notes  String?
 
   creatorId String?
-  creator   User?            @relation("CreatedInviteCodes", fields: [creatorId], references: [id], onDelete: SetNull)
+  creator   User?   @relation("CreatedInviteCodes", fields: [creatorId], references: [id], onDelete: SetNull)
 
-  usedById  String?          @unique
-  usedBy    User?            @relation("UsedInviteCode", fields: [usedById], references: [id], onDelete: SetNull)
-  usedAt    DateTime?
+  usedById String?   @unique
+  usedBy   User?     @relation("UsedInviteCode", fields: [usedById], references: [id], onDelete: SetNull)
+  usedAt   DateTime?
 
   expiresAt DateTime
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([code])
   @@index([status])
   @@index([creatorId])
   @@map("invite_codes")
+}
+
+// 28. PublicUtilityBill（公共水电费用单据）与 PublicUtilityAllocation（分摊明细）
+// docs/09 §7：第一版公共区域水电只记运营成本；分摊规则放第二阶段（T217）。
+// 分摊基数取「计费月内生效中的合同所覆盖房间」的建筑面积占比，总额按分向下取整后
+// 把余额补给金额最大的一笔，保证分摊合计与单据总额完全相等。
+model PublicUtilityBill {
+  id         String   @id @default(cuid())
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id])
+
+  meterType MeterType
+  period    String
+
+  /// 公共表读数链路（可选）：从哪块公共表、哪两笔读数算出用量
+  meterId        String?
+  meter          Meter?   @relation(fields: [meterId], references: [id])
+  openingReading Decimal? @db.Decimal(10, 2)
+  closingReading Decimal? @db.Decimal(10, 2)
+  usage          Decimal? @db.Decimal(10, 2)
+
+  unitPrice   Int
+  /// 总额（分）。按用量自动算出，或在直接录入总额时使用
+  totalAmount Int
+
+  notes String? @db.Text
+
+  createdById String
+  /// 补缴账单生成时间；null 表示尚未向租客开单
+  billsGeneratedAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  allocations PublicUtilityAllocation[]
+
+  @@unique([buildingId, meterType, period])
+  @@index([period])
+  @@map("public_utility_bills")
+}
+
+model PublicUtilityAllocation {
+  id     String            @id @default(cuid())
+  billId String
+  bill   PublicUtilityBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  roomId     String
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  /// 分摊基数（平方米 ×100 取整），避免浮点比较
+  baseAreaHundredths Int
+  amount             Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([billId, contractId])
+  @@index([contractId])
+  @@map("public_utility_allocations")
 }

@@ -2068,6 +2068,272 @@
         ]
       }
     },
+    "/api/public-utilities": {
+      "get": {
+        "operationId": "PublicUtilitiesController_findAll",
+        "parameters": [
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "PublicUtilities"
+        ],
+        "security": []
+      },
+      "post": {
+        "operationId": "PublicUtilitiesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePublicUtilityBillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "PublicUtilities"
+        ],
+        "security": []
+      }
+    },
+    "/api/public-utilities/{id}": {
+      "get": {
+        "operationId": "PublicUtilitiesController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "PublicUtilities"
+        ],
+        "security": []
+      },
+      "delete": {
+        "operationId": "PublicUtilitiesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "PublicUtilities"
+        ],
+        "security": []
+      }
+    },
+    "/api/public-utilities/preview": {
+      "post": {
+        "operationId": "PublicUtilitiesController_preview",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePublicUtilityBillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "PublicUtilities"
+        ],
+        "security": []
+      }
+    },
+    "/api/public-utilities/{id}/generate-bills": {
+      "post": {
+        "operationId": "PublicUtilitiesController_generateBills",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "PublicUtilities"
+        ],
+        "security": []
+      }
+    },
     "/api/buildings": {
       "post": {
         "operationId": "BuildingsController_create",
@@ -7164,6 +7430,53 @@
             "type": "boolean"
           }
         }
+      },
+      "CreatePublicUtilityBillDto": {
+        "type": "object",
+        "properties": {
+          "buildingId": {
+            "type": "string",
+            "description": "不传时用 DEFAULT_BUILDING_ID",
+            "maxLength": 40
+          },
+          "meterType": {
+            "description": "ELECTRICITY / WATER / GAS",
+            "enum": [
+              "ELECTRICITY",
+              "WATER",
+              "GAS"
+            ],
+            "pattern": "^(ELECTRICITY|WATER|GAS)$",
+            "type": "string"
+          },
+          "period": {
+            "type": "string",
+            "description": "计费月 YYYY-MM",
+            "pattern": "^\\d{4}-\\d{2}$"
+          },
+          "meterId": {
+            "type": "string",
+            "description": "公共表 ID（可选）：给出时按该表当月用量 × 单价自动算总额"
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "单价（分/度或吨），不传时取表上的单价",
+            "minimum": 0
+          },
+          "totalAmount": {
+            "type": "number",
+            "description": "直接录入总额（分）；与 meterId 二选一",
+            "minimum": 1
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "meterType",
+          "period"
+        ]
       },
       "CreateBuildingDto": {
         "type": "object",

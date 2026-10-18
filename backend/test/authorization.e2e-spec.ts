@@ -23,6 +23,8 @@ import { ContractsService } from '../src/modules/contracts/contracts.service.js'
 import { MaintenanceController } from '../src/modules/maintenance/maintenance.controller.js';
 import { MaintenanceService } from '../src/modules/maintenance/maintenance.service.js';
 import { PrepayController } from '../src/modules/prepay/prepay.controller.js';
+import { PublicUtilitiesController } from '../src/modules/public-utilities/public-utilities.controller.js';
+import { PublicUtilitiesService } from '../src/modules/public-utilities/public-utilities.service.js';
 import { PrepayService } from '../src/modules/prepay/prepay.service.js';
 import { MetersController } from '../src/modules/meters/meters.controller.js';
 import { MetersService } from '../src/modules/meters/meters.service.js';
@@ -81,6 +83,14 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       update: vi.fn(),
       remove: vi.fn(),
     };
+    const publicUtilitiesService = {
+      findAll: vi.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockResolvedValue({ id: 'pu-1' }),
+      preview: vi.fn().mockResolvedValue({ allocations: [] }),
+      create: vi.fn().mockResolvedValue({ id: 'pu-1' }),
+      generateBills: vi.fn().mockResolvedValue({ created: 0 }),
+      remove: vi.fn().mockResolvedValue({ message: '单据已删除' }),
+    };
     billsService = {
       findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
       findByTenant: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
@@ -116,6 +126,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
     const moduleRef = await Test.createTestingModule({
       controllers: [
+        PublicUtilitiesController,
         TenantsController,
         BillsController,
         ContractsController,
@@ -131,6 +142,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'test' }) },
         { provide: TenantsService, useValue: tenantsService },
+        { provide: PublicUtilitiesService, useValue: publicUtilitiesService },
         { provide: BillsService, useValue: billsService },
         { provide: CheckoutService, useValue: checkoutService },
         {
@@ -391,6 +403,33 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
       expect(res.status).toBe(200); // 服务在本 e2e 里被 mock；重点是下面这行的范围参数
       expect(app.get(BillsService).findByTenant).toHaveBeenCalledWith('', expect.anything());
+    });
+  });
+
+  describe('公共水电分摊（T217）', () => {
+    const routes: { method: 'get' | 'post'; path: string }[] = [
+      { method: 'get', path: '/public-utilities' },
+      { method: 'post', path: '/public-utilities/preview' },
+      { method: 'post', path: '/public-utilities' },
+      { method: 'post', path: '/public-utilities/pu-1/generate-bills' },
+    ];
+
+    it('未登录一律 401', async () => {
+      for (const { method, path } of routes) {
+        await request(app.getHttpServer())[method](path).expect(401);
+      }
+    });
+
+    it('CLEANER 与 TENANT 一律 403（分摊是管理操作）', async () => {
+      for (const role of ['CLEANER', 'TENANT']) {
+        for (const { method, path } of routes) {
+          await as(request(app.getHttpServer())[method](path), role).expect(403);
+        }
+      }
+    });
+
+    it('ADMIN 列表 → 200', async () => {
+      await as(request(app.getHttpServer()).get('/public-utilities'), 'ADMIN').expect(200);
     });
   });
 
