@@ -246,6 +246,7 @@
 | [T200](../tasks/T200-仓库卫生与分支治理.md) | 仓库卫生与分支治理（OPT-27：清理 29 个旧分支/worktree、8 份历史文档归档至 archive、去 tsbuildinfo、重构 README） | 普通 | completed | 2026-10-17 |
 | [T201](../tasks/T201-文档与代码一致性收口.md) | 文档与代码一致性收口（OPT-28：generate-status.mjs 脚本、表数/路由数门禁、元信息补齐、死链清零） | 普通 | completed | 2026-10-17 |
 | [T202](../tasks/T202-计划收口与度量看板实测化.md) | 计划收口与度量看板实测化（修复 tsc/build 阻断、openapi.json 漂移、ENCRYPTION_KEY 运行时缺陷；看板改实测；新增 .env.example 一致性门禁） | 强 | completed | 2026-10-17 |
+| [T216](../tasks/T216-旧资料导入.md) | 旧资料批量导入（docs/00 §2.2：租客/合同/账单 CSV，模板 + 预检逐行错误 + 整批原子写入 + 判重跳过 + IMPORT 审计） | 强 | in_progress | 2026-10-18 |
 | [T212](../tasks/T212-计划收口与看板校准.md) | 计划收口与看板校准（基准改报 main/develop、任务号动态推导、验收缺口实扫；OPT-08 三条收口；docs/14 文檔二草案） | 强 | completed | 2026-10-18 |
 | [T211](../tasks/T211-生产可重现性与数据库约束.md) | 生产可重现性与数据库约束（`.env.prod.example` + docs/12 §7.5；`contracts` 同房源未结束合同的部分唯一索引 + 前置重复检查） | 强 | completed | 2026-10-18 |
 | [T210](../tasks/T210-审查剩余项收口.md) | 审查剩余项收口（EXIF 三格式、账单列表筛选、日期 400、isActive 布尔、cron 段式、电表模拟基准、租客范围、越权矩阵） | 强 | completed | 2026-10-18 |

@@ -517,6 +517,60 @@ export interface paths {
         patch: operations["TenantsController_update"];
         trace?: never;
     };
+    "/api/imports/{entity}/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载模板（UTF-8 BOM，Excel 直接打开不乱码） */
+        get: operations["ImportsController_template"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/imports/{entity}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预检：返回逐行错误与跳过数，不写库 */
+        post: operations["ImportsController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/imports/{entity}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 写入。默认 dryRun=true，只有显式传 dryRun=false 才真正落库——
+         *     避免误调用一次 commit 就把数据写进去。
+         */
+        post: operations["ImportsController_commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/buildings": {
         parameters: {
             query?: never;
@@ -3212,6 +3266,110 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    ImportsController_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    ImportsController_preview: {
+        parameters: {
+            query?: {
+                /** @description 楼栋 ID；不传时用 DEFAULT_BUILDING_ID */
+                buildingId?: string;
+            };
+            header?: never;
+            path: {
+                entity: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    ImportsController_commit: {
+        parameters: {
+            query?: {
+                /** @description 楼栋 ID；不传时用 DEFAULT_BUILDING_ID */
+                buildingId?: string;
+                /**
+                 * @description true = 只预检不写入（默认）；false = 真正写入。
+                 *     用显式开关而不是「预检接口 + 写入接口」两个上传来避免文件被上传两次。
+                 */
+                dryRun?: boolean;
+            };
+            header?: never;
+            path: {
+                entity: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description 错误 */

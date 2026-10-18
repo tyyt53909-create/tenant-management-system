@@ -22,6 +22,8 @@ import { ContractsController } from '../src/modules/contracts/contracts.controll
 import { ContractsService } from '../src/modules/contracts/contracts.service.js';
 import { MaintenanceController } from '../src/modules/maintenance/maintenance.controller.js';
 import { MaintenanceService } from '../src/modules/maintenance/maintenance.service.js';
+import { ImportsController } from '../src/modules/imports/imports.controller.js';
+import { ImportsService } from '../src/modules/imports/imports.service.js';
 import { PrepayController } from '../src/modules/prepay/prepay.controller.js';
 import { PrepayService } from '../src/modules/prepay/prepay.service.js';
 import { MetersController } from '../src/modules/meters/meters.controller.js';
@@ -81,6 +83,11 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       update: vi.fn(),
       remove: vi.fn(),
     };
+    const importsService = {
+      template: vi.fn().mockReturnValue('name,phone\r\n张三,13800138000\r\n'),
+      preview: vi.fn().mockResolvedValue({ entity: 'tenants', totalRows: 0, skipped: 0, imported: 0, errors: [], dryRun: true }),
+      commit: vi.fn().mockResolvedValue({ entity: 'tenants', totalRows: 0, skipped: 0, imported: 0, errors: [], dryRun: true }),
+    };
     billsService = {
       findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
       findByTenant: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
@@ -117,6 +124,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [
         TenantsController,
+        ImportsController,
         BillsController,
         ContractsController,
         MaintenanceController,
@@ -131,6 +139,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'test' }) },
         { provide: TenantsService, useValue: tenantsService },
+        { provide: ImportsService, useValue: importsService },
         { provide: BillsService, useValue: billsService },
         { provide: CheckoutService, useValue: checkoutService },
         {
@@ -391,6 +400,37 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
       expect(res.status).toBe(200); // 服务在本 e2e 里被 mock；重点是下面这行的范围参数
       expect(app.get(BillsService).findByTenant).toHaveBeenCalledWith('', expect.anything());
+    });
+  });
+
+  describe('旧资料导入（T216）', () => {
+    const routes: { method: 'get' | 'post'; path: string }[] = [
+      { method: 'get', path: '/imports/tenants/template' },
+      { method: 'post', path: '/imports/tenants/preview' },
+      { method: 'post', path: '/imports/tenants/commit' },
+    ];
+
+    it('未登录一律 401', async () => {
+      for (const { method, path } of routes) {
+        await request(app.getHttpServer())[method](path).expect(401);
+      }
+    });
+
+    it('CLEANER 一律 403', async () => {
+      for (const { method, path } of routes) {
+        await as(request(app.getHttpServer())[method](path), 'CLEANER').expect(403);
+      }
+    });
+
+    it('TENANT 一律 403（导入是管理操作）', async () => {
+      for (const { method, path } of routes) {
+        await as(request(app.getHttpServer())[method](path), 'TENANT').expect(403);
+      }
+    });
+
+    it('ADMIN 下载模板 → 200 text/csv', async () => {
+      const res = await as(request(app.getHttpServer()).get('/imports/tenants/template'), 'ADMIN').expect(200);
+      expect(res.headers['content-type']).toContain('text/csv');
     });
   });
 
