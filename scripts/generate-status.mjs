@@ -16,13 +16,29 @@ const statusPath = path.join(repoRoot, 'STATUS.md');
 
 console.log('📊 正在统计代码库指标与实测数据...');
 
-// 1. 获取 Git 最新提交与分支信息
-let gitBranch = 'main';
-let gitCommit = 'unknown';
-try {
-  gitBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: repoRoot, encoding: 'utf8' }).trim();
-  gitCommit = execSync('git rev-parse --short HEAD', { cwd: repoRoot, encoding: 'utf8' }).trim();
-} catch {}
+// 1. 基准：报告「发布分支 main」与「集成分支 develop」的状态，而不是「生成时你刚好在哪个分支」。
+//    在 feature 分支上生成看板曾把基准写成未合并的分支、任务号写成旧值（T212 修正）。
+function revParse(ref) {
+  try {
+    return execSync(`git rev-parse --short ${ref}`, { cwd: repoRoot, encoding: 'utf8' }).trim();
+  } catch {
+    return null;
+  }
+}
+const headBranch = (() => {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', { cwd: repoRoot, encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+})();
+const mainCommit = revParse('origin/main') ?? revParse('main') ?? 'unknown';
+const developCommit = revParse('origin/develop') ?? revParse('develop') ?? 'unknown';
+// 在别的分支上生成时，明确提示看板数字未必等于已合并状态
+const headNote =
+  headBranch === 'main' || headBranch === 'develop'
+    ? ''
+    : `；生成时 HEAD 在 \`${headBranch}\`（数字含未合并提交）`;
 
 // 2. 统计数据模型
 const schemaPath = path.join(repoRoot, 'backend/prisma/schema.prisma');
@@ -83,7 +99,37 @@ function getTaskCount() {
     return 56;
   }
 }
-const taskCount = getTaskCount();
+/** 任务书数量与最新任务号：看板的「活跃任务/已完成任务」不再手写。 */
+function readTaskFiles() {
+  const dir = path.join(repoRoot, 'tasks');
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^T\d+.*\.md$/.test(f)) : [];
+  const numbers = files.map((f) => Number(f.match(/^T(\d+)/)[1])).filter((n) => Number.isFinite(n));
+  return { count: files.length, latest: numbers.length ? Math.max(...numbers) : 0 };
+}
+const taskFiles = readTaskFiles();
+const taskCount = taskFiles.count;
+const latestTaskNumber = taskFiles.latest;
+
+/** 从 docs/13 实扫「未勾选的验收标准」：缺口数字不再手写，也就不会和文档漂移。 */
+function readPlanGaps() {
+  const docPath = path.join(repoRoot, 'docs/13-架构与现有代码优化计划.md');
+  if (!fs.existsSync(docPath)) return { total: 0, bySection: [] };
+  const lines = fs.readFileSync(docPath, 'utf8').split('\n');
+  let section = '';
+  const counts = new Map();
+  let total = 0;
+  for (const line of lines) {
+    const heading = line.match(/^###\s+(OPT-\d+)/);
+    if (heading) section = heading[1];
+    if (/^\s*-\s*\[ \]/.test(line)) {
+      total += 1;
+      const key = section || '未标注';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  return { total, bySection: [...counts.entries()].map(([k, v]) => `${k}(${v})`) };
+}
+const planGaps = readPlanGaps();
 
 // 6. 测试统计（实测：直接执行三端测试套件并解析真实结果，禁止硬编码）
 const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
@@ -198,7 +244,7 @@ const content = `# 项目状态跟踪
 
 > 最后更新: ${dateStr}
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: \`${gitBranch}\` 分支当前提交 \`${gitCommit}\`（T001~T204 全量完成）
+> 进度基准: 发布分支 \`main\` \`${mainCommit}\`、集成分支 \`develop\` \`${developCommit}\`（T001~T${latestTaskNumber} 全量完成${headNote}）
 > 整体进度: **${overallProgress}%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
 > 质量状态: 后端 (${backendTestFiles} 文件 ${backendTests} 测例)、管理后台 (${frontendTestFiles} 文件 ${frontendTests} 测例 + Playwright ${playwrightStats.tests} 流程)、小程序 (${miniprogramTests} 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
 
@@ -210,13 +256,13 @@ const content = `# 项目状态跟踪
 |------|-----|------|
 | **当前阶段** | 阶段0~阶段4 全量收官；架构优化计划 M1~M4 全部完成 | 房态状态机、滞纳金核销、水电表MQTT模拟器、预付闭环、OTP/限流加固、生产编排与灾备演练全量交付 |
 | **整体进度** | **${overallProgress}%** | 唯一事实来源：五阶段进度严格加权均值 100% |
-| **活跃任务** | T204 | 管理后台 Element Plus 按需引入（OPT-19#3 达标） |
-| **已完成任务** | T001~T173 全量 + T174~T204 | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 全部 28 项优化 |
+| **活跃任务** | T${latestTaskNumber} | 见 \`tasks/T${latestTaskNumber}-*.md\`（由 scripts/generate-status.mjs 从 tasks/ 推导） |
+| **已完成任务** | T001~T${latestTaskNumber} | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 优化（任务书 ${taskCount} 份） |
 | **阻塞问题** | 0 | 无阻塞 |
 | **数据模型** | ${modelCount} 张实体表 | Prisma schema 实际 model 严密对齐 |
 | **OpenAPI 路由** | ${routeCount} 条路由 | 全自动化生成规范，类型 100% 导出前端 |
 | **自动化测试** | ${totalTests} 测例全绿 | 后端 ${backendTests} + 小程序 ${miniprogramTests} + 前端 ${frontendTests}，100% 通过率 |
-| **验收缺口** | 1 项 | OPT-02#4（\`docs/06\` 为 human 文档，需人工补 §10 节号指引）；OPT-19#3 已于 T204 达标（首屏 JS −88%）。详见 \`docs/13\` 与 T204 交接记录 |
+| **验收缺口** | ${planGaps.total} 项 | ${planGaps.total === 0 ? '计划内验收标准全部勾选' : `${planGaps.bySection.join('、')} 未达标/未验证；逐条原因见 \`docs/13\`（本行由脚本实扫 docs/13，不手写数字）`} |
 | **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
 
 ---
