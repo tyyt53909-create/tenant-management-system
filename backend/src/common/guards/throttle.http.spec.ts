@@ -28,7 +28,12 @@ class ThrottleProbeController {
   }
 }
 
-const LIMIT_KEYS = ['THROTTLE_GLOBAL_LIMIT', 'THROTTLE_AUTH_LIMIT', 'THROTTLE_OTP_LIMIT'] as const;
+const LIMIT_KEYS = [
+  'THROTTLE_GLOBAL_LIMIT',
+  'THROTTLE_AUTH_LIMIT',
+  'THROTTLE_OTP_LIMIT',
+  'THROTTLE_OTP_IP_LIMIT',
+] as const;
 
 describe('限流 HTTP', () => {
   let app: INestApplication;
@@ -41,6 +46,7 @@ describe('限流 HTTP', () => {
     process.env.THROTTLE_GLOBAL_LIMIT = '3';
     process.env.THROTTLE_AUTH_LIMIT = '10';
     process.env.THROTTLE_OTP_LIMIT = '5';
+    process.env.THROTTLE_OTP_IP_LIMIT = '3';
 
     const moduleRef = await Test.createTestingModule({
       imports: [ThrottlerModule.forRoot(createThrottleModuleOptions())],
@@ -82,8 +88,13 @@ describe('限流 HTTP', () => {
   });
 
   it('同一邮箱第 6 次发送验证码返回 429，另一个邮箱不受影响', async () => {
+    // 每次换一个来源 IP，只考验「按邮箱」这一层（每 IP 上限另有测试）
+    let ipSeq = 0;
     const send = (email: string) =>
-      request(app.getHttpServer()).post('/api/auth/send-email-code').send({ email });
+      request(app.getHttpServer())
+        .post('/api/auth/send-email-code')
+        .set('X-Forwarded-For', `203.0.113.${100 + ipSeq++}`)
+        .send({ email });
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const res = await send('tenant@example.com');
@@ -92,10 +103,35 @@ describe('限流 HTTP', () => {
 
     const blocked = await send('tenant@example.com');
     expect(blocked.status).toBe(429);
-    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+    // 具名限流器的等待时间带后缀（@nestjs/throttler 的 getThrottlerSuffix），
+    // 邮箱维度被挡时头是 Retry-After-otpEmail，IP 维度被挡时才是 Retry-After。
+    expect(Number(blocked.headers['retry-after-otpemail'])).toBeGreaterThan(0);
 
     const other = await send('other@example.com');
     expect(other.status).not.toBe(429);
+  });
+
+  it('发送验证码按 IP 限流：换邮箱也不能绕（回归 T206）', async () => {
+    const send = (email: string, forwardedFor: string) =>
+      request(app.getHttpServer())
+        .post('/api/auth/send-email-code')
+        .set('X-Forwarded-For', forwardedFor)
+        .send({ email });
+
+    const ip = '198.51.100.77';
+    for (let i = 0; i < 3; i += 1) {
+      const res = await send(`victim${i}@example.com`, ip);
+      expect(res.status).not.toBe(429);
+    }
+
+    // 第 4 个不同的收件邮箱：邮箱维度没超，但同一 IP 已到上限
+    const blocked = await send('victim3@example.com', ip);
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+
+    // 换一个 IP 仍然可以发（限流是按 IP 计数，不是全局锁死）
+    const otherIp = await send('victim3@example.com', '198.51.100.78');
+    expect(otherIp.status).not.toBe(429);
   });
 
   it('普通接口按 IP 适用全局限流，代理后的不同来源分开计数', async () => {
@@ -121,9 +157,17 @@ describe('AuthController 限流装饰器', () => {
     }
   });
 
-  it('发送验证码按邮箱跟踪', () => {
+  it('发送验证码：邮箱计数走命名限流器，且没有顶掉 default 的 IP tracker', () => {
     const handlers = AuthController.prototype as unknown as Record<string, object>;
-    const tracker = Reflect.getMetadata('THROTTLER:TRACKERdefault', handlers.sendEmailCode);
-    expect(typeof tracker).toBe('function');
+    const sendEmailCode = handlers.sendEmailCode;
+
+    // 邮箱维度：命名限流器 otpEmail 被收紧（tracker 由模块配置提供）
+    expect(typeof Reflect.getMetadata('THROTTLER:LIMITotpEmail', sendEmailCode)).toBe('function');
+    expect(typeof Reflect.getMetadata('THROTTLER:TTLotpEmail', sendEmailCode)).toBe('function');
+
+    // IP 维度：default 也被收紧，但**不能**挂 tracker —— 一旦挂了，guard 就会用它
+    // 取代 commonOptions 的 IP tracker，按 IP 限流随之失效（T206 修的正是这一点）
+    expect(typeof Reflect.getMetadata('THROTTLER:LIMITdefault', sendEmailCode)).toBe('function');
+    expect(Reflect.getMetadata('THROTTLER:TRACKERdefault', sendEmailCode)).toBeUndefined();
   });
 });

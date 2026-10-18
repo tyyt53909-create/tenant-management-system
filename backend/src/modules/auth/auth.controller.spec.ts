@@ -54,6 +54,7 @@ describe('AuthController', () => {
           provide: GoogleAuthService,
           useValue: {
             getClientId: vi.fn().mockReturnValue('test-google-client-id'),
+            isMockEnabled: vi.fn().mockReturnValue(false),
             verifyIdToken: vi.fn(),
           },
         },
@@ -620,7 +621,10 @@ describe('AuthController', () => {
 
   describe('googleAuth & google/client-id', () => {
     it('应该能正常获取 Google Client ID', () => {
-      expect(controller.getGoogleClientId()).toEqual({ clientId: 'test-google-client-id' });
+      expect(controller.getGoogleClientId()).toEqual({
+        clientId: 'test-google-client-id',
+        mockEnabled: false,
+      });
     });
 
     it('已有用户使用 Google 登录：匹配邮箱并自动关联 googleId', async () => {

@@ -21,6 +21,8 @@ export class FederatedAuthService {
   getGoogleClientId() {
     return {
       clientId: this.googleAuthService.getClientId(),
+      // 前端据此决定是否显示「模拟 Google 登录」开发者通道（T206：后端不再仅凭 NODE_ENV 放行 mock）
+      mockEnabled: this.googleAuthService.isMockEnabled(),
     };
   }
 

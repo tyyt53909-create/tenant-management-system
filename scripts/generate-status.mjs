@@ -110,10 +110,12 @@ function runSuite(name, cwd, parse) {
     output = String(error.stdout ?? '');
   }
   const stats = parse(output);
-  if (exitedWithError || stats.failed > 0) {
-    console.error(`❌ ${name}：${stats.failed} 个失败测例`);
+  // 一个都没解析到（例如测试命令本身跑不起来）不能当成「0 例全绿」，必须失败
+  const broken = exitedWithError || stats.tests === 0;
+  if (broken || stats.failed > 0) {
+    console.error(`❌ ${name}：${broken ? '未能解析到任何测例（测试命令可能失败）' : `${stats.failed} 个失败测例`}`);
   }
-  return stats;
+  return { ...stats, broken };
 }
 
 function parseVitestSuite(output) {
@@ -171,9 +173,12 @@ const frontendTests = frontendStats.tests;
 const miniprogramTests = miniprogramStats.tests;
 const totalTests = backendTests + frontendTests + miniprogramTests;
 const totalFailedTests = backendStats.failed + frontendStats.failed + miniprogramStats.failed;
+const brokenSuites = [backendStats, frontendStats, miniprogramStats].filter((s) => s.broken).length;
 
-if (totalFailedTests > 0) {
-  console.error(`❌ 存在 ${totalFailedTests} 个失败测例，拒绝生成进度看板（先修复测试再生成）。`);
+if (totalFailedTests > 0 || brokenSuites > 0) {
+  console.error(
+    `❌ ${brokenSuites > 0 ? `${brokenSuites} 个套件未能正常解析` : `存在 ${totalFailedTests} 个失败测例`}，拒绝生成进度看板（先修复测试再生成）。`,
+  );
   process.exit(1);
 }
 

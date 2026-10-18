@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -25,17 +25,46 @@ export class GoogleAuthService {
     return this.clientId || '';
   }
 
+  /**
+   * 模拟通道是否可用（T206）。
+   *
+   * 原先只以 `NODE_ENV !== 'production'` 把关：部署漏设 NODE_ENV（staging/typo/未设）且没配
+   * GOOGLE_CLIENT_ID 时，`POST /auth/google {"idToken":"mock-google-token:admin@example.com"}`
+   * 就能冒充既有账号。现在改成与 OTP 万能码同级的**显式开关**：必须 GOOGLE_AUTH_MOCK=true，
+   * 且 NODE_ENV 不是 production。
+   */
+  isMockEnabled(): boolean {
+    return (
+      this.configService.get<string>('GOOGLE_AUTH_MOCK') === 'true' &&
+      this.configService.get<string>('NODE_ENV') !== 'production'
+    );
+  }
+
   async verifyIdToken(idToken: string): Promise<GooglePayload> {
     if (!idToken || typeof idToken !== 'string') {
       throw new BadRequestException('无效的 Google idToken');
     }
 
+    const isMockToken = idToken.startsWith('mock-google-token:');
+    if (isMockToken && !this.isMockEnabled()) {
+      throw new UnauthorizedException(
+        '模拟 Google 登录通道未启用（需 GOOGLE_AUTH_MOCK=true 且 NODE_ENV 非 production）',
+      );
+    }
+
     // 开发与测试环境 Mock Token 支持（格式: mock-google-token:email[:name[:googleId]]）
     if (
-      this.configService.get<string>('NODE_ENV') !== 'production' &&
-      (idToken.startsWith('mock-google-token:') || !this.clientId || this.clientId === 'your-google-client-id-here')
+      this.isMockEnabled() &&
+      (isMockToken || !this.clientId || this.clientId === 'your-google-client-id-here')
     ) {
       return this.verifyMockToken(idToken);
+    }
+
+    // 未配置 Client ID 且模拟通道关闭：明确报错，不要静默按 mock 处理
+    if (!this.clientId || this.clientId === 'your-google-client-id-here') {
+      throw new ServiceUnavailableException(
+        '服务端未配置 GOOGLE_CLIENT_ID，Google 登录不可用（开发环境可设 GOOGLE_AUTH_MOCK=true 启用模拟通道）',
+      );
     }
 
     try {

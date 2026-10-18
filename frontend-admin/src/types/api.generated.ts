@@ -669,11 +669,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 下载文件（T159 加归属校验）。
+         * 下载文件（T159 加归属校验；T206 修正 expiresIn 分支绕过校验的越权）。
          *
          *     原先仅要求登录，任何已登录用户拿到 key 即可下载任意文件；
          *     现在 ADMIN 可取任意文件，其他角色仅可取自己上传的，越权一律 404
          *     （不用 403，避免通过状态码差异探测 key 是否存在）。
+         *
+         *     注意：归属校验必须放在最前面 —— 签名 URL 分支（expiresIn）同样是一条读取路径，
+         *     之前它先 return，导致非 ADMIN 用户可以用 ?expiresIn= 拿到他人文件的预签名地址。
          */
         get: operations["FilesController_getFile"];
         put?: never;
