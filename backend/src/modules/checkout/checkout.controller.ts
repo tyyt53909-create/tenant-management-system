@@ -43,7 +43,7 @@ export class CheckoutController {
   findAll(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryCheckoutsDto) {
     const user = resolveAuthUser(userParam);
     if (user.role === 'TENANT') {
-      const tenantId = user.tenantId || user.userId || '';
+      const tenantId = user.tenantId ?? '';
       return this.checkoutService.findByTenant(tenantId, query);
     }
     return this.checkoutService.findAll(query);
@@ -56,7 +56,9 @@ export class CheckoutController {
   @RequireCapability('tenant.checkout.read')
   getVoucher(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
     const user = resolveAuthUser(userParam);
-    const tenantId = user.role === 'TENANT' ? user.tenantId : undefined;
+    // 租客角色一律传 tenantId（无租客档案时为空串）：服务端据此 fail-closed，
+    // 不能传 undefined —— 那会跳过归属校验（T209）
+    const tenantId = user.role === 'TENANT' ? (user.tenantId ?? '') : undefined;
     return this.checkoutService.getVoucher(id, tenantId);
   }
 

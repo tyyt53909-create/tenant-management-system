@@ -22,6 +22,23 @@ with sync_playwright() as p:
     page.goto(BASE, wait_until="networkidle")
     page.wait_for_timeout(1200)
     shot(page, "desktop-landlord.png")
+
+    # 懒加载图片要滚到位置才会发起请求；先整页走一遍再断言，
+    # 否则未加载的图会被 !complete 误判成破图。走完再拍整页，滚动揭示的内容才是可见的。
+    # 每个图最多等 3 秒：滚回顶部后视野外的懒图不会再触发 load，无上限等会永久挂住。
+    page.evaluate("""async () => {
+      const step = window.innerHeight * 0.8;
+      for (let y = 0; y < document.body.scrollHeight; y += step) {
+        window.scrollTo({ top: y, behavior: 'instant' });
+        await new Promise((r) => setTimeout(r, 130));
+      }
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      await Promise.all([...document.images].map((i) => i.complete ? null : new Promise((r) => {
+        i.onload = i.onerror = r;
+        setTimeout(r, 3000);
+      })));
+    }""")
+    page.wait_for_timeout(600)
     shot(page, "desktop-landlord-full.png", full=True)
 
     # 隐蔽的 a11y / 布局检查
@@ -35,7 +52,10 @@ with sync_playwright() as p:
       const vis = [...document.querySelectorAll('h1')].find(h => h.offsetParent !== null);
       r.visibleH1 = vis ? vis.textContent.replace(/\\s+/g,' ').trim() : null;
       r.hiddenCount = [...document.querySelectorAll('[data-p="tenant"]')].filter(e => e.offsetParent !== null).length;
-      r.imgsBroken = [...document.images].filter(i => !i.complete || i.naturalWidth === 0).map(i => i.src);
+      // 已加载完成却宽度为 0 才是真的坏图；尚未加载的（懒加载没滚到的）单独记为 pending，
+      // 不算失败——否则一张视野外的懒图就会让整轮校验变红。
+      r.imgsBroken = [...document.images].filter(i => i.complete && i.naturalWidth === 0).map(i => i.src);
+      r.imgsPending = [...document.images].filter(i => !i.complete).length;
       r.fontLoaded = document.fonts.check('700 16px Archivo');
       return r;
     }""")
@@ -52,8 +72,8 @@ with sync_playwright() as p:
         title: document.title,
         visibleH1: vis ? vis.textContent.replace(/\\s+/g,' ').trim() : null,
         landlordVisible: [...document.querySelectorAll('[data-p="landlord"]')].filter(e => e.offsetParent !== null).length,
-        stored: localStorage.getItem('tms-persona'),
-        accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+        stored: localStorage.getItem('qiju-persona'),
+        accent: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
       };
     }""")
     print("TENANT:", json.dumps(info2, ensure_ascii=False))

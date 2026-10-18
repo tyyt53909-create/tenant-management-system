@@ -257,6 +257,18 @@ describe('PrepayService', () => {
       });
     });
 
+    it('create：显式传 0 时保留 0（语义为不提醒，T207 修正 `|| 10000` 把 0 吞掉）', async () => {
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.prepayAccount.findUnique.mockResolvedValue(null);
+      prisma.prepayAccount.create.mockResolvedValue({ id: accountId });
+
+      await service.create({ tenantId: 'tenant-1', roomId: 'room-1', lowBalanceThreshold: 0 } as any);
+
+      expect(prisma.prepayAccount.create).toHaveBeenCalledWith({
+        data: { tenantId: 'tenant-1', roomId: 'room-1', lowBalanceThreshold: 0 },
+      });
+    });
+
     it('findAll：tenantId 过滤 + 分页 + 补充房间号', async () => {
       prisma.prepayAccount.findMany.mockResolvedValue([
         { id: accountId, roomId: 'room-1' },

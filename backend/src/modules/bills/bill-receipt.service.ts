@@ -52,7 +52,8 @@ export class BillReceiptService {
       throw new NotFoundException('账单不存在');
     }
 
-    if (tenantId && (!bill.contract || bill.contract.tenantId !== tenantId)) {
+    // tenantId === undefined 才代表「管理员视图」；空串是「租客但无档案」，必须走比对（T209）
+    if (tenantId !== undefined && (!bill.contract || bill.contract.tenantId !== tenantId)) {
       throw new NotFoundException('收据不存在');
     }
 

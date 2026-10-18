@@ -697,6 +697,26 @@ describe('BillsService', () => {
       });
     });
 
+    it('findAll：buildingId 与账期区间同样生效（T209：此前这三个参数被静默忽略）', async () => {
+      prisma.bill.findMany.mockResolvedValue([]);
+      prisma.bill.count.mockResolvedValue(0);
+
+      await service.findAll({
+        buildingId: 'b-1',
+        startDate: '2026-10-01',
+        endDate: '2026-10-31',
+      } as any);
+
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            contract: { room: { buildingId: 'b-1' } },
+            dueDate: { gte: new Date('2026-10-01'), lte: new Date('2026-10-31') },
+          },
+        }),
+      );
+    });
+
     it('findAll：status/billType/contractId 过滤 + 分页', async () => {
       prisma.bill.findMany.mockResolvedValue([]);
       prisma.bill.count.mockResolvedValue(0);

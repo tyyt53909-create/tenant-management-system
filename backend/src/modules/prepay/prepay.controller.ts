@@ -40,7 +40,7 @@ export class PrepayController {
   findMy(@CurrentUser() userParam: CurrentUserParam) {
     const user = resolveAuthUser(userParam);
     if (user.role === 'TENANT') {
-      const tenantId = user.tenantId || user.userId || '';
+      const tenantId = user.tenantId ?? '';
       return this.prepayService.findByTenant(tenantId);
     }
     return this.prepayService.findAll({});
@@ -66,7 +66,7 @@ export class PrepayController {
   findTransactions(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryPrepayTransactionsDto) {
     const user = resolveAuthUser(userParam);
     if (user.role === 'TENANT') {
-      const tenantId = user.tenantId || user.userId || '';
+      const tenantId = user.tenantId ?? '';
       return this.prepayService.findTransactionsByTenant(tenantId, query);
     }
     // 管理员查看所有交易

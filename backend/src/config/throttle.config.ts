@@ -5,7 +5,23 @@ export const THROTTLE_DEFAULTS = {
   global: { limit: 100, ttl: 60_000 },
   auth: { limit: 10, ttl: 60_000 },
   otp: { limit: 5, ttl: 60 * 60 * 1000 },
+  /** 发送验证码的每 IP 上限：按邮箱计数之外还要有一层，否则换一个邮箱就是一个新桶（可被寄信轰炸）。 */
+  otpIp: { limit: 30, ttl: 60 * 60 * 1000 },
 } as const;
+
+/**
+ * 按邮箱计数的命名限流器。
+ *
+ * @nestjs/throttler 每条路由对每个命名限流器只会用一个 tracker（guard 里是
+ * `routeOrClassGetTracker || namedThrottler.getTracker || commonOptions.getTracker`），
+ * 所以在路由上给 `default` 挂 getTracker 会**顶掉**按 IP 的全局限流。
+ * 故把邮箱计数放进独立的命名限流器：tracker 由模块配置提供，路由只收紧它的次数，
+ * `default` 的 IP tracker 保持不变。
+ */
+export const OTP_EMAIL_THROTTLER_NAME = 'otpEmail';
+
+/** 命名限流器的全局上限：足够宽松，使其只在实际使用它的路由上生效。 */
+const OTP_EMAIL_GLOBAL_LIMIT = 100_000;
 
 const TEST_LIMIT = 100_000;
 
@@ -13,6 +29,7 @@ export interface ThrottleLimits {
   global: { limit: number; ttl: number };
   auth: { limit: number; ttl: number };
   otp: { limit: number; ttl: number };
+  otpIp: { limit: number; ttl: number };
 }
 
 export function resolveThrottleLimits(env: NodeJS.ProcessEnv = process.env): ThrottleLimits {
@@ -30,6 +47,10 @@ export function resolveThrottleLimits(env: NodeJS.ProcessEnv = process.env): Thr
       limit: readLimit(env.THROTTLE_OTP_LIMIT, relaxed ?? THROTTLE_DEFAULTS.otp.limit),
       ttl: THROTTLE_DEFAULTS.otp.ttl,
     },
+    otpIp: {
+      limit: readLimit(env.THROTTLE_OTP_IP_LIMIT, relaxed ?? THROTTLE_DEFAULTS.otpIp.limit),
+      ttl: THROTTLE_DEFAULTS.otpIp.ttl,
+    },
   };
 }
 
@@ -41,6 +62,12 @@ export function createThrottleModuleOptions(storage?: ThrottlerStorage): Throttl
         name: 'default',
         ttl: () => resolveThrottleLimits().global.ttl,
         limit: () => resolveThrottleLimits().global.limit,
+      },
+      {
+        name: OTP_EMAIL_THROTTLER_NAME,
+        ttl: () => resolveThrottleLimits().otp.ttl,
+        limit: () => OTP_EMAIL_GLOBAL_LIMIT,
+        getTracker: otpEmailTracker,
       },
     ],
   };

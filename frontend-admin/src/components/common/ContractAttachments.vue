@@ -78,4 +78,4 @@ async function upload(event:Event){
 watch(()=>props.contractId,()=>{items.value=[];progress.value='';failures.value=[];void load();},{immediate:true});
 onUnmounted(()=>{active=false;generation++;});
 </script>
-<style scoped>.attachment-failures{padding-left:18px;color:#98634c;font-size:11px;line-height:1.8;overflow-wrap:anywhere}</style>
+<style scoped>.attachment-failures{padding-left:18px;color:#98634c;font-size:var(--font-micro);line-height:1.8;overflow-wrap:anywhere}</style>

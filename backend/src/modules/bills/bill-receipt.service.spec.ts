@@ -29,6 +29,12 @@ describe('BillReceiptService', () => {
     await expect(service.getReceipt('b1', 't1')).rejects.toThrow(NotFoundException);
   });
 
+  it('租客无档案（tenantId 为空串）→ 404，不再 fail-open 返回他人收据（T209）', async () => {
+    prisma.bill.findUnique.mockResolvedValue(bill());
+
+    await expect(service.getReceipt('b1', '')).rejects.toThrow(NotFoundException);
+  });
+
   it('recognizes voucher tags, bill references and direct ids with amount statuses', async () => {
     prisma.bill.findFirst.mockResolvedValue(bill({ lateFees: [{ confirmedAmount: 100, settledAmount: 20 }], paymentRecords: [{ id: 'p', amount: 10, paidAt: new Date(), paymentMethod: 'CASH' }] }));
     expect((await service.recognizeVoucher('[VOUCHER:BILL-1:7]')).amountMatchStatus).toBe('MISMATCH');

@@ -66,8 +66,10 @@ describe('validateEnvironment', () => {
     const result = spawnSync(
       process.execPath,
       [
-        '--experimental-strip-types',
-        '--disable-warning=ExperimentalWarning',
+        // 用 tsx 作为加载器而不是 --experimental-strip-types：后者是 Node 22.6+ 才有的选项，
+        // CI 跑 Node 20 会报 "bad option: --experimental-strip-types"（T212 在 CI 上暴露）
+        '--import',
+        'tsx',
         '--input-type=module',
         '-e',
         `import { validateEnvironment } from './src/config/env.validation.ts';

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isUniqueConstraintError } from './prisma-error.js';
-import {
-  findDuplicateNotifications,
-  findDuplicateRentBills,
-  rentBillDedupKey,
-} from './duplicate-keys.js';
+import { findDuplicateNotifications, findDuplicateRentBills, findDuplicateUnfinishedContracts, rentBillDedupKey } from './duplicate-keys.js';
 
 describe('duplicate key checks', () => {
   it('只列出同一合同同一账期的重复租金账单', () => {
@@ -33,5 +29,35 @@ describe('duplicate key checks', () => {
     expect(isUniqueConstraintError({ code: 'P2002' })).toBe(true);
     expect(isUniqueConstraintError({ code: 'P2003' })).toBe(false);
     expect(isUniqueConstraintError(new Error('duplicate'))).toBe(false);
+  });
+});
+
+describe('findDuplicateUnfinishedContracts（T211 部分唯一索引的前置检查）', () => {
+  it('同一房源两份未结束合同 → 报冲突', () => {
+    const dup = findDuplicateUnfinishedContracts([
+      { id: 'c1', roomId: 'r1', status: 'ACTIVE' },
+      { id: 'c2', roomId: 'r1', status: 'DRAFT' },
+    ]);
+    expect(dup).toEqual([{ key: 'r1', ids: ['c1', 'c2'] }]);
+  });
+
+  it('不同房源各一份 → 不报', () => {
+    expect(
+      findDuplicateUnfinishedContracts([
+        { id: 'c1', roomId: 'r1', status: 'ACTIVE' },
+        { id: 'c2', roomId: 'r2', status: 'DRAFT' },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('已结束的合同（EXPIRED/TERMINATED/RENEWED）不参与判定', () => {
+    expect(
+      findDuplicateUnfinishedContracts([
+        { id: 'c1', roomId: 'r1', status: 'ACTIVE' },
+        { id: 'c2', roomId: 'r1', status: 'TERMINATED' },
+        { id: 'c3', roomId: 'r1', status: 'EXPIRED' },
+        { id: 'c4', roomId: 'r1', status: 'RENEWED' },
+      ]),
+    ).toEqual([]);
   });
 });

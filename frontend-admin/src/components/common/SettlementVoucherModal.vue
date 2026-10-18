@@ -56,7 +56,7 @@
             <tr>
               <td><b>押金基数</b></td>
               <td>原租赁合同履约保证金退还基数</td>
-              <td style="text-align: right; color: #059669">
+              <td style="text-align: right; color: var(--success-text)">
                 +¥{{ (voucher.depositAmount / 100).toFixed(2) }}
               </td>
             </tr>
@@ -78,7 +78,7 @@
               </td>
             </tr>
             <tr v-if="!voucher.items || voucher.items.length === 0">
-              <td colspan="3" style="text-align: center; color: #94a3b8">无额外扣款或补偿项</td>
+              <td colspan="3" style="text-align: center; color: var(--text-muted)">无额外扣款或补偿项</td>
             </tr>
           </tbody>
         </table>
@@ -155,18 +155,19 @@ const visible = computed({
 const loading = ref(false);
 const voucher = ref<any>(null);
 
+// T207：与后端 CheckoutItemType 严格对齐（原先这四类扣款名在枚举里都不存在，
+// 导致标签退化成原始枚举名、且扣款被显示成 "+¥"）
 const itemTypeMap: Record<string, string> = {
-  DAMAGE_COMPENSATION: '损坏赔偿',
-  CLEANING_FEE: '清洁费扣除',
-  OVERDUE_FEE: '欠费补缴',
-  OTHER_DEDUCTION: '其他扣款',
+  DEPOSIT_DEDUCTION: '押金扣除',
+  OTHER_FEE: '其他费用',
+  RENT_REFUND: '租金退还',
   DEPOSIT_REFUND: '押金退还',
-  RENT_REFUND: '多收租金退还',
-  OTHER_REFUND: '其他退费',
+  UTILITY_REFUND: '水电余额退还',
+  OTHER_REFUND: '其他退款',
 };
 
 function isDeduction(type: string): boolean {
-  return ['DAMAGE_COMPENSATION', 'CLEANING_FEE', 'OVERDUE_FEE', 'OTHER_DEDUCTION'].includes(type);
+  return type === 'DEPOSIT_DEDUCTION' || type === 'OTHER_FEE';
 }
 
 async function fetchVoucher() {
@@ -270,12 +271,12 @@ function handlePrint() {
 }
 
 .text-deduction {
-  color: #dc2626;
+  color: var(--error-text);
   font-weight: 600;
 }
 
 .text-refund {
-  color: #059669;
+  color: var(--success-text);
   font-weight: 600;
 }
 
@@ -303,7 +304,7 @@ function handlePrint() {
 .number-amount {
   font-size: 18px;
   font-weight: 700;
-  color: #059669;
+  color: var(--success-text);
 }
 
 .voucher-notes {
@@ -331,7 +332,7 @@ function handlePrint() {
 .sign-underline {
   display: inline-block;
   width: 120px;
-  border-bottom: 1px solid #94a3b8;
+  border-bottom: 1px solid var(--text-muted);
   margin-left: 6px;
 }
 
@@ -345,13 +346,13 @@ function handlePrint() {
 .stamp-circle {
   width: 90px;
   height: 90px;
-  border: 2px dashed #dc2626;
+  border: 2px dashed var(--error-text);
   border-radius: 50%;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  color: #dc2626;
+  color: var(--error-text);
   transform: rotate(-15deg);
   opacity: 0.85;
 }
@@ -376,7 +377,7 @@ function handlePrint() {
 
 .print-tip {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 @media print {

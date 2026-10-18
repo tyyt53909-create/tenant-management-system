@@ -4,10 +4,12 @@ import { BillsService } from '../bills/bills.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { NotificationPriority } from '../notifications/dto/create-notification.dto.js';
 import { LateFeeUtil } from '../bills/utils/late-fee.util.js';
+import { roomUpdateForContractTransition } from '../contracts/contract-transitions.js';
 import {
   SYSTEM_OPERATOR,
   MS_PER_DAY,
   startOfTodayUtc,
+  startOfUtcDay,
   daysBetween,
   formatDate,
   formatAmount,
@@ -46,13 +48,17 @@ export class SchedulerDailyJobsService {
       });
       activated++;
 
-      // 房间随动：预留 → 已入住（仅当仍为 RESERVED，遵循房态状态机前置条件）
-      const room = await this.prisma.room.findUnique({ where: { id: contract.roomId } });
-      if (room && room.status === 'RESERVED') {
-        await this.prisma.room.update({
-          where: { id: room.id },
-          data: { status: 'OCCUPIED', version: { increment: 1 } },
-        });
+      // 房间随动：预留 → 已入住。规则与 API 共用（contract-transitions.ts），
+      // 只在其房态前置条件满足时随动，避免两处各写一份而漂移（T207）。
+      const room = await this.prisma.room.findUnique({
+        where: { id: contract.roomId },
+        select: { status: true },
+      });
+      if (room) {
+        const roomUpdate = roomUpdateForContractTransition(room, 'DRAFT', 'ACTIVE');
+        if (roomUpdate) {
+          await this.prisma.room.update({ where: { id: contract.roomId }, data: roomUpdate });
+        }
       }
     }
 
@@ -114,7 +120,9 @@ export class SchedulerDailyJobsService {
       // 未缴金额 > 0 时刷新滞纳金建议（已确认的账单会 409，跳过）
       if (bill.amount - bill.paidAmount > 0) {
         try {
-          await this.billsService.addLateFee(bill.id, {}, SYSTEM_OPERATOR);
+          // 传业务日零点：任务 01:00 上海执行时用真实 now 会把昨天的账单算成「逾期 0 天」
+          // 从而抛「账单尚未逾期」，滞纳金建议整批失败且再也不会重试（T208）
+          await this.billsService.addLateFee(bill.id, {}, SYSTEM_OPERATOR, today);
           suggested++;
         } catch (error) {
           if (!(error instanceof ConflictException)) {
@@ -125,7 +133,7 @@ export class SchedulerDailyJobsService {
 
       const userId = bill.contract?.tenant?.userId;
       if (userId) {
-        const overdueDays = LateFeeUtil.overdueDays(bill.dueDate);
+        const overdueDays = LateFeeUtil.overdueDays(bill.dueDate, today);
         await this.notify(
           userId,
           '账单逾期提醒',
@@ -158,39 +166,55 @@ export class SchedulerDailyJobsService {
       const userId = bill.contract?.tenant?.userId;
       if (!userId) continue;
 
-      const overdueDays = LateFeeUtil.overdueDays(bill.dueDate);
+      const overdueDays = LateFeeUtil.overdueDays(bill.dueDate, today);
       let title: string | null = null;
       let body = '';
       let priority: 'NORMAL' | 'URGENT' = 'NORMAL';
+      // 去重键必须带「节点」维度：1/3/7 天的 title 完全相同，只按 title 去重会把
+      // 第 3、7 天当成重复而静默丢弃（T208）
+      let nodeKey: string | null = null;
 
       if (overdueDays > 0) {
         if ([1, 3, 7].includes(overdueDays)) {
           title = '账单逾期提醒';
           body = `您有账单逾期 ${overdueDays} 天，请尽快缴费`;
           priority = 'URGENT';
+          nodeKey = `overdue-d${overdueDays}`;
         }
       } else {
         const daysUntilDue = daysBetween(today, startOfTodayUtc(bill.dueDate));
         if (daysUntilDue === 3) {
           title = '账单即将到期提醒';
           body = `您的账单将于 ${formatDate(bill.dueDate)} 到期，请及时缴费`;
+          nodeKey = `due-in-${daysUntilDue}`;
         } else if (daysUntilDue === 0) {
           title = '账单到期提醒';
           body = '您的账单今日到期，请及时缴费';
+          nodeKey = `due-in-${daysUntilDue}`;
         }
       }
 
-      if (!title) continue;
+      if (!title || !nodeKey) continue;
 
-      // 同日同标题去重（同一收件人当天只发一次）
+      // 同日同标题去重（同一收件人当天只发一次）。
+      // 注意基准要用「当前 UTC 自然日零点」：业务日零点在凌晨 01:00 执行时落在未来，
+      // 拿它比 createdAt >= today 永远不成立（T208）。
       const existing = await this.prisma.notification.findFirst({
-        where: { userId, title, createdAt: { gte: today } },
+        where: { userId, title, createdAt: { gte: startOfUtcDay() } },
         select: { id: true },
       });
       if (existing) continue;
 
-      await this.notify(userId, title, body, priority, { billId: bill.id }, `BILL_REMINDER:${userId}:${bill.id}:${title}`);
-      sent++;
+      const delivered = await this.notify(
+        userId,
+        title,
+        body,
+        priority,
+        { billId: bill.id },
+        `BILL_REMINDER:${userId}:${bill.id}:${nodeKey}`,
+      );
+      // 只有真的发出去才计入（notify 会吞掉失败并在日志里留痕）
+      if (delivered) sent++;
     }
 
     return sent;
@@ -273,6 +297,7 @@ export class SchedulerDailyJobsService {
   }
 
   /** 通知发送（失败不阻断任务，仅记录日志） */
+  /** 发送通知；返回是否真的发出（失败只记日志，供调用方决定是否计入统计，T208）。 */
   private async notify(
     userId: string,
     title: string,
@@ -280,7 +305,7 @@ export class SchedulerDailyJobsService {
     priority: 'NORMAL' | 'URGENT',
     data?: Record<string, unknown>,
     dedupKey?: string,
-  ) {
+  ): Promise<boolean> {
     try {
       await this.notificationsService.create({
         userId,
@@ -290,8 +315,10 @@ export class SchedulerDailyJobsService {
         data,
         dedupKey,
       });
+      return true;
     } catch (error) {
       this.logger.warn(`通知发送失败（userId=${userId}）：${(error as Error).message}`);
+      return false;
     }
   }
 }

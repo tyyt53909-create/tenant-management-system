@@ -88,11 +88,17 @@ export async function setupActiveContract(tag = 'PW'): Promise<FlowData> {
       data: { status: 'ACTIVE' },
     });
     if (activated.status() !== 200) throw new Error('合同生效失败: ' + activated.status());
-    const occupied = await req.patch(`rooms/${room.id}/status`, {
-      headers,
-      data: { status: 'OCCUPIED', version: reservedBody.version },
-    });
-    if (occupied.status() !== 200) throw new Error('房态 OCCUPIED 失败: ' + occupied.status());
+    // 合同生效的副作用已把房间从 RESERVED 随动到 OCCUPIED（docs/04 §2.3，T207 起 API 也实现），
+    // 再发一次房态流转会带旧 version 撞乐观锁 409。这里改为断言副作用确实发生（T212）。
+    const afterActivate = await req.get(`rooms/${room.id}`, { headers });
+    if (afterActivate.status() !== 200) throw new Error('合同生效后读取房源失败: ' + afterActivate.status());
+    const afterActivateBody = await afterActivate.json();
+    if (afterActivateBody.status !== 'OCCUPIED') {
+      throw new Error('合同生效后房间应随动为 OCCUPIED，实际 ' + afterActivateBody.status);
+    }
+    if (!(afterActivateBody.version > reservedBody.version)) {
+      throw new Error('房间随动应使 version 递增，实际 ' + afterActivateBody.version);
+    }
 
     return { uid: id, buildingId, room, tenant, contract: { ...contract, status: 'ACTIVE' } };
   } finally {

@@ -5,11 +5,11 @@
 
       <el-table :data="tableData" v-loading="loading" empty-text="暂无预付账户，点击右上角「新增账户」开始录入">
         <el-table-column label="租客" min-width="120">
-          <template #default="{ row }">{{ row.tenant?.name || row.tenantId }}</template>
+          <template #default="{ row }">{{ row.tenant?.name || '—' }}</template>
         </el-table-column>
         <el-table-column label="房号" width="110">
           <template #default="{ row }">
-            {{ row.roomNumber || row.roomId }}
+            {{ row.roomNumber || '—' }}
           </template>
         </el-table-column>
         <el-table-column label="余额" width="140">
@@ -71,7 +71,7 @@
     <!-- 充值/扣费/退款/调整 -->
     <el-dialog v-model="txDialogVisible" title="账户记账" width="520px">
       <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
-        <el-descriptions-item label="租客">{{ currentAccount?.tenant?.name || currentAccount?.tenantId }}</el-descriptions-item>
+        <el-descriptions-item label="租客">{{ currentAccount?.tenant?.name || '—' }}</el-descriptions-item>
         <el-descriptions-item label="当前余额">
           ¥{{ ((currentAccount?.balanceCache || 0) / 100).toFixed(2) }}
         </el-descriptions-item>
@@ -120,7 +120,7 @@
         </el-table-column>
         <el-table-column label="金额" width="110">
           <template #default="{ row }">
-            <span :style="{ color: row.amount >= 0 ? '#67c23a' : '#f56c6c' }">
+            <span :style="{ color: row.amount >= 0 ? 'var(--success-text)' : 'var(--error-text)' }">
               {{ row.amount >= 0 ? '+' : '-' }}¥{{ (Math.abs(row.amount) / 100).toFixed(2) }}
             </span>
           </template>
@@ -420,13 +420,13 @@ onMounted(fetchData);
 }
 
 .low-balance {
-  color: #f56c6c;
+  color: var(--error-text);
   font-weight: 600;
 }
 
 .tx-hint {
   margin-left: 8px;
-  color: #909399;
+  color: var(--text-muted);
   font-size: 12px;
 }
 </style>

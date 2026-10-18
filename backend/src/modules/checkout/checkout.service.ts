@@ -7,6 +7,7 @@ import { QueryCheckoutsDto } from './dto/query-checkouts.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
+import { isDeductionItemType, isRefundItemType } from './checkout-item-types.js';
 
 const CHECKOUT_STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿',
@@ -267,17 +268,15 @@ export class CheckoutService {
       throw new NotFoundException('退租记录不存在');
     }
 
-    if (tenantId && (!record.contract || record.contract.tenantId !== tenantId)) {
+    // tenantId === undefined 才代表「管理员视图」；空串是「租客但无档案」，必须走比对（T209）
+    if (tenantId !== undefined && (!record.contract || record.contract.tenantId !== tenantId)) {
       throw new NotFoundException('退租记录不存在');
     }
 
     const depositAmount = record.contract?.depositAmount ?? 0;
-    const deductions = (record.items || []).filter((item) =>
-      ['DAMAGE_COMPENSATION', 'CLEANING_FEE', 'OVERDUE_FEE', 'OTHER_DEDUCTION'].includes(item.itemType),
-    );
-    const refunds = (record.items || []).filter((item) =>
-      ['DEPOSIT_REFUND', 'RENT_REFUND', 'OTHER_REFUND'].includes(item.itemType),
-    );
+    // 类别分组集中在 checkout-item-types.ts（与 Prisma 枚举对齐，T207）
+    const deductions = (record.items || []).filter((item) => isDeductionItemType(item.itemType));
+    const refunds = (record.items || []).filter((item) => isRefundItemType(item.itemType));
 
     const totalDeduction = deductions.reduce((sum, item) => sum + item.amount, 0);
     const totalRefundItem = refunds.reduce((sum, item) => sum + item.amount, 0);

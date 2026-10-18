@@ -12,8 +12,11 @@ export class BillLateFeeService {
    * - 仅对已逾期（到期日 < 今日）且未缴清的账单生效
    * - 不带 confirmedAmount：生成或刷新「建议值」（同一账单只保留一条未确认建议，重复调用不重复建单）
    * - 带 confirmedAmount：管理者确认入账（金额可调整），确认后不可重复确认（409）
+   *
+   * `referenceDate` 供定时任务传入「业务日零点」：任务在凌晨 01:00 上海执行时，
+   * 用真实 now 计算会把昨天的账单算成「逾期 0 天」，导致滞纳金建议整批失败（T208）。
    */
-  async addLateFee(billId: string, dto: CreateLateFeeDto, operatorId: string) {
+  async addLateFee(billId: string, dto: CreateLateFeeDto, operatorId: string, referenceDate?: Date) {
     return this.prisma.$transaction(async (tx) => {
       const bill = await tx.bill.findUnique({
         where: { id: billId },
@@ -28,7 +31,7 @@ export class BillLateFeeService {
         throw new BadRequestException(`账单为 ${bill.status} 状态，不可添加滞纳金`);
       }
 
-      const overdueDays = LateFeeUtil.overdueDays(bill.dueDate);
+      const overdueDays = LateFeeUtil.overdueDays(bill.dueDate, referenceDate);
       if (overdueDays <= 0) {
         throw new BadRequestException('账单尚未逾期，无需计算滞纳金');
       }

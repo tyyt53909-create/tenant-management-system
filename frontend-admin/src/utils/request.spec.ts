@@ -63,6 +63,53 @@ describe('请求认证恢复', () => {
     expect(window.location.href).toBe('/login');
   });
 
+  it('并发轮换：刷新被挡在宽限窗口内时重试一次，用户不被登出（T208）', async () => {
+    const rotationRace = new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', undefined, undefined, {
+      status: 401,
+      statusText: 'Unauthorized',
+      data: { message: '刷新令牌正在轮换中，请稍后重试' },
+      headers: new AxiosHeaders(),
+      config: undefined as unknown as InternalAxiosRequestConfig,
+    });
+    // 第一次：另一个标签页刚赢下轮换；第二次：浏览器已带上赢家写入的新 cookie
+    const refresh = vi
+      .spyOn(axios, 'post')
+      .mockRejectedValueOnce(rotationRace)
+      .mockResolvedValueOnce({ data: { accessToken: 'new' } });
+    let calls = 0;
+    request.defaults.adapter = async (config) => {
+      if (++calls === 1) throw unauthorized(config);
+      return { data: {}, status: 200, statusText: 'OK', headers: {}, config };
+    };
+
+    await expect(request.get('/rooms')).resolves.toBeDefined();
+
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(getAccessToken()).toBe('new');
+    // 会话没有被 expireSession 清掉、也没有被踢到登录页
+    expect(window.location.href).toBe('/rooms');
+  });
+
+  it('其它刷新失败（cookie 失效）不重试，直接登出', async () => {
+    const invalid = new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', undefined, undefined, {
+      status: 401,
+      statusText: 'Unauthorized',
+      data: { message: 'Token 无效或已过期' },
+      headers: new AxiosHeaders(),
+      config: undefined as unknown as InternalAxiosRequestConfig,
+    });
+    const refresh = vi.spyOn(axios, 'post').mockRejectedValue(invalid);
+    request.defaults.adapter = async (config) => {
+      throw unauthorized(config);
+    };
+
+    await expect(request.get('/rooms')).rejects.toThrow();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(getAccessToken()).toBeNull();
+    expect(window.location.href).toBe('/login');
+  });
+
   it('多个并发 401 共用一次刷新，并携带新 token 重试', async () => {
     const refresh = vi.spyOn(axios, 'post').mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));

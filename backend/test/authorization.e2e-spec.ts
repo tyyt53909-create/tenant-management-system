@@ -22,6 +22,8 @@ import { ContractsController } from '../src/modules/contracts/contracts.controll
 import { ContractsService } from '../src/modules/contracts/contracts.service.js';
 import { MaintenanceController } from '../src/modules/maintenance/maintenance.controller.js';
 import { MaintenanceService } from '../src/modules/maintenance/maintenance.service.js';
+import { PrepayController } from '../src/modules/prepay/prepay.controller.js';
+import { PrepayService } from '../src/modules/prepay/prepay.service.js';
 import { MetersController } from '../src/modules/meters/meters.controller.js';
 import { MetersService } from '../src/modules/meters/meters.service.js';
 import { MetersSimulatorService } from '../src/modules/meters/meters-simulator.service.js';
@@ -123,6 +125,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         MetersController,
         RoomsController,
         AuthController,
+        PrepayController,
       ],
       providers: [
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
@@ -180,6 +183,15 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         { provide: MetersService, useValue: { findAll: vi.fn(), findOne: vi.fn(), createReading: vi.fn(), findReadings: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() } },
         { provide: MetersSimulatorService, useValue: { runSimulation: vi.fn() } },
         // 能力守卫放行（能力拒绝由 tenant-capability 专属测试覆盖；本文件聚焦服务层隔离）
+        {
+          provide: PrepayService,
+          useValue: {
+            findByTenant: vi.fn().mockResolvedValue({ id: 'pa-1', tenantId: 'tenant-self', balanceCache: 0 }),
+            findTransactionsByTenant: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findAllTransactions: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+          },
+        },
         { provide: TenantCapabilityService, useValue: { hasCapability: vi.fn().mockResolvedValue(true) } },
         {
           provide: InviteCodeService,
@@ -337,6 +349,48 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
     it('POST /rooms（创建房源，管理接口）→ 403', async () => {
       await as(request(app.getHttpServer()).post('/rooms').send({}), 'TENANT').expect(403);
+    });
+  });
+
+  describe('租客端 /my 与 /transactions 路由（T209 补矩阵）', () => {
+    const routes = [
+      '/bills/my',
+      '/contracts/my',
+      '/maintenance/my',
+      '/prepay-accounts/my',
+      '/prepay-accounts/transactions',
+    ];
+
+    it('未登录访问这些路由一律 401', async () => {
+      for (const path of routes) {
+        const res = await request(app.getHttpServer()).get(path);
+        expect(`${path} → ${res.status}`).toBe(`${path} → 401`);
+      }
+    });
+
+    it('CLEANER（保洁）一律 403', async () => {
+      for (const path of routes) {
+        const res = await as(request(app.getHttpServer()).get(path), 'CLEANER');
+        expect(`${path} → ${res.status}`).toBe(`${path} → 403`);
+      }
+    });
+
+    it('TENANT 可访问，且范围参数是自己的 tenantId', async () => {
+      for (const path of routes) {
+        const res = await as(request(app.getHttpServer()).get(path), 'TENANT', 'tenant-self');
+        expect(`${path} → ${res.status}`).toBe(`${path} → 200`);
+      }
+      expect(app.get(BillsService).findByTenant).toHaveBeenCalledWith('tenant-self', expect.anything());
+    });
+
+    it('TENANT 但没有租客档案 → 控制器传空范围（真实服务经 scopedWhere 直接 403，不再退化成 userId）', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/bills/my')
+        .set('x-test-role', 'TENANT')
+        .set('x-test-tenant', '');
+
+      expect(res.status).toBe(200); // 服务在本 e2e 里被 mock；重点是下面这行的范围参数
+      expect(app.get(BillsService).findByTenant).toHaveBeenCalledWith('', expect.anything());
     });
   });
 

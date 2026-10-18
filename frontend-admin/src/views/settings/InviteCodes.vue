@@ -406,7 +406,7 @@ onMounted(() => {
 
 .form-tip {
   margin-left: 12px;
-  color: var(--el-text-color-secondary, #909399);
+  color: var(--el-text-color-secondary, var(--text-muted));
   font-size: 12px;
 }
 

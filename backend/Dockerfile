@@ -1,8 +1,8 @@
 # OPT-25 / T198：后端生产镜像（多阶段）
 #   deps    -> 安装全部依赖（含 dev，用于构建）
-#   builder -> prisma generate + nest build + 预编译 seed（ts-node 只活在构建期）
+#   builder -> prisma generate + nest build + 预编译 seed（tsc 编译，运行期不需要 TS 执行器）
 #   runner  -> 非 root 运行；app / migrate / seed 共用同一镜像
-#              （seed 为预编译 JS，运行时不需要 ts-node）
+#              （seed 为预编译 JS，运行时不需要 TS 执行器）
 # 构建：docker build -f backend/Dockerfile ./backend
 
 FROM node:20-alpine AS deps
@@ -32,6 +32,16 @@ RUN ARCH="$(uname -m)" \
      done \
   && npm prune --omit=dev \
   && npm cache clean --force
+# 断言：镜像里必须留下与运行架构一致的 Prisma 查询引擎。
+# 之前出现过「构建成功、启动即崩」的错架构镜像（arm64 镜像里是 x64 引擎 → Prisma
+# 找不到 libquery_engine-linux-musl-arm64-*.so.node，容器 crash loop，T208）。
+# 有了这一步，同类问题会在构建期就失败，而不是等到部署。
+RUN ARCH="$(uname -m)" \
+  && ENG="$(find node_modules/@prisma/engines node_modules/.prisma/client -name 'libquery_engine-*.so.node' 2>/dev/null | head -1)" \
+  && if [ -z "$ENG" ]; then echo "❌ 未找到 Prisma 查询引擎（generate 未产出或被 prune 删除）"; exit 1; fi \
+  && echo "✅ Prisma 引擎: $ENG (arch=$ARCH)" \
+  && if [ "$ARCH" = "aarch64" ] && ! echo "$ENG" | grep -q "arm64" ; then echo "❌ arm64 镜像里出现非 arm64 引擎: $ENG"; exit 1; fi \
+  && if [ "$ARCH" != "aarch64" ] && echo "$ENG" | grep -q "arm64" ; then echo "❌ 非 arm64 构建里出现 arm64 引擎: $ENG"; exit 1; fi
 
 FROM node:20-alpine AS runner
 WORKDIR /app

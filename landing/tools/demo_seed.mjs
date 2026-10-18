@@ -64,8 +64,9 @@ const FLOOR_ADJ = [-80, 0, 60, 120, 180, 240];
 /** 房态排布（索引按「楼栋 → 楼层 → 房号」展开，共 72 间） */
 const VACANT_CLEAN = new Set([3, 10, 17, 30, 41, 55]);
 const RESERVED = new Set([24, 47]);
-const PENDING_CLEAN = 63;
-const CLEANING = 66;
+// 保洁工作队列要有足够行数，否则保洁任务页截出来只有两行、大片留白。
+const PENDING_CLEAN = new Set([5, 21, 63]);
+const CLEANING = new Set([12, 66]);
 const MAINTENANCE = 69;
 
 const PHOTOS = [
@@ -192,8 +193,8 @@ async function main() {
         let cleanStatus = 'CLEAN';
         if (VACANT_CLEAN.has(idx)) { status = 'VACANT'; cleanStatus = 'CLEAN'; }
         else if (RESERVED.has(idx)) { status = 'RESERVED'; }
-        else if (idx === PENDING_CLEAN) { status = 'VACANT'; cleanStatus = 'PENDING_CLEAN'; }
-        else if (idx === CLEANING) { status = 'VACANT'; cleanStatus = 'CLEANING'; }
+        else if (PENDING_CLEAN.has(idx)) { status = 'VACANT'; cleanStatus = 'PENDING_CLEAN'; }
+        else if (CLEANING.has(idx)) { status = 'VACANT'; cleanStatus = 'CLEANING'; }
         else if (idx === MAINTENANCE) { status = 'MAINTENANCE'; }
 
         const rent = plan.rent + FLOOR_ADJ[floor - 1];
@@ -252,7 +253,7 @@ async function main() {
 
   // 6. 租客（每个房间一位）
   const housed = rooms.filter((r) => r.status === 'OCCUPIED' || r.status === 'RESERVED');
-  const movedOut = rooms.filter((r) => [PENDING_CLEAN, CLEANING, MAINTENANCE].includes(r.idx) || [3, 10].includes(r.idx));
+  const movedOut = rooms.filter((r) => PENDING_CLEAN.has(r.idx) || CLEANING.has(r.idx) || r.idx === MAINTENANCE || [3, 10].includes(r.idx));
 
   const tenantRows = [];
   let ti = 0;
@@ -569,10 +570,10 @@ async function main() {
   // 11. 通知 + 审计日志
   await prisma.notification.createMany({
     data: [
-      { userId: admin.id, title: '本月账单已生成', body: '2026-10 月度租金账单已生成，共 61 张，请及时跟进收款。', priority: 'NORMAL', isRead: false, data: { period: '2026-10' }, createdAt: new Date(TODAY.getTime() - 3 * 86400000) },
-      { userId: admin.id, title: '有 6 张账单进入逾期', body: '以下账单已超过应缴日期，系统已按合同规则计算建议滞纳金，请确认后跟进。', priority: 'URGENT', isRead: false, data: { count: 6 }, createdAt: new Date(TODAY.getTime() - 2 * 86400000) },
+      { userId: admin.id, title: '本月账单已生成', body: `${monthKey(CUR_Y, CUR_M)} 月度租金账单已生成，共 ${dbBills.filter((b) => b.period === monthKey(CUR_Y, CUR_M)).length} 张，请及时跟进收款。`, priority: 'NORMAL', isRead: false, data: { period: monthKey(CUR_Y, CUR_M) }, createdAt: new Date(TODAY.getTime() - 3 * 86400000) },
+      { userId: admin.id, title: `有 ${overdueBills.length} 张账单进入逾期`, body: '以下账单已超过应缴日期，系统已按合同规则计算建议滞纳金，请确认后跟进。', priority: 'URGENT', isRead: false, data: { count: overdueBills.length }, createdAt: new Date(TODAY.getTime() - 2 * 86400000) },
       { userId: admin.id, title: '新的报修工单', body: 'B 座 302 提交「热水器打不着火」，优先级：紧急。', priority: 'URGENT', isRead: true, readAt: new Date(TODAY.getTime() - 86400000), data: { category: 'APPLIANCE' }, createdAt: new Date(TODAY.getTime() - 5 * 86400000) },
-      { userId: admin.id, title: '预付账户余额不足提醒', body: '3 个预付账户余额已低于提醒阈值，建议通知租客充值。', priority: 'NORMAL', isRead: true, readAt: new Date(TODAY.getTime() - 2 * 86400000), data: { count: 3 }, createdAt: new Date(TODAY.getTime() - 6 * 86400000) },
+      { userId: admin.id, title: '预付账户余额不足提醒', body: `${prepayRows.filter((p) => p.balanceCache < p.lowBalanceThreshold).length} 个预付账户余额已低于提醒阈值，建议通知租客充值。`, priority: 'NORMAL', isRead: true, readAt: new Date(TODAY.getTime() - 2 * 86400000), data: { count: prepayRows.filter((p) => p.balanceCache < p.lowBalanceThreshold).length }, createdAt: new Date(TODAY.getTime() - 6 * 86400000) },
       { userId: admin.id, title: '退租结算待确认', body: 'A 座 204 的退租结算单已提交，等待确认退款。', priority: 'NORMAL', isRead: false, data: { status: 'PENDING' }, createdAt: new Date(TODAY.getTime() - 86400000) },
     ],
   });

@@ -1,0 +1,61 @@
+/* 栖居管理后台设计令牌 —— 全站唯一来源。
+ *
+ * 这里的取值不是随手挑的：每个文字色都以实际底色量测过对比度，并落在
+ * WCAG AA（一般文字 >= 4.5:1）之上。量测基线三处：
+ *   卡片底 #fffefa / 页面底 #f7f5f0 / 表头底 #f7f7f3
+ *
+ *   --text-primary    #302f2a  13.29 / 12.42 / 12.55
+ *   --text-secondary  #5e6058   6.32 /  5.90 /  5.97
+ *   --text-muted      #6f6c63   5.20 /  4.82 /  4.89   ← 页面底与表头底上的最小可用值
+ *   --text-subtle     #78756b   4.57 /  4.23 /  4.29   ← 只允许用在卡片底上的次要说明
+ *
+ * 因此：卡片内的说明文字可以用 subtle；落在页面底、表头底（表格 head、分组标题）
+ * 的文字一律用 muted。不要再新增浅于 --text-muted 的文字色。
+ *
+ * Element Plus 的运行时变量在 styles/element-variables.css 里引用本文件的令牌，
+ * 保证自绘组件与 EP 组件同色。
+ */
+:root {
+  /* 品牌色（与 Element Plus --el-color-primary 系列一致） */
+  --primary: #535b43;
+  --primary-light: #768168;
+  --primary-dark: #3d4232;
+  --primary-lighter: #edf0e8;
+
+  /* 语义色 */
+  --success: #66846b;
+  --warning: #b87648;
+  --error: #ba6459;
+  --info: #647c83;
+
+  /* 语义色用于「文字」时的加深变体（上表同法量测）。
+     原始语义色作为文字时只有 3.6–4.4，连自身浅底色徽章都不达标；
+     填充、边框、图形仍用上面的 --success/--warning/--error/--info。 */
+  --success-text: #4f7355; /* 5.31 / 4.92 / 对 #eaf3ed 4.73 */
+  --warning-text: #98612f; /* 5.09 / 4.72 / 对 #fbf0e0 4.56 */
+  --error-text: #a54f44;   /* 5.47 / 5.07 / 对 #fbebe8 4.77 */
+  --info-text: #556e75;    /* 5.37 / 4.98 / 对 #f0eee7 4.67 */
+
+  /* 背景与描边 */
+  --bg-page: #f7f5f0;
+  --bg-section: #f1eee8;
+  --bg-card: #fffefa;
+  --bg-white: #fff;
+  --border: #e9e5dd;
+  --border-dark: #dcd8cc;
+
+  /* 文字层（对比度见文件头） */
+  --text-primary: #302f2a;
+  --text-secondary: #5e6058;
+  --text-muted: #6f6c63;
+  --text-subtle: #78756b;
+
+  /* 字级地板：任何文字不得小于 11px。语义性内容（表格副行、说明段落）用 12px。 */
+  --font-micro: 11px;
+  --font-small: 12px;
+  --font-body: 13px;
+  --font-title: 20px;
+
+  /* 动效 */
+  --ease: cubic-bezier(.22, 1, .36, 1);
+}

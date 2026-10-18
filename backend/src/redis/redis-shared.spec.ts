@@ -79,6 +79,27 @@ describe('两个实例共享 Redis 状态', () => {
     expect(await instanceB.get('tenant@example.com')).toMatchObject({ code: '654321' });
   });
 
+  it('重启后未过期的验证码仍有效（新实例等于重启后的进程状态，T212 补验 OPT-08）', async () => {
+    const redis = new SharedRedis();
+    const beforeRestart = new RedisOtpStore(redis);
+    await beforeRestart.set('restart@example.com', { ...record, code: '135790' });
+
+    // 重启：内存态全部丢弃，只留 Redis 里的副本
+    const afterRestart = new RedisOtpStore(redis);
+
+    expect(await afterRestart.get('restart@example.com')).toMatchObject({ code: '135790' });
+  });
+
+  it('已过期的验证码重启后读不到（TTL 生效）', async () => {
+    const redis = new SharedRedis();
+    const beforeRestart = new RedisOtpStore(redis);
+    await beforeRestart.set('expired@example.com', { ...record, expiresAt: Date.now() - 1 });
+
+    const afterRestart = new RedisOtpStore(redis);
+
+    expect(await afterRestart.get('expired@example.com')).toBeUndefined();
+  });
+
   it('两个限流存储共享计数，超过阈值都返回阻断', async () => {
     const redis = new SharedRedis();
     const instanceA = new RedisThrottlerStorage(redis);

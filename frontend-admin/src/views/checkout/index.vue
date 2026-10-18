@@ -97,8 +97,12 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="contractId" label="关联合同" width="130" show-overflow-tooltip />
-        <el-table-column prop="roomId" label="退租房源" width="130" show-overflow-tooltip />
+        <el-table-column label="关联合同" width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.contract?.contractNumber || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="退租房源" width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.room?.roomNumber ? `${row.room.roomNumber} 室` : '—' }}</template>
+        </el-table-column>
         <el-table-column prop="checkoutDate" label="退租日期" width="120">
           <template #default="{ row }">
             {{ row.checkoutDate ? row.checkoutDate.split('T')[0] : '-' }}
@@ -366,12 +370,12 @@ onMounted(fetchData);
 }
 
 .amount-deduction {
-  color: #f56c6c;
+  color: var(--error-text);
   font-weight: 600;
 }
 
 .amount-refund {
-  color: #67c23a;
+  color: var(--success-text);
   font-weight: 600;
 }
 </style>
