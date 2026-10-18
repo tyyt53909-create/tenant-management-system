@@ -1,8 +1,8 @@
 # OPT-25 / T198：后端生产镜像（多阶段）
 #   deps    -> 安装全部依赖（含 dev，用于构建）
-#   builder -> prisma generate + nest build + 预编译 seed（ts-node 只活在构建期）
+#   builder -> prisma generate + nest build + 预编译 seed（tsc 编译，运行期不需要 TS 执行器）
 #   runner  -> 非 root 运行；app / migrate / seed 共用同一镜像
-#              （seed 为预编译 JS，运行时不需要 ts-node）
+#              （seed 为预编译 JS，运行时不需要 TS 执行器）
 # 构建：docker build -f backend/Dockerfile ./backend
 
 FROM node:20-alpine AS deps

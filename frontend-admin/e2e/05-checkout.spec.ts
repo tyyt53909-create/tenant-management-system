@@ -31,7 +31,8 @@ test.describe('退租结算', () => {
     await dialog.getByRole('button', { name: '确定' }).click();
     await expect(page.getByText('创建成功').first()).toBeVisible({ timeout: 8000 });
 
-    const row = page.getByRole('row', { name: new RegExp(seed.contract.id) });
+    // 列表「关联合同」列显示的是合同编号（不再是裸 cuid），按业务标识定位（T212）
+    const row = page.getByRole('row', { name: new RegExp(seed.contract.contractNumber) });
     await expect(row).toBeVisible({ timeout: 8000 });
     await expect(row).toContainText('草稿');
 
@@ -44,7 +45,8 @@ test.describe('退租结算', () => {
       await statusSelect.click();
       await page.getByRole('option', { name: '已完成' }).click();
       await editDialog.getByRole('button', { name: '确定' }).click();
-      await expect(page.getByRole('row', { name: new RegExp(seed.contract.id) })).toContainText('已完成', { timeout: 8000 });
+      // 复用上面的 row 定位（同样按合同编号，T212）
+      await expect(row).toContainText('已完成', { timeout: 8000 });
     }
   });
 });

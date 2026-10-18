@@ -123,6 +123,8 @@ async function main() {
   });
 
   const adminUser = await api('GET', '/auth/me', { token: adminToken });
+  // 派单需要 assignedTo（docs/04 §4.3，T207 起服务端强制校验），用真实保洁账号的 userId
+  const cleanerUser = await api('GET', '/auth/me', { token: cleanerToken });
 
   // ---------- 步骤 2：创建房源 ----------
   const room = await step('2 创建房源', async () => {
@@ -239,15 +241,21 @@ async function main() {
     expectStatus(activated, 200, '合同生效');
     assert(activated.data.status === 'ACTIVE', '合同应为 ACTIVE，实际 ' + activated.data.status);
 
-    // RESERVED+CLEAN -> OCCUPIED+CLEAN
-    const occupied = await api('PATCH', '/rooms/' + room.id + '/status', {
-      token: adminToken,
-      body: { status: 'OCCUPIED', version: reserved.data.version },
-    });
-    expectStatus(occupied, 200, '流转至 OCCUPIED');
-    assert(occupied.data.status === 'OCCUPIED', '应为 OCCUPIED，实际 ' + occupied.data.status);
-    room.version = occupied.data.version;
-    return { detail: 'DRAFT -> ACTIVE，房态 RESERVED -> OCCUPIED（version=' + occupied.data.version + '）' };
+    // 合同生效的副作用：按 docs/04 §2.3，房间随动 RESERVED+CLEAN -> OCCUPIED+CLEAN。
+    // T207 起 API 也实现该副作用（此前只有定时任务做），因此这里不再重复发一次房态流转
+    // —— 那会带着流转前的 version 撞乐观锁 409（T212 在 CI 上暴露）。改为断言副作用确实发生。
+    const afterActivate = await api('GET', '/rooms/' + room.id, { token: adminToken });
+    expectStatus(afterActivate, 200, '合同生效后读取房源');
+    assert(
+      afterActivate.data.status === 'OCCUPIED',
+      '合同生效后房间应随动为 OCCUPIED，实际 ' + afterActivate.data.status,
+    );
+    assert(
+      afterActivate.data.version > reserved.data.version,
+      '房间随动应使 version 递增，实际 ' + afterActivate.data.version + '（流转前 ' + reserved.data.version + '）',
+    );
+    room.version = afterActivate.data.version;
+    return { detail: 'DRAFT -> ACTIVE，房态随动 RESERVED -> OCCUPIED（version=' + afterActivate.data.version + '）' };
   });
 
   // ---------- 步骤 5：生成月度账单 ----------
@@ -462,7 +470,11 @@ async function main() {
     for (const status of ['ACKNOWLEDGED', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_CONFIRM', 'COMPLETED']) {
       const res = await api('PATCH', '/maintenance/' + maintenance.id, {
         token: adminToken,
-        body: { status, ...(status === 'COMPLETED' ? { resolution: '已更换水管' } : {}) },
+        body: {
+          status,
+          ...(status === 'ASSIGNED' ? { assignedTo: cleanerUser.data.id } : {}),
+          ...(status === 'COMPLETED' ? { resolution: '已更换水管' } : {}),
+        },
       });
       if (![200, 201].includes(res.status)) {
         // 记录实际可达状态，便于人工判断状态机
