@@ -118,10 +118,13 @@ export class JwtAuthService {
     // 原子轮换（T208）：并发刷新时只有一个请求能赢，输的那个不再把整个会话家族撤销。
     // 原先「get → 判断 rotated → save」三步非原子，两个并发请求都会通过判断；
     // 而管理后台多标签页、小程序首屏并发 401 都会真的并发刷新 —— 结果是用户被强制登出。
-    const won = await this.sessions.rotate(verified.jti, nextJti);
-    if (!won) {
-      const rotatedAt = current.rotatedAt ?? 0;
-      const withinGrace = rotatedAt > 0 && Date.now() - rotatedAt <= ROTATION_RACE_GRACE_MS;
+    const rotation = await this.sessions.rotate(verified.jti, nextJti);
+    if (!rotation.rotated) {
+      // 判定基准必须取 rotate 的结果，不能用上面那份 `current` 快照：
+      // 真实并发时两个请求都在任何人轮换之前读完会话，快照里没有 rotatedAt，
+      // 用它判断会让输家永远落进「重放」分支，把赢家刚签发的新会话一起撤销（T208 补修）。
+      const withinGrace =
+        rotation.rotatedAt > 0 && Date.now() - rotation.rotatedAt <= ROTATION_RACE_GRACE_MS;
       if (withinGrace) {
         // 刚刚被别的请求轮换过：并发竞态，不销毁会话家族，让客户端重试
         throw new UnauthorizedException('刷新令牌正在轮换中，请稍后重试');

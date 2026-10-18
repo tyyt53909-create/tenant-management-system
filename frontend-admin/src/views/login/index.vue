@@ -49,7 +49,7 @@
         <div class="oauth-section">
           <div id="google-signin-btn" class="google-gis-container"></div>
           <button
-            v-if="mockEnabled"
+            v-if="mockEnabled && !hasGoogleClientId"
             type="button"
             class="google-btn"
             :disabled="googleLoading"

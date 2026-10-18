@@ -246,6 +246,31 @@ describe('ContractsService CRUD（T157）', () => {
       expect(prisma.contract.update).not.toHaveBeenCalled();
     });
 
+    it('update：同房源已有另一份未结束合同 → 409，不能提前把续签合同置为 ACTIVE（补 T207 缺口）', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'c-new', status: 'DRAFT', roomId: 'room-1' });
+      // 续签场景：旧合同仍是 ACTIVE，新合同是 DRAFT
+      prisma.contract.findFirst.mockResolvedValue({ contractNumber: 'CN-OLD', status: 'ACTIVE' });
+
+      await expect(service.update('c-new', { status: 'ACTIVE' } as any)).rejects.toThrow(ConflictException);
+
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+      // 检查必须排除自己，否则任何合同都无法置为 ACTIVE
+      expect(prisma.contract.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ roomId: 'room-1', id: { not: 'c-new' } }),
+        }),
+      );
+    });
+
+    it('update：同房源没有别的未结束合同时，DRAFT → ACTIVE 正常', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'DRAFT', roomId: 'room-1' });
+      prisma.contract.findFirst.mockResolvedValue(null);
+      prisma.contract.update.mockResolvedValue({ id: 'c-1' });
+      prisma.room.findUnique.mockResolvedValue({ status: 'RESERVED' });
+
+      await expect(service.update('c-1', { status: 'ACTIVE' } as any)).resolves.toMatchObject({ id: 'c-1' });
+    });
+
     it('update：DRAFT → ACTIVE 且房间为 RESERVED 时，房间随动为 OCCUPIED', async () => {
       prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'DRAFT', roomId: 'room-1' });
       prisma.contract.update.mockResolvedValue({ id: 'c-1' });
