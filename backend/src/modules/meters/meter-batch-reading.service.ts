@@ -3,7 +3,7 @@ import type { Prisma, ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
-import { settlesByDefault } from './meter-types.constants.js';
+import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterBatchReadingService {
@@ -353,6 +353,8 @@ export class MeterBatchReadingService {
           const lastSettledReading = await tx.meterReading.findFirst({
             where: {
               meterId: item.meterId,
+              // 同 meter-reading：结算基准要排除模拟读数（T209）
+              source: NOT_SIMULATED,
               OR: [
                 { notes: { contains: '[SETTLED]' } },
                 { notes: { contains: '[INITIAL]' } },

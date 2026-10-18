@@ -60,7 +60,8 @@ export class FilesService {
 
     const extension = EXTENSION[detected];
     const key = `${Date.now()}-${randomUUID()}${extension || extname(file.originalname || '') || '.bin'}`;
-    const stored = detected === 'image/jpeg' ? await this.stripMetadata(body) : body;
+    // 原图一律重编码以清除 EXIF（含 GPS）：此前只对 JPEG 处理，PNG/WebP 会原样落盘（T209）
+    const stored = await this.stripMetadata(body, detected);
     await this.storage.put(key, stored, detected);
 
     let thumbnailKey: string | undefined;
@@ -142,8 +143,26 @@ export class FilesService {
     return { key, url, expiresIn: expiresInSeconds };
   }
 
-  private stripMetadata(body: Buffer): Promise<Buffer> {
-    return sharp(body, { failOn: 'error' }).rotate().jpeg({ quality: 90 }).toBuffer();
+  /**
+   * 重编码以清除 EXIF/GPS 等元数据（sharp 默认不保留 metadata）。
+   *
+   * 三种允许的图片格式都要走这一步：手机相册的 PNG（eXIf chunk）与 WebP（EXIF chunk）
+   * 同样会带定位信息，此前只处理 JPEG（T209）。
+   *
+   * 解不开的文件（magic bytes 像图片但内容不合法）按原样保存并留日志：宁可保留可用性，
+   * 也不要把一个能存的文件变成 500；这类内容本身无法被当作图片渲染
+   * （下载时带 `X-Content-Type-Options: nosniff`）。
+   */
+  private async stripMetadata(body: Buffer, format: ImageMime): Promise<Buffer> {
+    try {
+      const pipeline = sharp(body, { failOn: 'error' }).rotate();
+      if (format === 'image/png') return await pipeline.png().toBuffer();
+      if (format === 'image/webp') return await pipeline.webp().toBuffer();
+      return await pipeline.jpeg({ quality: 90 }).toBuffer();
+    } catch (error) {
+      this.logger.warn(`图片元数据清理失败，按原样保存：${(error as Error).message}`);
+      return body;
+    }
   }
 
   private assertSafeKey(key: string) {

@@ -71,7 +71,7 @@ export class SchedulerService {
   }
 
   /** 月度账单生成（Asia/Shanghai 每月 1 日 01:10） */
-  @Cron('0 10 1 * *', { name: 'monthly-bill-generation', timeZone: TIMEZONE })
+  @Cron('0 10 1 * * *', { name: 'monthly-bill-generation', timeZone: TIMEZONE })
   async handleMonthlyBillCron() {
     await this.rerun('monthly-bill-generation', 'CRON');
   }

@@ -6,6 +6,7 @@ import { mkdtemp, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
+import sharp from 'sharp';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { CapabilityGuard } from '../../common/guards/capability.guard.js';
@@ -14,7 +15,17 @@ import { FilesController } from '../files/files.controller.js';
 import { ContractAttachmentsService } from './contract-attachments.service.js';
 import { ContractAttachmentsController } from './contract-attachments.controller.js';
 
+// 真实 PNG 夹具（故意带 EXIF）：describe 回调必须同步，所以放在模块层（T209）。
+// 原先内嵌的 1×1 base64 本身不合规（libpng 读不了），「重编码清 EXIF」在测试里从未跑过。
+const png = await sharp({
+  create: { width: 8, height: 8, channels: 3, background: { r: 10, g: 20, b: 30 } },
+})
+  .withMetadata({ exif: { IFD0: { Copyright: 'tenant-system-test' } } })
+  .png()
+  .toBuffer();
+
 // 真实 multipart 与临时磁盘存储；数据库桩保留上传记录，鉴权桩仅注入已验证身份。
+
 // RolesGuard 和合同归属验证均使用实际实现，不访问或修改开发数据库。
 describe('合同图片 HTTP 上传、重读与授权', () => {
   let app: INestApplication;
@@ -23,7 +34,6 @@ describe('合同图片 HTTP 上传、重读与授权', () => {
   let records: any[];
   let assets: any[];
   let prisma: any;
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
   const actors: Record<string, any> = {
     admin: { userId: 'admin-1', role: 'ADMIN' },
     tenant: { userId: 'user-1', role: 'TENANT', tenantId: 'tenant-1' },
@@ -89,7 +99,11 @@ describe('合同图片 HTTP 上传、重读与授权', () => {
     expect(listed.body[0]).not.toHaveProperty('uploadedBy');
     expect(listed.body[0]).not.toHaveProperty('fileUrl');
     const image = await request(app.getHttpServer()).get(saved.downloadUrl).set('Authorization', 'Bearer tenant').expect(200);
-    expect(image.body).toEqual(png);
+    // 原图会重编码以清除 EXIF，因此不再逐字节相等；改为断言图片本身与元数据（T209）
+    const storedMeta = await sharp(image.body).metadata();
+    expect(storedMeta.format).toBe('png');
+    expect(storedMeta.width).toBe(8);
+    expect(storedMeta.exif).toBeUndefined();
     expect(image.headers['content-type']).toBe('image/png');
     expect(image.headers['cache-control']).toBe('private, no-store');
     expect(image.headers['x-content-type-options']).toBe('nosniff');

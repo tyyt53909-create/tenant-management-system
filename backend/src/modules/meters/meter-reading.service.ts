@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
-import { settlesByDefault } from './meter-types.constants.js';
+import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterReadingService {
@@ -196,6 +196,8 @@ export class MeterReadingService {
         const lastSettledReading = await tx.meterReading.findFirst({
           where: {
             meterId,
+            // 结算基准必须排除模拟读数，否则仿真器的 [INITIAL]/[SETTLED] 会成为真实扣费起点（T209）
+            source: NOT_SIMULATED,
             OR: [
               { notes: { contains: '[SETTLED]' } },
               { notes: { contains: '[INITIAL]' } },

@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#c0392b"/><text x="32" y="45" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">寓</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="栖居">
+  <rect width="48" height="48" rx="11" fill="#515c43"/>
+  <path d="M7.6 25.2 24 11.6l16.4 13.6" fill="none" stroke="#fffefa" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M13.2 24.6h21.6v11.2a2.2 2.2 0 0 1-2.2 2.2H15.4a2.2 2.2 0 0 1-2.2-2.2z" fill="#fffefa"/>
+  <path d="M20.6 30.6a3.4 3.4 0 0 1 6.8 0v7.4h-6.8z" fill="#515c43"/>
+</svg>

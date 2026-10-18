@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, IsEnum, Min, Max } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PrepayTransactionType } from './create-prepay-transaction.dto.js';
 
@@ -24,11 +24,11 @@ export class QueryPrepayTransactionsDto {
   @IsOptional()
   type?: PrepayTransactionType | `${PrepayTransactionType}`;
 
-  @IsString()
+  @IsDateString()
   @IsOptional()
   startDate?: string;
 
-  @IsString()
+  @IsDateString()
   @IsOptional()
   endDate?: string;
 }
