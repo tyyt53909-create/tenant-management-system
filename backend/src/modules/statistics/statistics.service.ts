@@ -84,6 +84,9 @@ export class StatisticsService {
       this.prisma.bill.findMany({
         where: {
           dueDate: { gte: range.start, lte: range.end },
+          // 已取消的账单不计入出账额（T207）：否则 collectionRate 的分母被灌水，
+          // 且与 dashboard/management-summary 明确使用 status:{not:'CANCELLED'} 的口径互相矛盾
+          status: { not: 'CANCELLED' },
           ...(query.buildingId ? { contract: { buildingId: query.buildingId } } : {}),
         },
         select: { amount: true, billType: true, status: true },
@@ -96,12 +99,18 @@ export class StatisticsService {
       }),
     ]);
 
-    // 占用房间（存在 ACTIVE 合同）
+    // 占用房间：按「统计区间的末端」计算（T207 修正）。
+    // 原实现只查 status='ACTIVE'（当下的状态），把它用在历史区间报表上会串台：
+    // 查 1 月报表却返回今天的占用数。现在改用合同有效期覆盖该时刻：
+    // 区间末端若在未来（本月/本季报表），以「当前时刻」为准，避免出现前瞻性的空档。
+    const asOf = range.end.getTime() > Date.now() ? new Date() : range.end;
     const occupiedIds = new Set(
       (
         await this.prisma.contract.findMany({
           where: {
-            status: 'ACTIVE',
+            status: { in: ['ACTIVE', 'EXPIRED', 'RENEWED'] },
+            startDate: { lte: asOf },
+            endDate: { gte: asOf },
             roomId: { in: rooms.map((r) => r.id) },
           },
           select: { roomId: true },

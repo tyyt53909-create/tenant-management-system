@@ -29,7 +29,8 @@ export class PrepayService {
       data: {
         tenantId: dto.tenantId,
         roomId: dto.roomId,
-        lowBalanceThreshold: dto.lowBalanceThreshold || 10000,
+        // 显式传 0（语义：不提醒）必须保留；`|| 10000` 会把 0 吞成 10000（T207）
+        lowBalanceThreshold: dto.lowBalanceThreshold ?? 10000,
       },
     });
   }

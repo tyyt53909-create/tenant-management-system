@@ -155,18 +155,19 @@ const visible = computed({
 const loading = ref(false);
 const voucher = ref<any>(null);
 
+// T207：与后端 CheckoutItemType 严格对齐（原先这四类扣款名在枚举里都不存在，
+// 导致标签退化成原始枚举名、且扣款被显示成 "+¥"）
 const itemTypeMap: Record<string, string> = {
-  DAMAGE_COMPENSATION: '损坏赔偿',
-  CLEANING_FEE: '清洁费扣除',
-  OVERDUE_FEE: '欠费补缴',
-  OTHER_DEDUCTION: '其他扣款',
+  DEPOSIT_DEDUCTION: '押金扣除',
+  OTHER_FEE: '其他费用',
+  RENT_REFUND: '租金退还',
   DEPOSIT_REFUND: '押金退还',
-  RENT_REFUND: '多收租金退还',
-  OTHER_REFUND: '其他退费',
+  UTILITY_REFUND: '水电余额退还',
+  OTHER_REFUND: '其他退款',
 };
 
 function isDeduction(type: string): boolean {
-  return ['DAMAGE_COMPENSATION', 'CLEANING_FEE', 'OVERDUE_FEE', 'OTHER_DEDUCTION'].includes(type);
+  return type === 'DEPOSIT_DEDUCTION' || type === 'OTHER_FEE';
 }
 
 async function fetchVoucher() {
