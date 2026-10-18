@@ -29,8 +29,12 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
+          # PR：只扫 base..head（快）；push / schedule / 手动：base 置空 → 扫全量历史。
+          # 原先固定写 default_branch 作 base，在「推送到 main」与「定时任务」这两种情况下
+          # base 与 head 是同一个提交，TruffleHog 会直接报 "BASE and HEAD commits are the same"
+          # 并以非 0 退出 —— 也就是 main 上的安全扫描从来不可能通过（T213）。
+          base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          head: ${{ github.sha }}
           extra_args: --debug --only-verified
       
       - name: 检查常见密钥模式
