@@ -53,7 +53,7 @@ export class BillsController {
     const user = resolveAuthUser(userParam);
     // 租客只能查看自己的账单
     if (user.role === 'TENANT') {
-      const tenantId = user.tenantId || user.userId || '';
+      const tenantId = user.tenantId ?? '';
       return this.billsService.findByTenant(tenantId, query);
     }
     // 管理员可以看所有
@@ -75,7 +75,9 @@ export class BillsController {
   @RequireCapability('tenant.bill.read')
   getReceipt(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
     const user = resolveAuthUser(userParam);
-    const tenantId = user.role === 'TENANT' ? user.tenantId : undefined;
+    // 租客角色一律传 tenantId（无租客档案时为空串）：服务端据此 fail-closed，
+    // 不能传 undefined —— 那会跳过归属校验（T209）
+    const tenantId = user.role === 'TENANT' ? (user.tenantId ?? '') : undefined;
     return this.billsService.getReceipt(id, tenantId);
   }
 
@@ -87,7 +89,7 @@ export class BillsController {
     const user = resolveAuthUser(userParam);
     // 租客需要验证是否是自己的账单
     if (user.role === 'TENANT') {
-      const tenantId = user.tenantId || user.userId || '';
+      const tenantId = user.tenantId ?? '';
       return this.billsService.findOneForTenant(id, tenantId);
     }
     return this.billsService.findOne(id);

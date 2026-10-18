@@ -159,6 +159,16 @@ export class BillsService {
     if (status) where.status = status;
     if (billType) where.billType = billType;
     if (contractId) where.contractId = contractId;
+    // 与 exportBills 对齐：列表同样支持楼栋与账期区间筛选（T209 之前这三个参数被静默忽略）
+    if (query.buildingId) {
+      where.contract = { room: { buildingId: query.buildingId } };
+    }
+    if (query.startDate || query.endDate) {
+      where.dueDate = {
+        ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+        ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+      };
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.bill.findMany({

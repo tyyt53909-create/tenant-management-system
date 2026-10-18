@@ -8,10 +8,14 @@ import sharp from 'sharp';
 import { FilesService } from './files.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
-const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  'base64',
-);
+// 真实 PNG 夹具（**故意带 EXIF**）：原先内嵌的 1×1 base64 本身不合规（libpng 读不了），
+// 重编码清 EXIF 这条路径在测试里从未真正跑过 —— 夹具必须能被解码，测试才有意义（T209）
+const PNG = await sharp({
+  create: { width: 8, height: 8, channels: 3, background: { r: 10, g: 20, b: 30 } },
+})
+  .withMetadata({ exif: { IFD0: { Copyright: 'tenant-system-test', Software: 'T209' } } })
+  .png()
+  .toBuffer();
 
 /**
  * 文件归属与下载授权（T159 安全修复）。
@@ -57,6 +61,18 @@ describe('FilesService', () => {
 
   it('无文件应抛错', async () => {
     await expect(service.save(undefined as any)).rejects.toThrow(BadRequestException);
+  });
+
+  it('落盘的 PNG 原图已清除 EXIF（T209：此前只对 JPEG 重编码）', async () => {
+    // 先确认测试前提：夹具本身确实是带 EXIF 的
+    expect((await sharp(PNG).metadata()).exif).toBeDefined();
+
+    const saved = await service.save(pngFile() as any);
+    const stored = await service.read(saved.key);
+
+    const meta = await sharp(stored).metadata();
+    expect(meta.format).toBe('png');
+    expect(meta.exif).toBeUndefined();
   });
 
   it('非图片类型应拒绝', async () => {

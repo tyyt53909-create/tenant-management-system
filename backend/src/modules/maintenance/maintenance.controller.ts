@@ -38,7 +38,7 @@ export class MaintenanceController {
   @RequireCapability('tenant.maintenance.read')
   findMy(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryMaintenanceDto) {
     const user = resolveAuthUser(userParam);
-    const tenantId = user.tenantId || user.userId || '';
+    const tenantId = user.tenantId ?? '';
     return this.maintenanceService.findByTenant(tenantId, query);
   }
 
@@ -49,7 +49,7 @@ export class MaintenanceController {
   findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
     const user = resolveAuthUser(userParam);
     if (user.role === 'TENANT') {
-      const tenantId = user.tenantId || user.userId || '';
+      const tenantId = user.tenantId ?? '';
       return this.maintenanceService.findOneForTenant(id, tenantId);
     }
     return this.maintenanceService.findOne(id);

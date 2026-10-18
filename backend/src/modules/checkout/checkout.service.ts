@@ -268,7 +268,8 @@ export class CheckoutService {
       throw new NotFoundException('退租记录不存在');
     }
 
-    if (tenantId && (!record.contract || record.contract.tenantId !== tenantId)) {
+    // tenantId === undefined 才代表「管理员视图」；空串是「租客但无档案」，必须走比对（T209）
+    if (tenantId !== undefined && (!record.contract || record.contract.tenantId !== tenantId)) {
       throw new NotFoundException('退租记录不存在');
     }
 

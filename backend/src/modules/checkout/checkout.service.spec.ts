@@ -375,6 +375,17 @@ describe('CheckoutService', () => {
       expect(voucher.items[0].amountYuan).toBe('200.00');
     });
 
+    it('租客无档案（tenantId 为空串）→ 404，不再 fail-open 返回他人结算单（T209）', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({
+        id: 'chk-x',
+        status: 'COMPLETED',
+        contract: { tenantId: 'tenant-real', tenant: { name: '别人' } },
+        items: [],
+      });
+
+      await expect(service.getVoucher('chk-x', '')).rejects.toThrow(NotFoundException);
+    });
+
     it('totalRefund 为空时按明细重算：押金扣除与水电余额退还都计入（回归 T207）', async () => {
       prisma.checkoutRecord.findUnique.mockResolvedValue({
         id: 'chk-2',

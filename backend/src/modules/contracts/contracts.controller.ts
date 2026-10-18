@@ -38,7 +38,7 @@ export class ContractsController {
   findMy(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryContractsDto) {
     const user = resolveAuthUser(userParam);
     if (user.role === 'TENANT') {
-      const tenantId = user.tenantId || user.userId || '';
+      const tenantId = user.tenantId ?? '';
       return this.contractsService.findByTenant(tenantId, query);
     }
     return this.contractsService.findAll(query);
@@ -51,7 +51,7 @@ export class ContractsController {
   findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
     const user = resolveAuthUser(userParam);
     if (user.role === 'TENANT') {
-      const tenantId = user.tenantId || user.userId || '';
+      const tenantId = user.tenantId ?? '';
       return this.contractsService.findOneForTenant(id, tenantId);
     }
     return this.contractsService.findOne(id);

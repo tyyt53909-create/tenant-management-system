@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, IsString, IsEnum, Min, Max } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum BillStatus {
@@ -45,11 +45,11 @@ export class QueryBillsDto {
   @IsOptional()
   buildingId?: string;
 
-  @IsString()
+  @IsDateString()
   @IsOptional()
   startDate?: string;
 
-  @IsString()
+  @IsDateString()
   @IsOptional()
   endDate?: string;
 }
