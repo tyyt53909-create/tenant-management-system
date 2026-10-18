@@ -13,8 +13,8 @@
 @media(max-width:760px){.qiju-side{width:255px;flex-basis:255px}.qiju-topbar{height:62px;padding:0 14px;gap:8px}.qiju-content{padding:20px 14px 45px}.qiju-content>.page-intro{align-items:flex-start;flex-direction:column}.qiju-content>.page-intro h1{font-size:24px}.page-head-actions{justify-content:flex-start}.management-metrics{gap:9px}.management-metric{padding:12px 10px;min-height:100px;gap:8px}.management-metric strong{font-size:21px}.management-metric-icon{width:29px;height:29px}.management-metric h2{font-size:var(--font-micro)}.management-metric p{font-size:var(--font-micro)}.qiju-content .resource-panel-body>.el-form{padding:13px 13px 0}.qiju-content .resource-panel-body>.resource-tabs{padding:13px 13px 8px}.search-trigger{width:36px}.qiju-content .resource-panel-head{margin-bottom:8px}.qiju-content .resource-panel-body>.el-form .el-form-item{margin-right:0}.v3-preferences-card{padding:18px}.v3-preference-row{gap:12px}.v3-preference-row .el-switch{flex-shrink:0}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 
-/* 中等宽度（≈761–1120px）：顶栏放不下两个带文字的触发器（本层给 search-trigger 定的
+/* 中等宽度（≤900px）：顶栏放不下两个带文字的触发器（本层给 search-trigger 定的
    宽度是 272px），必须在此换成图标态；否则文字会被压成一字一行的竖排，
    或把顶栏撑出横向滚动。title 提示与 ⌘V / ⌘K 快捷键仍然可用。
    放在本文件末尾是为了盖过上面的 .search-trigger{width:272px}。 */
-@media(max-width:1120px){.voucher-trigger{width:36px;padding:0;justify-content:center}.voucher-trigger span,.voucher-trigger kbd{display:none}.search-trigger{width:36px;min-width:36px;padding:0;justify-content:center}.search-trigger span,.search-trigger kbd{display:none}}
+@media(max-width:900px){.voucher-trigger{width:36px;padding:0;justify-content:center}.voucher-trigger span,.voucher-trigger kbd{display:none}.search-trigger{width:36px;min-width:36px;padding:0;justify-content:center}.search-trigger span,.search-trigger kbd{display:none}}
