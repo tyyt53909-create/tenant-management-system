@@ -1,13 +1,8 @@
 <template>
   <div class="buildings-page">
-    <el-card>
-      <el-form :inline="true">
-        <el-form-item>
-          <el-button type="primary" @click="handleCreate">新增楼栋</el-button>
-        </el-form-item>
-      </el-form>
-
-      <el-table :data="tableData" v-loading="loading" border stripe empty-text="暂无楼栋，点击右上角「新增楼栋」开始录入">
+    <ResourcePanel title="楼栋管理" description="维护楼栋档案与租客端联系卡片信息" :count="pagination.total" :loading="loading" :error="loadError || undefined" @retry="fetchData">
+      <template #actions><el-button type="primary" @click="handleCreate">新增楼栋</el-button></template>
+      <el-table :data="tableData" v-loading="loading" :empty-text="emptyText">
         <el-table-column prop="name" label="楼栋名称" width="180" />
         <el-table-column prop="address" label="地址" min-width="240" />
         <el-table-column label="总楼层" width="90">
@@ -17,11 +12,12 @@
         </el-table-column>
         <el-table-column label="管家/房东联系" width="220">
           <template #default="{ row }">
-            <div v-if="row.metadata?.landlordName || row.metadata?.landlordPhone">
-              <div style="font-weight: 550; color: #333;">{{ row.metadata.landlordName || '专属管家' }} <span style="font-size: 12px; color: #666; font-weight: normal;">{{ row.metadata.landlordPhone }}</span></div>
-              <div v-if="row.metadata?.landlordWechat" style="font-size: 12px; color: #2e7d32;">微信: {{ row.metadata.landlordWechat }}</div>
-            </div>
-            <span v-else style="color: #bbb;">默认管家服务</span>
+            <template v-if="row.metadata?.landlordName || row.metadata?.landlordPhone">
+              <strong>{{ row.metadata.landlordName || '专属管家' }}</strong>
+              <small class="table-subline">{{ row.metadata.landlordPhone || '未登记电话' }}</small>
+              <small v-if="row.metadata?.landlordWechat" class="table-subline wechat-line">微信: {{ row.metadata.landlordWechat }}</small>
+            </template>
+            <span v-else class="table-subline">默认管家服务</span>
           </template>
         </el-table-column>
         <el-table-column prop="isActive" label="状态" width="90">
@@ -44,7 +40,7 @@
         </el-table-column>
       </el-table>
 
-      <div style="margin-top: 20px; text-align: right">
+      <div>
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.limit"
@@ -53,7 +49,7 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
       <el-form ref="formRef" :model="formData" :rules="rules" label-width="110px">
@@ -99,10 +95,12 @@ import type { FormInstance } from 'element-plus';
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding } from '@/api/buildings';
 import type { Building } from '@/types';
 import { usePagedTable } from '@/composables';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
 
-const { loading, tableData, pagination, fetchData } = usePagedTable<Building>({
+const { loading, loadError, tableData, pagination, fetchData } = usePagedTable<Building>({
   fetchApi: (params) => getBuildings(params),
 });
+const emptyText = '暂无楼栋，点击右上角「新增楼栋」开始录入';
 
 const submitLoading = ref(false);
 const dialogVisible = ref(false);
@@ -217,4 +215,5 @@ onMounted(fetchData);
 
 <style scoped>
 .buildings-page { padding: 0; }
+.wechat-line { color: var(--success-text); }
 </style>

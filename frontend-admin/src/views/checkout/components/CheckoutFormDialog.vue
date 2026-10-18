@@ -464,7 +464,7 @@ const handleSubmit = async () => {
 
 .items-editor__tip {
   margin-left: auto;
-  color: #909399;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -481,7 +481,7 @@ const handleSubmit = async () => {
 }
 
 .amount-deduction {
-  color: #f56c6c;
+  color: var(--error-text);
   font-weight: 600;
 }
 

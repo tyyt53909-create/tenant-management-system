@@ -254,7 +254,7 @@ onMounted(fetchData);
 }
 
 .detail-label {
-  color: #909399;
+  color: var(--text-muted);
   width: 64px;
   flex: none;
 }

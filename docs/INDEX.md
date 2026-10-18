@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-18
-> 文档总数: 106 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 文档总数: 109 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
 > 状态标注: active 43、draft 7、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 118 份（含本索引与归档）
-> 任务书: 81 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 121 份（含本索引与归档）
+> 任务书: 82 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -36,6 +36,7 @@
 | [12-部署与运维.md](./12-部署与运维.md) | 部署与运维 | 事实来源类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\*、docker-compose.yml | 2026-10-16 | 环境变量清单；T174 OTP 开关与 SMTP，T175 限流与 TRUST_PROXY |
 | [14-下一阶段计划（草案）.md](./14-下一阶段计划（草案）.md) | 下一阶段计划（草案） | 过程类 | draft | strong | docs/**、backend/**、frontend-admin/**、miniprogram/** | 2026-10-18 | 文檔二草案：只彙整已有证据的剩余工作，**范围待人工确认** |
 | [13-架构与现有代码优化计划.md](./13-架构与现有代码优化计划.md) | 架构与现有代码优化计划 | 过程类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\* | 2026-10-15 | OPT-01～OPT-28，不加新业务功能 |
+| [15-管理后台设计系统.md](./15-管理后台设计系统.md) | 管理后台设计系统 | 事实来源类 | active | medium | frontend-admin/src/styles/\*\*、frontend-admin/src/style.css、frontend-admin/src/components/common/ResourcePanel.vue、frontend-admin/src/views/\*\* | 2026-10-18 | 令牌唯一来源、WCAG AA 对比度表、11px 字级地板、页面骨架与顶栏断点 |
 
 ---
 

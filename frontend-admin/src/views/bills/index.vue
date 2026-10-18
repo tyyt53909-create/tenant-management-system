@@ -460,7 +460,7 @@ onUnmounted(() => {
 .late-fee-suggest {
   margin-right: 2px;
   font-style: normal;
-  color: #909399;
+  color: var(--text-muted);
 }
-.late-fee-empty { color: #c0c4cc; }
+.late-fee-empty { color: var(--text-muted); }
 </style>
