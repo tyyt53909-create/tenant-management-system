@@ -137,12 +137,12 @@ const chartOption = computed<EChartsOption>(() => {
       boundaryGap: false,
       axisLine: { lineStyle: { color: '#e9e5dd' } },
       axisTick: { show: false },
-      axisLabel: { color: '#8b897f', fontSize: 11 },
+      axisLabel: { color: '#6f6c63', fontSize: 11 },
     },
     yAxis: {
       type: 'value',
       splitLine: { lineStyle: { color: '#f0ede5' } },
-      axisLabel: { color: '#8b897f', fontSize: 11 },
+      axisLabel: { color: '#6f6c63', fontSize: 11 },
     },
     series: [
       {
@@ -206,7 +206,7 @@ const chartOption = computed<EChartsOption>(() => {
 .trend-tabs {
   display: flex;
   gap: 4px;
-  background: #ece7de;
+  background: #f2eee7; /* 白字面较浅一阶，使内文达到 4.5:1 */
   padding: 2px;
   border-radius: 6px;
 }
@@ -216,7 +216,7 @@ const chartOption = computed<EChartsOption>(() => {
   background: transparent;
   padding: 4px 10px;
   font-size: 11px;
-  color: #736f66;
+  color: var(--text-muted);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -245,7 +245,7 @@ const chartOption = computed<EChartsOption>(() => {
 
 .stat-label {
   font-size: 11px;
-  color: #8b897f;
+  color: var(--text-muted);
 }
 
 .stat-mom {
@@ -256,7 +256,7 @@ const chartOption = computed<EChartsOption>(() => {
 }
 
 .stat-mom.up {
-  color: #a35d32;
+  color: #8f5a2b;
   background: #f7ebe1;
 }
 

@@ -17,7 +17,10 @@
           <span v-if="item.path==='/maintenance' && management.snapshot?.maintenance.submitted" class="nav-count">{{ Math.min(management.snapshot.maintenance.submitted,99) }}</span>
         </router-link>
       </nav>
-      <div class="side-bottom"><div class="workspace-card"><span class="workspace-icon"><el-icon><OfficeBuilding /></el-icon></span><div><strong>租赁运营中心</strong><small>房源与服务，有序相连</small></div></div></div>
+      <div class="side-bottom"><el-dropdown class="side-user-dropdown" trigger="click" placement="top-start" @command="handleCommand">
+        <button class="side-user" aria-label="账户与退出登录"><span class="user-avatar">{{ userInitial }}</span><div><strong>{{ userStore.user?.email || '管理员' }}</strong><small>{{ roleLabel }}</small></div><el-icon><ArrowDown /></el-icon></button>
+        <template #dropdown><el-dropdown-menu><el-dropdown-item command="logout">退出登录</el-dropdown-item></el-dropdown-menu></template>
+      </el-dropdown></div>
     </aside>
     <div class="qiju-main">
       <header class="qiju-topbar">
@@ -28,10 +31,6 @@
         <button class="search-trigger" @click="searchVisible = true"><el-icon><Search /></el-icon><span>搜索页面与服务…</span><kbd>⌘ K</kbd></button>
         <span class="top-date">{{ today }}</span>
         <router-link class="icon-button" to="/notifications" aria-label="通知中心"><el-icon :size="20"><Bell /></el-icon><i v-if="notificationStore.unreadCount" class="unread-dot" /></router-link>
-        <el-dropdown @command="handleCommand">
-          <button class="user-button"><span class="user-avatar">{{ userInitial }}</span><span class="user-label">{{ userStore.user?.email || '管理员' }}</span><el-icon><ArrowDown /></el-icon></button>
-          <template #dropdown><el-dropdown-menu><el-dropdown-item command="logout">退出登录</el-dropdown-item></el-dropdown-menu></template>
-        </el-dropdown>
       </header>
       <main id="workspace-content" class="qiju-content" tabindex="-1">
         <div v-if="route.path !== '/dashboard'" class="page-intro">
@@ -106,6 +105,11 @@ const navigation = [
 const currentPage = computed(() => navigation.find((item) => item.path === route.path) || navigation[0]!);
 const today = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date());
 const userInitial = computed(() => userStore.user?.email?.slice(0, 1).toUpperCase() || '管');
+/** 侧栏账户卡的第二行：让「这个账号是谁」一眼可见，不必展开菜单 */
+const roleLabel = computed(() => {
+  const map: Record<string, string> = { ADMIN: '管理员账号', TENANT: '租客账号', CLEANER: '保洁账号' };
+  return map[userStore.user?.role as string] || '当前登录账号';
+});
 const searchResults = computed(() => navigation.filter((item) => `${item.title}${item.description}`.includes(searchQuery.value.trim())));
 function openPage(path: string) { searchVisible.value = false; searchQuery.value = ''; router.push(path); }
 function handleCommand(command: string) { if (command === 'logout') { userStore.logout(); router.push('/login'); } }

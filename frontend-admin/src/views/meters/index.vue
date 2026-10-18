@@ -111,20 +111,20 @@
           <el-descriptions-item label="签约租客">{{ unsettledInfo?.tenantName || '无生效合同' }}</el-descriptions-item>
           <el-descriptions-item label="单价">¥{{ ((currentMeter?.unitPrice || 0) / 100).toFixed(2) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
           <el-descriptions-item label="预付余额">
-            <span v-if="unsettledInfo && unsettledInfo.prepayBalance !== null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? '#F56C6C' : '#67C23A', fontWeight: 'bold' }">
+            <span v-if="unsettledInfo && unsettledInfo.prepayBalance !== null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? 'var(--error-text)' : 'var(--success-text)', fontWeight: 'bold' }">
               ¥{{ (unsettledInfo.prepayBalance / 100).toFixed(2) }}
             </span>
-            <span v-else style="color: #909399">无预付账户</span>
+            <span v-else style="color: var(--text-muted)">无预付账户</span>
           </el-descriptions-item>
           <el-descriptions-item label="起步结算底数">{{ unsettledInfo?.lastSettledReading ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="当前最新读数">{{ unsettledInfo?.currentReading ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="待结算用量">
-            <span style="font-size: 15px; font-weight: bold; color: #409EFF">
+            <span style="font-size: 15px; font-weight: bold; color: var(--info-text)">
               {{ unsettledInfo?.unsettledUsage ?? 0 }} {{ unitMap[currentMeter?.meterType || ''] || '' }}
             </span>
           </el-descriptions-item>
           <el-descriptions-item label="预估结算金额">
-            <span style="font-size: 15px; font-weight: bold; color: #E6A23C">
+            <span style="font-size: 15px; font-weight: bold; color: var(--warning-text)">
               ¥{{ ((unsettledInfo?.estimatedAmount || 0) / 100).toFixed(2) }}
             </span>
           </el-descriptions-item>

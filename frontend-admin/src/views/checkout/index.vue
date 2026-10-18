@@ -370,12 +370,12 @@ onMounted(fetchData);
 }
 
 .amount-deduction {
-  color: #f56c6c;
+  color: var(--error-text);
   font-weight: 600;
 }
 
 .amount-refund {
-  color: #67c23a;
+  color: var(--success-text);
   font-weight: 600;
 }
 </style>

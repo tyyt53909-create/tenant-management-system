@@ -367,7 +367,7 @@ const handleConfirmLateFee = async () => {
 <style scoped>
 .field-hint {
   margin-left: 8px;
-  color: #909399;
+  color: var(--text-muted);
   font-size: 12px;
 }
 .late-fee-body {

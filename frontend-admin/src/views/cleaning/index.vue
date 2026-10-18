@@ -274,19 +274,19 @@ onMounted(() => {
 }
 
 .stat-card--pending {
-  border-left-color: #e6a23c;
+  border-left-color: var(--warning-text);
 }
 
 .stat-card--cleaning {
-  border-left-color: #409eff;
+  border-left-color: var(--info-text);
 }
 
 .stat-card--clean {
-  border-left-color: #67c23a;
+  border-left-color: var(--success-text);
 }
 
 .stat-label {
-  color: #909399;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -302,7 +302,7 @@ onMounted(() => {
 }
 
 .no-action {
-  color: #909399;
+  color: var(--text-muted);
   font-size: 13px;
 }
 </style>
