@@ -35,7 +35,9 @@ import { RoomsController } from '../src/modules/rooms/rooms.controller.js';
 import { RoomsService } from '../src/modules/rooms/rooms.service.js';
 import { TenantCapabilityService } from '../src/modules/tenant-capabilities/tenant-capability.service.js';
 import { TenantsController } from '../src/modules/tenants/tenants.controller.js';
+import { TagsController } from '../src/modules/tags/tags.controller.js';
 import { TenantsService } from '../src/modules/tenants/tenants.service.js';
+import { TagsService } from '../src/modules/tags/tags.service.js';
 
 /**
  * 越权回归测试（T148）
@@ -88,6 +90,12 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       preview: vi.fn().mockResolvedValue({ entity: 'tenants', totalRows: 0, skipped: 0, imported: 0, errors: [], dryRun: true }),
       commit: vi.fn().mockResolvedValue({ entity: 'tenants', totalRows: 0, skipped: 0, imported: 0, errors: [], dryRun: true }),
     };
+    const tagsService = {
+      findAll: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({ id: 'tag-new', name: '学生', sort: 0 }),
+      update: vi.fn().mockResolvedValue({ id: 'tag-1', name: '学生', sort: 0 }),
+      remove: vi.fn().mockResolvedValue({ message: '标签已删除', affectedTenants: 0 }),
+    };
     billsService = {
       findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
       findByTenant: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
@@ -125,6 +133,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       controllers: [
         TenantsController,
         ImportsController,
+        TagsController,
         BillsController,
         ContractsController,
         MaintenanceController,
@@ -140,6 +149,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'test' }) },
         { provide: TenantsService, useValue: tenantsService },
         { provide: ImportsService, useValue: importsService },
+        { provide: TagsService, useValue: tagsService },
         { provide: BillsService, useValue: billsService },
         { provide: CheckoutService, useValue: checkoutService },
         {
@@ -431,6 +441,48 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
     it('ADMIN 下载模板 → 200 text/csv', async () => {
       const res = await as(request(app.getHttpServer()).get('/imports/tenants/template'), 'ADMIN').expect(200);
       expect(res.headers['content-type']).toContain('text/csv');
+    });
+  });
+
+  describe('标签字典（T215）', () => {
+    const adminWrites: { method: 'post' | 'patch' | 'delete'; path: string }[] = [
+      { method: 'post', path: '/tags' },
+      { method: 'patch', path: '/tags/tag-1' },
+      { method: 'delete', path: '/tags/tag-1' },
+    ];
+
+    it('未登录一律 401', async () => {
+      await request(app.getHttpServer()).get('/tags').expect(401);
+      for (const { method, path } of adminWrites) {
+        await request(app.getHttpServer())[method](path).expect(401);
+      }
+    });
+
+    it('CLEANER 可读、不可改', async () => {
+      await as(request(app.getHttpServer()).get('/tags'), 'CLEANER').expect(200);
+      for (const { method, path } of adminWrites) {
+        await as(request(app.getHttpServer())[method](path), 'CLEANER').expect(403);
+      }
+    });
+
+    it('TENANT 可读（打标签时的候选）、不可改', async () => {
+      await as(request(app.getHttpServer()).get('/tags'), 'TENANT', 'tenant-self').expect(200);
+      for (const { method, path } of adminWrites) {
+        await as(request(app.getHttpServer())[method](path), 'TENANT', 'tenant-self').expect(403);
+      }
+    });
+
+    it('TENANT 无租客档案仍可读标签（标签本身与租客档案无关）', async () => {
+      await request(app.getHttpServer())
+        .get('/tags')
+        .set('x-test-role', 'TENANT')
+        .set('x-test-tenant', '')
+        .expect(200);
+    });
+
+    it('ADMIN 可读可写', async () => {
+      await as(request(app.getHttpServer()).get('/tags'), 'ADMIN').expect(200);
+      await as(request(app.getHttpServer()).post('/tags').send({ name: '学生' }), 'ADMIN').expect(201);
     });
   });
 

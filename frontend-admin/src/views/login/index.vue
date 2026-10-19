@@ -217,14 +217,14 @@ onMounted(async () => {
   color: #302f2a;
 }
 .login-brand { font-size: 18px; color: #535b43; letter-spacing: .1em; }
-.login-brand span { font-size: 9px; margin-left: 10px; color: #a39a8c; }
-.login-subtitle { color: #8b897f; font-size: 12px; margin-bottom: 10px; }
+.login-brand span { font-size: 9px; margin-left: 10px; color: var(--text-subtle); }
+.login-subtitle { color: var(--text-muted); font-size: 12px; margin-bottom: 10px; }
 
 .oauth-divider {
   display: flex;
   align-items: center;
   margin: 24px 0 18px;
-  color: #a49f95;
+  color: var(--text-muted);
   font-size: 12px;
 }
 .oauth-divider::before,

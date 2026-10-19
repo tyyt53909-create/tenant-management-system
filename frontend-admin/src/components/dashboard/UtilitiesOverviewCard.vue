@@ -217,7 +217,7 @@ onMounted(() => {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.1em;
-  color: #8c827a;
+  color: var(--text-muted);
   text-transform: uppercase;
   margin-bottom: 4px;
 }
@@ -241,7 +241,7 @@ onMounted(() => {
   padding: 2px 9px;
   border-radius: 6px;
   background: #f4f1ea;
-  color: #766e65;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -253,7 +253,7 @@ onMounted(() => {
 .subtitle {
   margin: 6px 0 0;
   font-size: 13px;
-  color: #8c827a;
+  color: var(--text-muted);
 }
 
 /* 头部控件 */
@@ -336,12 +336,12 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   font-size: 13px;
-  color: #767167;
+  color: var(--text-muted);
 }
 
 .kpi-icon {
   font-size: 16px;
-  color: #9d988d;
+  color: var(--text-subtle);
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
 }
 
@@ -367,7 +367,7 @@ onMounted(() => {
 
 .kpi-value .unit {
   font-size: 13px;
-  color: #8c827a;
+  color: var(--text-muted);
   font-weight: 400;
 }
 
@@ -376,7 +376,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #8c827a;
+  color: var(--text-muted);
 }
 
 .mom-rate {
@@ -384,7 +384,7 @@ onMounted(() => {
 }
 
 .mom-rate.up {
-  color: #ba6459;
+  color: var(--error-text);
 }
 
 .mom-rate.down {
@@ -404,7 +404,7 @@ onMounted(() => {
 
 .status-badge.warning {
   background: #faecea;
-  color: #ba6459;
+  color: var(--error-text);
 }
 
 .status-badge.done {
@@ -414,7 +414,7 @@ onMounted(() => {
 
 .cost-split {
   font-size: 12px;
-  color: #8c827a;
+  color: var(--text-muted);
 }
 
 /* 响应式适配 */

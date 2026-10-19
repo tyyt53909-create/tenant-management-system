@@ -61,7 +61,7 @@
     </div>
 
     <div v-else-if="result.isCancelled" class="settled-notice is-cancelled">
-      <el-icon :size="24" color="#909399"><InfoFilled /></el-icon>
+      <el-icon :size="24" color="var(--text-muted)"><InfoFilled /></el-icon>
       <div>
         <strong>该账单已被取消</strong>
         <p>此账单已被作废或取消，不可进行收款入账操作。</p>
@@ -237,13 +237,13 @@ const bannerDesc = computed(() => {
 
 .banner-matched {
   background: #f6ffed;
-  color: #389e0d;
+  color: var(--success-text);
   border-bottom-color: #b7eb8f;
 }
 
 .banner-mismatch {
   background: #fffbe6;
-  color: #d46b08;
+  color: var(--warning-text);
   border-bottom-color: #ffe58f;
 }
 
@@ -280,7 +280,7 @@ const bannerDesc = computed(() => {
 
 .meta-col .lbl {
   font-size: 11px;
-  color: #8c8983;
+  color: var(--text-muted);
 }
 
 .meta-col .val {
@@ -296,7 +296,7 @@ const bannerDesc = computed(() => {
 }
 
 .text-success {
-  color: #389e0d !important;
+  color: var(--success-text) !important;
 }
 
 .font-mono {
@@ -348,6 +348,6 @@ const bannerDesc = computed(() => {
 .form-section-title small {
   margin-left: 8px;
   font-size: 11px;
-  color: #8c8983;
+  color: var(--text-muted);
 }
 </style>

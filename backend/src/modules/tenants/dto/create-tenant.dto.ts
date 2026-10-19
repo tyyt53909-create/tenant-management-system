@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsEmail, IsOptional, Matches } from 'class-validator';
+import { IsString, IsNotEmpty, IsEmail, IsOptional, Matches, IsArray, ArrayMaxSize } from 'class-validator';
 
 export class CreateTenantDto {
   @IsString()
@@ -22,8 +22,15 @@ export class CreateTenantDto {
   @IsOptional()
   emergencyPhone?: string;
 
+  /**
+   * 标签字典 ID 列表（T215）。服务端会校验每个 ID 都存在；
+   * 未传表示不改动，传 [] 表示清空。
+   */
+  @IsArray()
+  @ArrayMaxSize(20, { message: '单个租客最多 20 个标签' })
+  @IsString({ each: true })
   @IsOptional()
-  tags?: Record<string, unknown> | unknown[]; // JSON
+  tagIds?: string[];
 
   @IsString()
   @IsOptional()
