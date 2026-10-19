@@ -120,7 +120,7 @@
         </el-table-column>
         <el-table-column label="金额" width="110">
           <template #default="{ row }">
-            <span :style="{ color: row.amount >= 0 ? '#67c23a' : '#f56c6c' }">
+            <span :style="{ color: row.amount >= 0 ? 'var(--success-text)' : 'var(--error-text)' }">
               {{ row.amount >= 0 ? '+' : '-' }}¥{{ (Math.abs(row.amount) / 100).toFixed(2) }}
             </span>
           </template>
@@ -419,13 +419,13 @@ onMounted(fetchData);
 }
 
 .low-balance {
-  color: #f56c6c;
+  color: var(--error-text);
   font-weight: 600;
 }
 
 .tx-hint {
   margin-left: 8px;
-  color: #909399;
+  color: var(--text-muted);
   font-size: 12px;
 }
 </style>

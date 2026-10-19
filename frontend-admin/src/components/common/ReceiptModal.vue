@@ -256,7 +256,7 @@ function handlePrint() {
 
 .paid-cell {
   font-weight: 600;
-  color: #059669;
+  color: var(--success-text);
 }
 
 .pay-sub-line {
@@ -288,12 +288,12 @@ function handlePrint() {
 .number-amount {
   font-size: 18px;
   font-weight: 700;
-  color: #059669;
+  color: var(--success-text);
 }
 
 .unpaid-reminder {
   font-size: 12px;
-  color: #d97706;
+  color: var(--warning-text);
   margin-bottom: 16px;
 }
 
@@ -316,7 +316,7 @@ function handlePrint() {
 .sign-underline {
   display: inline-block;
   width: 120px;
-  border-bottom: 1px solid #94a3b8;
+  border-bottom: 1px solid var(--text-muted);
   margin-left: 6px;
 }
 
@@ -330,13 +330,13 @@ function handlePrint() {
 .stamp-circle {
   width: 90px;
   height: 90px;
-  border: 2px dashed #dc2626;
+  border: 2px dashed var(--error-text);
   border-radius: 50%;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  color: #dc2626;
+  color: var(--error-text);
   transform: rotate(-15deg);
   opacity: 0.85;
 }
@@ -361,7 +361,7 @@ function handlePrint() {
 
 .print-tip {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 @media print {

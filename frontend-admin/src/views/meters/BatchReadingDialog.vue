@@ -408,12 +408,12 @@ async function handleSubmitBatch() {
 }
 
 .stat-pill.highlight {
-  border-color: #3b82f6;
+  border-color: var(--info-text);
   color: #1d4ed8;
 }
 
 .stat-pill.cost {
-  border-color: #10b981;
+  border-color: var(--success-text);
   color: #047857;
 }
 
@@ -432,8 +432,8 @@ async function handleSubmitBatch() {
 }
 
 .reading-num-input.input-invalid :deep(.el-input__wrapper) {
-  border: 1px solid #ef4444 !important;
-  box-shadow: 0 0 0 1px #ef4444 inset !important;
+  border: 1px solid var(--error-text) !important;
+  box-shadow: 0 0 0 1px var(--error-text) inset !important;
 }
 
 .reading-num-input.input-surge :deep(.el-input__wrapper) {
@@ -457,12 +457,12 @@ async function handleSubmitBatch() {
 }
 
 .text-danger {
-  color: #ef4444;
+  color: var(--error-text);
   font-weight: bold;
 }
 
 .text-placeholder {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .dialog-footer {

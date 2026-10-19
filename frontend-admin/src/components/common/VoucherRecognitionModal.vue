@@ -347,7 +347,7 @@ defineExpose({
 
 .zone-kbd-tip {
   font-size: 11px;
-  color: #8c8983;
+  color: var(--text-muted);
 }
 
 .zone-kbd-tip b {
@@ -368,7 +368,7 @@ defineExpose({
 
 .paste-hint {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--text-muted);
 }
 
 .result-loading-box {
@@ -418,7 +418,7 @@ defineExpose({
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #8c8983;
+  color: var(--text-muted);
 }
 
 .right-buttons {

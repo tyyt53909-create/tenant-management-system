@@ -476,6 +476,6 @@ watch(detailVisible,open=>{if(!open&&route.query.detail===detailId.value)void ro
 
 <style scoped>
 .contracts-page { padding: 0; }
-.muted { color: #c0c4cc; }
-.hint { margin-left: 8px; color: #909399; font-size: 12px; }
+.muted { color: var(--text-muted); }
+.hint { margin-left: 8px; color: var(--text-muted); font-size: 12px; }
 </style>

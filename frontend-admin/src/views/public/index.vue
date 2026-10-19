@@ -184,15 +184,15 @@ onMounted(() => {
 .public-rooms { padding: 0; }
 .header { display: flex; justify-content: space-between; align-items: flex-start; }
 .title { margin: 0; font-size: 20px; }
-.sub { margin: 6px 0 0; color: #909399; font-size: 13px; }
+.sub { margin: 6px 0 0; color: var(--text-muted); font-size: 13px; }
 .room-card { margin-bottom: 16px; cursor: pointer; }
 .room-cover { height: 140px; background: #f5f7fa; border-radius: 4px; overflow: hidden; }
 .room-cover img { width: 100%; height: 100%; object-fit: cover; }
-.no-photo { height: 100%; display: flex; align-items: center; justify-content: center; color: #c0c4cc; font-size: 13px; }
+.no-photo { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; }
 .room-body { padding-top: 10px; }
 .room-title { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
 .room-meta { margin-top: 6px; color: #606266; font-size: 13px; }
-.room-desc { margin-top: 6px; color: #909399; font-size: 12px; min-height: 32px; }
+.room-desc { margin-top: 6px; color: var(--text-muted); font-size: 12px; min-height: 32px; }
 .detail-photos { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .detail-photos img { width: 140px; height: 100px; object-fit: cover; border-radius: 4px; }
 </style>
