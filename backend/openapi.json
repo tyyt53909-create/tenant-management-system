@@ -2073,6 +2073,174 @@
         ]
       }
     },
+    "/api/imports/{entity}/template": {
+      "get": {
+        "operationId": "ImportsController_template",
+        "parameters": [
+          {
+            "name": "entity",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "下载模板（UTF-8 BOM，Excel 直接打开不乱码）",
+        "tags": [
+          "Imports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/imports/{entity}/preview": {
+      "post": {
+        "operationId": "ImportsController_preview",
+        "parameters": [
+          {
+            "name": "entity",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "description": "楼栋 ID；不传时用 DEFAULT_BUILDING_ID",
+            "schema": {
+              "maxLength": 40,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "预检：返回逐行错误与跳过数，不写库",
+        "tags": [
+          "Imports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/imports/{entity}/commit": {
+      "post": {
+        "operationId": "ImportsController_commit",
+        "parameters": [
+          {
+            "name": "entity",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "description": "楼栋 ID；不传时用 DEFAULT_BUILDING_ID",
+            "schema": {
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "dryRun",
+            "required": false,
+            "in": "query",
+            "description": "true = 只预检不写入（默认）；false = 真正写入。\n用显式开关而不是「预检接口 + 写入接口」两个上传来避免文件被上传两次。",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "写入。默认 dryRun=true，只有显式传 dryRun=false 才真正落库——\n避免误调用一次 commit 就把数据写进去。",
+        "tags": [
+          "Imports"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/tags": {
       "get": {
         "operationId": "TagsController_findAll",

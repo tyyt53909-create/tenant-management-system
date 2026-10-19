@@ -16,6 +16,7 @@ import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
 import { TenantsModule } from './modules/tenants/tenants.module.js';
+import { ImportsModule } from './modules/imports/imports.module.js';
 import { TagsModule } from './modules/tags/tags.module.js';
 import { BuildingsModule } from './modules/buildings/buildings.module.js';
 import { ContractsModule } from './modules/contracts/contracts.module.js';
@@ -59,6 +60,7 @@ import { HealthModule } from './modules/health/health.module.js';
     AuthModule,
     RoomsModule,
     TenantsModule,
+    ImportsModule,
     TagsModule,
     BuildingsModule,
     ContractsModule,

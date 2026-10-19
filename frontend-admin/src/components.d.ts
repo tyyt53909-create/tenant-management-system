@@ -58,6 +58,7 @@ declare module 'vue' {
     ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
+    ElUpload: typeof import('element-plus/es')['ElUpload']
     EntitySelect: typeof import('./components/common/EntitySelect.vue')['default']
     ExportCurrent: typeof import('./components/common/ExportCurrent.vue')['default']
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
