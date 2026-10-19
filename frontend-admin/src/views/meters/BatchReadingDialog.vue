@@ -99,30 +99,30 @@
                 placeholder="回车下一行"
                 class="reading-num-input"
                 :class="{
-                  'input-invalid': isRowInvalid(row),
-                  'input-surge': isRowSurge(row),
+                  'input-invalid': isRowInvalid(row as BatchSheetItem),
+                  'input-surge': isRowSurge(row as BatchSheetItem),
                 }"
                 @keydown.enter.prevent="focusNextRow($index)"
                 @keydown.down.prevent="focusNextRow($index)"
                 @keydown.up.prevent="focusPrevRow($index)"
               />
-              <span v-if="isRowInvalid(row)" class="warning-tag error">倒退</span>
-              <span v-else-if="isRowSurge(row)" class="warning-tag surge">突增</span>
+              <span v-if="isRowInvalid(row as BatchSheetItem)" class="warning-tag error">倒退</span>
+              <span v-else-if="isRowSurge(row as BatchSheetItem)" class="warning-tag surge">突增</span>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="本次用量" width="100" align="right">
           <template #default="{ row }">
-            <span v-if="hasInput(row.meterId)" :class="{ 'text-danger': isRowInvalid(row) }">
-              {{ computeUsage(row).toFixed(2) }}
+            <span v-if="hasInput(row.meterId)" :class="{ 'text-danger': isRowInvalid(row as BatchSheetItem) }">
+              {{ computeUsage(row as BatchSheetItem).toFixed(2) }}
             </span>
             <span v-else class="text-placeholder">-</span>
           </template>
         </el-table-column>
         <el-table-column label="预估费用" width="100" align="right">
           <template #default="{ row }">
-            <span v-if="hasInput(row.meterId) && !isRowInvalid(row)">
-              ¥{{ (computeCost(row) / 100).toFixed(2) }}
+            <span v-if="hasInput(row.meterId) && !isRowInvalid(row as BatchSheetItem)">
+              ¥{{ (computeCost(row as BatchSheetItem) / 100).toFixed(2) }}
             </span>
             <span v-else class="text-placeholder">-</span>
           </template>
@@ -132,7 +132,7 @@
             <template v-if="row.prepayBalance !== null">
               <el-tag
                 size="small"
-                :type="row.prepayBalance >= computeCost(row) ? 'success' : 'warning'"
+                :type="row.prepayBalance >= computeCost(row as BatchSheetItem) ? 'success' : 'warning'"
               >
                 ¥{{ (row.prepayBalance / 100).toFixed(2) }}
               </el-tag>

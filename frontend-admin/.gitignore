@@ -25,3 +25,8 @@ e2e/.auth/
 *.njsproj
 *.sln
 *.sw?
+
+# 类型声明（T205）
+# src/components.d.ts 由 unplugin-vue-components 生成，但**刻意纳入版本管理**，不要加入忽略：
+# `npm run build` 是 `vue-tsc -b && vite build`，vue-tsc 先跑，CI 需要这份声明才能对 <el-*> 组件与
+# v-loading 指令做类型检查。改 vite.config.ts 的 Components() 配置后请重新构建并提交该文件。

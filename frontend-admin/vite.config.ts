@@ -17,10 +17,11 @@ export default defineConfig(({ mode }) => {
       // 必须在 element-variables.css 之前加载才能被栖居主题覆盖），这里只做 JS 按需。
       Components({
         resolvers: [ElementPlusResolver({ importStyle: false })],
-        // dts 暂不生成：生成后 vue-tsc 会首次拿到 Element Plus 的插槽类型，
-        // 从而对 11 个视图里既有的 `#default="{ row }"` 报 79 处 DefaultRow 类型错误
-        // （属历史宽松写法，非本次改动引入）。修完那些插槽标注再打开，见 T204 交接记录 §5。
-        dts: false,
+        // 生成元件/指令的全局类型声明（src/components.d.ts，已纳入版本管理），
+        // 让 vue-tsc 能对 <el-*> 做真实类型检查（含 v-loading 等指令）。
+        // 开启前提：11 个视图的 el-table-column 插槽已补齐显式标注（T205），
+        // 否则 row 会推断为 DefaultRow 并报大量 TS2345，见 T204 交接记录 §四。
+        dts: 'src/components.d.ts',
       }),
     ],
     resolve: {

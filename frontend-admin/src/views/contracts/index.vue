@@ -29,7 +29,7 @@
         :empty-text="emptyText"
         :default-sort="{ prop: 'endDate', order: 'descending' }"
       >
-        <el-table-column prop="contractNumber" label="合同 / 签约人" :min-width="detailVisible ? 200 : 250" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row)"><span class="record-glyph"><el-icon><Document /></el-icon></span><span><strong>{{ row.contractNumber }}</strong><small>{{ row.room?.roomNumber || '未关联房源' }} · {{ row.tenant?.name || '未关联租客' }}</small></span></button></template></el-table-column>
+        <el-table-column prop="contractNumber" label="合同 / 签约人" :min-width="detailVisible ? 200 : 250" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row as Contract)"><span class="record-glyph"><el-icon><Document /></el-icon></span><span><strong>{{ row.contractNumber }}</strong><small>{{ row.room?.roomNumber || '未关联房源' }} · {{ row.tenant?.name || '未关联租客' }}</small></span></button></template></el-table-column>
         <el-table-column v-if="detailVisible" prop="endDate" sort-by="endDateOnly" label="合同期限" width="130" sortable><template #default="{row}">{{ formatDateOnly(row.startDate) }}<span class="table-subline">{{ formatDateOnly(row.endDate) }}</span></template></el-table-column>
         <el-table-column v-if="!detailVisible" prop="startDate" sort-by="startDateOnly" label="开始日期" width="120" sortable>
           <template #default="{ row }">
@@ -76,8 +76,8 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="openDetail(row)">详情</el-button>
-            <el-dropdown><el-button text aria-label="更多合同操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!canRenew(row)" @click="handleRenew(row)">发起续签</el-dropdown-item><el-dropdown-item @click="handleEdit(row)">编辑合同</el-dropdown-item><el-dropdown-item @click="handleDelete(row)">删除合同</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+            <el-button type="primary" link @click="openDetail(row as Contract)">详情</el-button>
+            <el-dropdown><el-button text aria-label="更多合同操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!canRenew(row as Contract)" @click="handleRenew(row as Contract)">发起续签</el-dropdown-item><el-dropdown-item @click="handleEdit(row as Contract)">编辑合同</el-dropdown-item><el-dropdown-item @click="handleDelete(row as Contract)">删除合同</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </template>
         </el-table-column>
       </el-table>
