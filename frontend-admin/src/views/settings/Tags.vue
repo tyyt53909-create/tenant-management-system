@@ -35,8 +35,8 @@
       </el-table-column>
       <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link @click="openEdit(row)">改名</el-button>
-          <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+          <el-button type="primary" link @click="openEdit(row as Tag)">改名</el-button>
+          <el-button type="danger" link @click="handleDelete(row as Tag)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
