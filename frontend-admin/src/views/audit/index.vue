@@ -1,6 +1,6 @@
 <template>
   <div class="audit-page">
-    <el-card shadow="never">
+    <ResourcePanel title="审计日志" description="系统对所有写操作自动记录，不可编辑或删除；展开某行可查看当时的请求内容" :count="pagination.total" :loading="loading" @retry="fetchData">
       <el-form :inline="true" :model="queryForm">
         <el-form-item label="实体类型">
           <el-select
@@ -100,7 +100,7 @@
         <el-table-column prop="ip" label="来源 IP" width="150" show-overflow-tooltip />
       </el-table>
 
-      <div style="margin-top: 20px; text-align: right">
+      <div>
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.limit"
@@ -111,7 +111,7 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
+    </ResourcePanel>
   </div>
 </template>
 
@@ -121,6 +121,7 @@ import { ElMessage } from 'element-plus';
 import { getAuditLogs } from '@/api/audit';
 import type { AuditLog } from '@/api/audit';
 import { formatDateTime } from '@/utils/table';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
 
 const loading = ref(false);
 const tableData = ref<AuditLog[]>([]);
@@ -228,12 +229,12 @@ onMounted(fetchData);
 
 <style scoped>
 .audit-page { padding: 0; }
-.muted { color: #909399; }
+.muted { color: var(--text-muted); }
 .small { font-size: 12px; }
 .path-text { margin-left: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .detail-body { padding: 4px 16px 12px; }
 .detail-row { display: flex; gap: 12px; margin-bottom: 10px; }
-.detail-label { flex-shrink: 0; width: 90px; color: #909399; font-size: 13px; }
+.detail-label { flex-shrink: 0; width: 90px; color: var(--text-muted); font-size: 13px; }
 .detail-value { flex: 1; min-width: 0; word-break: break-all; font-size: 13px; }
 .detail-pre {
   flex: 1;

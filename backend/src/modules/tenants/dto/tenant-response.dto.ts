@@ -5,7 +5,8 @@ export class TenantResponseDto {
   email: string | null;
   emergencyContact: string | null;
   emergencyPhone: string | null;
-  tags: Record<string, unknown> | unknown[] | null;
+  /** 标签（T215）：按字典 sort、名称排序 */
+  tags: { id: string; name: string }[];
   notes: string | null;
   isActive: boolean;
   userId: string | null;

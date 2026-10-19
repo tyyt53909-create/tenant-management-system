@@ -61,6 +61,8 @@ export interface Tenant {
   isActive?:boolean;
   contracts?:{id:string;contractNumber:string;startDate:string;endDate:string;status:string;rentAmount:number;room?:{roomNumber:string}}[];
   prepayAccounts?:{balanceCache:number}[];
+  /** 标签（T215）：字典中的 { id, name } */
+  tags?: { id: string; name: string }[];
   createdAt: string;
   updatedAt: string;
   /** 派生：与表格显示一致的时间串，供排序用 */

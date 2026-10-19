@@ -1,15 +1,6 @@
 <template>
   <div class="statistics-page">
-    <el-card shadow="never">
-      <template #header>
-        <div class="header">
-          <span class="title">统计</span>
-          <span class="range" v-if="data">
-            统计区间：{{ data.summary.range.start.slice(0, 10) }} ~ {{ data.summary.range.end.slice(0, 10) }}
-          </span>
-        </div>
-      </template>
-
+    <ResourcePanel title="数据统计" :description="rangeText" :loading="loading" @retry="fetchData">
       <el-form :inline="true" :model="query">
         <el-form-item label="时间维度">
           <el-radio-group v-model="query.period" @change="onPeriodChange">
@@ -55,59 +46,39 @@
         style="margin-bottom: 12px"
       />
 
-      <el-row v-loading="loading" :gutter="16" class="cards">
-        <el-col :xs="12" :sm="8" :md="6">
-          <el-card shadow="hover" class="stat-card">
-            <div class="stat-label">出账总额</div>
-            <div class="stat-value">¥{{ money(data?.summary.totalBilled) }}</div>
-            <div class="stat-sub">租金 ¥{{ money(data?.summary.rentBilled) }} · 水电 ¥{{ money(data?.summary.utilityBilled) }}</div>
-          </el-card>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="6">
-          <el-card shadow="hover" class="stat-card">
-            <div class="stat-label">实收总额</div>
-            <div class="stat-value success">¥{{ money(data?.summary.totalPaid) }}</div>
-            <div class="stat-sub">租金 ¥{{ money(data?.summary.rentPaid) }} · 水电 ¥{{ money(data?.summary.utilityPaid) }}</div>
-          </el-card>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="6">
-          <el-card shadow="hover" class="stat-card">
-            <div class="stat-label">收缴率</div>
-            <div class="stat-value">
-              {{ data?.summary.collectionRate === null ? '—' : (data?.summary.collectionRate ?? '—') + '%' }}
-            </div>
-            <div class="stat-sub">实收 / 出账</div>
-          </el-card>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="6">
-          <el-card shadow="hover" class="stat-card">
-            <div class="stat-label">出租率</div>
-            <div class="stat-value">{{ data?.summary.occupancyRate ?? 0 }}%</div>
-            <div class="stat-sub">
-              {{ data?.summary.roomOccupied ?? 0 }} / {{ data?.summary.roomTotal ?? 0 }} 间
-            </div>
-          </el-card>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="6">
-          <el-card shadow="hover" class="stat-card">
-            <div class="stat-label">逾期账单</div>
-            <div class="stat-value danger">{{ data?.summary.overdueCount ?? 0 }}</div>
-            <div class="stat-sub">区间内到期且逾期</div>
-          </el-card>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="6">
-          <el-card shadow="hover" class="stat-card">
-            <div class="stat-label">新增报修</div>
-            <div class="stat-value">{{ data?.summary.maintenanceCount ?? 0 }}</div>
-            <div class="stat-sub">区间内提交</div>
-          </el-card>
-        </el-col>
-      </el-row>
+      <section class="management-overview" aria-label="运营统计摘要">
+        <div class="management-metrics stat-metrics">
+          <article class="management-metric">
+            <span class="management-metric-icon"><el-icon :size="18"><Wallet /></el-icon></span>
+            <div><h2>出账总额</h2><strong>¥{{ money(data?.summary.totalBilled) }}<small>元</small></strong><p>租金 ¥{{ money(data?.summary.rentBilled) }} · 水电 ¥{{ money(data?.summary.utilityBilled) }}</p></div>
+          </article>
+          <article class="management-metric success">
+            <span class="management-metric-icon"><el-icon :size="18"><CircleCheck /></el-icon></span>
+            <div><h2>实收总额</h2><strong>¥{{ money(data?.summary.totalPaid) }}<small>元</small></strong><p>租金 ¥{{ money(data?.summary.rentPaid) }} · 水电 ¥{{ money(data?.summary.utilityPaid) }}</p></div>
+          </article>
+          <article class="management-metric">
+            <span class="management-metric-icon"><el-icon :size="18"><Odometer /></el-icon></span>
+            <div><h2>收缴率</h2><strong>{{ data?.summary.collectionRate === null ? '—' : (data?.summary.collectionRate ?? '—') }}<small v-if="data?.summary.collectionRate !== null">%</small></strong><p>实收 / 出账</p></div>
+          </article>
+          <article class="management-metric">
+            <span class="management-metric-icon"><el-icon :size="18"><House /></el-icon></span>
+            <div><h2>出租率</h2><strong>{{ data?.summary.occupancyRate ?? 0 }}<small>%</small></strong><p>{{ data?.summary.roomOccupied ?? 0 }} / {{ data?.summary.roomTotal ?? 0 }} 间</p></div>
+          </article>
+          <article class="management-metric danger">
+            <span class="management-metric-icon"><el-icon :size="18"><Warning /></el-icon></span>
+            <div><h2>逾期账单</h2><strong>{{ data?.summary.overdueCount ?? 0 }}<small>笔</small></strong><p>区间内到期且逾期</p></div>
+          </article>
+          <article class="management-metric warning">
+            <span class="management-metric-icon"><el-icon :size="18"><Tools /></el-icon></span>
+            <div><h2>新增报修</h2><strong>{{ data?.summary.maintenanceCount ?? 0 }}<small>条</small></strong><p>区间内提交</p></div>
+          </article>
+        </div>
+      </section>
 
       <template v-if="query.dimension === 'FLOOR'">
         <h3 class="section-title">按楼层</h3>
         <el-empty v-if="!data || data.byFloor.length === 0" description="暂无楼层数据" />
-        <el-table v-else :data="data.byFloor" border stripe>
+        <el-table v-else :data="data.byFloor">
           <el-table-column prop="floor" label="楼层" width="120">
             <template #default="{ row }">{{ row.floor }} 层</template>
           </el-table-column>
@@ -120,13 +91,14 @@
           </el-table-column>
         </el-table>
       </template>
-    </el-card>
+    </ResourcePanel>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import { Wallet, CircleCheck, Odometer, House, Warning, Tools } from '@element-plus/icons-vue';
 import {
   getStatisticsOverview,
   getBuildingsForFilter,
@@ -134,6 +106,7 @@ import {
   type StatisticsPeriod,
   type StatisticsDimension,
 } from '@/api/statistics';
+import ResourcePanel from '@/components/common/ResourcePanel.vue';
 
 const loading = ref(false);
 const data = ref<StatisticsOverview | null>(null);
@@ -151,6 +124,13 @@ const query = reactive<{
 
 /** 分 → 元（保留两位） */
 const money = (cents?: number) => ((cents ?? 0) / 100).toFixed(2);
+
+/** 统计区间文案（ResourcePanel 的副标题） */
+const rangeText = computed(() =>
+  data.value
+    ? `统计区间：${data.value.summary.range.start.slice(0, 10)} ~ ${data.value.summary.range.end.slice(0, 10)}`
+    : '',
+);
 
 const onPeriodChange = () => {
   if (query.period !== 'CUSTOM') customRange.value = null;
@@ -189,15 +169,9 @@ onMounted(async () => {
 
 <style scoped>
 .statistics-page { padding: 0; }
-.header { display: flex; justify-content: space-between; align-items: center; }
-.title { font-size: 18px; font-weight: 600; }
-.range { color: #909399; font-size: 13px; }
-.cards { margin-top: 8px; }
-.stat-card { margin-bottom: 16px; }
-.stat-label { color: #909399; font-size: 13px; }
-.stat-value { font-size: 24px; font-weight: 600; margin: 6px 0; }
-.stat-value.success { color: #67c23a; }
-.stat-value.danger { color: #f56c6c; }
-.stat-sub { color: #c0c4cc; font-size: 12px; }
+/* 统计页有 6 张摘要卡：共用 .management-metric 语言，只把栅格改成 3 列更好收行 */
+.stat-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1120px) { .stat-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .stat-metrics { grid-template-columns: 1fr; } }
 .section-title { margin: 18px 0 10px; font-size: 15px; }
 </style>

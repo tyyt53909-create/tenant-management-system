@@ -61,7 +61,7 @@
       >
         <el-table-column prop="billNumber" label="账单 / 房源" min-width="250" sortable>
           <template #default="{ row }">
-            <button class="record-cell" @click="openDetail(row)">
+            <button class="record-cell" @click="openDetail(row as Bill)">
               <span class="record-glyph"><el-icon><Wallet /></el-icon></span>
               <span>
                 <strong>{{ row.contract?.room?.roomNumber || billTypeMap[row.billType] }} · {{ row.period }}</strong>
@@ -106,19 +106,19 @@
             </el-tooltip>
           </template>
           <template #default="{ row }">
-            <span v-if="lateFeeOf(row)" class="late-fee-cell">
+            <span v-if="lateFeeOf(row as Bill)" class="late-fee-cell">
               <span class="late-fee-amount">
-                <em v-if="!isLateFeeConfirmed(lateFeeOf(row))" class="late-fee-suggest">建议</em>
-                {{ formatYuan(lateFeeDisplayAmount(lateFeeOf(row))) }}
+                <em v-if="!isLateFeeConfirmed(lateFeeOf(row as Bill))" class="late-fee-suggest">建议</em>
+                {{ formatYuan(lateFeeDisplayAmount(lateFeeOf(row as Bill))) }}
               </span>
-              <el-tooltip placement="top" :content="lateFeeStateOf(lateFeeOf(row)).tip">
-                <el-tag size="small" effect="plain" :type="lateFeeStateOf(lateFeeOf(row)).type">
-                  {{ lateFeeStateOf(lateFeeOf(row)).text }}
+              <el-tooltip placement="top" :content="lateFeeStateOf(lateFeeOf(row as Bill)).tip">
+                <el-tag size="small" effect="plain" :type="lateFeeStateOf(lateFeeOf(row as Bill)).type">
+                  {{ lateFeeStateOf(lateFeeOf(row as Bill)).text }}
                 </el-tag>
               </el-tooltip>
             </span>
             <el-tooltip
-              v-else-if="isOverdueByDate(row)"
+              v-else-if="isOverdueByDate(row as Bill)"
               placement="top"
               content="逾期账单：可点击「滞纳金」按合同规则生成系统建议值"
             >
@@ -129,18 +129,18 @@
         </el-table-column>
         <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="openDetail(row)">详情</el-button>
-            <el-button type="success" link :disabled="!canReceive(row)" @click="handlePayment(row)">收款</el-button>
-            <el-tooltip placement="top" :disabled="canOpenLateFee(row)" :content="lateFeeDisabledReason(row)">
+            <el-button type="primary" link @click="openDetail(row as Bill)">详情</el-button>
+            <el-button type="success" link :disabled="!canReceive(row as Bill)" @click="handlePayment(row as Bill)">收款</el-button>
+            <el-tooltip placement="top" :disabled="canOpenLateFee(row as Bill)" :content="lateFeeDisabledReason(row as Bill)">
               <span class="op-wrap">
-                <el-button type="warning" link :disabled="!canOpenLateFee(row)" @click="handleLateFee(row)">
+                <el-button type="warning" link :disabled="!canOpenLateFee(row as Bill)" @click="handleLateFee(row as Bill)">
                   滞纳金
                 </el-button>
               </span>
             </el-tooltip>
-            <el-button type="info" link :disabled="row.paidAmount <= 0" @click="handleOpenReceipt(row)">收据</el-button>
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="info" link :disabled="row.paidAmount <= 0" @click="handleOpenReceipt(row as Bill)">收据</el-button>
+            <el-button type="primary" link @click="handleEdit(row as Bill)">编辑</el-button>
+            <el-button type="danger" link @click="handleDelete(row as Bill)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -460,7 +460,7 @@ onUnmounted(() => {
 .late-fee-suggest {
   margin-right: 2px;
   font-style: normal;
-  color: #909399;
+  color: var(--text-muted);
 }
-.late-fee-empty { color: #c0c4cc; }
+.late-fee-empty { color: var(--text-muted); }
 </style>
