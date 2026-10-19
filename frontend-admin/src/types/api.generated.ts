@@ -1013,6 +1013,26 @@ export interface paths {
         patch: operations["MaintenanceController_update"];
         trace?: never;
     };
+    "/api/meters/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 水电对账（T218）：读数 / 扣费 / 账单三方交叉核对，只读。
+         *     只有管理员可用；租客只在自己的账单里看到扣费结果。
+         */
+        get: operations["MetersController_reconcile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/meters/simulator/run": {
         parameters: {
             query?: never;
@@ -5104,6 +5124,42 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateMaintenanceDto"];
             };
         };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MetersController_reconcile: {
+        parameters: {
+            query?: {
+                /** @description 账期 YYYY-MM；不传时默认上个月 */
+                period?: string;
+                buildingId?: string;
+                meterType?: "ELECTRICITY" | "WATER" | "GAS";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description 成功 */
             200: {

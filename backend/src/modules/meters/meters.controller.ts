@@ -9,6 +9,8 @@ import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
+import { QueryReconciliationDto } from './dto/query-reconciliation.dto.js';
+import { MeterReconciliationService } from './meter-reconciliation.service.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { RunSimulationDto } from './dto/run-simulation.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
@@ -24,7 +26,24 @@ export class MetersController {
   constructor(
     private readonly metersService: MetersService,
     private readonly metersSimulatorService: MetersSimulatorService,
+    private readonly reconciliationService: MeterReconciliationService,
   ) {}
+
+  /**
+   * 水电对账（T218）：读数 / 扣费 / 账单三方交叉核对，只读。
+   * 只有管理员可用；租客只在自己的账单里看到扣费结果。
+   */
+  @Get('reconciliation')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  reconcile(@Query() query: QueryReconciliationDto) {
+    const period = query.period ?? previousMonth();
+    return this.reconciliationService.reconcile({
+      period,
+      buildingId: query.buildingId,
+      meterType: query.meterType as never,
+    });
+  }
 
   // 运行虚拟水电表模拟器（仅 ADMIN）
   @Post('simulator/run')
@@ -167,4 +186,11 @@ export class MetersController {
   remove(@Param('id') id: string) {
     return this.metersService.remove(id);
   }
+}
+
+/** 未指定账期时默认上个月（月初对账最常见） */
+function previousMonth(): string {
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
