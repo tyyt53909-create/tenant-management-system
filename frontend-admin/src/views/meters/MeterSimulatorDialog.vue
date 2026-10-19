@@ -59,7 +59,7 @@
 
       <el-form-item v-if="form.scenario === 'TIME_TRAVEL_MONTH'" label="穿梭天数">
         <el-input-number v-model="form.days" :min="1" :max="90" />
-        <span style="margin-left: 10px; color: #909399; font-size: 13px">天（建议 30 天）</span>
+        <span style="margin-left: 10px; color: var(--text-muted); font-size: 13px">天（建议 30 天）</span>
       </el-form-item>
 
       <el-form-item v-if="form.scenario !== 'ANOMALY_TEST'" label="结算模式">
@@ -70,7 +70,7 @@
 
       <el-form-item v-if="form.scenario !== 'ANOMALY_TEST'" label="随机波动">
         <el-slider v-model="variancePercent" :min="5" :max="40" :format-tooltip="(v: number) => `±${v}%`" style="width: 300px" />
-        <span style="margin-left: 15px; color: #909399; font-size: 13px">±{{ variancePercent }}% 随机扰动</span>
+        <span style="margin-left: 15px; color: var(--text-muted); font-size: 13px">±{{ variancePercent }}% 随机扰动</span>
       </el-form-item>
     </el-form>
 
@@ -91,8 +91,8 @@
         <div class="report-meta">
           <span>🎯 测试表号: <strong>{{ result.anomalyResults.meterNumber }}</strong></span>
           <span>🧪 测试项: <strong>{{ result.anomalyResults.totalTests }} 项</strong></span>
-          <span style="color: #67c23a">🟢 通过: <strong>{{ result.anomalyResults.passedCount }}</strong></span>
-          <span :style="{ color: result.anomalyResults.failedCount > 0 ? '#f56c6c' : '#909399' }">
+          <span style="color: var(--success-text)">🟢 通过: <strong>{{ result.anomalyResults.passedCount }}</strong></span>
+          <span :style="{ color: result.anomalyResults.failedCount > 0 ? 'var(--error-text)' : 'var(--text-muted)' }">
             🔴 失败: <strong>{{ result.anomalyResults.failedCount }}</strong>
           </span>
         </div>
@@ -123,7 +123,7 @@
           </div>
           <div class="summary-card">
             <div class="card-label">数据状态</div>
-            <div class="card-val" style="color: #409eff">
+            <div class="card-val" style="color: var(--info-text)">
               {{ form.autoSettle ? '已自动扣费' : '未结算待结' }}
             </div>
           </div>
@@ -293,7 +293,7 @@ const handleRun = async () => {
 
 .card-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 

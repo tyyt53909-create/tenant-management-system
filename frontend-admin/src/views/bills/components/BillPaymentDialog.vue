@@ -233,11 +233,11 @@ async function handleSubmit() {
 <style scoped>
 .payment-hint {
   margin-left: 8px;
-  color: #909399;
+  color: var(--text-muted);
   font-size: 12px;
 }
 .total-amount {
   font-weight: 600;
-  color: #e6a23c;
+  color: var(--warning-text);
 }
 </style>

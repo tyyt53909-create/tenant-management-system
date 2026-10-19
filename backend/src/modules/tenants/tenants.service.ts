@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
@@ -21,13 +21,24 @@ export const TENANT_PUBLIC_SELECT = {
   email: true,
   emergencyContact: true,
   emergencyPhone: true,
-  tags: true,
   notes: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
   userId: true,
 } as const;
+
+/** 标签按字典顺序展示（T215） */
+const TAG_ORDER_BY: Prisma.TenantTagOrderByWithRelationInput[] = [
+  { tag: { sort: 'asc' } },
+  { tag: { name: 'asc' } },
+];
+/** 标签关联行只需要 id 与名称 */
+const TENANT_TAG_ROW = { select: { tag: { select: { id: true, name: true } } } };
+/** create / update 的 include 形态 */
+const TENANT_TAG_INCLUDE = { orderBy: TAG_ORDER_BY, ...TENANT_TAG_ROW };
+/** findMany / findUnique 的 select 分支下嵌套标签 */
+const TENANT_TAG_SELECT = { orderBy: TAG_ORDER_BY, ...TENANT_TAG_ROW };
 
 @Injectable()
 export class TenantsService {
@@ -58,22 +69,27 @@ export class TenantsService {
       }
     }
 
-    // 3. 创建租客
-    return this.prisma.tenant.create({
+    // 3. 校验标签字典 ID（T215）
+    const tagIds = await this.assertTagIdsExist(dto.tagIds);
+
+    // 4. 创建租客
+    const created = await this.prisma.tenant.create({
       data: {
         name: dto.name,
         phone: dto.phone,
         email: dto.email,
         emergencyContact: dto.emergencyContact,
         emergencyPhone: dto.emergencyPhone,
-        tags: dto.tags as Prisma.InputJsonValue,
         notes: dto.notes,
+        ...(tagIds.length ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } } : {}),
       },
+      include: { tags: TENANT_TAG_INCLUDE },
     });
+    return this.flattenTags(created);
   }
 
   async findAll(query: QueryTenantsDto) {
-    const { page = 1, limit = 20, isActive, name, phone } = query;
+    const { page = 1, limit = 20, isActive, name, phone, tagId } = query;
     const skip = (page - 1) * limit;
 
     // 构建查询条件
@@ -86,6 +102,8 @@ export class TenantsService {
     // 姓名/手机号模糊查询（大小写不敏感）；空串视为不筛选
     if (name?.trim()) where.name = { contains: name.trim(), mode: 'insensitive' };
     if (phone?.trim()) where.phone = { contains: phone.trim() };
+    // 标签筛选（T215）：只要有该标签即可
+    if (tagId?.trim()) where.tags = { some: { tagId: tagId.trim() } };
 
     // 查询数据和总数
     const [data, total] = await Promise.all([
@@ -100,6 +118,7 @@ export class TenantsService {
         select: { ...TENANT_PUBLIC_SELECT,
           contracts:{where:{status:'ACTIVE'},orderBy:{startDate:'desc'},take:1,select:{id:true,contractNumber:true,startDate:true,endDate:true,status:true,rentAmount:true,room:{select:{roomNumber:true}}}},
           prepayAccounts:{select:{balanceCache:true}},
+          tags: TENANT_TAG_SELECT,
         },
       }),
       this.prisma.tenant.count({ where }),
@@ -109,7 +128,7 @@ export class TenantsService {
 
     return {
       data: data.map((tenant) => ({
-        ...tenant,
+        ...this.flattenTags(tenant),
         idNumberMasked: masks.get(tenant.id) ?? null,
       })),
       meta: {
@@ -127,6 +146,7 @@ export class TenantsService {
       // 白名单字段 + 账号信息（不含证件号），T148 脱敏
       select: {
         ...TENANT_PUBLIC_SELECT,
+        tags: TENANT_TAG_SELECT,
         user: {
           select: {
             id: true,
@@ -143,7 +163,7 @@ export class TenantsService {
 
     const masks = await this.maskedIdNumbers([tenant.id]);
     return {
-      ...tenant,
+      ...this.flattenTags(tenant),
       idNumberMasked: masks.get(tenant.id) ?? null,
     };
   }
@@ -223,16 +243,19 @@ export class TenantsService {
       }
     }
 
-    // 4. 更新租客
-    const { tags, ...rest } = dto;
-    const data: Prisma.TenantUpdateInput = {
-      ...rest,
-      ...(tags !== undefined ? { tags: tags as Prisma.InputJsonValue } : {}),
-    };
-    return this.prisma.tenant.update({
+    // 4. 更新租客；tagIds 未传表示不改动，传 [] 表示清空（T215）
+    const { tagIds, ...rest } = dto;
+    const data: Prisma.TenantUpdateInput = { ...rest };
+    if (tagIds !== undefined) {
+      const validTagIds = await this.assertTagIdsExist(tagIds);
+      data.tags = { deleteMany: {}, create: validTagIds.map((tagId) => ({ tagId })) };
+    }
+    const updated = await this.prisma.tenant.update({
       where: { id },
       data,
+      include: { tags: TENANT_TAG_INCLUDE },
     });
+    return this.flattenTags(updated);
   }
 
   async remove(id: string) {
@@ -251,6 +274,31 @@ export class TenantsService {
     });
 
     return { message: '租客已删除' };
+  }
+
+  /**
+   * 校验标签 ID 全部存在，返回去重后的 ID 列表（T215）。
+   * 不存在时 400 而不是静默忽略——静默会让人以为标签已保存。
+   */
+  private async assertTagIdsExist(tagIds?: string[]): Promise<string[]> {
+    if (!tagIds?.length) return [];
+    const unique = [...new Set(tagIds)];
+    const found = await this.prisma.tag.findMany({
+      where: { id: { in: unique } },
+      select: { id: true },
+    });
+    if (found.length !== unique.length) {
+      const foundIds = new Set(found.map((tag) => tag.id));
+      const missing = unique.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(`标签不存在：${missing.join(', ')}`);
+    }
+    return unique;
+  }
+
+  /** 把关联行摊平成 { id, name } 列表，响应保持简单（T215） */
+  private flattenTags<T extends { tags?: { tag: { id: string; name: string } }[] }>(tenant: T) {
+    const { tags, ...rest } = tenant;
+    return { ...rest, tags: (tags ?? []).map((row) => row.tag) };
   }
 
   private async maskedIdNumbers(tenantIds: string[]) {

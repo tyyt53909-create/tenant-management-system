@@ -10,6 +10,11 @@
         <el-form-item label="手机号">
           <el-input v-model="queryForm.phone" placeholder="请输入手机号" clearable @keyup.enter="handleQuery" />
         </el-form-item>
+        <el-form-item label="标签">
+          <el-select v-model="queryForm.tagId" placeholder="全部标签" clearable style="width: 150px" @change="handleQuery">
+            <el-option v-for="tag in tagOptions" :key="tag.id" :label="tag.name" :value="tag.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleQuery">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
@@ -24,10 +29,18 @@
         :empty-text="emptyText"
         :default-sort="{ prop: 'createdAt', order: 'descending' }"
       >
-        <el-table-column prop="name" label="租客" min-width="215" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row)"><span class="record-avatar">{{ row.name?.slice(0,1) }}</span><span><strong>{{ row.name }}</strong><small>{{ row.phone || '尚未填写电话' }}</small></span></button></template></el-table-column>
+        <el-table-column prop="name" label="租客" min-width="215" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row as Tenant)"><span class="record-avatar">{{ row.name?.slice(0,1) }}</span><span><strong>{{ row.name }}</strong><small>{{ row.phone || '尚未填写电话' }}</small></span></button></template></el-table-column>
         <el-table-column label="关联房源" min-width="145"><template #default="{row}"><strong>{{ row.contracts?.[0]?.room?.roomNumber || '暂无生效租约' }}</strong><small class="table-subline">{{ row.contracts?.[0]?.contractNumber || '可查看历史合同' }}</small></template></el-table-column>
         <el-table-column label="入住 / 到期" width="150"><template #default="{row}">{{ row.contracts?.[0]?.startDate?.slice(0,10) || '—' }}<small class="table-subline">{{ row.contracts?.[0]?.endDate?.slice(0,10) || '未记录当前租期' }}</small></template></el-table-column>
         <el-table-column label="预付余额合计" width="140"><template #default="{row}"><strong>{{ row.prepayAccounts?.length ? formatMoney(row.prepayAccounts.reduce((sum:number,account:any)=>sum+account.balanceCache,0)) : '未开通账户' }}</strong><small class="table-subline">{{ row.prepayAccounts?.length ? `${row.prepayAccounts.length} 个账户` : '不显示为零元' }}</small></template></el-table-column>
+        <el-table-column label="标签" min-width="150">
+          <template #default="{row}">
+            <div v-if="row.tags?.length" class="tag-cell">
+              <el-tag v-for="tag in row.tags" :key="tag.id" size="small" effect="plain">{{ tag.name }}</el-tag>
+            </div>
+            <span v-else class="tag-empty">未打标签</span>
+          </template>
+        </el-table-column>
         <el-table-column label="档案 / 租约" width="115"><template #default="{row}"><el-tag :type="row.isActive ? 'success' : 'info'">{{ row.isActive ? '启用' : '停用' }}</el-tag><small class="table-subline">{{ row.contracts?.length ? '关联生效租约' : '暂无生效租约' }}</small></template></el-table-column>
         <el-table-column prop="createdAt" sort-by="createdAtSort" label="创建时间" width="180" sortable>
           <template #default="{ row }">
@@ -36,7 +49,7 @@
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="openDetail(row)">查看档案</el-button><el-dropdown><el-button text aria-label="更多租客操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleEdit(row)">编辑资料</el-dropdown-item><el-dropdown-item @click="handleDelete(row)">删除档案</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+            <el-button type="primary" link @click="openDetail(row as Tenant)">查看档案</el-button><el-dropdown><el-button text aria-label="更多租客操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleEdit(row as Tenant)">编辑资料</el-dropdown-item><el-dropdown-item @click="handleDelete(row as Tenant)">删除档案</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -84,6 +97,18 @@
         <el-form-item label="紧急联系电话" prop="emergencyPhone">
           <el-input v-model="formData.emergencyPhone" placeholder="请输入紧急联系电话" />
         </el-form-item>
+        <el-form-item label="标签" prop="tagIds">
+          <el-select
+            v-model="formData.tagIds"
+            multiple
+            filterable
+            clearable
+            placeholder="选择标签（可在「系统设置 › 标签字典」维护）"
+            style="width: 100%"
+          >
+            <el-option v-for="tag in tagOptions" :key="tag.id" :label="tag.name" :value="tag.id" />
+          </el-select>
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -106,6 +131,7 @@ import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import ResourceDrawer from '@/components/common/ResourceDrawer.vue';
 import type { FormInstance, FormRules } from 'element-plus';
 import { getTenants, createTenant, updateTenant, deleteTenant } from '@/api/tenants';
+import { getTags, type Tag } from '@/api/tags';
 import type { Tenant } from '@/types';
 import { formatMoney } from '@/utils/table';
 
@@ -123,12 +149,23 @@ const currentEditId = ref<string>('');
 const queryForm = reactive({
   name: '',
   phone: '',
+  tagId: '',
 });
+
+/** 标签字典（T215）：筛选与表单共用，进入页面时加载一次 */
+const tagOptions = ref<Tag[]>([]);
+const loadTags = async () => {
+  try {
+    tagOptions.value = await getTags();
+  } catch {
+    tagOptions.value = [];
+  }
+};
 
 /** 区分「系统暂无数据」与「筛选无结果」，避免用户误以为数据丢失 */
 const emptyText = computed(() =>
-  queryForm.name || queryForm.phone
-    ? '没有符合条件的租客，试试调整姓名或手机号'
+  queryForm.name || queryForm.phone || queryForm.tagId
+    ? '没有符合条件的租客，试试调整姓名、手机号或标签'
     : '暂无租客，点击右上角「新增租客」开始录入',
 );
 
@@ -145,6 +182,7 @@ const formData = reactive({
   idNumber: '',
   emergencyContact: '',
   emergencyPhone: '',
+  tagIds: [] as string[],
 });
 
 const rules: FormRules = {
@@ -170,6 +208,8 @@ const fetchData = async () => {
       page: pagination.page,
       limit: pagination.limit,
       ...queryForm,
+      // 空标签不参与筛选，避免后端收到 tagId=
+      tagId: queryForm.tagId || undefined,
     };
     const response = await getTenants(params);
     // 派生可排序的时间串（与表格显示格式一致，避免与 ISO 原值不一致）
@@ -199,6 +239,7 @@ const handleSizeChange = () => {
 const handleReset = () => {
   queryForm.name = '';
   queryForm.phone = '';
+  queryForm.tagId = '';
   handleQuery();
 };
 
@@ -219,6 +260,7 @@ const handleEdit = (row: Tenant) => {
     idNumber: '',
     emergencyContact: row.emergencyContact || '',
     emergencyPhone: row.emergencyPhone || '',
+    tagIds: (row.tags || []).map((tag) => tag.id),
   });
   dialogVisible.value = true;
 };
@@ -248,7 +290,9 @@ const handleSubmit = async () => {
 
     submitLoading.value = true;
     try {
-      const { idNumber: _unsupported, ...data }: any = formData;
+      const { idNumber: _unsupported, tagIds, ...data }: any = formData;
+      // 标签以 tagIds 单独提交（T215）；空数组表示清空标签
+      data.tagIds = tagIds;
       if(!data.email)delete data.email;
 
       if (currentEditId.value) {
@@ -278,10 +322,12 @@ const handleDialogClose = () => {
     idNumber: '',
     emergencyContact: '',
     emergencyPhone: '',
+    tagIds: [],
   });
 };
 
 onMounted(() => {
+  loadTags();
   fetchData();
   if(typeof route.query.detail==='string'){detailId.value=route.query.detail;detailVisible.value=true;}
 });
@@ -291,5 +337,14 @@ watch(()=>route.query.detail,id=>{if(typeof id==='string'){detailId.value=id;det
 <style scoped>
 .tenants-page {
   padding: 0;
+}
+.tag-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tag-empty {
+  color: var(--text-muted, #8b897f);
+  font-size: 12px;
 }
 </style>

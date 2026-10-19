@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { TENANT_PUBLIC_SELECT, TenantsService } from './tenants.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CryptoService } from '../../common/crypto/crypto.service.js';
@@ -31,6 +31,10 @@ describe('TenantsService', () => {
             tenantRegistration: {
               findMany: vi.fn().mockResolvedValue([]),
               findUnique: vi.fn(),
+            },
+            tag: {
+              findMany: vi.fn().mockResolvedValue([]),
+              findFirst: vi.fn(),
             },
           },
         },
@@ -222,6 +226,77 @@ describe('TenantsService', () => {
       await expect(service.update('tenant-123', { phone: '13800138001' })).rejects.toThrow(
         ConflictException,
       );
+    });
+  });
+
+  describe('标签（T215）', () => {
+    const tenant = { id: 'tenant-123', name: '张三', phone: '13800138000' };
+
+    it('创建时按 tagIds 建立关联', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(prisma.tag, 'findMany').mockResolvedValue([{ id: 'tag-a' }, { id: 'tag-b' }] as any);
+      const create = vi.spyOn(prisma.tenant, 'create').mockResolvedValue(tenant as any);
+
+      await service.create({ name: '张三', phone: '13800138000', tagIds: ['tag-a', 'tag-b', 'tag-a'] });
+
+      expect(prisma.tag.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['tag-a', 'tag-b'] } },
+        select: { id: true },
+      });
+      expect(create.mock.calls[0][0].data.tags).toEqual({
+        create: [{ tagId: 'tag-a' }, { tagId: 'tag-b' }],
+      });
+    });
+
+    it('创建时标签不存在 → 400，且不写库', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(prisma.tag, 'findMany').mockResolvedValue([{ id: 'tag-a' }] as any);
+      const create = vi.spyOn(prisma.tenant, 'create');
+
+      await expect(
+        service.create({ name: '张三', phone: '13800138000', tagIds: ['tag-a', 'tag-ghost'] }),
+      ).rejects.toThrow(BadRequestException);
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('更新时未传 tagIds → 不动标签', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue(tenant as any);
+      const update = vi.spyOn(prisma.tenant, 'update').mockResolvedValue(tenant as any);
+
+      await service.update('tenant-123', { name: '张三（已更新）' });
+
+      expect(update.mock.calls[0][0].data).not.toHaveProperty('tags');
+    });
+
+    it('更新时传空数组 → 清空标签', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue(tenant as any);
+      const update = vi.spyOn(prisma.tenant, 'update').mockResolvedValue(tenant as any);
+
+      await service.update('tenant-123', { tagIds: [] });
+
+      expect(update.mock.calls[0][0].data.tags).toEqual({ deleteMany: {}, create: [] });
+    });
+
+    it('列表可带 tagId 筛选', async () => {
+      vi.spyOn(prisma.tenant, 'findMany').mockResolvedValue([]);
+      vi.spyOn(prisma.tenant, 'count').mockResolvedValue(0);
+
+      await service.findAll({ page: 1, limit: 20, tagId: 'tag-a' });
+
+      expect(prisma.tenant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tags: { some: { tagId: 'tag-a' } } } }),
+      );
+    });
+
+    it('响应把关联行摊平成 { id, name }', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({
+        ...tenant,
+        tags: [{ tag: { id: 'tag-a', name: '学生' } }],
+      } as any);
+
+      const result = await service.findOne('tenant-123');
+
+      expect(result.tags).toEqual([{ id: 'tag-a', name: '学生' }]);
     });
   });
 

@@ -30,10 +30,10 @@
         </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link @click="handleTransaction(row)">充值/扣费</el-button>
-            <el-button type="primary" link @click="handleViewTransactions(row)">流水</el-button>
-            <el-button type="warning" link @click="handleEditThreshold(row)">阈值</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="success" link @click="handleTransaction(row as PrepayAccount)">充值/扣费</el-button>
+            <el-button type="primary" link @click="handleViewTransactions(row as PrepayAccount)">流水</el-button>
+            <el-button type="warning" link @click="handleEditThreshold(row as PrepayAccount)">阈值</el-button>
+            <el-button type="danger" link @click="handleDelete(row as PrepayAccount)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -120,7 +120,7 @@
         </el-table-column>
         <el-table-column label="金额" width="110">
           <template #default="{ row }">
-            <span :style="{ color: row.amount >= 0 ? '#67c23a' : '#f56c6c' }">
+            <span :style="{ color: row.amount >= 0 ? 'var(--success-text)' : 'var(--error-text)' }">
               {{ row.amount >= 0 ? '+' : '-' }}¥{{ (Math.abs(row.amount) / 100).toFixed(2) }}
             </span>
           </template>
@@ -227,7 +227,8 @@ const typeMap: Record<string, string> = {
   REFUND: '退款',
   ADJUSTMENT: '调整',
 };
-const typeBadgeMap: Record<string, string> = {
+// el-tag 的 type 只接受这几个字面量：标注成 string 会在启用组件 dts 后被 vue-tsc 拒绝（T205）。
+const typeBadgeMap: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
   RECHARGE: 'success',
   DEDUCTION: 'warning',
   REFUND: 'danger',
@@ -419,13 +420,13 @@ onMounted(fetchData);
 }
 
 .low-balance {
-  color: #f56c6c;
+  color: var(--error-text);
   font-weight: 600;
 }
 
 .tx-hint {
   margin-left: 8px;
-  color: #909399;
+  color: var(--text-muted);
   font-size: 12px;
 }
 </style>

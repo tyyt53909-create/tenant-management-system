@@ -22,7 +22,11 @@ import { ContractsController } from '../src/modules/contracts/contracts.controll
 import { ContractsService } from '../src/modules/contracts/contracts.service.js';
 import { MaintenanceController } from '../src/modules/maintenance/maintenance.controller.js';
 import { MaintenanceService } from '../src/modules/maintenance/maintenance.service.js';
+import { ImportsController } from '../src/modules/imports/imports.controller.js';
+import { ImportsService } from '../src/modules/imports/imports.service.js';
 import { PrepayController } from '../src/modules/prepay/prepay.controller.js';
+import { PublicUtilitiesController } from '../src/modules/public-utilities/public-utilities.controller.js';
+import { PublicUtilitiesService } from '../src/modules/public-utilities/public-utilities.service.js';
 import { PrepayService } from '../src/modules/prepay/prepay.service.js';
 import { MetersController } from '../src/modules/meters/meters.controller.js';
 import { MetersService } from '../src/modules/meters/meters.service.js';
@@ -34,7 +38,9 @@ import { RoomsController } from '../src/modules/rooms/rooms.controller.js';
 import { RoomsService } from '../src/modules/rooms/rooms.service.js';
 import { TenantCapabilityService } from '../src/modules/tenant-capabilities/tenant-capability.service.js';
 import { TenantsController } from '../src/modules/tenants/tenants.controller.js';
+import { TagsController } from '../src/modules/tags/tags.controller.js';
 import { TenantsService } from '../src/modules/tenants/tenants.service.js';
+import { TagsService } from '../src/modules/tags/tags.service.js';
 
 /**
  * 越权回归测试（T148）
@@ -82,6 +88,25 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       update: vi.fn(),
       remove: vi.fn(),
     };
+    const publicUtilitiesService = {
+      findAll: vi.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockResolvedValue({ id: 'pu-1' }),
+      preview: vi.fn().mockResolvedValue({ allocations: [] }),
+      create: vi.fn().mockResolvedValue({ id: 'pu-1' }),
+      generateBills: vi.fn().mockResolvedValue({ created: 0 }),
+      remove: vi.fn().mockResolvedValue({ message: '单据已删除' }),
+    };
+    const importsService = {
+      template: vi.fn().mockReturnValue('name,phone\r\n张三,13800138000\r\n'),
+      preview: vi.fn().mockResolvedValue({ entity: 'tenants', totalRows: 0, skipped: 0, imported: 0, errors: [], dryRun: true }),
+      commit: vi.fn().mockResolvedValue({ entity: 'tenants', totalRows: 0, skipped: 0, imported: 0, errors: [], dryRun: true }),
+    };
+    const tagsService = {
+      findAll: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({ id: 'tag-new', name: '学生', sort: 0 }),
+      update: vi.fn().mockResolvedValue({ id: 'tag-1', name: '学生', sort: 0 }),
+      remove: vi.fn().mockResolvedValue({ message: '标签已删除', affectedTenants: 0 }),
+    };
     billsService = {
       findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
       findByTenant: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
@@ -117,7 +142,10 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
     const moduleRef = await Test.createTestingModule({
       controllers: [
+        PublicUtilitiesController,
         TenantsController,
+        ImportsController,
+        TagsController,
         BillsController,
         ContractsController,
         MaintenanceController,
@@ -132,6 +160,9 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'test' }) },
         { provide: TenantsService, useValue: tenantsService },
+        { provide: PublicUtilitiesService, useValue: publicUtilitiesService },
+        { provide: ImportsService, useValue: importsService },
+        { provide: TagsService, useValue: tagsService },
         { provide: BillsService, useValue: billsService },
         { provide: CheckoutService, useValue: checkoutService },
         {
@@ -409,6 +440,106 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
     it('ADMIN → 200', async () => {
       await as(request(app.getHttpServer()).get('/meters/reconciliation?period=2026-01'), 'ADMIN').expect(200);
+    });
+  });
+
+  describe('公共水电分摊（T217）', () => {
+    const routes: { method: 'get' | 'post'; path: string }[] = [
+      { method: 'get', path: '/public-utilities' },
+      { method: 'post', path: '/public-utilities/preview' },
+      { method: 'post', path: '/public-utilities' },
+      { method: 'post', path: '/public-utilities/pu-1/generate-bills' },
+    ];
+
+    it('未登录一律 401', async () => {
+      for (const { method, path } of routes) {
+        await request(app.getHttpServer())[method](path).expect(401);
+      }
+    });
+
+    it('CLEANER 与 TENANT 一律 403（分摊是管理操作）', async () => {
+      for (const role of ['CLEANER', 'TENANT']) {
+        for (const { method, path } of routes) {
+          await as(request(app.getHttpServer())[method](path), role).expect(403);
+        }
+      }
+    });
+
+    it('ADMIN 列表 → 200', async () => {
+      await as(request(app.getHttpServer()).get('/public-utilities'), 'ADMIN').expect(200);
+    });
+  });
+
+  describe('旧资料导入（T216）', () => {
+    const routes: { method: 'get' | 'post'; path: string }[] = [
+      { method: 'get', path: '/imports/tenants/template' },
+      { method: 'post', path: '/imports/tenants/preview' },
+      { method: 'post', path: '/imports/tenants/commit' },
+    ];
+
+    it('未登录一律 401', async () => {
+      for (const { method, path } of routes) {
+        await request(app.getHttpServer())[method](path).expect(401);
+      }
+    });
+
+    it('CLEANER 一律 403', async () => {
+      for (const { method, path } of routes) {
+        await as(request(app.getHttpServer())[method](path), 'CLEANER').expect(403);
+      }
+    });
+
+    it('TENANT 一律 403（导入是管理操作）', async () => {
+      for (const { method, path } of routes) {
+        await as(request(app.getHttpServer())[method](path), 'TENANT').expect(403);
+      }
+    });
+
+    it('ADMIN 下载模板 → 200 text/csv', async () => {
+      const res = await as(request(app.getHttpServer()).get('/imports/tenants/template'), 'ADMIN').expect(200);
+      expect(res.headers['content-type']).toContain('text/csv');
+    });
+  });
+
+  describe('标签字典（T215）', () => {
+    const adminWrites: { method: 'post' | 'patch' | 'delete'; path: string }[] = [
+      { method: 'post', path: '/tags' },
+      { method: 'patch', path: '/tags/tag-1' },
+      { method: 'delete', path: '/tags/tag-1' },
+    ];
+
+    it('未登录一律 401', async () => {
+      await request(app.getHttpServer()).get('/tags').expect(401);
+      for (const { method, path } of adminWrites) {
+        await request(app.getHttpServer())[method](path).expect(401);
+      }
+    });
+
+    it('CLEANER 可读、不可改', async () => {
+      await as(request(app.getHttpServer()).get('/tags'), 'CLEANER').expect(200);
+      for (const { method, path } of adminWrites) {
+        await as(request(app.getHttpServer())[method](path), 'CLEANER').expect(403);
+      }
+    });
+
+    it('TENANT 可读（打标签时的候选）、不可改', async () => {
+      await as(request(app.getHttpServer()).get('/tags'), 'TENANT', 'tenant-self').expect(200);
+      for (const { method, path } of adminWrites) {
+        await as(request(app.getHttpServer())[method](path), 'TENANT', 'tenant-self').expect(403);
+      }
+    });
+
+    it('TENANT 无租客档案仍可读标签（标签本身与租客档案无关）', async () => {
+      await request(app.getHttpServer())
+        .get('/tags')
+        .set('x-test-role', 'TENANT')
+        .set('x-test-tenant', '')
+        .expect(200);
+    });
+
+    it('ADMIN 可读可写', async () => {
+      await as(request(app.getHttpServer()).get('/tags'), 'ADMIN').expect(200);
+      await as(request(app.getHttpServer()).post('/tags').send({ name: '学生' }), 'ADMIN').expect(201);
     });
   });
 

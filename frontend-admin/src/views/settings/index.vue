@@ -5,6 +5,14 @@
         <InviteCodes />
       </el-tab-pane>
 
+      <el-tab-pane label="资料导入" name="imports">
+        <DataImport />
+      </el-tab-pane>
+
+      <el-tab-pane label="标签字典" name="tags">
+        <Tags />
+      </el-tab-pane>
+
       <el-tab-pane label="偏好与关于" name="preferences">
         <div class="v3-preferences-grid">
           <section class="v3-preferences-card">
@@ -64,6 +72,8 @@
 import { ref } from 'vue';
 import { usePreferencesStore } from '@/stores/preferences';
 import InviteCodes from './InviteCodes.vue';
+import DataImport from './DataImport.vue';
+import Tags from './Tags.vue';
 
 const activeTab = ref('invite-codes');
 const preferences = usePreferencesStore();

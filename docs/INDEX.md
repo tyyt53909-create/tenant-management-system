@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-18
-> 文档总数: 106 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 文档总数: 114 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
 > 状态标注: active 43、draft 7、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 118 份（含本索引与归档）
-> 任务书: 81 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 126 份（含本索引与归档）
+> 任务书: 87 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -36,6 +36,7 @@
 | [12-部署与运维.md](./12-部署与运维.md) | 部署与运维 | 事实来源类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\*、docker-compose.yml | 2026-10-16 | 环境变量清单；T174 OTP 开关与 SMTP，T175 限流与 TRUST_PROXY |
 | [14-下一阶段计划（草案）.md](./14-下一阶段计划（草案）.md) | 下一阶段计划（草案） | 过程类 | draft | strong | docs/**、backend/**、frontend-admin/**、miniprogram/** | 2026-10-18 | 文檔二草案：只彙整已有证据的剩余工作，**范围待人工确认** |
 | [13-架构与现有代码优化计划.md](./13-架构与现有代码优化计划.md) | 架构与现有代码优化计划 | 过程类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\* | 2026-10-15 | OPT-01～OPT-28，不加新业务功能 |
+| [15-管理后台设计系统.md](./15-管理后台设计系统.md) | 管理后台设计系统 | 事实来源类 | active | medium | frontend-admin/src/styles/\*\*、frontend-admin/src/style.css、frontend-admin/src/components/common/ResourcePanel.vue、frontend-admin/src/views/\*\* | 2026-10-18 | 令牌唯一来源、WCAG AA 对比度表、11px 字级地板、页面骨架与顶栏断点 |
 
 ---
 
@@ -246,7 +247,10 @@
 | [T200](../tasks/T200-仓库卫生与分支治理.md) | 仓库卫生与分支治理（OPT-27：清理 29 个旧分支/worktree、8 份历史文档归档至 archive、去 tsbuildinfo、重构 README） | 普通 | completed | 2026-10-17 |
 | [T201](../tasks/T201-文档与代码一致性收口.md) | 文档与代码一致性收口（OPT-28：generate-status.mjs 脚本、表数/路由数门禁、元信息补齐、死链清零） | 普通 | completed | 2026-10-17 |
 | [T202](../tasks/T202-计划收口与度量看板实测化.md) | 计划收口与度量看板实测化（修复 tsc/build 阻断、openapi.json 漂移、ENCRYPTION_KEY 运行时缺陷；看板改实测；新增 .env.example 一致性门禁） | 强 | completed | 2026-10-17 |
-| [T218](../tasks/T218-水电对账.md) | 水电对账（docs/00 §2.2：读数/扣费/账单三方交叉核对，差额与异常提示，只读） | 强 | in_progress | 2026-10-18 |
+| [T218](../tasks/T218-水电对账.md) | 水电对账（docs/00 §2.2：读数/扣费/账单三方交叉核对，差额与异常提示，只读） | 强 | completed | 2026-10-19 |
+| [T217](../tasks/T217-公共水电分摊.md) | 公共水电分摊（docs/09 §7：PublicUtilityBill/PublicUtilityAllocation、按面积分摊、预览、生成 UTILITY 补缴账单） | 强 | completed | 2026-10-19 |
+| [T216](../tasks/T216-旧资料导入.md) | 旧资料批量导入（docs/00 §2.2：租客/合同/账单 CSV，模板 + 预检逐行错误 + 整批原子写入 + 判重跳过 + IMPORT 审计） | 强 | completed | 2026-10-19 |
+| [T215](../tasks/T215-租客标签管理.md) | 租客标签管理（docs/00 §2.1 P0 遗留：Tag 字典 + TenantTag 关联、迁移回填、`/tags` 增删改查、租客 tagIds 与 `?tagId=` 筛选、后台多选与标签列、「标签字典」设置页） | 强 | completed | 2026-10-19 |
 | [T212](../tasks/T212-计划收口与看板校准.md) | 计划收口与看板校准（基准改报 main/develop、任务号动态推导、验收缺口实扫；OPT-08 三条收口；docs/14 文檔二草案） | 强 | completed | 2026-10-18 |
 | [T211](../tasks/T211-生产可重现性与数据库约束.md) | 生产可重现性与数据库约束（`.env.prod.example` + docs/12 §7.5；`contracts` 同房源未结束合同的部分唯一索引 + 前置重复检查） | 强 | completed | 2026-10-18 |
 | [T210](../tasks/T210-审查剩余项收口.md) | 审查剩余项收口（EXIF 三格式、账单列表筛选、日期 400、isActive 布尔、cron 段式、电表模拟基准、租客范围、越权矩阵） | 强 | completed | 2026-10-18 |
@@ -255,17 +259,23 @@
 | [T206](../tasks/T206-安全权限修复.md) | 安全与权限修复（审查第一轮：档案 IDOR、OTP 每 IP 限流、Google mock 显式开关、移除 bundle 内硬编码帐密） | 强 | completed | 2026-10-18 |
 | [T204](../tasks/T204-管理后台ElementPlus按需引入.md) | 管理后台 Element Plus 按需引入（OPT-19#3：unplugin-vue-components + ElementPlusResolver，首屏 JS −88%，locale 改 el-config-provider） | 强 | completed | 2026-10-17 |
 | [T203](../tasks/T203-技术债与验证缺口收口.md) | 技术债与验证缺口收口（process.env 收敛至 config 层、首屏 JS 前后实测确认未达标、docs-check ❌ 阻断 CI、ENCRYPTION_KEY 必填测试） | 强 | completed | 2026-10-17 |
+| [T205](../tasks/T205-管理后台插槽类型标注与dts启用.md) | 管理后台插槽行类型收窄与组件 dts 启用（OPT-19#3 收尾：打开 `dts` 生成并纳入版本管理，78 处调用点收窄 + 1 处 tag 值类型，79 处类型错误清零） | 强 | completed | 2026-10-17 |
 
 **交接记录**：[2026-10-14-T166-T168-运营与效率类开发.md](./handoff/2026-10-14-T166-T168-运营与效率类开发.md)、[2026-10-14-T169-Google认证登录.md](./handoff/2026-10-14-T169-Google认证登录.md)、[2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md](./handoff/2026-10-14-T170-邮箱验证码登录与邀请码延迟绑定.md)、[2026-10-15-T171-工作台水电使用概览.md](./handoff/2026-10-15-T171-工作台水电使用概览.md)、[2026-10-15-T173-租客账号能力开关.md](./handoff/2026-10-15-T173-租客账号能力开关.md)、[2026-10-15-T174-OTP验证码安全加固.md](./handoff/2026-10-15-T174-OTP验证码安全加固.md)、[2026-10-16-T175-接口限流.md](./handoff/2026-10-16-T175-接口限流.md)
 
 ### 3.4 交接记录
 
+- [2026-10-18-T218-水电对账.md](./handoff/2026-10-18-T218-水电对账.md)：T218，读数/扣费/账单三方交叉核对的只读对账视图（`GET /meters/reconciliation`，仅 ADMIN）；逐表列出读数差、扣费合计、UTILITY 账单合计与应收差额，模拟读数不计入。
+- [2026-10-18-T217-公共水电分摊.md](./handoff/2026-10-18-T217-公共水电分摊.md)：T217，docs/09 §7 的公共水电分摊落地；`PublicUtilityBill`/`PublicUtilityAllocation` 两表、按面积分摊（每笔向下取整、余额补给最大一笔使合计等于总额）、预览与「生成补缴账单」幂等开单。
+- [2026-10-18-T216-旧资料导入.md](./handoff/2026-10-18-T216-旧资料导入.md)：T216，上线前数据补录阻塞项；租客/合同/账单 CSV 模板、预检（逐行错误）与单事务写入，任一行有错整批不写、判重 skipped、`commit` 默认 dryRun，后台「资料导入」分步页。
+- [2026-10-18-T215-租客标签管理.md](./handoff/2026-10-18-T215-租客标签管理.md)：T215，第一版 P0「标签管理」补齐；`Tag`/`TenantTag` 两表与旧 JSON 回填迁移，`/tags` 增删改查仅 ADMIN 可写，租客 `tagIds` 校验与 `?tagId=` 筛选，后台标签列/筛选/设置页。
 - [2026-10-18-T212-计划收口与看板校准.md](./handoff/2026-10-18-T212-计划收口与看板校准.md)：T212，看板基准曾写成「生成时所在分支」、验收缺口手写为 1 项（实际 4 条）；OPT-08 三条收口（含把一条与实作相反的验收标准改写）；新增文檔二草案。
 - [2026-10-18-T211-生产可重现性与数据库约束.md](./handoff/2026-10-18-T211-生产可重现性与数据库约束.md)：T211，仓库没有 `.env.prod` 与变量清单导致「只有原部署者能重部署」；同房源唯一性补上数据库部分唯一索引（dev 库实测确有一笔重复），并修掉前置检查脚本照文档跑会失败的问题。
 - [2026-10-18-T210-审查剩余项收口.md](./handoff/2026-10-18-T210-审查剩余项收口.md)：T210，PNG/WebP 未去 EXIF（夹具本身不合规导致该路径从未被测）、账单列表静默忽略筛选、非法日期 500、`?isActive=false` 反成 true、月账单 cron 5 段式、电表结算基准含模拟读数、租客范围退化、越权矩阵缺 5 条 /my。
 - [2026-10-18-T208-排程部署与CI修复.md](./handoff/2026-10-18-T208-排程部署与CI修复.md)：T208，滞纳金/提醒的营业日错位（建议永不产生）、月账单单点失败中止整批、镜像里 Prisma 引擎架构不符、CI 金钥长度不合法、refresh 并发刷新误判重放导致全员登出。
 - [2026-10-18-T207-金流与资料完整性修复.md](./handoff/2026-10-18-T207-金流与资料完整性修复.md)：T207，退租凭单扣款分类用了不存在的枚举（实退金额被高估）、合同/报修状态机可被 PATCH 绕过、同房源可重复签约、预付阈值 0 被吞、统计含已取消账单。
 - [2026-10-18-T206-安全权限修复.md](./handoff/2026-10-18-T206-安全权限修复.md)：T206，全专案审查第一轮：档案下载 IDOR（expiresIn 分支绕过归属校验）、OTP 路由失去每 IP 限流、Google 模拟登入后门、登入页硬编码帐密；含回归反证与 process 事故记录。
+- [2026-10-17-T205-管理后台插槽类型标注与dts启用.md](./handoff/2026-10-17-T205-管理后台插槽类型标注与dts启用.md)：T205，管理后台插槽行类型收窄与组件 dts 启用（`dts: 'src/components.d.ts'` 并纳入版本管理；78 处调用点收窄 + `typeBadgeMap` 值类型，`vue-tsc` 79 → 0 错误；16/16 路由与 7 条交互冒烟无告警）。
 - [2026-10-17-T204-管理后台ElementPlus按需引入.md](./handoff/2026-10-17-T204-管理后台ElementPlus按需引入.md)：T204，管理后台 Element Plus 按需引入（首屏 JS 1069→125 KB、−88.3%；分页文案与主题样式不变；16/16 路由冒烟）。
 - [2026-10-17-T203-技术债与验证缺口收口.md](./handoff/2026-10-17-T203-技术债与验证缺口收口.md)：T203，技术债与验证缺口收口（`process.env` 收敛至 config 层 0 处、首屏 JS 前后实测 1064→1065 KB 确认未达标、docs-check ❌ 改为 exit 1、`ENCRYPTION_KEY` 必填测试）。
 - [2026-10-17-T202-计划收口与度量看板实测化.md](./handoff/2026-10-17-T202-计划收口与度量看板实测化.md)：T202，计划验收项收口与看板实测化（修复 `tsc`/`build` 阻断、`openapi.json` 漂移、`ENCRYPTION_KEY` 运行时缺陷；`generate-status.mjs` 改为实测三端测试数、失败拒绝生成；新增 `.env.example` ↔ 部署文档一致性门禁；未达标验收项如实留空并注明）。

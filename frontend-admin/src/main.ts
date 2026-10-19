@@ -6,6 +6,8 @@ import { useUserStore } from './stores/user';
 
 // 先加载基础样式，再覆盖 CSS 变量，避免默认蓝色覆盖栖居主题。
 import 'element-plus/dist/index.css';
+// 设计令牌是全站唯一来源，必须最先落地，后面的样式表只引用不重新定义。
+import './styles/tokens.css';
 import './styles/element-variables.css';
 import './style.css';
 
