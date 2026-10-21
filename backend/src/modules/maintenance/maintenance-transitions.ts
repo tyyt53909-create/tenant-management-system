@@ -4,6 +4,10 @@ import type { MaintenanceStatus } from '@prisma/client';
  * 报修工单状态机（docs/04-状态机.md §4.3 的可执行版本）。
  *
  * COMPLETED / CANCELLED 为终态，不可逆（§4.4）。
+ *
+ * T225 起 ASSIGNED 表示「待接单」：管理者可指派具体维修人员，也可不指派
+ * （assignedTo = null，进入公共池，由维修人员先接先得）。因此不再强制
+ * ASSIGNED 必须带 assignedTo。
  */
 export const MAINTENANCE_TRANSITIONS: Record<MaintenanceStatus, readonly MaintenanceStatus[]> = {
   SUBMITTED: ['ACKNOWLEDGED', 'CANCELLED'],
@@ -20,11 +24,6 @@ export function isMaintenanceTransitionAllowed(
   to: MaintenanceStatus,
 ): boolean {
   return (MAINTENANCE_TRANSITIONS[from] ?? []).includes(to);
-}
-
-/** 派单必须知道给谁（§4.3「填写 assignedTo、assignedAt」）。 */
-export function maintenanceTransitionNeedsAssignee(to: MaintenanceStatus): boolean {
-  return to === 'ASSIGNED';
 }
 
 /** 只有确认完成才写 resolvedAt（§4.3 PENDING_CONFIRM → COMPLETED 的副作用）。 */

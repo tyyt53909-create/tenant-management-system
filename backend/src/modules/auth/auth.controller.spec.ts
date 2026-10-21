@@ -169,8 +169,40 @@ describe('AuthController', () => {
       expect(result.user.id).toBe('user-123');
     });
 
-    it('应该拒绝无效的邀请码', async () => {
+    it('维修邀请码注册为 MAINTENANCE，且不创建租客档案（T225）', async () => {
       vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+        valid: true,
+        invitedBy: 'admin-123',
+        role: 'MAINTENANCE',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+      const tenantCreate = vi.fn().mockResolvedValue({});
+      const userCreate = vi.fn().mockResolvedValue({
+        id: 'maint-1',
+        email: dto.email,
+        role: 'MAINTENANCE',
+      });
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
+        callback({
+          user: { create: userCreate, update: vi.fn().mockResolvedValue({}) },
+          tenant: { create: tenantCreate },
+        }),
+      );
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
+
+      const result = await controller.register(dto);
+
+      expect(userCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ role: 'MAINTENANCE' }),
+      });
+      expect(tenantCreate).not.toHaveBeenCalled();
+      expect(result.user.role).toBe('MAINTENANCE');
+    });
+
+    it('应该拒绝无效的邀请码', async () => {      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
         valid: false,
       });
 

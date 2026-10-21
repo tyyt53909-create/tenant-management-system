@@ -9,11 +9,13 @@ export type LoginForm = ApiSchemas['LoginDto'];
 export type RegisterForm = ApiSchemas['RegisterDto'];
 
 // 用户类型。这是页面使用的形状，不是请求 DTO。
+export type UserRole = 'ADMIN' | 'CLEANER' | 'MAINTENANCE' | 'TENANT';
+
 export interface User {
   id: string;
   email: string;
   phone?: string;
-  role: 'ADMIN' | 'TENANT';
+  role: UserRole;
   createdAt: string;
   features?: {
     meterSimulator?: boolean;
@@ -361,7 +363,7 @@ export interface QueryParams {
 export interface InviteCode {
   id: string;
   code: string;
-  role: 'ADMIN' | 'TENANT';
+  role: UserRole;
   status: 'UNUSED' | 'USED' | 'REVOKED';
   notes?: string | null;
   creatorId?: string | null;

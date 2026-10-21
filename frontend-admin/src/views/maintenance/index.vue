@@ -30,7 +30,7 @@
           <div class="repair-work-meta"><span>{{ row.room?.roomNumber || '未关联房源' }} · {{ row.tenant?.name || '物业记录' }}</span><time>{{ formatDateTime(row.createdAt) }}</time></div>
         </div>
         <div class="repair-work-footer">
-          <el-tag :type="statusTypeMap[row.status]">{{ statusMap[row.status] }}</el-tag>
+          <el-tag :type="statusTypeMap[row.status]">{{ displayStatus(row) }}</el-tag>
           <div><el-button text @click="openDetail(row)">查看详情</el-button><el-button type="primary" plain @click="handleEdit(row)">处理工单</el-button><el-dropdown><el-button text aria-label="更多工单操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleDelete(row)">删除工单</el-dropdown-item></el-dropdown-menu></template></el-dropdown></div>
         </div>
       </article></div>
@@ -61,7 +61,21 @@
           </el-select>
         </el-form-item>
         <el-form-item label="处理人">
-          <el-select v-model="formData.assignedTo" clearable placeholder="选择跟进方式"><el-option v-if="formData.assignedTo && formData.assignedTo !== userStore.user?.id" :value="formData.assignedTo" label="保持已指派人员" /><el-option v-if="userStore.user" :value="userStore.user.id" :label="`由我跟进 · ${userStore.user.email}`" /></el-select>
+          <el-select v-model="formData.assignedTo" clearable placeholder="放入公共池或选择维修人员">
+            <el-option label="公共工单池（维修人员先接先得）" value="" />
+            <el-option
+              v-for="assignee in assignees"
+              :key="assignee.id"
+              :value="assignee.id"
+              :label="`维修人员 · ${assignee.email || assignee.id}`"
+            />
+            <el-option
+              v-if="keepCurrentAssignee"
+              :value="formData.assignedTo"
+              label="保持当前指派人员"
+            />
+            <el-option v-if="userStore.user" :value="userStore.user.id" :label="`由我跟进 · ${userStore.user.email}`" />
+          </el-select>
         </el-form-item>
         <el-form-item label="解决方案">
           <el-input v-model="formData.resolution" type="textarea" :rows="4" placeholder="请输入解决方案" />
@@ -87,8 +101,9 @@ import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
 import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import ResourceDrawer from '@/components/common/ResourceDrawer.vue';
 import ProtectedImage from '@/components/common/ProtectedImage.vue';
-import { getMaintenanceList, updateMaintenance, deleteMaintenance } from '@/api/maintenance';
+import { getMaintenanceList, getMaintenanceAssignees, updateMaintenance, deleteMaintenance } from '@/api/maintenance';
 import type { Maintenance } from '@/types';
+import type { MaintenanceAssignee } from '@/api/maintenance';
 
 const loading = ref(false);
 const route=useRoute();
@@ -98,6 +113,20 @@ const submitLoading = ref(false);
 const dialogVisible = ref(false);
 const tableData = ref<Maintenance[]>([]);
 const currentEditId = ref('');
+const assignees = ref<MaintenanceAssignee[]>([]);
+
+/** 已指派人员不在候选列表时保留原值，避免编辑时被静默清空 */
+const keepCurrentAssignee = computed(() =>
+  Boolean(
+    formData.assignedTo &&
+      formData.assignedTo !== userStore.user?.id &&
+      !assignees.value.some((item) => item.id === formData.assignedTo),
+  ),
+);
+
+/** ASSIGNED 且无指派人 = 公共池待接单 */
+const displayStatus = (row: Maintenance) =>
+  row.status === 'ASSIGNED' && !row.assignedTo ? '待接单（公共池）' : statusMap[row.status];
 
 const queryForm = reactive({ status: '' });
 
@@ -201,9 +230,19 @@ const handleDelete = async (row: Maintenance) => {
 };
 
 const handleSubmit = async () => {
+  if (
+    ['IN_PROGRESS', 'PENDING_CONFIRM'].includes(formData.status) &&
+    !formData.assignedTo
+  ) {
+    ElMessage.warning('请先指派维修人员，再进入维修中');
+    return;
+  }
   submitLoading.value = true;
   try {
-    const data: any = { ...formData };
+    // 只有派单状态才允许提交空值（公共池）；其他状态若带指派人则一并保存。
+    const data: any = { status: formData.status, resolution: formData.resolution };
+    if (formData.status === 'ASSIGNED') data.assignedTo = formData.assignedTo || '';
+    else if (formData.assignedTo) data.assignedTo = formData.assignedTo;
     await updateMaintenance(currentEditId.value, data);
     ElMessage.success('更新成功');
     dialogVisible.value = false;
@@ -215,7 +254,16 @@ const handleSubmit = async () => {
   }
 };
 
-onMounted(()=>{void fetchData();if(typeof route.query.detail==='string'){detailId.value=route.query.detail;detailVisible.value=true;}});
+const loadAssignees = async () => {
+  try {
+    assignees.value = await getMaintenanceAssignees();
+  } catch {
+    // 候选人加载失败不阻断工单列表；仍可选公共池或自己
+    assignees.value = [];
+  }
+};
+
+onMounted(()=>{void fetchData();void loadAssignees();if(typeof route.query.detail==='string'){detailId.value=route.query.detail;detailVisible.value=true;}});
 watch(()=>route.query.detail,id=>{if(typeof id==='string'){detailId.value=id;detailVisible.value=true;}});
 </script>
 

@@ -213,7 +213,7 @@ export default {
       try {
         const user = await getUserInfo()
         uni.setStorageSync('user_role', user.role)
-        if (user.role === 'CLEANER') {
+        if (user.role === 'CLEANER' || user.role === 'MAINTENANCE') {
           openHome(user.role)
           return
         }

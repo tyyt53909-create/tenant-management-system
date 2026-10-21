@@ -21,6 +21,15 @@ export const login = (data) => {
 }
 
 /**
+ * 员工激活（保洁/维修）：用管理员发放的角色邀请码注册并登录
+ * @param {{ email: string, password: string, inviteCode: string, phone?: string }} data
+ * @returns {Promise<LoginResponse>}
+ */
+export const register = (data) => {
+  return request.post('/auth/register', data)
+}
+
+/**
  * 发送邮箱验证码 (OTP)
  * @param {{ email: string }} data
  * @returns {Promise<{ message: string, cooldown?: number }>}

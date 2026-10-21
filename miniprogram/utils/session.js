@@ -2,9 +2,11 @@ import { getUserInfo } from '../api/index.js'
 import { API_BASE_URL } from './api-config.js'
 
 export const CLEANER_PAGE = '/pages/cleaning/cleaning'
+export const MAINTENANCE_PAGE = '/pages/maintenance/workbench'
 
 export function openHome(role) {
   if (role === 'CLEANER') uni.reLaunch({ url: CLEANER_PAGE })
+  else if (role === 'MAINTENANCE') uni.reLaunch({ url: MAINTENANCE_PAGE })
   else uni.switchTab({ url: '/pages/index/index' })
 }
 
@@ -36,8 +38,8 @@ export function hasCapability(code) {
   return caps.includes(code)
 }
 
-// 旧会话没有缓存角色时也向服务器确认，不把保洁误当作租客。
-export async function ensureTenantSession() {
+// 任意已登录角色（租客/保洁/维修/管理员）都可用的会话确认。
+export async function ensureSession() {
   if (!uni.getStorageSync('access_token')) {
     uni.reLaunch({ url: '/pages/login/login' })
     return false
@@ -47,7 +49,14 @@ export async function ensureTenantSession() {
   if (Array.isArray(user.capabilities)) {
     uni.setStorageSync('user_capabilities', user.capabilities)
   }
-  if (user.role === 'CLEANER') {
+  return user
+}
+
+// 租客页面专用：保洁/维修会被送回各自的工作台，避免误入租客页面。
+export async function ensureTenantSession() {
+  const user = await ensureSession()
+  if (!user) return false
+  if (user.role === 'CLEANER' || user.role === 'MAINTENANCE') {
     openHome(user.role)
     return false
   }

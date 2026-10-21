@@ -15,6 +15,14 @@
       }
     },
     {
+      "path": "pages/maintenance/workbench",
+      "style": {
+        "navigationBarTitleText": "维修工作台",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
       "path": "pages/login/login",
       "style": {
         "navigationBarTitleText": "登录",

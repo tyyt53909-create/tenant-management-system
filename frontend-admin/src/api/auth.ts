@@ -1,6 +1,6 @@
 import axios from 'axios';
 import request from '@/utils/request';
-import type { LoginForm, RegisterForm, User } from '@/types';
+import type { LoginForm, RegisterForm, User, UserRole } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -48,7 +48,7 @@ export const generateInviteCode = (data: {
   count?: number;
   expiryDays?: number;
   notes?: string;
-  role?: 'ADMIN' | 'TENANT';
+  role?: UserRole;
 }) => {
   return request.post('/auth/invite-codes', data);
 };
