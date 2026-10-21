@@ -93,3 +93,17 @@ export interface SpaceModelContract {
   summary: SpaceSummaryContract;
   generatedAt: string;
 }
+
+/** 小區模型使用：每棟樓的摘要，不帶房間明細。 */
+export interface CampusBuildingSummary {
+  id: string;
+  name: string;
+  floors: number;
+  total: number;
+  rentable: number;
+  occupied: number;
+  reserved: number;
+  pendingClean: number;
+  cleaning: number;
+  maintenance: number;
+}

@@ -56,9 +56,11 @@ export class SpaceService {
       : floorsWithRooms;
     const floors = floorNumbers.sort((a, b) => b - a).map((floor, level) => {
       const floorRooms = projected.filter((room) => room.floor === floor).sort((a, b) => naturalCompare(a.roomNumber, b.roomNumber));
-      floorRooms.forEach((room, index) => { room.shape.x = (index % 12) * 4.85; room.shape.y = Math.floor(index / 12) * 4.8; });
-      const rows = Math.ceil(floorRooms.length / 12);
-      return { floor, level: floorNumbers.length - level - 1, layoutMode: 'AUTO' as const, width: Math.min(12, floorRooms.length) * 4.85, depth: Math.max(1, rows) * 4.8, rooms: floorRooms };
+      // 让每层平面尽量接近方形，3D 模型才不会变成一条薄片。
+      const columns = Math.min(8, Math.max(2, Math.ceil(Math.sqrt(floorRooms.length * 2))));
+      floorRooms.forEach((room, index) => { room.shape.x = (index % columns) * 4.85; room.shape.y = Math.floor(index / columns) * 4.8; });
+      const rows = Math.ceil(floorRooms.length / columns);
+      return { floor, level: floorNumbers.length - level - 1, layoutMode: 'AUTO' as const, width: Math.min(columns, floorRooms.length) * 4.85, depth: Math.max(1, rows) * 4.8, rooms: floorRooms };
     });
     const counts = { OCCUPIED: 0, RESERVED: 0, RENTABLE: 0, PENDING_CLEAN: 0, CLEANING: 0, MAINTENANCE: 0, UNKNOWN: 0 };
     projected.forEach((room) => counts[room.state]++);

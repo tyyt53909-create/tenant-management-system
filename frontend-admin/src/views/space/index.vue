@@ -2,8 +2,9 @@
   <div class="space-page">
     <section class="space-controlbar">
       <div class="space-controlbar-title">
-        <strong>{{ model?.building.name || '房源模型' }}</strong>
-        <span v-if="model">{{ model.summary.total }} 间 · {{ model.floors.length }} 层</span>
+        <strong>{{ view === 'campus' ? '小区模型' : model?.building.name || '房源模型' }}</strong>
+        <span v-if="view === 'campus'">{{ buildings.length }} 栋楼 · {{ campusSummary.total }} 间</span>
+        <span v-else-if="model">{{ model.summary.total }} 间 · {{ model.floors.length }} 层</span>
       </div>
       <div class="space-controlbar-actions">
         <el-select
@@ -12,7 +13,7 @@
           filterable
           class="space-building-select"
           :loading="buildingsLoading"
-          @change="loadSpace"
+          @change="handleBuildingChange"
         >
           <el-option
             v-for="building in buildings"
@@ -24,12 +25,21 @@
             <small class="space-option-meta">{{ building.floors || building.totalFloors }} 层</small>
           </el-option>
         </el-select>
-        <el-button :loading="spaceLoading" @click="loadSpace">刷新</el-button>
+        <el-button v-if="view === 'building' && buildings.length > 1" @click="backToCampus">返回小区</el-button>
+        <el-button :loading="view === 'campus' ? campusLoading : spaceLoading" @click="refreshView">刷新</el-button>
         <el-button @click="router.push({ path: '/space/editor', query: { building: buildingId } })">编辑平面图</el-button>
       </div>
     </section>
 
-    <section v-if="model" class="space-summary" aria-label="房源状态摘要">
+    <section v-if="view === 'campus'" class="space-campus-summary" aria-label="小区摘要">
+      <div><span>楼栋</span><strong>{{ buildings.length }}</strong></div>
+      <div><span>房源</span><strong>{{ campusSummary.total }}</strong></div>
+      <div><span>可出租</span><strong class="rentable">{{ campusSummary.rentable }}</strong></div>
+      <div><span>已出租</span><strong class="occupied">{{ campusSummary.occupied }}</strong></div>
+      <div><span>待处理</span><strong class="issue">{{ campusSummary.pendingClean + campusSummary.cleaning + campusSummary.maintenance }}</strong></div>
+    </section>
+
+    <section v-if="view === 'building' && model" class="space-summary" aria-label="房源状态摘要">
       <article
         v-for="item in summaryItems"
         :key="item.state"
@@ -44,34 +54,37 @@
 
     <section class="space-stage-panel">
       <header class="space-stage-head">
-        <div class="space-mode-switch" role="group" aria-label="显示模式">
+        <div v-if="view === 'building'" class="space-mode-switch" role="group" aria-label="显示模式">
           <button
             :class="{ active: mode === '2d' }"
             :aria-pressed="mode === '2d'"
             @click="setMode('2d')"
           >
-            2D 剖面
+            2D 楼层
           </button>
           <button
             :class="{ active: mode === '3d' }"
             :aria-pressed="mode === '3d'"
             @click="setMode('3d')"
           >
-            3D 模型
+            3D 楼栋
           </button>
         </div>
-
+        <div v-else class="space-campus-title">
+          <strong>小区总览</strong>
+          <span>先看整个小区，点击楼栋进入 2D 楼层</span>
+        </div>
       </header>
 
-      <div v-if="buildingsLoading || spaceLoading" class="space-loading" aria-busy="true">
+      <div v-if="buildingsLoading || spaceLoading || campusLoading" class="space-loading" aria-busy="true">
         <div class="space-loading-stage" />
-        <p>正在读取楼栋与空间模型…</p>
+        <p>{{ view === 'campus' ? '正在读取小区楼栋…' : '正在读取楼栋与空间模型…' }}</p>
       </div>
 
-      <div v-else-if="loadError" class="space-error" role="alert">
+      <div v-else-if="loadError || campusError" class="space-error" role="alert">
         <strong>空间模型未能加载</strong>
-        <p>{{ loadError }}</p>
-        <el-button @click="loadSpace">重新加载</el-button>
+        <p>{{ loadError || campusError }}</p>
+        <el-button @click="refreshView">重新加载</el-button>
       </div>
 
       <div v-else-if="!buildings.length" class="space-empty">
@@ -80,11 +93,35 @@
         <el-button type="primary" @click="router.push('/buildings')">前往楼栋管理</el-button>
       </div>
 
-      <div v-else-if="model && model.summary.total === 0" class="space-empty">
+      <div v-else-if="view === 'building' && model && model.summary.total === 0" class="space-empty">
         <strong>{{ model.building.name }} 还没有房源</strong>
         <p>这栋楼目前只有楼层骨架。新增房源后，房间会直接出现在模型里。</p>
         <el-button type="primary" @click="router.push('/rooms')">前往房源管理</el-button>
       </div>
+
+      <template v-else-if="view === 'campus'">
+        <div class="space-legend campus-legend" aria-label="楼栋状态图例">
+          <span><i class="campus-dot rentable" />有可租</span>
+          <span><i class="campus-dot occupied" />已租满</span>
+          <span><i class="campus-dot issue" />有待处理</span>
+        </div>
+        <SpaceCampus3D :buildings="campusBuildings" @select="openCampusBuilding" />
+        <div class="campus-building-list" aria-label="楼栋列表">
+          <button
+            v-for="building in campusBuildings"
+            :key="building.id"
+            type="button"
+            @click="openCampusBuilding(building.id)"
+          >
+            <strong>{{ building.name }}</strong>
+            <span>{{ building.floors }} 层 · 可租 {{ building.rentable }} · 已租 {{ building.occupied }}</span>
+          </button>
+        </div>
+        <footer class="space-stage-foot">
+          <span>先看小区整体，再点击楼栋进入 2D 楼层视图。</span>
+          <span>绿色有可租 · 红色有待处理 · 蓝色已租满</span>
+        </footer>
+      </template>
 
       <template v-else-if="model">
         <div class="space-legend" aria-label="房态图例">
@@ -117,8 +154,8 @@
         />
 
         <footer class="space-stage-foot">
-          <span v-if="mode === '2d'">按楼层排列的示意或平面图；AUTHORED 楼层的方位来自平面图资料。</span>
-          <span v-else>等轴模型用于观察楼层与房间状态；可拖拽旋转、滚轮缩放。</span>
+          <span v-if="mode === '2d'">绿色可租、蓝色已租、红色待清洁／清洁中／维修中。</span>
+          <span v-else>单栋楼模型可旋转；展开楼层可检查每一间房。</span>
         </footer>
       </template>
     </section>
@@ -139,7 +176,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { getBuildings } from '@/api/buildings';
 import { getBuildingSpace } from '@/api/space';
 import type { Building } from '@/types';
-import type { SpaceModelContract, SpaceRoomContract, SpaceState } from '@/types/space';
+import type {
+  CampusBuildingSummary,
+  SpaceModelContract,
+  SpaceRoomContract,
+  SpaceState,
+} from '@/types/space';
 import type { ResourceRecord } from '@/utils/resource';
 import { SPACE_STATE_META, SPACE_STATE_ORDER } from '@/utils/spaceModel';
 import SpacePlan2DContract from '@/components/space/SpacePlan2DContract.vue';
@@ -147,6 +189,9 @@ import PropertyDetailPanel from '@/components/common/PropertyDetailPanel.vue';
 
 const SpaceScene3DContract = defineAsyncComponent(
   () => import('@/components/space/SpaceScene3DContract.vue'),
+);
+const SpaceCampus3D = defineAsyncComponent(
+  () => import('@/components/space/SpaceCampus3D.vue'),
 );
 
 type BuildingWithFloors = Building & { floors?: number };
@@ -159,7 +204,11 @@ const buildingId = ref('');
 const model = ref<SpaceModelContract | null>(null);
 const buildingsLoading = ref(false);
 const spaceLoading = ref(false);
+const campusLoading = ref(false);
 const loadError = ref('');
+const campusError = ref('');
+const view = ref<'campus' | 'building'>('building');
+const campusModels = ref<Record<string, SpaceModelContract>>({});
 const mode = ref<'2d' | '3d'>('3d');
 const selectedRoomId = ref('');
 const detailVisible = ref(false);
@@ -195,9 +244,42 @@ const legendItems = computed(() => {
   );
 });
 
+const campusBuildings = computed<CampusBuildingSummary[]>(() =>
+  buildings.value.map((building) => {
+    const summary = campusModels.value[building.id]?.summary;
+    return {
+      id: building.id,
+      name: building.name,
+      floors: building.floors || campusModels.value[building.id]?.building.floors || 0,
+      total: summary?.total ?? 0,
+      rentable: summary?.rentable ?? 0,
+      occupied: summary?.occupied ?? 0,
+      reserved: summary?.reserved ?? 0,
+      pendingClean: summary?.pendingClean ?? 0,
+      cleaning: summary?.cleaning ?? 0,
+      maintenance: summary?.maintenance ?? 0,
+    };
+  }),
+);
+
+const campusSummary = computed(() =>
+  campusBuildings.value.reduce(
+    (total, building) => ({
+      total: total.total + building.total,
+      rentable: total.rentable + building.rentable,
+      occupied: total.occupied + building.occupied,
+      pendingClean: total.pendingClean + building.pendingClean,
+      cleaning: total.cleaning + building.cleaning,
+      maintenance: total.maintenance + building.maintenance,
+    }),
+    { total: 0, rentable: 0, occupied: 0, pendingClean: 0, cleaning: 0, maintenance: 0 },
+  ),
+);
+
 async function loadBuildings() {
   buildingsLoading.value = true;
   loadError.value = '';
+  campusError.value = '';
   try {
     const response = await getBuildings({ page: 1, limit: 100 });
     buildings.value = (response.data as BuildingWithFloors[]).filter(
@@ -206,11 +288,43 @@ async function loadBuildings() {
     const queryId = typeof route.query.building === 'string' ? route.query.building : '';
     const preferred = buildings.value.find((building) => building.id === queryId);
     buildingId.value = preferred?.id || buildings.value[0]?.id || '';
-    await loadSpace();
+    if (buildings.value.length > 1) {
+      await loadCampus();
+      if (preferred) {
+        view.value = 'building';
+        mode.value = '2d';
+        model.value = campusModels.value[preferred.id] || null;
+        if (!model.value) await loadSpace();
+      } else {
+        view.value = 'campus';
+      }
+    } else {
+      view.value = 'building';
+      await loadSpace();
+    }
   } catch {
     loadError.value = '请检查连接后重试；空间模型不会显示旧的楼栋数据。';
   } finally {
     buildingsLoading.value = false;
+  }
+}
+
+async function loadCampus() {
+  if (!buildings.value.length) return;
+  campusLoading.value = true;
+  campusError.value = '';
+  try {
+    const entries = await Promise.all(
+      buildings.value.map(async (building) => {
+        const space = await getBuildingSpace(building.id);
+        return [building.id, space] as const;
+      }),
+    );
+    campusModels.value = Object.fromEntries(entries);
+  } catch {
+    campusError.value = '小区模型未能加载，请稍后重试。';
+  } finally {
+    campusLoading.value = false;
   }
 }
 
@@ -232,6 +346,43 @@ async function loadSpace() {
     loadError.value = '空间模型未能加载，请确认后端已更新并稍后重试。';
   } finally {
     if (requestId === spaceRequest) spaceLoading.value = false;
+  }
+}
+
+function handleBuildingChange() {
+  if (view.value === 'campus') {
+    void openCampusBuilding(buildingId.value);
+    return;
+  }
+  void loadSpace();
+}
+
+async function openCampusBuilding(id: string) {
+  if (!id) return;
+  buildingId.value = id;
+  view.value = 'building';
+  mode.value = '2d';
+  selectedRoomId.value = '';
+  detailVisible.value = false;
+  model.value = campusModels.value[id] || null;
+  if (!model.value) await loadSpace();
+  if (typeof route.query.building === 'string' && route.query.building !== id) {
+    void router.replace({ query: { ...route.query, building: id } });
+  }
+}
+
+function backToCampus() {
+  view.value = 'campus';
+  mode.value = '3d';
+  selectedRoomId.value = '';
+  detailVisible.value = false;
+}
+
+function refreshView() {
+  if (view.value === 'campus') {
+    void loadCampus();
+  } else {
+    void loadSpace();
   }
 }
 
@@ -392,6 +543,110 @@ onMounted(() => {
 
 .space-summary-card p {
   display: none;
+}
+
+.space-campus-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.space-campus-summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e9e4da;
+  border-radius: 9px;
+  background: #fffefa;
+}
+
+.space-campus-summary span {
+  color: #827b6e;
+  font-size: 10px;
+}
+
+.space-campus-summary strong {
+  color: #302f2a;
+  font-size: 20px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.space-campus-summary strong.rentable { color: #5f8f5a; }
+.space-campus-summary strong.occupied { color: #5f7f9b; }
+.space-campus-summary strong.issue { color: #a6473c; }
+
+.space-campus-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.space-campus-title strong {
+  color: #36362f;
+  font-size: 14px;
+}
+
+.space-campus-title span {
+  color: #948d80;
+  font-size: 10px;
+}
+
+.campus-legend {
+  gap: 14px;
+}
+
+.campus-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #777166;
+  font-size: 10px;
+}
+
+.campus-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.campus-dot.rentable { background: #6f9a66; }
+.campus-dot.occupied { background: #6b8ba6; }
+.campus-dot.issue { background: #c45d4c; }
+
+.campus-building-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  padding: 12px 16px 2px;
+}
+
+.campus-building-list button {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #e9e4da;
+  border-radius: 9px;
+  background: #fffefa;
+  text-align: left;
+  color: #36362f;
+}
+
+.campus-building-list button:hover {
+  border-color: #cfc7b8;
+  background: #faf8f2;
+}
+
+.campus-building-list strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.campus-building-list span {
+  color: #8d8679;
+  font-size: 10px;
 }
 
 .space-stage-panel {
@@ -572,7 +827,8 @@ onMounted(() => {
     width: auto;
   }
 
-  .space-summary {
+  .space-summary,
+  .space-campus-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

@@ -1,12 +1,12 @@
 import type { SpaceFloorContract, SpaceModelContract, SpaceRoomContract, SpaceState } from '@/types/space';
 
 export const CONTRACT_STATE_META: Record<SpaceState, { label: string; short: string; color: string; soft: string }> = {
-  OCCUPIED: { label: '已出租', short: '已租', color: '#768168', soft: '#e7ece1' },
-  RESERVED: { label: '已预订', short: '预订', color: '#b87648', soft: '#f7e8d8' },
-  RENTABLE: { label: '可出租', short: '可租', color: '#5f7355', soft: '#edf3e7' },
-  PENDING_CLEAN: { label: '待清洁', short: '待清', color: '#b6844f', soft: '#fbf0df' },
-  CLEANING: { label: '清洁中', short: '清洁', color: '#5f7f91', soft: '#e8f0f4' },
-  MAINTENANCE: { label: '维修中', short: '维修', color: '#b35f55', soft: '#f8e5e1' },
+  OCCUPIED: { label: '已出租', short: '已租', color: '#5f7f9b', soft: '#e8eef4' },
+  RESERVED: { label: '已预订', short: '预订', color: '#8b7398', soft: '#f1ebf4' },
+  RENTABLE: { label: '可出租', short: '可租', color: '#5f8f5a', soft: '#e7f2e3' },
+  PENDING_CLEAN: { label: '待清洁', short: '待清', color: '#d47a55', soft: '#fbeae3' },
+  CLEANING: { label: '清洁中', short: '清洁', color: '#c45d4c', soft: '#f9e5e1' },
+  MAINTENANCE: { label: '维修中', short: '维修', color: '#a6473c', soft: '#f6dfdb' },
   UNKNOWN: { label: '状态异常', short: '异常', color: '#8b8477', soft: '#eeeae3' },
 };
 

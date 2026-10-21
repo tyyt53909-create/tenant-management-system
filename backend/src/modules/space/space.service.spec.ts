@@ -69,12 +69,12 @@ describe('SpaceService', () => {
     await expect(service.getBuildingSpace('missing', 'ADMIN')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('wraps AUTO layout after twelve columns, including long room numbers', async () => {
+  it('wraps AUTO layout into a squarer footprint, including long room numbers', async () => {
     const rooms = Array.from({ length: 13 }, (_, index) => mkRoom(String(index), `A${String(index + 1).padStart(2, '0')}-LONG-ROOM`, 1, 'VACANT'));
     const { service } = createService(rooms);
     const result = await service.getBuildingSpace('b1', 'ADMIN');
     const laidOut = result.floors[2]?.rooms ?? [];
-    expect(Math.max(...laidOut.map((room) => room.shape.x / 4.85))).toBe(11);
+    expect(Math.max(...laidOut.map((room) => room.shape.x / 4.85))).toBe(5);
     expect(laidOut.some((room) => room.shape.y > 0)).toBe(true);
   });
 });
