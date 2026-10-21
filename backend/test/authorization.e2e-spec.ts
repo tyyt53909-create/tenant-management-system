@@ -41,6 +41,10 @@ import { TenantsController } from '../src/modules/tenants/tenants.controller.js'
 import { TagsController } from '../src/modules/tags/tags.controller.js';
 import { TenantsService } from '../src/modules/tenants/tenants.service.js';
 import { TagsService } from '../src/modules/tags/tags.service.js';
+import { SpaceController } from '../src/modules/space/space.controller.js';
+import { SpaceService } from '../src/modules/space/space.service.js';
+import { FloorPlansController } from '../src/modules/floor-plans/floor-plans.controller.js';
+import { FloorPlansService } from '../src/modules/floor-plans/floor-plans.service.js';
 
 /**
  * 越权回归测试（T148）
@@ -655,6 +659,64 @@ describe('房源接口角色隔离（T148，真实 RoomsService）', () => {
     expect(prisma.contract.findFirst).toHaveBeenCalledWith({
       where: { roomId: 'room-t1', tenantId: 'tenant-self' },
       select: { id: true },
+    });
+  });
+});
+
+describe('空间与楼层平面授权（T226）', () => {
+  let app: INestApplication;
+  const spaceService = {
+    getBuildingSpace: vi.fn(async (_id: string, role: string, tenantId?: string) => ({
+      view: role,
+      floors: [{ floor: 1, rooms: role === 'TENANT' ? (tenantId ? [{ id: 'mine', roomNumber: '101' }] : []) : [{ id: 'mine', roomNumber: '101', ...(role === 'ADMIN' ? { tenantName: '租客甲', lease: { rentAmount: 1000 } } : {}) }] }],
+    })),
+  };
+  const floorPlansService = { findAll: vi.fn().mockResolvedValue([]), save: vi.fn().mockResolvedValue({}) };
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [SpaceController, FloorPlansController],
+      providers: [
+        { provide: SpaceService, useValue: spaceService },
+        { provide: FloorPlansService, useValue: floorPlansService },
+      ],
+    }).overrideGuard(JwtAuthGuard).useValue(fakeJwtGuard).compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+  });
+
+  afterAll(async () => { await app?.close(); });
+
+  describe('GET /buildings/:id/space', () => {
+    it('ADMIN 200；CLEANER 200 且無租客／合約資料', async () => {
+      await as(request(app.getHttpServer()).get('/buildings/b1/space'), 'ADMIN').expect(200);
+      const cleaner = await as(request(app.getHttpServer()).get('/buildings/b1/space'), 'CLEANER').expect(200);
+      expect(JSON.stringify(cleaner.body)).not.toMatch(/tenantName|lease/);
+    });
+
+    it('TENANT 只取得自己房間；無租客檔案為空範圍', async () => {
+      const own = await as(request(app.getHttpServer()).get('/buildings/b1/space'), 'TENANT', 'tenant-self').expect(200);
+      expect(own.body.floors.flatMap((floor: any) => floor.rooms).map((room: any) => room.id)).toEqual(['mine']);
+      expect(spaceService.getBuildingSpace).toHaveBeenLastCalledWith('b1', 'TENANT', 'tenant-self');
+      const noProfile = await request(app.getHttpServer()).get('/buildings/b1/space').set('x-test-role', 'TENANT').set('x-test-tenant', '').expect(200);
+      expect(noProfile.body.floors.flatMap((floor: any) => floor.rooms)).toEqual([]);
+      expect(spaceService.getBuildingSpace).toHaveBeenLastCalledWith('b1', 'TENANT', '');
+    });
+
+    it('未登入 401', async () => { await request(app.getHttpServer()).get('/buildings/b1/space').expect(401); });
+  });
+
+  describe('floor-plans 管理權限', () => {
+    it('GET 管理平面圖：ADMIN 200，CLEANER/TENANT 403，未登入 401', async () => {
+      await as(request(app.getHttpServer()).get('/buildings/b1/floor-plans'), 'ADMIN').expect(200);
+      for (const role of ['CLEANER', 'TENANT']) await as(request(app.getHttpServer()).get('/buildings/b1/floor-plans'), role).expect(403);
+      await request(app.getHttpServer()).get('/buildings/b1/floor-plans').expect(401);
+    });
+
+    it('PUT 非管理角色不得編輯', async () => {
+      for (const role of ['CLEANER', 'TENANT']) {
+        await as(request(app.getHttpServer()).put('/buildings/b1/floor-plans/1').send({}), role).expect(403);
+      }
     });
   });
 });
