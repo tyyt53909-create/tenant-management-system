@@ -35,6 +35,8 @@ import { PublicModule } from './modules/public/public.module.js';
 import { StatisticsModule } from './modules/statistics/statistics.module.js';
 import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-capabilities.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { FloorPlansModule } from './modules/floor-plans/floor-plans.module.js';
+import { SpaceModule } from './modules/space/space.module.js';
 
 @Module({
   imports: [
@@ -65,6 +67,8 @@ import { HealthModule } from './modules/health/health.module.js';
     ImportsModule,
     TagsModule,
     BuildingsModule,
+    FloorPlansModule,
+    SpaceModule,
     ContractsModule,
     BillsModule,
     MaintenanceModule,
