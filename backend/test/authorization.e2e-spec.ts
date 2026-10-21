@@ -194,6 +194,16 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
               }
               return { id };
             }),
+            findWorkbench: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findOneForWorker: vi.fn(async (id: string, userId?: string) => {
+              if (id !== 'mr-pool' || userId !== 'user-maintenance') {
+                throw new NotFoundException('报修工单不存在');
+              }
+              return { id };
+            }),
+            claim: vi.fn().mockResolvedValue({ id: 'mr-pool', status: 'IN_PROGRESS' }),
+            complete: vi.fn().mockResolvedValue({ id: 'mr-pool', status: 'PENDING_CONFIRM' }),
+            findAssignees: vi.fn().mockResolvedValue([]),
             create: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
@@ -382,6 +392,63 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
     it('POST /rooms（创建房源，管理接口）→ 403', async () => {
       await as(request(app.getHttpServer()).post('/rooms').send({}), 'TENANT').expect(403);
+    });
+  });
+
+  describe('维修角色（MAINTENANCE，T225）', () => {
+    it('GET /maintenance/workbench 维修人员 → 200', async () => {
+      await as(request(app.getHttpServer()).get('/maintenance/workbench'), 'MAINTENANCE').expect(200);
+      expect(app.get(MaintenanceService).findWorkbench).toHaveBeenCalledWith(
+        'user-maintenance',
+        expect.anything(),
+      );
+    });
+
+    it('GET /maintenance/workbench 租客/保洁 → 403', async () => {
+      await as(request(app.getHttpServer()).get('/maintenance/workbench'), 'TENANT', 'tenant-self').expect(403);
+      await as(request(app.getHttpServer()).get('/maintenance/workbench'), 'CLEANER').expect(403);
+    });
+
+    it('GET /maintenance/:id 维修人员走 findOneForWorker（公共池可见）', async () => {
+      await as(request(app.getHttpServer()).get('/maintenance/mr-pool'), 'MAINTENANCE').expect(200);
+      expect(app.get(MaintenanceService).findOneForWorker).toHaveBeenCalledWith(
+        'mr-pool',
+        'user-maintenance',
+      );
+      expect(app.get(MaintenanceService).findOne).not.toHaveBeenCalled();
+    });
+
+    it('GET /maintenance/:id 他人工单 → 404', async () => {
+      await as(request(app.getHttpServer()).get('/maintenance/mr-other'), 'MAINTENANCE').expect(404);
+    });
+
+    it('PATCH /maintenance/:id/claim 维修人员 → 200；管理员 → 403', async () => {
+      await as(request(app.getHttpServer()).patch('/maintenance/mr-pool/claim'), 'MAINTENANCE').expect(200);
+      expect(app.get(MaintenanceService).claim).toHaveBeenCalledWith('mr-pool', 'user-maintenance');
+      await as(request(app.getHttpServer()).patch('/maintenance/mr-pool/claim'), 'ADMIN').expect(403);
+    });
+
+    it('PATCH /maintenance/:id/complete 维修人员 → 200；租客 → 403', async () => {
+      await as(request(app.getHttpServer()).patch('/maintenance/mr-pool/complete').send({ resolution: '已更换水龙头' }), 'MAINTENANCE').expect(200);
+      expect(app.get(MaintenanceService).complete).toHaveBeenCalledWith(
+        'mr-pool',
+        'user-maintenance',
+        expect.objectContaining({ resolution: '已更换水龙头' }),
+      );
+      await as(request(app.getHttpServer()).patch('/maintenance/mr-pool/complete').send({ resolution: 'x' }), 'TENANT', 'tenant-self').expect(403);
+    });
+
+    it('GET /maintenance/assignees 仅管理员可访问', async () => {
+      await as(request(app.getHttpServer()).get('/maintenance/assignees'), 'ADMIN').expect(200);
+      await as(request(app.getHttpServer()).get('/maintenance/assignees'), 'MAINTENANCE').expect(403);
+    });
+
+    it('维修人员不能访问管理/租客接口', async () => {
+      const paths = ['/tenants', '/bills', '/contracts', '/maintenance', '/checkout'];
+      for (const path of paths) {
+        const res = await as(request(app.getHttpServer()).get(path), 'MAINTENANCE');
+        expect(`${path} → ${res.status}`).toBe(`${path} → 403`);
+      }
     });
   });
 

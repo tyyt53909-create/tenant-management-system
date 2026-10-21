@@ -1,15 +1,53 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import type { Prisma, MaintenanceCategory, MaintenancePriority } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
 import { QueryMaintenanceDto } from './dto/query-maintenance.dto.js';
+import { CompleteMaintenanceDto } from './dto/complete-maintenance.dto.js';
+import { QueryWorkbenchDto, WorkbenchView } from './dto/query-workbench.dto.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import {
   isMaintenanceTransitionAllowed,
-  maintenanceTransitionNeedsAssignee,
   maintenanceTransitionSetsResolvedAt,
 } from './maintenance-transitions.js';
+
+/**
+ * 维修工作台投影：只给维修人员看房间、问题与照片，
+ * 不返回租客姓名、电话、证件等资料（docs/03 §2.2 数据最小化）。
+ */
+const WORKBENCH_SELECT = {
+  id: true,
+  title: true,
+  description: true,
+  category: true,
+  priority: true,
+  status: true,
+  assignedTo: true,
+  assignedAt: true,
+  resolvedAt: true,
+  resolution: true,
+  createdAt: true,
+  updatedAt: true,
+  room: {
+    select: {
+      id: true,
+      roomNumber: true,
+      floor: true,
+      building: { select: { name: true } },
+    },
+  },
+  photos: {
+    select: { id: true, fileUrl: true },
+    orderBy: { createdAt: 'asc' },
+  },
+} satisfies Prisma.MaintenanceRequestSelect;
 
 @Injectable()
 export class MaintenanceService {
@@ -124,6 +162,163 @@ export class MaintenanceService {
     return request;
   }
 
+  /**
+   * 维修工作台列表（T225）。
+   *
+   * - pool：待接单。公共池（assignedTo = null）与直接指派给我的工单；
+   * - active：我已接单、处理中或待租客确认；
+   * - done：我已完成的工单。
+   */
+  async findWorkbench(userId: string, query: QueryWorkbenchDto) {
+    const { page = 1, limit = 20, view = WorkbenchView.POOL } = query;
+    const skip = (page - 1) * limit;
+
+    // 维修人员的范围必须由服务端固定，不能由请求参数放宽。
+    const where: Prisma.MaintenanceRequestWhereInput =
+      view === WorkbenchView.POOL
+        ? {
+            status: 'ASSIGNED',
+            OR: [{ assignedTo: null }, { assignedTo: userId }],
+          }
+        : view === WorkbenchView.ACTIVE
+          ? {
+              assignedTo: userId,
+              status: { in: ['IN_PROGRESS', 'PENDING_CONFIRM'] },
+            }
+          : {
+              assignedTo: userId,
+              status: 'COMPLETED',
+            };
+
+    const [data, total] = await Promise.all([
+      this.prisma.maintenanceRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+        select: WORKBENCH_SELECT,
+      }),
+      this.prisma.maintenanceRequest.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  /** 维修人员查看单条工单：公共池、指派给自己或自己已接的工单。 */
+  async findOneForWorker(id: string, userId: string) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      select: WORKBENCH_SELECT,
+    });
+
+    if (!request) {
+      throw new NotFoundException('报修工单不存在');
+    }
+
+    const isPool = request.status === 'ASSIGNED' && request.assignedTo === null;
+    const isMine = request.assignedTo === userId;
+    if (!isPool && !isMine) {
+      // 不暴露他人工单是否存在
+      throw new NotFoundException('报修工单不存在');
+    }
+
+    return request;
+  }
+
+  /**
+   * 接单：ASSIGNED → IN_PROGRESS。公共池先接先得。
+   * 使用带状态与指派条件的 updateMany，避免两个维修人员同时接单时后写覆盖。
+   */
+  async claim(id: string, userId: string) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      select: { id: true, status: true, assignedTo: true },
+    });
+
+    if (!request) {
+      throw new NotFoundException('报修工单不存在');
+    }
+    if (request.status !== 'ASSIGNED') {
+      throw new ConflictException('仅可承接待接单的工单');
+    }
+    if (request.assignedTo && request.assignedTo !== userId) {
+      throw new ConflictException('工单已被其他维修人员接单');
+    }
+
+    const result = await this.prisma.maintenanceRequest.updateMany({
+      where: {
+        id,
+        status: 'ASSIGNED',
+        OR: [{ assignedTo: null }, { assignedTo: userId }],
+      },
+      data: { status: 'IN_PROGRESS', assignedTo: userId, assignedAt: new Date() },
+    });
+
+    if (result.count === 0) {
+      throw new ConflictException('工单已被其他维修人员接单，请刷新后重试');
+    }
+
+    return this.findOneForWorker(id, userId);
+  }
+
+  /** 提交处理结果：IN_PROGRESS → PENDING_CONFIRM，必须填写解决方案。 */
+  async complete(id: string, userId: string, dto: CompleteMaintenanceDto) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      select: { id: true, status: true, assignedTo: true },
+    });
+
+    if (!request) {
+      throw new NotFoundException('报修工单不存在');
+    }
+    if (request.assignedTo !== userId) {
+      throw new ForbiddenException('仅可处理自己接下的工单');
+    }
+    if (request.status !== 'IN_PROGRESS') {
+      throw new ConflictException('仅可提交维修中的工单');
+    }
+
+    const resolution = dto.resolution?.trim();
+    if (!resolution) {
+      throw new BadRequestException('请填写解决方案');
+    }
+
+    const result = await this.prisma.maintenanceRequest.updateMany({
+      where: { id, status: 'IN_PROGRESS', assignedTo: userId },
+      data: { status: 'PENDING_CONFIRM', resolution },
+    });
+
+    if (result.count === 0) {
+      throw new ConflictException('工单状态已变化，请刷新后重试');
+    }
+
+    return this.findOneForWorker(id, userId);
+  }
+
+  /** 管理员派单候选人：启用中的维修人员。 */
+  async findAssignees() {
+    return this.prisma.user.findMany({
+      where: { role: 'MAINTENANCE', isActive: true },
+      select: { id: true, email: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /** 指派对象必须是启用中的维修人员或管理员，避免写入无法登录的账号。 */
+  private async assertAssignableUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, isActive: true },
+    });
+
+    if (!user || !user.isActive || !['MAINTENANCE', 'ADMIN'].includes(user.role)) {
+      throw new BadRequestException('指派对象必须是启用中的维修人员');
+    }
+  }
+
   async findAll(query: QueryMaintenanceDto) {
     const { page = 1, limit = 20, status, roomId, tenantId } = query;
     const skip = (page - 1) * limit;
@@ -191,20 +386,29 @@ export class MaintenanceService {
         `工单状态不允许从 ${request.status ?? '未知'} 变更为 ${dto.status}（合法流转见 docs/04-状态机.md §4.3）`,
       );
     }
+
+    // T225：ASSIGNED 可以不带 assignedTo（进入公共池）；带值时必须是可登录的维修/管理员账号。
+    // 传空字符串表示把已指派工单退回公共池（清空 assignedTo/assignedAt）。
+    if (typeof dto.assignedTo === 'string' && dto.assignedTo.trim()) {
+      await this.assertAssignableUser(dto.assignedTo);
+    }
+
+    const effectiveAssignee =
+      dto.assignedTo !== undefined ? dto.assignedTo.trim() : request.assignedTo;
     if (
-      dto.status !== undefined &&
-      maintenanceTransitionNeedsAssignee(dto.status) &&
-      !dto.assignedTo &&
-      !request.assignedTo
+      statusChanged &&
+      ['IN_PROGRESS', 'PENDING_CONFIRM'].includes(dto.status!) &&
+      !effectiveAssignee
     ) {
-      throw new BadRequestException('派单必须指定 assignedTo');
+      throw new BadRequestException('进入维修中前必须先指派维修人员，或由维修人员在工作中台接单');
     }
 
     const updateData: Prisma.MaintenanceRequestUpdateInput = {};
     if (dto.status) updateData.status = dto.status;
-    if (dto.assignedTo) {
-      updateData.assignedTo = dto.assignedTo;
-      updateData.assignedAt = new Date();
+    if (dto.assignedTo !== undefined) {
+      const assignee = dto.assignedTo.trim();
+      updateData.assignedTo = assignee || null;
+      updateData.assignedAt = assignee ? new Date() : null;
     }
     if (dto.resolution) {
       updateData.resolution = dto.resolution;

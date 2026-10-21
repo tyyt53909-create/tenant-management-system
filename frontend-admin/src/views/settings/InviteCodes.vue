@@ -55,8 +55,8 @@
       <el-table-column label="角色 / 状态" width="130" align="center">
         <template #default="{ row }">
           <div class="invite-state">
-            <el-tag size="small" :type="row.role === 'ADMIN' ? 'warning' : 'primary'">
-              {{ row.role === 'ADMIN' ? '管理员' : '租客' }}
+            <el-tag size="small" :type="roleTag(row.role)">
+              {{ roleLabel(row.role) }}
             </el-tag>
             <el-tag
               size="small"
@@ -134,6 +134,8 @@
         <el-form-item label="目标角色">
           <el-select v-model="generateForm.role" style="width: 100%">
             <el-option label="租客 (TENANT)" value="TENANT" />
+            <el-option label="保洁 (CLEANER)" value="CLEANER" />
+            <el-option label="维修 (MAINTENANCE)" value="MAINTENANCE" />
             <el-option label="管理员 (ADMIN)" value="ADMIN" />
           </el-select>
         </el-form-item>
@@ -193,8 +195,23 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getInviteCodes, generateInviteCode, revokeInviteCode } from '@/api/auth';
-import type { InviteCode } from '@/types';
+import type { InviteCode, UserRole } from '@/types';
 import { usePagedTable } from '@/composables';
+
+const roleLabels: Record<UserRole, string> = {
+  ADMIN: '管理员',
+  CLEANER: '保洁',
+  MAINTENANCE: '维修',
+  TENANT: '租客',
+};
+const roleTagType: Record<UserRole, 'warning' | 'primary' | 'success' | 'info'> = {
+  ADMIN: 'warning',
+  CLEANER: 'success',
+  MAINTENANCE: 'info',
+  TENANT: 'primary',
+};
+const roleLabel = (role: string) => roleLabels[role as UserRole] || role;
+const roleTag = (role: string) => roleTagType[role as UserRole] || 'primary';
 
 const generating = ref(false);
 
@@ -220,7 +237,7 @@ const {
 const generateDialogVisible = ref(false);
 const generateForm = reactive({
   count: 1,
-  role: 'TENANT' as 'TENANT' | 'ADMIN',
+  role: 'TENANT' as UserRole,
   expiryDays: 365,
   notes: '',
 });

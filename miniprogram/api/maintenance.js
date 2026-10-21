@@ -40,6 +40,36 @@ export const createMaintenance = (data) => {
 }
 
 /**
+ * 维修工作台工单列表（仅 MAINTENANCE）
+ * @param {{ view?: 'pool'|'active'|'done', page?: number, limit?: number }} [params]
+ * @returns {Promise<any>}
+ */
+export const getWorkbenchOrders = (params) => request.get('/maintenance/workbench', params)
+
+/**
+ * 维修工作台工单详情（仅公共池或本人已接工单）
+ * @param {string} id
+ * @returns {Promise<any>}
+ */
+export const getWorkbenchOrder = (id) => request.get(`/maintenance/workbench/${encodeURIComponent(id)}`)
+
+/**
+ * 接单（公共池先接先得）
+ * @param {string} id
+ * @returns {Promise<any>}
+ */
+export const claimMaintenance = (id) => request.patch(`/maintenance/${encodeURIComponent(id)}/claim`, {})
+
+/**
+ * 提交处理结果（IN_PROGRESS → PENDING_CONFIRM）
+ * @param {string} id
+ * @param {{ resolution: string }} data
+ * @returns {Promise<any>}
+ */
+export const completeMaintenance = (id, data) =>
+  request.patch(`/maintenance/${encodeURIComponent(id)}/complete`, data)
+
+/**
  * 上传单张报修照片（multipart/form-data，字段名 file）
  * @param {string} filePath - 本地图片临时路径
  * @returns {Promise<{ key: string, url: string, fileName: string, fileSize: number, mimeType: string }>}

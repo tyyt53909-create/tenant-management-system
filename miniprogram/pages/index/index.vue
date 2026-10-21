@@ -69,7 +69,7 @@ export default {
       this.loading = true; this.error = ''
       try {
         const user = await getUserInfo(); uni.setStorageSync('user_role', user.role)
-        if (user.role === 'CLEANER') { openHome(user.role); return }
+        if (['CLEANER', 'MAINTENANCE'].includes(user.role)) { openHome(user.role); return }
         this.userName = user.tenant?.name || '租客'
         this.capabilities = user.capabilities || []
         uni.setStorageSync('user_capabilities', this.capabilities)

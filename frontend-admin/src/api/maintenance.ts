@@ -20,3 +20,13 @@ export const updateMaintenance = (id: string, data: Partial<Maintenance>) => {
 export const deleteMaintenance = (id: string) => {
   return request.delete(`/maintenance/${id}`);
 };
+
+export interface MaintenanceAssignee {
+  id: string;
+  email: string | null;
+}
+
+/** 可指派的维修人员（仅 ADMIN） */
+export const getMaintenanceAssignees = (): Promise<MaintenanceAssignee[]> => {
+  return request.get('/maintenance/assignees');
+};

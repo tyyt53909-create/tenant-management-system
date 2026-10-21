@@ -68,7 +68,10 @@ export class AuthService {
     // 4. 密码加密
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    // 5. 创建用户和租客（事务）
+    // T225：邀请码决定账号角色，保洁/维修/管理员不再创建租客档案。
+    const role = validation.role ?? 'TENANT';
+
+    // 5. 创建用户（租客角色同时创建 Tenant）
     const user = await this.prisma.$transaction(async (tx) => {
       // 创建 User
       const newUser = await tx.user.create({
@@ -76,32 +79,34 @@ export class AuthService {
           email: dto.email,
           phone: dto.phone,
           passwordHash,
-          role: 'TENANT',
+          role,
           invitedBy: validation.invitedBy,
           isActive: true,
         },
       });
-
-      // 创建 Tenant
-      // Tenant.phone 必填且唯一（docs/02-数据模型.md）：注册时手机号可选，
-      // 缺失时用 userId 生成唯一占位值，避免空串触发唯一约束导致第二个注册 500（T148 / BUG-1）
-      const tenantPhone = dto.phone?.trim() ? dto.phone.trim() : `pending-${newUser.id}`;
 
       // 邀请码一次性：注册成功后立即核销（docs/03-权限矩阵.md §4.1
       // 「使用后立即失效」）。与建号同事务，避免
       // 「账号已建但邀请码仍可复用」的中间态。
       await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
 
-      await tx.tenant.create({
-        data: {
-          userId: newUser.id,
-          name: dto.email.split('@')[0], // 使用邮箱前缀作为初始名称
-          phone: tenantPhone,
-          email: dto.email,
-          emergencyContact: dto.phone || '',
-          emergencyPhone: dto.phone || '',
-        },
-      });
+      if (role === 'TENANT') {
+        // 创建 Tenant
+        // Tenant.phone 必填且唯一（docs/02-数据模型.md）：注册时手机号可选，
+        // 缺失时用 userId 生成唯一占位值，避免空串触发唯一约束导致第二个注册 500（T148 / BUG-1）
+        const tenantPhone = dto.phone?.trim() ? dto.phone.trim() : `pending-${newUser.id}`;
+
+        await tx.tenant.create({
+          data: {
+            userId: newUser.id,
+            name: dto.email.split('@')[0], // 使用邮箱前缀作为初始名称
+            phone: tenantPhone,
+            email: dto.email,
+            emergencyContact: dto.phone || '',
+            emergencyPhone: dto.phone || '',
+          },
+        });
+      }
 
       return newUser;
     });

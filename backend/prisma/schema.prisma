@@ -197,6 +197,7 @@ enum RentCalculationMethod {
 enum UserRole {
   ADMIN // 管理者
   CLEANER // 保洁
+  MAINTENANCE // 维修
   TENANT // 租客
 }
 

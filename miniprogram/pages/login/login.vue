@@ -24,6 +24,13 @@
           >
             <text class="tab-text">密码登录</text>
           </view>
+          <view
+            class="login-tab"
+            :class="{ active: loginType === 'staff' }"
+            @tap="loginType = 'staff'"
+          >
+            <text class="tab-text">员工激活</text>
+          </view>
         </view>
 
         <!-- 1. 邮箱验证码登录 (默认首选) -->
@@ -65,7 +72,7 @@
         </view>
 
         <!-- 2. 账号密码登录 -->
-        <view v-else class="tab-content">
+        <view v-else-if="loginType === 'password'" class="tab-content">
           <view class="input-group">
             <text class="label">账号</text>
             <input 
@@ -92,6 +99,45 @@
           <button class="btn-login" :loading="loading" :disabled="loading" @tap="handlePasswordLogin">
             登录
           </button>
+        </view>
+
+        <!-- 3. 员工激活（保洁/维修） -->
+        <view v-else class="tab-content">
+          <view class="input-group">
+            <text class="label">员工邮箱</text>
+            <input
+              class="input"
+              v-model="staffForm.email"
+              placeholder="请输入员工邮箱"
+              placeholder-class="placeholder"
+            />
+          </view>
+
+          <view class="input-group">
+            <text class="label">设置密码</text>
+            <input
+              class="input"
+              v-model="staffForm.password"
+              password
+              placeholder="至少 6 位"
+              placeholder-class="placeholder"
+            />
+          </view>
+
+          <view class="input-group">
+            <text class="label">员工邀请码</text>
+            <input
+              class="input"
+              v-model="staffForm.inviteCode"
+              placeholder="请输入管理员发放的邀请码"
+              placeholder-class="placeholder"
+            />
+          </view>
+
+          <button class="btn-login" :loading="staffLoading" :disabled="staffLoading" @tap="handleStaffActivate">
+            激活并登录
+          </button>
+          <text class="staff-hint">保洁、维修人员请向管理员索取对应角色的邀请码；租客无需激活，直接验证码登录。</text>
         </view>
 
         <!-- 第三方账号登录 -->
@@ -126,6 +172,7 @@
 <script>
 import { 
   login, 
+  register,
   sendEmailCode, 
   loginWithEmailCode, 
   loginWithGoogle, 
@@ -136,7 +183,7 @@ import { openHome } from '../../utils/session.js'
 export default {
   data() {
     return {
-      loginType: 'email', // 'email' | 'password'
+      loginType: 'email', // 'email' | 'password' | 'staff'
       emailForm: {
         email: '',
         code: ''
@@ -145,11 +192,17 @@ export default {
         account: '',
         password: ''
       },
+      staffForm: {
+        email: '',
+        password: '',
+        inviteCode: ''
+      },
       sendingCode: false,
       otpCooldown: 0,
       timer: null,
       emailLoading: false,
       loading: false,
+      staffLoading: false,
       googleLoading: false,
       googleClientId: '',
       gisButtonLoaded: false,
@@ -390,6 +443,39 @@ export default {
         console.error('登录失败:', error)
       } finally {
         this.loading = false
+      }
+    },
+    async handleStaffActivate() {
+      if (this.staffLoading) return
+      const email = (this.staffForm.email || '').trim()
+      const password = this.staffForm.password || ''
+      const inviteCode = (this.staffForm.inviteCode || '').trim()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        uni.showToast({ title: '请输入正确的员工邮箱', icon: 'none' })
+        return
+      }
+      if (password.length < 6) {
+        uni.showToast({ title: '密码至少 6 位', icon: 'none' })
+        return
+      }
+      if (!inviteCode) {
+        uni.showToast({ title: '请输入员工邀请码', icon: 'none' })
+        return
+      }
+
+      this.staffLoading = true
+      try {
+        const res = await register({ email, password, inviteCode })
+        uni.setStorageSync('access_token', res.accessToken)
+        uni.setStorageSync('refresh_token', res.refreshToken)
+        uni.setStorageSync('user_role', res.user.role)
+        uni.showToast({ title: '激活成功', icon: 'success' })
+        openHome(res.user.role)
+      } catch (error) {
+        const msg = error.message || (error.data && error.data.message) || '激活失败，请检查邀请码'
+        uni.showToast({ title: msg, icon: 'none' })
+      } finally {
+        this.staffLoading = false
       }
     },
     handleLogin() {
@@ -645,5 +731,14 @@ export default {
   color: #8c887f;
   line-height: 1.5;
   display: block;
+}
+
+.staff-hint {
+  display: block;
+  margin-top: 22rpx;
+  font-size: 20rpx;
+  color: #8c887f;
+  line-height: 1.7;
+  text-align: center;
 }
 </style>

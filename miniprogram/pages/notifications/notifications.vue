@@ -67,7 +67,7 @@ import {
   markAllNotificationsRead,
   deleteNotification
 } from '../../api/index.js'
-import { ensureTenantSession } from '../../utils/session.js'
+import { ensureSession } from '../../utils/session.js'
 
 export default {
   data() {
@@ -103,7 +103,7 @@ export default {
       if (this.loading) return
       this.loading = true
       try {
-        if (!await ensureTenantSession()) return
+        if (!await ensureSession()) return
         const params = { page: this.page, limit: this.limit }
         // 注意：不能传 unreadOnly=false —— 后端对 "false" 的解析曾有问题，
         // 关闭筛选时应省略该参数（见 docs/09-待确认清单）

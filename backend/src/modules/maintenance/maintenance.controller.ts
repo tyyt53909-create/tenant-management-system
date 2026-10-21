@@ -3,6 +3,8 @@ import { MaintenanceService } from './maintenance.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
 import { QueryMaintenanceDto } from './dto/query-maintenance.dto.js';
+import { QueryWorkbenchDto } from './dto/query-workbench.dto.js';
+import { CompleteMaintenanceDto } from './dto/complete-maintenance.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -42,9 +44,34 @@ export class MaintenanceController {
     return this.maintenanceService.findByTenant(tenantId, query);
   }
 
+  // 维修人员工作台（静态路径必须声明在 :id 之前）
+  @Get('workbench')
+  @UseGuards(RolesGuard)
+  @Roles('MAINTENANCE')
+  findWorkbench(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryWorkbenchDto) {
+    const user = resolveAuthUser(userParam);
+    return this.maintenanceService.findWorkbench(user.userId, query);
+  }
+
+  @Get('workbench/:id')
+  @UseGuards(RolesGuard)
+  @Roles('MAINTENANCE')
+  findWorkbenchOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    return this.maintenanceService.findOneForWorker(id, user.userId);
+  }
+
+  // 管理员派单候选人（静态路径必须声明在 :id 之前）
+  @Get('assignees')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findAssignees() {
+    return this.maintenanceService.findAssignees();
+  }
+
   @Get(':id')
   @UseGuards(RolesGuard, CapabilityGuard)
-  @Roles('TENANT', 'ADMIN')
+  @Roles('TENANT', 'ADMIN', 'MAINTENANCE')
   @RequireCapability('tenant.maintenance.read')
   findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
     const user = resolveAuthUser(userParam);
@@ -52,7 +79,32 @@ export class MaintenanceController {
       const tenantId = user.tenantId ?? '';
       return this.maintenanceService.findOneForTenant(id, tenantId);
     }
+    if (user.role === 'MAINTENANCE') {
+      return this.maintenanceService.findOneForWorker(id, user.userId);
+    }
     return this.maintenanceService.findOne(id);
+  }
+
+  // 维修人员接单（先接先得）
+  @Patch(':id/claim')
+  @UseGuards(RolesGuard)
+  @Roles('MAINTENANCE')
+  claim(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    return this.maintenanceService.claim(id, user.userId);
+  }
+
+  // 维修人员提交处理结果
+  @Patch(':id/complete')
+  @UseGuards(RolesGuard)
+  @Roles('MAINTENANCE')
+  complete(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto: CompleteMaintenanceDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.maintenanceService.complete(id, user.userId, dto);
   }
 
   @Patch(':id')
