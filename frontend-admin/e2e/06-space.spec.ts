@@ -19,7 +19,7 @@ test.describe('房源模型', () => {
     );
     expect(overflow).toBe(false);
 
-    await page.getByRole('button', { name: '2D 剖面' }).click();
+    await page.getByRole('button', { name: '2D 楼层' }).click();
     const firstRoom = page.locator('.room').first();
     await expect(firstRoom).toBeVisible({ timeout: 10000 });
     await firstRoom.click();
@@ -28,7 +28,7 @@ test.describe('房源模型', () => {
     await expect(page.locator('.room.selected')).toHaveCount(1);
     await page.getByRole('button', { name: '关闭详情面板' }).click();
 
-    await page.getByRole('button', { name: '3D 模型' }).click();
+    await page.getByRole('button', { name: '3D 楼栋' }).click();
     await expect(page.locator('.scene-canvas')).toBeVisible({ timeout: 15000 });
 
     await page.getByRole('button', { name: '展开', exact: true }).click();
