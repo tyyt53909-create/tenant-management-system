@@ -4,8 +4,8 @@
       <text class="map-title">{{ title }}</text>
       <text v-if="subtitle" class="map-subtitle">{{ subtitle }}</text>
     </view>
-    <view v-for="floor in floors" :key="floor.floor" class="floor-row">
-      <text class="floor-label">{{ floor.floor }}楼</text>
+    <view v-for="floor in floors" :key="floor.key" class="floor-row">
+      <text class="floor-label">{{ floor.label }}</text>
       <view class="room-grid">
         <view v-for="room in floor.rooms" :key="room.id"
           :class="['room-tile', { active: room.id === selectedRoomId, occupied: mode === 'tenant' }]"
@@ -34,11 +34,18 @@ export default {
       this.rooms.forEach(room => {
         const floor = Number(room.floor)
         if (!Number.isFinite(floor)) return
-        if (!grouped.has(floor)) grouped.set(floor, [])
-        grouped.get(floor).push(room)
+        const buildingName = typeof room.buildingName === 'string' ? room.buildingName.trim() : ''
+        const groupKey = `${buildingName || ''}\u0000${floor}`
+        if (!grouped.has(groupKey)) grouped.set(groupKey, { floor, buildingName, rooms: [] })
+        grouped.get(groupKey).rooms.push(room)
       })
-      return [...grouped.entries()].sort((a, b) => a[0] - b[0])
-        .map(([floor, rooms]) => ({ floor, rooms }))
+      return [...grouped.entries()]
+        .sort(([, a], [, b]) => a.buildingName.localeCompare(b.buildingName) || a.floor - b.floor)
+        .map(([key, group]) => ({
+          key,
+          ...group,
+          label: group.buildingName ? `${group.buildingName} · ${group.floor}楼` : `${group.floor}楼`
+        }))
     }
   }
 }
