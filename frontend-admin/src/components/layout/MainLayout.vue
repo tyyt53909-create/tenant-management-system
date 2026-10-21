@@ -1,9 +1,9 @@
 <template>
   <div class="qiju-shell">
     <a class="skip-link" href="#workspace-content">跳到页面内容</a>
-    <button v-if="mobileOpen" class="nav-cover" aria-label="关闭导航" @click="mobileOpen = false" />
-    <aside :class="['qiju-side', { open: mobileOpen }]">
-      <router-link to="/dashboard" class="qiju-brand" @click="mobileOpen = false">
+    <button v-if="mobileOpen" :class="['nav-cover', { 'nav-cover--hover': navHoverOpen }]" aria-label="关闭导航" @click="closeNav" />
+    <aside :class="['qiju-side', { open: mobileOpen }]" @mouseenter="cancelNavClose" @mouseleave="scheduleNavClose">
+      <router-link to="/dashboard" class="qiju-brand" @click="closeNav">
         <span class="brand-mark"><el-icon :size="22"><House /></el-icon></span>
         <span><strong>栖居管理</strong><small>PROPERTY CONSOLE</small></span>
       </router-link>
@@ -11,20 +11,28 @@
       <nav class="qiju-navigation" aria-label="管理导航">
         <router-link v-for="item in navigation" :key="item.path" :to="item.path"
           :class="['qiju-nav-item', { active: route.path === item.path }]"
-          :aria-current="route.path === item.path ? 'page' : undefined" @click="mobileOpen = false">
+          :aria-current="route.path === item.path ? 'page' : undefined" @click="closeNav">
           <el-icon :size="18"><component :is="item.icon" /></el-icon><span>{{ item.title }}</span>
           <span v-if="item.path === '/notifications' && notificationStore.unreadCount" class="nav-count">{{ Math.min(notificationStore.unreadCount, 99) }}</span>
           <span v-if="item.path==='/maintenance' && management.snapshot?.maintenance.submitted" class="nav-count">{{ Math.min(management.snapshot.maintenance.submitted,99) }}</span>
         </router-link>
       </nav>
-      <div class="side-bottom"><el-dropdown class="side-user-dropdown" trigger="click" placement="top-start" @command="handleCommand">
-        <button class="side-user" aria-label="账户与退出登录"><span class="user-avatar">{{ userInitial }}</span><div><strong>{{ userStore.user?.email || '管理员' }}</strong><small>{{ roleLabel }}</small></div><el-icon><ArrowDown /></el-icon></button>
-        <template #dropdown><el-dropdown-menu><el-dropdown-item command="logout">退出登录</el-dropdown-item></el-dropdown-menu></template>
-      </el-dropdown></div>
+      <div class="side-bottom">
+        <div class="side-account">
+          <span class="user-avatar">{{ userInitial }}</span>
+          <div class="side-account-copy">
+            <strong>{{ userStore.user?.email || '管理员' }}</strong>
+            <small>{{ roleLabel }}</small>
+          </div>
+          <button class="side-logout" type="button" title="退出登录" aria-label="退出登录" @click="handleLogout">
+            <el-icon :size="14"><SwitchButton /></el-icon>
+          </button>
+        </div>
+      </div>
     </aside>
     <div class="qiju-main">
       <header class="qiju-topbar">
-        <button class="icon-button mobile-toggle" aria-label="打开导航" :aria-expanded="mobileOpen" @click="mobileOpen = !mobileOpen"><el-icon :size="20"><Menu /></el-icon></button>
+        <button class="icon-button mobile-toggle" aria-label="打开导航" :aria-expanded="mobileOpen" @mouseenter="scheduleNavOpen" @mouseleave="scheduleNavClose" @click="toggleNav"><el-icon :size="20"><Menu /></el-icon></button>
         <div class="qiju-breadcrumb"><span>运营中心</span><span>/</span><b>{{ currentPage.title }}</b></div>
         <div class="top-spacer" />
         <button class="voucher-trigger" title="识别并核销租客缴费单据 (⌘ V)" @click="voucherVisible = true"><el-icon><Ticket /></el-icon><span>单据识别入账</span><kbd>⌘ V</kbd></button>
@@ -52,7 +60,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { House, User, OfficeBuilding, Document, Wallet, Tools, Brush, Bell, TrendCharts, Tickets, Ticket, Odometer, Switch, Setting, ArrowDown, ArrowRight, Search, Menu } from '@element-plus/icons-vue';
+import { House, User, OfficeBuilding, Document, Wallet, Tools, Brush, Bell, TrendCharts, Tickets, Ticket, Odometer, Switch, SwitchButton, Setting, ArrowRight, Search, Menu, Grid } from '@element-plus/icons-vue';
 import VoucherRecognitionModal from '@/components/common/VoucherRecognitionModal.vue';
 import { useUserStore } from '@/stores/user';
 import { useNotificationStore } from '@/stores/notification';
@@ -69,6 +77,9 @@ const preferences=usePreferencesStore();
 const management=useManagementStore();
 watch(()=>[preferences.compact,preferences.reduceMotion],()=>{document.documentElement.classList.toggle('qiju-compact',preferences.compact);document.documentElement.classList.toggle('qiju-reduce-motion',preferences.reduceMotion);},{immediate:true});
 const mobileOpen = ref(false);
+const navHoverOpen = ref(false);
+let navOpenTimer: ReturnType<typeof setTimeout> | null = null;
+let navCloseTimer: ReturnType<typeof setTimeout> | null = null;
 const searchVisible = ref(false);
 const searchQuery = ref('');
 interface RecordSearchResult{kind:'rooms'|'tenants'|'contracts'|'maintenance';id:string;title:string;subtitle:string;status?:string}
@@ -88,6 +99,7 @@ function openRecord(item:RecordSearchResult){searchVisible.value=false;searchQue
 const navigation = [
   { path: '/dashboard', title: '工作台', icon: House, label: 'OVERVIEW / 运营总览', description: '' },
   { path: '/rooms', title: '房源管理', icon: OfficeBuilding, label: 'SPACES / 房源档案', description: '把状态、租金和入住关系放在一眼能看懂的位置。' },
+  { path: '/space', title: '房源模型', icon: Grid, label: 'SPACE MODEL / 楼栋空间', description: '用 2D 剖面和 3D 等轴模型，查看一栋楼的真实占用状态。' },
   { path: '/tenants', title: '租客档案', icon: User, label: 'RESIDENTS / 租客资料', description: '从租客本人出发，快速关联房源、合同与收款。' },
   { path: '/contracts', title: '合同管理', icon: Document, label: 'AGREEMENTS / 租赁关系', description: '租赁期限、每月应收和续约提醒，在同一行核对。' },
   { path: '/bills', title: '账单与收款', icon: Wallet, label: 'FINANCE / 账务管理', description: '应收、已收和剩余欠款，放在清楚可核对的位置。' },
@@ -112,7 +124,58 @@ const roleLabel = computed(() => {
 });
 const searchResults = computed(() => navigation.filter((item) => `${item.title}${item.description}`.includes(searchQuery.value.trim())));
 function openPage(path: string) { searchVisible.value = false; searchQuery.value = ''; router.push(path); }
-function handleCommand(command: string) { if (command === 'logout') { userStore.logout(); router.push('/login'); } }
+function handleLogout() {
+  userStore.logout();
+  router.push('/login');
+}
+
+/* 窄视窗导航：鼠标靠近按钮时展开，移开侧栏后收回；点击则固定打开。 */
+function isNarrowNav() {
+  return window.matchMedia('(max-width: 1100px)').matches;
+}
+function clearNavTimers() {
+  if (navOpenTimer) { clearTimeout(navOpenTimer); navOpenTimer = null; }
+  if (navCloseTimer) { clearTimeout(navCloseTimer); navCloseTimer = null; }
+}
+function scheduleNavOpen() {
+  if (!isNarrowNav() || mobileOpen.value) return;
+  clearNavTimers();
+  navOpenTimer = setTimeout(() => {
+    navHoverOpen.value = true;
+    mobileOpen.value = true;
+    navOpenTimer = null;
+  }, 140);
+}
+function cancelNavClose() {
+  if (navCloseTimer) { clearTimeout(navCloseTimer); navCloseTimer = null; }
+}
+function scheduleNavClose() {
+  if (!isNarrowNav() || !navHoverOpen.value) return;
+  clearNavTimers();
+  navCloseTimer = setTimeout(() => {
+    mobileOpen.value = false;
+    navHoverOpen.value = false;
+    navCloseTimer = null;
+  }, 320);
+}
+function closeNav() {
+  clearNavTimers();
+  mobileOpen.value = false;
+  navHoverOpen.value = false;
+}
+function toggleNav() {
+  clearNavTimers();
+  if (mobileOpen.value) {
+    if (navHoverOpen.value) {
+      navHoverOpen.value = false;
+      return;
+    }
+    mobileOpen.value = false;
+    return;
+  }
+  navHoverOpen.value = false;
+  mobileOpen.value = true;
+}
 
 const voucherVisible = ref(false);
 const voucherInitialText = ref('');
@@ -136,7 +199,7 @@ function handleGlobalPaste(event: ClipboardEvent) {
 
 function keyboard(event: KeyboardEvent) {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); searchVisible.value = !searchVisible.value; }
-  if (event.key === 'Escape') mobileOpen.value = false;
+  if (event.key === 'Escape') closeNav();
 }
 onMounted(() => {
   void notificationStore.fetchUnreadCount();
@@ -150,7 +213,8 @@ onUnmounted(() => {
   searchGeneration++;
   searchController?.abort();
   if (searchTimer) clearTimeout(searchTimer);
+  clearNavTimers();
 });
-watch(() => route.path, () => { mobileOpen.value = false; void notificationStore.fetchUnreadCount(); });
+watch(() => route.path, () => { closeNav(); void notificationStore.fetchUnreadCount(); });
 </script>
 <style src="@/styles/optimized-ui.css" />

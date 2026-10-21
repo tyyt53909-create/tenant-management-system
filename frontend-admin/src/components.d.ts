@@ -72,6 +72,8 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SettlementVoucherModal: typeof import('./components/common/SettlementVoucherModal.vue')['default']
+    SpacePlan2D: typeof import('./components/space/SpacePlan2D.vue')['default']
+    SpaceScene3D: typeof import('./components/space/SpaceScene3D.vue')['default']
     TenantAccountCapabilities: typeof import('./components/common/TenantAccountCapabilities.vue')['default']
     UtilitiesOverviewCard: typeof import('./components/dashboard/UtilitiesOverviewCard.vue')['default']
     UtilitiesTrendPanel: typeof import('./components/dashboard/UtilitiesTrendPanel.vue')['default']

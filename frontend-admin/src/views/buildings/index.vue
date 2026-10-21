@@ -1,41 +1,53 @@
 <template>
   <div class="buildings-page">
     <ResourcePanel title="楼栋管理" description="维护楼栋档案与租客端联系卡片信息" :count="pagination.total" :loading="loading" :error="loadError || undefined" @retry="fetchData">
-      <template #actions><el-button type="primary" @click="handleCreate">新增楼栋</el-button></template>
+      <template #actions><el-button @click="router.push('/space')">空间模型</el-button><el-button type="primary" @click="handleCreate">新增楼栋</el-button></template>
       <el-table :data="tableData" v-loading="loading" :empty-text="emptyText">
-        <el-table-column prop="name" label="楼栋名称" width="180" />
-        <el-table-column prop="address" label="地址" min-width="240" />
-        <el-table-column label="总楼层" width="90">
+        <el-table-column prop="name" label="楼栋 / 地址" min-width="240" sortable>
           <template #default="{ row }">
-            {{ row.floors || row.totalFloors || '-' }}
+            <div class="building-identity">
+              <strong :title="row.name">{{ row.name }}</strong>
+              <small :title="row.address || '未填写地址'">{{ row.address || '未填写地址' }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="管家/房东联系" width="220">
+
+        <el-table-column label="楼层 / 状态" width="110">
           <template #default="{ row }">
-            <template v-if="row.metadata?.landlordName || row.metadata?.landlordPhone">
-              <strong>{{ row.metadata.landlordName || '专属管家' }}</strong>
-              <small class="table-subline">{{ row.metadata.landlordPhone || '未登记电话' }}</small>
-              <small v-if="row.metadata?.landlordWechat" class="table-subline wechat-line">微信: {{ row.metadata.landlordWechat }}</small>
-            </template>
-            <span v-else class="table-subline">默认管家服务</span>
+            <div class="building-state">
+              <strong>{{ row.floors || row.totalFloors || '-' }} 层</strong>
+              <el-tag :type="row.isActive ? 'success' : 'danger'" size="small">
+                {{ row.isActive ? '启用' : '停用' }}
+              </el-tag>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="isActive" label="状态" width="90">
+
+        <el-table-column label="管家 / 房东联系" min-width="200">
           <template #default="{ row }">
-            <el-tag :type="row.isActive ? 'success' : 'danger'">
-              {{ row.isActive ? '启用' : '停用' }}
-            </el-tag>
+            <div class="building-contact">
+              <template v-if="row.metadata?.landlordName || row.metadata?.landlordPhone">
+                <strong>{{ row.metadata.landlordName || '专属管家' }}</strong>
+                <small>{{ row.metadata.landlordPhone || '未登记电话' }}</small>
+                <small v-if="row.metadata?.landlordWechat" :title="row.metadata.landlordWechat">微信 {{ row.metadata.landlordWechat }}</small>
+              </template>
+              <span v-else class="building-empty">默认管家服务</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="180">
+
+        <el-table-column prop="createdAt" label="创建时间" width="150">
           <template #default="{ row }">
             {{ new Date(row.createdAt).toLocaleString('zh-CN') }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+
+        <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row as Building)">删除</el-button>
+            <div class="table-actions">
+              <el-button class="table-action" @click="handleEdit(row)">编辑</el-button>
+              <el-button class="table-action table-action--danger" @click="handleDelete(row as Building)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -90,6 +102,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding } from '@/api/buildings';
@@ -97,6 +110,7 @@ import type { Building } from '@/types';
 import { usePagedTable } from '@/composables';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 
+const router = useRouter();
 const { loading, loadError, tableData, pagination, fetchData } = usePagedTable<Building>({
   fetchApi: (params) => getBuildings(params),
 });
@@ -215,5 +229,43 @@ onMounted(fetchData);
 
 <style scoped>
 .buildings-page { padding: 0; }
-.wechat-line { color: var(--success-text); }
+
+.building-identity strong,
+.building-contact strong,
+.building-state strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.building-identity small,
+.building-contact small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.building-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.building-state :deep(.el-tag) {
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
+}
+.building-empty {
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+}
 </style>
