@@ -21,7 +21,7 @@ async function loadPage(path) {
 }
 
 const workbenchPage = await loadPage('../pages/maintenance/workbench.vue')
-const detailPage = await loadPage('../pages/maintenance/workbench-detail.vue')
+const detailPage = await loadPage('../pages/maintenance/detail.vue')
 const loginPage = await loadPage('../pages/login/login.vue')
 
 function instance(page) {
@@ -47,6 +47,7 @@ beforeEach(() => {
     showToast: options => toasts.push(options.title),
     showModal: options => options.success({ confirm: modalConfirm }),
     previewImage: options => { previewed = options },
+    setNavigationBarTitle: () => {},
     stopPullDownRefresh: () => {},
     request: options => {
       calls.push(options)
@@ -209,21 +210,18 @@ test('取消接单不发请求', async () => {
   assert.equal(vm.busyId, '')
 })
 
-test('详情页映射房间、照片与状态，并支持预览', async () => {
+test('详情页复用租客报修进度页，按维修角色映射房间与照片', async () => {
   replies.push({ data: { role: 'MAINTENANCE' } }, { data: detail() })
   const vm = instance(detailPage)
   vm.id = 'mr-1'
   await vm.load()
 
-  assert.equal(vm.order.roomNumber, '101')
-  assert.equal(vm.order.buildingName, 'A栋')
-  assert.equal(vm.order.photos.length, 1)
-  assert.equal(vm.order.status, 'ASSIGNED')
-  assert.equal(vm.statusLabel, '公共池')
-
-  vm.previewPhoto(0)
-  assert.deepEqual(previewed.urls, ['/api/files/a.jpg'])
-  assert.equal(previewed.current, '/api/files/a.jpg')
+  assert.equal(vm.isMaintenance, true)
+  assert.equal(vm.record.room.roomNumber, '101')
+  assert.equal(vm.record.room.building.name, 'A栋')
+  assert.equal(vm.record.photos.length, 1)
+  assert.equal(vm.record.status, 'ASSIGNED')
+  assert.equal(vm.priority, '紧急')
 })
 
 test('完工结果为空时拒绝提交', async () => {
@@ -257,6 +255,6 @@ test('完工提交去除首尾空格并刷新为待确认', async () => {
   const patch = calls.find(call => call.method === 'PATCH')
   assert.deepEqual(patch.data, { resolution: '已更换水龙头' })
   assert.ok(patch.url.endsWith('/maintenance/mr-1/complete'))
-  assert.equal(vm.order.status, 'PENDING_CONFIRM')
-  assert.equal(vm.order.resolution, '已更换水龙头')
+  assert.equal(vm.record.status, 'PENDING_CONFIRM')
+  assert.equal(vm.record.resolution, '已更换水龙头')
 })

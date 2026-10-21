@@ -1,5 +1,5 @@
 <template>
-  <view class="workbench">
+  <view class="q-page workbench-page">
     <view class="wb-header">
       <view class="wb-heading">
         <text class="q-eyebrow">MAINTENANCE / 维修工作台</text>
@@ -39,25 +39,20 @@
       <text>{{ emptyHint }}</text>
     </view>
 
-    <view v-for="order in orders" :key="order.id" class="q-surface wb-card" @tap="openDetail(order.id)">
-      <view class="wb-card-top">
-        <text class="wb-room">{{ order.buildingName }} · {{ order.roomNumber }} <text v-if="order.floor">· {{ order.floor }} 楼</text></text>
-        <text :class="['q-pill', priorityClass(order.priority)]">{{ priorityLabel(order.priority) }}</text>
+    <view v-for="order in orders" :key="order.id" class="q-surface repair-card" @tap="openDetail(order.id)">
+      <view class="repair-icon"><QIcon name="repair" :size="46" /></view>
+      <view class="repair-copy">
+        <view class="repair-card-header">
+          <text>{{ order.title }}</text>
+          <text :class="['q-pill', statusClass(order)]">{{ statusLabel(order) }}</text>
+        </view>
+        <text class="repair-description">{{ order.description }}</text>
+        <text class="repair-date">{{ order.buildingName }} · {{ order.roomNumber }} · {{ categoryLabel(order.category) }} · {{ formatDate(order.createdAt) }}<text v-if="order.priority === 'URGENT'" class="repair-urgent"> · 紧急</text></text>
       </view>
-      <view class="wb-title-row">
-        <text class="wb-title">{{ order.title }}</text>
-        <text :class="['q-pill', order.isPool ? 'warn' : '']">{{ statusLabel(order) }}</text>
-      </view>
-      <text class="wb-desc">{{ order.description }}</text>
-      <view class="wb-meta">
-        <text>{{ categoryLabel(order.category) }} · {{ formatDate(order.createdAt) }}</text>
-        <text v-if="order.photoCount">{{ order.photoCount }} 张照片</text>
-      </view>
-      <view v-if="view === 'pool'" class="wb-actions">
-        <button class="q-primary" :disabled="loading || !!busyId" :loading="busyId === order.id" @tap.stop="claim(order)">
-          {{ order.isPool ? '接单处理' : '开始处理' }}
-        </button>
-      </view>
+      <button v-if="view === 'pool'" class="repair-claim" :disabled="loading || !!busyId" :loading="busyId === order.id" @tap.stop="claim(order)">
+        {{ order.isPool ? '接单' : '开始' }}
+      </button>
+      <text v-else class="repair-arrow">›</text>
     </view>
 
     <button v-if="authorized && orders.length > 0 && page < totalPages" class="wb-more" :disabled="loading || !!busyId" :loading="loading" @tap="loadMore">加载更多</button>
@@ -66,10 +61,12 @@
 </template>
 
 <script>
+import QIcon from '../../components/QIcon.vue'
 import { getUserInfo, getWorkbenchOrders, claimMaintenance, getUnreadCount } from '../../api/index.js'
 import { logoutSession, openHome } from '../../utils/session.js'
 
 export default {
+  components: { QIcon },
   data() {
     return {
       authorized: false, view: 'pool', orders: [], total: 0, page: 0, totalPages: 0,
@@ -216,13 +213,12 @@ export default {
       }
     },
     openDetail(id) {
-      uni.navigateTo({ url: `/pages/maintenance/workbench-detail?id=${encodeURIComponent(id)}` })
+      uni.navigateTo({ url: `/pages/maintenance/detail?id=${encodeURIComponent(id)}` })
     },
-    priorityLabel(priority) {
-      return { LOW: '低', NORMAL: '普通', URGENT: '紧急' }[priority] || priority
-    },
-    priorityClass(priority) {
-      return priority === 'URGENT' ? 'danger' : priority === 'LOW' ? 'quiet' : ''
+    statusClass(order) {
+      if (order.isPool || order.status === 'PENDING_CONFIRM') return 'warn'
+      if (order.status === 'COMPLETED' || order.status === 'CANCELLED') return 'quiet'
+      return ''
     },
     categoryLabel(category) {
       return {
@@ -259,8 +255,8 @@ export default {
 </script>
 
 <style scoped>
-.workbench { min-height: 100vh; box-sizing: border-box; padding: calc(42rpx + var(--status-bar-height, 0px)) 36rpx 64rpx; background: #f5f2ec; color: #302f2a; }
-.wb-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; margin-bottom: 36rpx; }
+.workbench-page { padding-bottom: 64rpx; }
+.wb-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; margin-bottom: 30rpx; }
 .wb-heading { flex: 1; min-width: 0; }
 .wb-logout { flex-shrink: 0; margin: 0; padding: 16rpx 8rpx; background: transparent; color: #68715b; font-size: 24rpx; line-height: 1.5; }
 .wb-logout::after { border: none; }
@@ -269,15 +265,17 @@ export default {
 .wb-tool { display: flex; align-items: center; gap: 6rpx; color: #68715b; }
 .wb-badge { min-width: 30rpx; height: 30rpx; line-height: 30rpx; padding: 0 8rpx; border-radius: 15rpx; background: #c16f62; color: #fffefa; font-size: 18rpx; text-align: center; }
 .wb-empty { margin-top: 24rpx; }
-.wb-card { margin-bottom: 24rpx; padding: 30rpx; }
-.wb-card-top { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
-.wb-room { font-size: 22rpx; color: #817e76; overflow-wrap: anywhere; }
-.wb-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16rpx; margin-top: 18rpx; }
-.wb-title { flex: 1; min-width: 0; font-size: 30rpx; font-weight: 550; line-height: 1.45; }
-.wb-desc { display: block; margin-top: 14rpx; font-size: 23rpx; color: #817e76; line-height: 1.7; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.wb-meta { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 20rpx; font-size: 20rpx; color: #a49f95; }
-.wb-actions { margin-top: 24rpx; }
-.wb-actions .q-primary { min-height: 76rpx; font-size: 24rpx; border-radius: 18rpx; }
+.repair-card { display: flex; align-items: center; gap: 18rpx; padding: 28rpx 24rpx; margin-bottom: 22rpx; }
+.repair-icon { width: 70rpx; height: 76rpx; background: #ecf0e9; display: flex; align-items: center; justify-content: center; border-radius: 22rpx; flex-shrink: 0; }
+.repair-copy { flex: 1; min-width: 0; }
+.repair-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10rpx; }
+.repair-card-header > text:first-child { font-size: 24rpx; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.repair-description { display: block; font-size: 22rpx; color: #817e76; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 12rpx; }
+.repair-date { display: block; font-size: 19rpx; color: #a49f95; margin-top: 12rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repair-urgent { color: #ad735a; }
+.repair-arrow { font-size: 32rpx; color: #a49f95; flex-shrink: 0; }
+.repair-claim { flex-shrink: 0; margin: 0; padding: 14rpx 22rpx; border-radius: 16rpx; background: #68715b; color: #fffefa; font-size: 22rpx; line-height: 1.4; }
+.repair-claim::after { border: none; }
 .wb-more { margin-top: 8rpx; padding: 22rpx; background: transparent; color: #68715b; font-size: 24rpx; border: 1rpx solid #d7d8cc; border-radius: 20rpx; }
 .wb-more::after { border: none; }
 .wb-end { display: block; text-align: center; padding: 24rpx; font-size: 20rpx; color: #a49f95; }
