@@ -32,7 +32,11 @@
       <text>新的清洁任务会在这里显示，下拉可刷新。</text>
     </view>
 
-    <view v-for="room in rooms" :key="room.id" class="room-card">
+    <SpaceMiniMap v-if="rooms.length" :rooms="rooms" title="清洁任务分布"
+      :selected-room-id="focusedRoomId" @select="focusTask" />
+
+    <view v-for="room in rooms" :id="`task-${room.id}`" :key="room.id"
+      :class="['room-card', { focused: focusedRoomId === room.id }]">
       <view class="room-top">
         <view>
           <text class="location">{{ room.buildingName }} · {{ room.floor }} 楼</text>
@@ -58,12 +62,14 @@
 <script>
 import { getUserInfo, getCleaningRooms, startCleaning, completeCleaning, getUnreadCount } from '../../api/index.js'
 import { logoutSession, openHome } from '../../utils/session.js'
+import SpaceMiniMap from '../../components/SpaceMiniMap.vue'
 
 export default {
+  components: { SpaceMiniMap },
   data() {
     return {
       authorized: false, rooms: [], total: 0, page: 0, totalPages: 0,
-      loading: false, busyId: '', error: '', unreadCount: 0
+      loading: false, busyId: '', error: '', unreadCount: 0, focusedRoomId: ''
     }
   },
   onShow() {
@@ -91,6 +97,10 @@ export default {
     },
     goToNotifications() {
       uni.navigateTo({ url: '/pages/notifications/notifications' })
+    },
+    focusTask(id) {
+      this.focusedRoomId = id
+      this.$nextTick(() => uni.pageScrollTo({ selector: `#task-${id}`, duration: 250 }))
     },
     async refresh() {
       if (this.loading || this.busyId) return
@@ -238,7 +248,8 @@ export default {
 button { margin: 0; font-size: 28rpx; line-height: 1.5; }
 button::after { border: none; }
 .text-button { flex-shrink: 0; padding: 16rpx; background: transparent; color: var(--accent); }
-.room-card { margin-bottom: 24rpx; padding: 32rpx; border: 1rpx solid #dfe6df; border-radius: 16rpx; background: #fff; }
+.room-card { margin-bottom: 24rpx; padding: 32rpx; border: 1rpx solid #dfe6df; border-radius: 16rpx; background: #fff; transition: border-color .2s, box-shadow .2s; }
+.room-card.focused { border-color: #176b50; box-shadow: 0 0 0 3rpx rgba(23,107,80,.14); }
 .location { font-size: 25rpx; color: #596b61; overflow-wrap: anywhere; }
 .room-number { margin-top: 12rpx; font-size: 44rpx; font-weight: 700; overflow-wrap: anywhere; }
 .room-unit { font-size: 26rpx; font-weight: 400; }

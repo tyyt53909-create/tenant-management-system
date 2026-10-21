@@ -2,6 +2,8 @@
   <view class="q-page page-with-tabbar home-page">
     <view class="home-greeting"><view><text class="q-eyebrow">{{ today }}</text><text class="q-title">{{ greeting }}，欢迎回家</text></view><view class="home-bell" @tap="goToNotifications"><QIcon name="bell" :size="40" /><view v-if="unreadCount" class="unread-dot" /></view></view>
     <view v-if="canViewContract" class="home-room" @tap="goToContract"><QIcon name="home" :size="28" /><text>{{ roomInfo || '我的居所 · 暂无生效合同' }}</text><text>›</text></view>
+    <SpaceMiniMap v-if="myRoomPosition" mode="tenant" title="我的居所位置"
+      :subtitle="`${myRoomPosition.floor}楼 · ${myRoomPosition.roomNumber}室`" :rooms="[myRoomPosition]" />
     <view v-if="error" class="q-error" @tap="loadData">{{ error }} · 点此重试</view>
     <QCalendar :events="calendarEvents" @open="openEvent" />
     <view class="q-section-heading"><text>待处理事项</text><text class="q-link" @tap="goToMaintenance">查看全部 ›</text></view>
@@ -37,15 +39,16 @@
 import QIcon from '../../components/QIcon.vue'
 import QCalendar from '../../components/QCalendar.vue'
 import ContactCardModal from '../../components/ContactCardModal.vue'
+import SpaceMiniMap from '../../components/SpaceMiniMap.vue'
 import { getUserInfo, getMyBills, getMyMaintenance, getMyContracts, getNotifications, getUnreadCount } from '../../api/index.js'
 import { openHome } from '../../utils/session.js'
 import { homeEvents } from '../../utils/calendar.js'
 import { getLandlordContact, copyToClipboard } from '../../utils/contact.js'
 export default {
-  components: { QIcon, QCalendar, ContactCardModal },
+  components: { QIcon, QCalendar, ContactCardModal, SpaceMiniMap },
   data() {
     const d = new Date()
-    return { today: `${d.getMonth() + 1}月${d.getDate()}日 · ${['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][d.getDay()]}`, greeting: d.getHours() < 12 ? '早上好' : d.getHours() < 18 ? '下午好' : '晚上好', userName: '', roomInfo: '', pendingBillsCount: 0, recentBills: [], repairs: [], notices: [], unreadCount: 0, loading: true, error: '', showContactModal: false, landlordContact: getLandlordContact({}, []), capabilities: uni.getStorageSync('user_capabilities') || [], services: [{ name: '账单', icon: 'bill', path: '/pages/bills/bills', tab: true }, { name: '合同', icon: 'contract', path: '/pages/contract/contract' }, { name: '报修', icon: 'repair', path: '/pages/maintenance/maintenance', tab: true }, { name: '余额', icon: 'wallet', path: '/pages/account/account' }] }
+    return { today: `${d.getMonth() + 1}月${d.getDate()}日 · ${['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][d.getDay()]}`, greeting: d.getHours() < 12 ? '早上好' : d.getHours() < 18 ? '下午好' : '晚上好', userName: '', roomInfo: '', myRoomPosition: null, pendingBillsCount: 0, recentBills: [], repairs: [], notices: [], unreadCount: 0, loading: true, error: '', showContactModal: false, landlordContact: getLandlordContact({}, []), capabilities: uni.getStorageSync('user_capabilities') || [], services: [{ name: '账单', icon: 'bill', path: '/pages/bills/bills', tab: true }, { name: '合同', icon: 'contract', path: '/pages/contract/contract' }, { name: '报修', icon: 'repair', path: '/pages/maintenance/maintenance', tab: true }, { name: '余额', icon: 'wallet', path: '/pages/account/account' }] }
   },
   computed: {
     calendarEvents() { return homeEvents(this.recentBills, this.repairs) },
@@ -97,6 +100,9 @@ export default {
         this.pendingBillsCount = this.recentBills.filter(b => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(b.status)).length
         const contract = contracts.data?.find(c => c.status === 'ACTIVE')
         this.roomInfo = contract?.room ? `${contract.room.building?.name || '我的居所'} · ${contract.room.roomNumber}室` : ''
+        this.myRoomPosition = contract?.room && Number.isFinite(Number(contract.room.floor))
+          ? { id: contract.room.id || 'my-room', roomNumber: String(contract.room.roomNumber), floor: Number(contract.room.floor) }
+          : null
         this.landlordContact = getLandlordContact(user, contracts.data || [])
       } catch {
         this.error = '居住信息暂时未能加载，请检查连接'

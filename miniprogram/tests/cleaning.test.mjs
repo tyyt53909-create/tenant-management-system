@@ -133,6 +133,14 @@ test('cleaner list only retains safe room fields and cleanable rooms', async () 
   assert.deepEqual(Object.keys(vm.rooms[0]).sort(), ['id', 'roomNumber', 'floor', 'buildingName', 'cleanStatus', 'version'].sort())
   assert.ok(!JSON.stringify(vm.rooms).includes('PRIVATE'))
 })
+test('task-map selection focuses only the matching task card', () => {
+  const vm = ready(); let scroll
+  vm.$nextTick = callback => callback()
+  uni.pageScrollTo = options => { scroll = options }
+  vm.focusTask('room-1')
+  assert.equal(vm.focusedRoomId, 'room-1')
+  assert.deepEqual(scroll, { selector: '#task-room-1', duration: 250 })
+})
 test('tenant cannot load cleaner tasks', async () => {
   replies.push({ data: { role: 'TENANT' } })
   const vm = instance(cleaningPage)
