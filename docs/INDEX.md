@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-21
-> 文档总数: 119 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 文档总数: 120 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
 > 状态标注: active 48、draft 7、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 131 份（含本索引与归档）
-> 任务书: 96 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 132 份（含本索引与归档）
+> 任务书: 97 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -53,6 +53,8 @@
 
 ## 3. 任务与交接
 
+- [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-21-T230-房源照片上传.md](./handoff/2026-10-21-T230-房源照片上传.md)：T230，RoomPhoto 启用；后端 `photos` DTO 与事务替换、前端照片编辑器、Playwright 09 通过。
 - [2026-10-21-T228-房源模型视觉重做.md](./handoff/2026-10-21-T228-房源模型视觉重做.md)：T228，小區模型 → 點樓棟 → 2D 樓層、單棟建築外殼、綠色可租／藍色已租／紅色待處理配色，Playwright 06/07 通過。
 - [2026-10-21-T225-T227-房源模型Wave2.md](./handoff/2026-10-21-T225-T227-房源模型Wave2.md)：T225～T227 Wave 2（平面圖編輯器、Space/floor-plans 授權 e2e、公開頁可租分佈、CLEANER/TENANT 小程式地圖），三個 PR 已合併 integration branch。
 - [2026-10-21-T221-T224-房源模型Wave1.md](./handoff/2026-10-21-T221-T224-房源模型Wave1.md)：T221～T224 Wave 1 并行交付（FloorPlan/RoomShape schema、Space API 角色投影、契約 2D/3D renderer），四個 PR 已進 integration branch；renderer 已於 Wave 3 整合。
