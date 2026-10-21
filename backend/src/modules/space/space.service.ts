@@ -41,7 +41,7 @@ export class SpaceService {
         id: room.id, roomNumber: room.roomNumber, floor: room.floor,
         shape: { kind: 'RECT', x: 0, y: 0, width: 4, depth: 3 }, state, alerts: [], version: room.version,
       };
-      if (role === 'ADMIN' || role === 'TENANT') {
+      if ((role === 'ADMIN' || role === 'TENANT') && ['OCCUPIED', 'RESERVED', 'MAINTENANCE'].includes(room.status)) {
         const contract = room.contracts?.[0];
         if (contract) {
           result.tenantName = contract.tenant.name;

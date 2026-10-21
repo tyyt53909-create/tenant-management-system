@@ -34,6 +34,18 @@ describe('SpaceService', () => {
     expect(result.floors.flatMap((floor) => floor.rooms).every((room) => !('tenantName' in room) && !('lease' in room))).toBe(true);
   });
 
+  it('does not project a residual DRAFT contract for VACANT+CLEAN rooms', async () => {
+    const room = mkRoom('vacant-draft', '111', 1, 'VACANT', 'CLEAN', [{
+      status: 'DRAFT', rentAmount: 200, startDate: new Date('2026-01-01'), endDate: new Date('2027-01-01'), tenant: { name: 'Residual Tenant' },
+    }]);
+    const { service } = createService([room]);
+    const result = await service.getBuildingSpace('b1', 'ADMIN');
+    const projected = result.floors[2]?.rooms[0];
+    expect(projected?.state).toBe('RENTABLE');
+    expect(projected).not.toHaveProperty('tenantName');
+    expect(projected).not.toHaveProperty('lease');
+  });
+
   it('scopes TENANT rooms and contracts to own tenant id', async () => {
     const { service, prisma } = createService([mkRoom('t1', '301', 3, 'OCCUPIED')]);
     await service.getBuildingSpace('b1', 'TENANT', 'tenant-1');
