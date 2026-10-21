@@ -64,8 +64,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { AxiosError } from 'axios';
 import { getBuildings } from '@/api/buildings';
-import { createFloorPlanTemplate, getFloorPlans, saveFloorPlan } from '@/api/floorPlans';
-import type { FloorPlan, FloorPlanShape } from '@/api/floorPlans';
+import { createFloorPlanTemplate, getFloorPlans, saveFloorPlan, toSaveFloorPlanShape } from '@/api/floorPlans';
+import type { FloorPlan, FloorPlanShapeResponse } from '@/api/floorPlans';
 import { getBuildingSpace } from '@/api/space';
 import type { Building } from '@/types';
 import type { SpaceFloorContract, SpaceModelContract } from '@/types/space';
@@ -78,7 +78,7 @@ const buildingId = ref('');
 const floorNumber = ref<number | undefined>();
 const model = ref<SpaceModelContract | null>(null);
 const plan = ref<FloorPlan | null>(null);
-const shapes = ref<FloorPlanShape[]>([]);
+const shapes = ref<FloorPlanShapeResponse[]>([]);
 const loadingBuildings = ref(false);
 const loadingPlan = ref(false);
 const saving = ref(false);
@@ -167,7 +167,11 @@ async function save() {
       width: plan.value?.width ?? floor?.width ?? canvasWidth.value,
       depth: plan.value?.depth ?? floor?.depth ?? canvasDepth.value,
       version: plan.value?.version ?? 0,
-      shapes: shapes.value.map(shape => ({ ...shape, width: Math.max(0, shape.width), depth: Math.max(0, shape.depth) })),
+      shapes: shapes.value.map(shape => ({
+        ...toSaveFloorPlanShape(shape),
+        width: Math.max(0, shape.width),
+        depth: Math.max(0, shape.depth),
+      })),
     });
     shapes.value = plan.value.shapes.map(shape => ({ ...shape }));
     ElMessage.success('平面图已保存。');
