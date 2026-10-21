@@ -33,6 +33,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '房源管理', icon: 'House' },
       },
       {
+        path: '/space',
+        name: 'Space',
+        component: () => import('@/views/space/index.vue'),
+        meta: { title: '房源模型', icon: 'Grid' },
+      },
+      {
         path: '/cleaning',
         name: 'Cleaning',
         component: () => import('@/views/cleaning/index.vue'),

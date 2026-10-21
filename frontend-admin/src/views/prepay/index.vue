@@ -4,12 +4,12 @@
     <ResourcePanel title="预付账户" :count="pagination.total" :loading="loading" :error="loadError" @retry="fetchData"><template #actions><ExportCurrent resource="prepay" :rows="tableData" /><el-button :loading="exporting" @click="handleExportCsv">导出全量流水 CSV</el-button><el-button @click="fetchData">刷新</el-button><el-button type="primary" @click="handleCreate">＋ 新增账户</el-button></template>
 
       <el-table :data="tableData" v-loading="loading" empty-text="暂无预付账户，点击右上角「新增账户」开始录入">
-        <el-table-column label="租客" min-width="120">
-          <template #default="{ row }">{{ row.tenant?.name || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="房号" width="110">
+        <el-table-column label="租客 / 房号" width="150">
           <template #default="{ row }">
-            {{ row.roomNumber || '—' }}
+            <div class="prepay-identity">
+              <strong :title="row.tenant?.name || '未关联租客'">{{ row.tenant?.name || '未关联租客' }}</strong>
+              <small :title="row.roomNumber || '未关联房号'">{{ row.roomNumber || '未关联房号' }}</small>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="余额" width="140">
@@ -25,15 +25,18 @@
         <el-table-column label="低余额阈值" width="120">
           <template #default="{ row }">¥{{ (row.lowBalanceThreshold / 100).toFixed(2) }}</template>
         </el-table-column>
-        <el-table-column label="更新时间" width="170">
+        <el-table-column label="更新时间" width="160">
           <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link @click="handleTransaction(row as PrepayAccount)">充值/扣费</el-button>
-            <el-button type="primary" link @click="handleViewTransactions(row as PrepayAccount)">流水</el-button>
-            <el-button type="warning" link @click="handleEditThreshold(row as PrepayAccount)">阈值</el-button>
-            <el-button type="danger" link @click="handleDelete(row as PrepayAccount)">删除</el-button>
+            <div class="table-actions">
+              <el-button class="table-action table-action--primary" @click="handleTransaction(row as PrepayAccount)">充值/扣费</el-button>
+              <el-button class="table-action" @click="handleViewTransactions(row as PrepayAccount)">流水</el-button>
+              <el-button class="table-action table-action--warn" @click="handleEditThreshold(row as PrepayAccount)">阈值</el-button>
+              <span class="table-actions__divider" aria-hidden="true" />
+              <el-button class="table-action table-action--danger" @click="handleDelete(row as PrepayAccount)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -417,6 +420,27 @@ onMounted(fetchData);
 <style scoped>
 .prepay-page {
   padding: 0;
+}
+
+.prepay-identity strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prepay-identity small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .low-balance {

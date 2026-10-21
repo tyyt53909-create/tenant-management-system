@@ -53,7 +53,7 @@
         :empty-text="emptyText"
         row-key="id"
       >
-        <el-table-column type="expand">
+        <el-table-column type="expand" width="40">
           <template #default="{ row }">
             <div class="detail-body">
               <div class="detail-row">
@@ -71,33 +71,43 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="时间" width="170" sortable>
+
+        <el-table-column prop="createdAt" label="时间" width="140" sortable>
           <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作者" width="210">
+
+        <el-table-column label="操作者 / IP" width="210">
           <template #default="{ row }">
-            <div v-if="row.user">
-              <div>{{ row.user.email || row.user.id }}</div>
-              <el-tag size="small" effect="plain">{{ roleMap[row.user.role] || row.user.role }}</el-tag>
+            <div class="audit-actor">
+              <div v-if="row.user" class="audit-actor-main">
+                <strong :title="row.user.email || row.user.id">{{ row.user.email || row.user.id }}</strong>
+                <el-tag size="small" effect="plain">{{ roleMap[row.user.role] || row.user.role }}</el-tag>
+              </div>
+              <span v-else class="muted" :title="row.userId">{{ row.userId }}</span>
+              <small class="audit-ip" :title="row.ip">{{ row.ip || '—' }}</small>
             </div>
-            <span v-else class="muted">{{ row.userId }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="action" label="操作" min-width="300" show-overflow-tooltip>
+
+        <el-table-column prop="action" label="操作" width="260">
           <template #default="{ row }">
-            <el-tag size="small" :type="methodType(row.action)" effect="plain">
-              {{ methodOf(row.action) }}
-            </el-tag>
-            <span class="path-text">{{ pathOf(row.action) }}</span>
+            <div class="audit-action" :title="row.action">
+              <el-tag size="small" :type="methodType(row.action)" effect="plain">
+                {{ methodOf(row.action) }}
+              </el-tag>
+              <span class="path-text">{{ pathOf(row.action) }}</span>
+            </div>
           </template>
         </el-table-column>
+
         <el-table-column prop="entityType" label="实体" width="150" sortable>
           <template #default="{ row }">
-            <div>{{ entityLabel(row.entityType) }}</div>
-            <div class="muted small">{{ row.entityId === '-' ? '（列表操作）' : row.entityId }}</div>
+            <div class="audit-entity">
+              <strong>{{ entityLabel(row.entityType) }}</strong>
+              <small :title="row.entityId">{{ row.entityId === '-' ? '（列表操作）' : row.entityId }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="ip" label="来源 IP" width="150" show-overflow-tooltip />
       </el-table>
 
       <div>
@@ -230,8 +240,69 @@ onMounted(fetchData);
 <style scoped>
 .audit-page { padding: 0; }
 .muted { color: var(--text-muted); }
-.small { font-size: 12px; }
-.path-text { margin-left: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.audit-actor { min-width: 0; }
+.audit-actor-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.audit-actor-main strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audit-actor-main :deep(.el-tag),
+.audit-action :deep(.el-tag) {
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
+}
+.audit-ip {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audit-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.path-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audit-entity strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.audit-entity small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .detail-body { padding: 4px 16px 12px; }
 .detail-row { display: flex; gap: 12px; margin-bottom: 10px; }
 .detail-label { flex-shrink: 0; width: 90px; color: var(--text-muted); font-size: 13px; }
