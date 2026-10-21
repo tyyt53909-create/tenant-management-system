@@ -1,13 +1,13 @@
 ---
-status: in_progress
+status: completed
 task_id: T222
 stage: 第五阶段（房源空间可视化 / Wave 1）
 priority: P1
 model_tier: 强
 branch: feature/T222-space-api
 start_time: 2026-10-21
-complete_time: null
-handoff: null
+complete_time: 2026-10-21
+handoff: docs/handoff/2026-10-21-T221-T224-房源模型Wave1.md
 ---
 
 # T222: 空间 API 与角色投影
@@ -72,7 +72,9 @@ T222 新增 `GET /buildings/:id/space`，由後端回傳 `SpaceModel` 契約，�
 ## 开发信息
 
 - 分支：`feature/T222-space-api`
-- 工作树：`../租客管理系統-worktrees/T222-space-api`
+- 工作树：`/Users/Admin/ai/tenant-system-worktrees/T222-space-api`
 - 基线：`feature/T221-space-platform`
 - 开始时间：2026-10-21
-- 状态：in_progress
+- 完成时间：2026-10-21
+- 合并 PR：#38
+- 状态：completed

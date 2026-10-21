@@ -75,6 +75,7 @@ declare module 'vue' {
     SpacePlan2D: typeof import('./components/space/SpacePlan2D.vue')['default']
     SpacePlan2DContract: typeof import('./components/space/SpacePlan2DContract.vue')['default']
     SpaceScene3D: typeof import('./components/space/SpaceScene3D.vue')['default']
+    SpaceScene3DContract: typeof import('./components/space/SpaceScene3DContract.vue')['default']
     TenantAccountCapabilities: typeof import('./components/common/TenantAccountCapabilities.vue')['default']
     UtilitiesOverviewCard: typeof import('./components/dashboard/UtilitiesOverviewCard.vue')['default']
     UtilitiesTrendPanel: typeof import('./components/dashboard/UtilitiesTrendPanel.vue')['default']
