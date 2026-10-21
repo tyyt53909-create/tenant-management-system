@@ -50,28 +50,65 @@
         :row-class-name="({row}:any)=>detailVisible && row.id===detailId ? 'detail-selected-row' : ''"
         :empty-text="emptyText"
       >
-        <el-table-column prop="roomNumber" label="房源与户型" min-width="225" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row as Room)"><span class="record-glyph"><el-icon><House /></el-icon></span><span><strong>{{ row.roomNumber }}</strong><small>{{ roomTypeMap[row.roomType] }} · {{ row.area == null ? '面积未记录' : `${row.area} m²` }} · {{ row.building?.name || '未关联楼栋' }} / {{ row.floor }} 楼</small></span></button></template></el-table-column>
-        <el-table-column label="租约月租" width="125"><template #default="{row}"><strong>{{ leaseOf(row as Room) ? formatMoney(leaseOf(row as Room)!.rentAmount) : '—' }}</strong><small class="table-subline">{{ leaseOf(row as Room)?.status==='DRAFT' ? '预订关联草稿' : leaseOf(row as Room) ? '元 / 月' : '未关联生效租约' }}</small></template></el-table-column>
-        <el-table-column label="入住关联" min-width="150"><template #default="{row}"><strong>{{ leaseOf(row as Room)?.tenant?.name || '暂无当前租客' }}</strong><small class="table-subline">{{ leaseOf(row as Room) ? leaseOf(row as Room)!.contractNumber : '请核对房态与租约' }}</small></template></el-table-column>
-        <el-table-column prop="status" label="房态" width="90">
+        <el-table-column prop="roomNumber" label="房源 / 户型" min-width="245" sortable>
           <template #default="{ row }">
-            <el-tag :type="roomStatusTagType(row.status)">
-              {{ roomStatusLabel(row.status) }}
-            </el-tag>
+            <button class="record-cell" @click="openDetail(row as Room)">
+              <span class="record-glyph"><el-icon><House /></el-icon></span>
+              <span>
+                <strong>{{ row.roomNumber }}</strong>
+                <small :title="roomSubtitle(row as Room)">{{ roomSubtitle(row as Room) }}</small>
+              </span>
+            </button>
           </template>
         </el-table-column>
-        <el-table-column label="最近待收日期" width="130"><template #default="{row}">{{ leaseOf(row as Room)?.bills?.[0]?.dueDate?.slice(0,10) || '—' }}<small v-if="leaseOf(row as Room) && !leaseOf(row as Room)?.bills?.length" class="table-subline">无未缴清账单</small></template></el-table-column>
-        <el-table-column prop="cleanStatus" label="清洁状态" width="105">
+
+        <el-table-column label="租约 / 租客" min-width="200">
           <template #default="{ row }">
-            <el-tag :type="cleanStatusTagType(row.cleanStatus)" effect="light">
-              {{ cleanStatusLabel(row.cleanStatus) }}
-            </el-tag>
+            <div class="room-lease">
+              <strong>{{ leaseOf(row as Room)?.tenant?.name || '暂无当前租客' }}</strong>
+              <small v-if="leaseOf(row as Room)">
+                {{ formatMoney(leaseOf(row as Room)!.rentAmount) }} / 月<template v-if="leaseOf(row as Room)?.status==='DRAFT'"> · 预订关联草稿</template>
+              </small>
+              <small v-else>未关联生效租约</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+
+        <el-table-column label="房态 / 清洁" width="150">
           <template #default="{ row }">
-            <el-button type="primary" link @click="openDetail(row as Room)">详情</el-button>
-            <el-dropdown><el-button text aria-label="更多房源操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleStatus(row as Room)">房态变更</el-dropdown-item><el-dropdown-item @click="handleEdit(row as Room)">编辑房源</el-dropdown-item><el-dropdown-item @click="handleDelete(row as Room)">删除房源</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+            <div class="room-state">
+              <el-tag :type="roomStatusTagType(row.status)">{{ roomStatusLabel(row.status) }}</el-tag>
+              <el-tag :type="cleanStatusTagType(row.cleanStatus)" effect="light">{{ cleanStatusLabel(row.cleanStatus) }}</el-tag>
+            </div>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="最近待收" width="125">
+          <template #default="{ row }">
+            <div class="room-due">
+              <strong>{{ leaseOf(row as Room)?.bills?.[0]?.dueDate?.slice(0,10) || '—' }}</strong>
+              <small v-if="leaseOf(row as Room) && !leaseOf(row as Room)?.bills?.length">无未缴清账单</small>
+            </div>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <div class="table-actions">
+              <el-button class="table-action" @click="openDetail(row as Room)">详情</el-button>
+              <el-dropdown trigger="click" @command="handleRoomCommand($event, row as Room)">
+                <el-button class="table-action table-action--icon" aria-label="更多房源操作">
+                  <el-icon><MoreFilled /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="status">房态变更</el-dropdown-item>
+                    <el-dropdown-item command="edit">编辑房源</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided style="color: var(--error-text)">删除房源</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -157,7 +194,7 @@
 import { computed, ref, reactive, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { House } from '@element-plus/icons-vue';
+import { House, MoreFilled } from '@element-plus/icons-vue';
 import { formatMoney } from '@/utils/table';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
@@ -268,6 +305,10 @@ const roomTypeMap: Record<string, string> = {
   STUDIO: '开间',
 };
 function leaseOf(row:Room){return row.contracts?.find(contract=>contract.status===(row.status==='RESERVED'?'DRAFT':'ACTIVE'));}
+function roomSubtitle(row: Room) {
+  const area = row.area == null ? '面积未记录' : `${row.area} m²`;
+  return `${roomTypeMap[row.roomType]} · ${area} · ${row.building?.name || '未关联楼栋'} / ${row.floor} 楼`;
+}
 
 /** 本地过滤：仅房号模糊匹配（清洁状态已由服务端 cleanStatus 处理） */
 const applyLocalFilters = (rooms: Room[]) => {
@@ -392,6 +433,12 @@ const handleDelete = async (row: Room) => {
   }
 };
 
+function handleRoomCommand(command: string, row: Room) {
+  if (command === 'status') handleStatus(row);
+  else if (command === 'edit') handleEdit(row);
+  else if (command === 'delete') void handleDelete(row);
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return;
 
@@ -452,5 +499,39 @@ watch(detailVisible,open=>{if(!open&&route.query.detail===detailId.value)void ro
 
 .filter-tip {
   margin-bottom: 12px;
+}
+
+.room-lease strong,
+.room-due strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-lease small,
+.room-due small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.room-state :deep(.el-tag) {
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
 }
 </style>

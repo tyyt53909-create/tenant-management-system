@@ -18,3 +18,14 @@
    或把顶栏撑出横向滚动。title 提示与 ⌘V / ⌘K 快捷键仍然可用。
    放在本文件末尾是为了盖过上面的 .search-trigger{width:272px}。 */
 @media(max-width:900px){.voucher-trigger{width:36px;padding:0;justify-content:center}.voucher-trigger span,.voucher-trigger kbd{display:none}.search-trigger{width:36px;min-width:36px;padding:0;justify-content:center}.search-trigger span,.search-trigger kbd{display:none}}
+
+/* 中等宽度：业务指标卡改为三列，图标移到右上，释放文字空间。 */
+@media(max-width:1120px){.management-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.management-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:761px){
+  .management-metric{position:relative;display:block;min-height:108px;padding:17px 17px 15px}
+  .management-metric-icon{position:absolute;top:15px;right:15px;width:32px;height:32px;border-radius:9px}
+  .management-metric h2{padding-right:42px;font-weight:550;letter-spacing:.01em}
+  .management-metric strong{margin:13px 0 4px;font-size:30px;line-height:1.15}
+  .management-metric p{line-height:1.5}
+}

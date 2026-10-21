@@ -54,51 +54,53 @@
         v-loading="loading"
         empty-text="暂无符合条件的房源"
       >
-        <el-table-column label="楼栋" width="150">
+        <el-table-column label="房源" min-width="240">
           <template #default="{ row }">
-            {{ row.building?.name || '—' }}
+            <div class="cleaning-room">
+              <strong>{{ row.roomNumber }}</strong>
+              <small>{{ row.building?.name || '未关联楼栋' }} · {{ row.floor }} 楼</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="roomNumber" label="房间号" width="140" />
-        <el-table-column prop="floor" label="楼层" width="80" />
-        <el-table-column label="房态" width="100">
+
+        <el-table-column label="房态 / 清洁" width="170">
           <template #default="{ row }">
-            <el-tag :type="roomStatusTagType(row.status)">{{ roomStatusLabel(row.status) }}</el-tag>
+            <div class="cleaning-state">
+              <el-tag :type="roomStatusTagType(row.status)">{{ roomStatusLabel(row.status) }}</el-tag>
+              <el-tag :type="cleanStatusTagType(row.cleanStatus)" effect="light">
+                {{ cleanStatusLabel(row.cleanStatus) }}
+              </el-tag>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="清洁状态" width="120">
-          <template #default="{ row }">
-            <el-tag :type="cleanStatusTagType(row.cleanStatus)" effect="light">
-              {{ cleanStatusLabel(row.cleanStatus) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="最后更新" width="180">
+
+        <el-table-column label="最后更新" width="160">
           <template #default="{ row }">
             {{ formatTime(row.updatedAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+
+        <el-table-column label="操作" width="118" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-if="row.cleanStatus === 'PENDING_CLEAN'"
-              type="primary"
-              link
-              :loading="actingId === row.id"
-              @click="handleStartCleaning(row as Room)"
-            >
-              开始清洁
-            </el-button>
-            <el-button
-              v-else-if="row.cleanStatus === 'CLEANING'"
-              type="success"
-              link
-              :loading="actingId === row.id"
-              @click="handleFinishCleaning(row as Room)"
-            >
-              完成清洁
-            </el-button>
-            <span v-else class="no-action">无需保洁</span>
+            <div class="table-actions">
+              <el-button
+                v-if="row.cleanStatus === 'PENDING_CLEAN'"
+                class="table-action table-action--primary"
+                :loading="actingId === row.id"
+                @click="handleStartCleaning(row as Room)"
+              >
+                开始清洁
+              </el-button>
+              <el-button
+                v-else-if="row.cleanStatus === 'CLEANING'"
+                class="table-action table-action--primary"
+                :loading="actingId === row.id"
+                @click="handleFinishCleaning(row as Room)"
+              >
+                完成清洁
+              </el-button>
+              <span v-else class="cleaning-empty">无需保洁</span>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -301,8 +303,43 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.no-action {
+.cleaning-room strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cleaning-room small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cleaning-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.cleaning-state :deep(.el-tag) {
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
+}
+.cleaning-empty {
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+}
+.cleaning-page :deep(.resource-panel-body > .el-table) {
+  border-left: 0;
+  border-right: 0;
 }
 </style>

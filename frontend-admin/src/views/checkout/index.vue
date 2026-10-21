@@ -97,43 +97,56 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="关联合同" width="140" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.contract?.contractNumber || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="退租房源" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.room?.roomNumber ? `${row.room.roomNumber} 室` : '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="checkoutDate" label="退租日期" width="120">
+        <el-table-column label="退租 / 房源" min-width="250">
           <template #default="{ row }">
-            {{ row.checkoutDate ? row.checkoutDate.split('T')[0] : '-' }}
+            <div class="checkout-identity">
+              <strong>
+                {{ row.room?.roomNumber ? `${row.room.roomNumber} 室` : '未关联房源' }} · {{ row.checkoutDate ? row.checkoutDate.split('T')[0] : '未记录日期' }}
+              </strong>
+              <small :title="row.contract?.contractNumber || '未关联合同'">{{ row.contract?.contractNumber || '未关联合同' }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="totalRefund" label="退款金额" width="120">
+
+        <el-table-column label="退款 / 明细" width="160">
           <template #default="{ row }">
-            ¥{{ formatMoney(row.totalRefund) }}
+            <div class="checkout-money">
+              <strong>¥{{ formatMoney(row.totalRefund) }}</strong>
+              <el-button class="table-action" @click="toggleDetail(row as CheckoutRecord)">
+                {{ itemsOf(row as CheckoutRecord).length ? `${itemsOf(row as CheckoutRecord).length} 项明细` : '查看明细' }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="明细项数" width="110">
+
+        <el-table-column label="状态 / 处理 / 备注" width="200">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="toggleDetail(row as CheckoutRecord)">
-              {{ itemsOf(row as CheckoutRecord).length ? `${itemsOf(row as CheckoutRecord).length} 项明细` : '查看明细' }}
-            </el-button>
+            <div class="checkout-meta">
+              <div class="checkout-meta-top">
+                <el-tag :type="statusTypeMap[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
+                <span :title="row.processedBy || '未记录处理人'">{{ row.processedBy || '未记录处理人' }}</span>
+              </div>
+              <small :title="row.notes || '无备注'">{{ row.notes || '无备注' }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="processedBy" label="处理人" width="140" show-overflow-tooltip />
-        <el-table-column prop="status" label="状态" width="100">
+
+        <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">
-            <el-tag :type="statusTypeMap[row.status]">
-              {{ statusMap[row.status] }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="notes" label="备注" min-width="150" show-overflow-tooltip />
-        <el-table-column label="操作" width="190" fixed="right">
-          <template #default="{ row }">
-            <el-button type="info" link @click="handleOpenVoucher(row as CheckoutRecord)">结算单</el-button>
-            <el-button type="primary" link @click="handleEdit(row as CheckoutRecord)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row as CheckoutRecord)">删除</el-button>
+            <div class="table-actions">
+              <el-button class="table-action table-action--primary" @click="handleOpenVoucher(row as CheckoutRecord)">结算单</el-button>
+              <el-button class="table-action" @click="handleEdit(row as CheckoutRecord)">编辑</el-button>
+              <el-dropdown trigger="click" @command="handleCheckoutCommand($event, row as CheckoutRecord)">
+                <el-button class="table-action table-action--icon" aria-label="更多退租操作">
+                  <el-icon><MoreFilled /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="delete" style="color: var(--error-text)">删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -167,6 +180,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { MoreFilled } from '@element-plus/icons-vue';
 import type { TableInstance } from 'element-plus';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
@@ -341,12 +355,66 @@ const handleDelete = async (row: CheckoutRecord) => {
   }
 };
 
+function handleCheckoutCommand(command: string, row: CheckoutRecord) {
+  if (command === 'edit') handleEdit(row);
+  else if (command === 'delete') void handleDelete(row);
+}
+
 onMounted(fetchData);
 </script>
 
 <style scoped>
 .checkout-page {
   padding: 0;
+}
+
+.checkout-identity strong,
+.checkout-money strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.checkout-identity small,
+.checkout-meta small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.checkout-money .table-action {
+  margin-top: 4px;
+}
+.checkout-meta {
+  min-width: 0;
+}
+.checkout-meta-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.checkout-meta-top span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.checkout-meta-top :deep(.el-tag) {
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
 }
 
 .items-panel {

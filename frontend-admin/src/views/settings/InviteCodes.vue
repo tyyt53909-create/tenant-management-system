@@ -40,96 +40,58 @@
       style="width: 100%"
       empty-text="暂无邀请码记录"
     >
-      <el-table-column prop="code" label="邀请码" min-width="220">
+      <el-table-column prop="code" label="邀请码 / 备注" min-width="240">
         <template #default="{ row }">
-          <div class="code-cell">
-            <code class="code-text">{{ row.code }}</code>
-            <el-button
-              type="primary"
-              link
-              size="small"
-              @click="copyText(row.code)"
-              title="复制邀请码"
-            >
-              复制
-            </el-button>
+          <div class="invite-code-cell">
+            <div class="code-cell">
+              <code class="code-text" :title="row.code">{{ row.code }}</code>
+              <el-button class="table-action" @click="copyText(row.code)" title="复制邀请码">复制</el-button>
+            </div>
+            <small class="invite-notes" :title="row.notes || '无备注'">{{ row.notes || '无备注' }}</small>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column prop="role" label="目标角色" width="110" align="center">
+      <el-table-column label="角色 / 状态" width="130" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.role === 'ADMIN' ? 'warning' : 'primary'">
-            {{ row.role === 'ADMIN' ? '管理员' : '租客' }}
-          </el-tag>
+          <div class="invite-state">
+            <el-tag size="small" :type="row.role === 'ADMIN' ? 'warning' : 'primary'">
+              {{ row.role === 'ADMIN' ? '管理员' : '租客' }}
+            </el-tag>
+            <el-tag
+              size="small"
+              :type="row.status === 'UNUSED' ? 'success' : row.status === 'USED' ? 'info' : 'danger'"
+            >
+              {{ row.status === 'UNUSED' ? '未使用' : row.status === 'USED' ? '已使用' : '已作废' }}
+            </el-tag>
+          </div>
         </template>
       </el-table-column>
 
-      <el-table-column prop="status" label="状态" width="100" align="center">
+      <el-table-column label="创建 / 有效期" width="170">
         <template #default="{ row }">
-          <el-tag
-            size="small"
-            :type="
-              row.status === 'UNUSED'
-                ? 'success'
-                : row.status === 'USED'
-                ? 'info'
-                : 'danger'
-            "
-          >
-            {{
-              row.status === 'UNUSED'
-                ? '未使用'
-                : row.status === 'USED'
-                ? '已使用'
-                : '已作废'
-            }}
-          </el-tag>
+          <div class="invite-dates">
+            <strong>创建 {{ formatDate(row.createdAt) }}</strong>
+            <small>至 {{ formatDate(row.expiresAt) }}</small>
+          </div>
         </template>
       </el-table-column>
 
-      <el-table-column prop="notes" label="备注说明" min-width="150">
+      <el-table-column label="核销 / 使用人" width="180">
         <template #default="{ row }">
-          {{ row.notes || '—' }}
+          <div class="invite-used">
+            <strong :title="row.usedBy?.email || row.usedBy?.phone || '未核销'">
+              {{ row.usedBy?.email || row.usedBy?.phone || '未核销' }}
+            </strong>
+            <small>{{ row.usedAt ? formatDate(row.usedAt) : '—' }}</small>
+          </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="创建人" min-width="150">
-        <template #default="{ row }">
-          {{ row.creator?.email || row.creator?.phone || row.creatorId || '—' }}
-        </template>
-      </el-table-column>
-
-      <el-table-column label="核销人" min-width="150">
-        <template #default="{ row }">
-          {{ row.usedBy?.email || row.usedBy?.phone || '—' }}
-        </template>
-      </el-table-column>
-
-      <el-table-column prop="usedAt" label="核销时间" width="170">
-        <template #default="{ row }">
-          {{ formatDate(row.usedAt) }}
-        </template>
-      </el-table-column>
-
-      <el-table-column prop="expiresAt" label="有效期至" width="170">
-        <template #default="{ row }">
-          {{ formatDate(row.expiresAt) }}
-        </template>
-      </el-table-column>
-
-      <el-table-column prop="createdAt" label="创建时间" width="170">
-        <template #default="{ row }">
-          {{ formatDate(row.createdAt) }}
-        </template>
-      </el-table-column>
-
-      <el-table-column label="操作" width="100" fixed="right" align="center">
+      <el-table-column label="操作" width="110" fixed="right" align="center">
         <template #default="{ row }">
           <el-button
-            type="danger"
-            link
-            size="small"
+            class="table-action table-action--danger"
             :disabled="row.status !== 'UNUSED'"
             @click="handleRevoke(row as InviteCode)"
           >
@@ -383,19 +345,79 @@ onMounted(() => {
   gap: 8px;
 }
 
+.invite-code-cell {
+  min-width: 0;
+}
+
 .code-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .code-text {
-  font-family: monospace;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--font-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background: var(--el-fill-color-light, #f5f7fa);
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
+}
+
+.code-cell .table-action {
+  flex-shrink: 0;
+}
+
+.invite-notes {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.invite-state :deep(.el-tag) {
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
+}
+
+.invite-dates strong,
+.invite-used strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-micro);
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-dates small,
+.invite-used small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pagination-container {

@@ -29,27 +29,73 @@
         :empty-text="emptyText"
         :default-sort="{ prop: 'createdAt', order: 'descending' }"
       >
-        <el-table-column prop="name" label="租客" min-width="215" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row as Tenant)"><span class="record-avatar">{{ row.name?.slice(0,1) }}</span><span><strong>{{ row.name }}</strong><small>{{ row.phone || '尚未填写电话' }}</small></span></button></template></el-table-column>
-        <el-table-column label="关联房源" min-width="145"><template #default="{row}"><strong>{{ row.contracts?.[0]?.room?.roomNumber || '暂无生效租约' }}</strong><small class="table-subline">{{ row.contracts?.[0]?.contractNumber || '可查看历史合同' }}</small></template></el-table-column>
-        <el-table-column label="入住 / 到期" width="150"><template #default="{row}">{{ row.contracts?.[0]?.startDate?.slice(0,10) || '—' }}<small class="table-subline">{{ row.contracts?.[0]?.endDate?.slice(0,10) || '未记录当前租期' }}</small></template></el-table-column>
-        <el-table-column label="预付余额合计" width="140"><template #default="{row}"><strong>{{ row.prepayAccounts?.length ? formatMoney(row.prepayAccounts.reduce((sum:number,account:any)=>sum+account.balanceCache,0)) : '未开通账户' }}</strong><small class="table-subline">{{ row.prepayAccounts?.length ? `${row.prepayAccounts.length} 个账户` : '不显示为零元' }}</small></template></el-table-column>
-        <el-table-column label="标签" min-width="150">
-          <template #default="{row}">
-            <div v-if="row.tags?.length" class="tag-cell">
-              <el-tag v-for="tag in row.tags" :key="tag.id" size="small" effect="plain">{{ tag.name }}</el-tag>
+        <el-table-column prop="name" label="租客" min-width="190" sortable>
+          <template #default="{ row }">
+            <button class="record-cell" @click="openDetail(row as Tenant)">
+              <span class="record-avatar">{{ row.name?.slice(0, 1) }}</span>
+              <span>
+                <strong :title="row.name">{{ row.name }}</strong>
+                <small :title="row.phone || '尚未填写电话'">{{ row.phone || '尚未填写电话' }}</small>
+              </span>
+            </button>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="房源 / 租期" min-width="185">
+          <template #default="{ row }">
+            <div class="tenant-lease">
+              <strong :title="row.contracts?.[0]?.room?.roomNumber || '暂无生效租约'">
+                {{ row.contracts?.[0]?.room?.roomNumber || '暂无生效租约' }}
+              </strong>
+              <small v-if="row.contracts?.[0]">
+                {{ formatDateOnly(row.contracts[0].startDate) }} → {{ formatDateOnly(row.contracts[0].endDate) }}
+              </small>
+              <small v-else>可查看历史合同</small>
             </div>
-            <span v-else class="tag-empty">未打标签</span>
           </template>
         </el-table-column>
-        <el-table-column label="档案 / 租约" width="115"><template #default="{row}"><el-tag :type="row.isActive ? 'success' : 'info'">{{ row.isActive ? '启用' : '停用' }}</el-tag><small class="table-subline">{{ row.contracts?.length ? '关联生效租约' : '暂无生效租约' }}</small></template></el-table-column>
-        <el-table-column prop="createdAt" sort-by="createdAtSort" label="创建时间" width="180" sortable>
+
+        <el-table-column label="余额 / 标签" width="140">
           <template #default="{ row }">
-            {{ formatDate(row.createdAt) }}
+            <div class="tenant-balance">
+              <strong :title="row.prepayAccounts?.length ? `${row.prepayAccounts.length} 个账户` : '未开通账户'">
+                {{ row.prepayAccounts?.length ? formatMoney(row.prepayAccounts.reduce((sum:number,account:any)=>sum+account.balanceCache,0)) : '未开通账户' }}
+              </strong>
+              <div v-if="row.tags?.length" class="tenant-tags">
+                <el-tag v-for="tag in row.tags.slice(0, 2)" :key="tag.id" size="small" effect="plain">{{ tag.name }}</el-tag>
+                <span v-if="row.tags.length > 2" class="tenant-tag-more">+{{ row.tags.length - 2 }}</span>
+              </div>
+              <small v-else class="tenant-tag-empty">未打标签</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+
+        <el-table-column label="状态" width="70">
           <template #default="{ row }">
-            <el-button type="primary" link @click="openDetail(row as Tenant)">查看档案</el-button><el-dropdown><el-button text aria-label="更多租客操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="handleEdit(row as Tenant)">编辑资料</el-dropdown-item><el-dropdown-item @click="handleDelete(row as Tenant)">删除档案</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+            <el-tag :type="row.isActive ? 'success' : 'info'">{{ row.isActive ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="createdAt" sort-by="createdAtSort" label="创建时间" width="120" sortable>
+          <template #default="{ row }">{{ formatDateOnly(row.createdAt) }}</template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <div class="table-actions">
+              <el-button class="table-action" @click="openDetail(row as Tenant)">档案</el-button>
+              <el-dropdown trigger="click" @command="handleTenantCommand($event, row as Tenant)">
+                <el-button class="table-action table-action--icon" aria-label="更多租客操作">
+                  <el-icon><MoreFilled /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="edit">编辑资料</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided style="color: var(--error-text)">删除档案</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -125,6 +171,7 @@
 import { ref, reactive, computed, onMounted,watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { MoreFilled } from '@element-plus/icons-vue';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
 import ExportCurrent from '@/components/common/ExportCurrent.vue';
@@ -133,7 +180,7 @@ import type { FormInstance, FormRules } from 'element-plus';
 import { getTenants, createTenant, updateTenant, deleteTenant } from '@/api/tenants';
 import { getTags, type Tag } from '@/api/tags';
 import type { Tenant } from '@/types';
-import { formatMoney } from '@/utils/table';
+import { formatMoney, formatDateOnly } from '@/utils/table';
 
 const loading = ref(false);
 const route=useRoute();
@@ -194,10 +241,6 @@ const rules: FormRules = {
   email: [
     { type: 'email', message: '请输入正确的邮箱', trigger: 'blur' },
   ],
-};
-
-const formatDate = (date: string) => {
-  return new Date(date).toLocaleString('zh-CN');
 };
 
 const fetchData = async () => {
@@ -282,6 +325,11 @@ const handleDelete = async (row: Tenant) => {
   }
 };
 
+function handleTenantCommand(command: string, row: Tenant) {
+  if (command === 'edit') handleEdit(row);
+  else if (command === 'delete') void handleDelete(row);
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return;
 
@@ -338,13 +386,50 @@ watch(()=>route.query.detail,id=>{if(typeof id==='string'){detailId.value=id;det
 .tenants-page {
   padding: 0;
 }
-.tag-cell {
+
+.tenant-lease strong,
+.tenant-balance strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tenant-lease small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tenant-tags {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
+  margin-top: 5px;
 }
-.tag-empty {
-  color: var(--text-muted, #8b897f);
-  font-size: 12px;
+.tenant-tags :deep(.el-tag) {
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
+}
+.tenant-tag-more {
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 18px;
+}
+.tenant-tag-empty {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
 }
 </style>

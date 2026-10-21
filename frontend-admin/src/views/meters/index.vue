@@ -26,46 +26,42 @@
       </el-form>
 
       <el-table :data="tableData" v-loading="loading" :empty-text="emptyText">
-        <el-table-column prop="meterNumber" label="表号" width="150" />
-        <el-table-column prop="meterType" label="类型" width="100">
+        <el-table-column label="表号 / 类型" min-width="200">
           <template #default="{ row }">
-            <el-tag :type="meterTypeColorMap[row.meterType]">
-              {{ meterTypeMap[row.meterType] }}
-            </el-tag>
+            <div class="meter-identity">
+              <strong :title="row.meterNumber">{{ row.meterNumber }}</strong>
+              <el-tag :type="meterTypeColorMap[row.meterType]" size="small">{{ meterTypeMap[row.meterType] }}</el-tag>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="房源" min-width="160">
-          <template #default="{ row }">{{ row.room?.roomNumber || '公共区域' }}</template>
-        </el-table-column>
-        <el-table-column prop="unitPrice" label="单价" width="120">
+
+        <el-table-column label="房源 / 价格" min-width="210">
           <template #default="{ row }">
-            ¥{{ (row.unitPrice / 100).toFixed(2) }}/{{ unitMap[row.meterType] }}
+            <div class="meter-room">
+              <strong>{{ row.room?.roomNumber || '公共区域' }}</strong>
+              <small>¥{{ (row.unitPrice / 100).toFixed(2) }}/{{ unitMap[row.meterType] }} · 生效 {{ row.priceEffectiveDate.split('T')[0] }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="priceEffectiveDate" label="价格生效日期" width="140">
+
+        <el-table-column label="状态 / 创建" width="140">
           <template #default="{ row }">
-            {{ row.priceEffectiveDate.split('T')[0] }}
+            <div class="meter-state">
+              <el-tag :type="row.isActive ? 'success' : 'info'" size="small">{{ row.isActive ? '启用' : '停用' }}</el-tag>
+              <small>创建 {{ new Date(row.createdAt).toLocaleDateString('zh-CN') }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="isActive" label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.isActive ? 'success' : 'info'">
-              {{ row.isActive ? '启用' : '停用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="180">
-          <template #default="{ row }">
-            {{ new Date(row.createdAt).toLocaleString('zh-CN') }}
-          </template>
-        </el-table-column>
+
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link :disabled="!row.isActive" @click="handleReading(row as Meter)">读数</el-button>
-            <el-button type="warning" link :disabled="!row.isActive" @click="handleOpenSettle(row as Meter)">结算</el-button>
-            <el-button type="primary" link @click="handleViewReadings(row as Meter)">记录</el-button>
-            <el-button type="primary" link @click="handleEdit(row as Meter)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row as Meter)">删除</el-button>
+            <div class="table-actions">
+              <el-button class="table-action table-action--primary" :disabled="!row.isActive" @click="handleReading(row as Meter)">读数</el-button>
+              <el-button class="table-action table-action--warn" :disabled="!row.isActive" @click="handleOpenSettle(row as Meter)">结算</el-button>
+              <el-button class="table-action" @click="handleViewReadings(row as Meter)">记录</el-button>
+              <el-button class="table-action" @click="handleEdit(row as Meter)">编辑</el-button>
+              <el-button class="table-action table-action--danger" @click="handleDelete(row as Meter)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -399,4 +395,43 @@ onMounted(fetchData);
 
 <style scoped>
 .meters-page { padding: 0; }
+
+.meter-identity,
+.meter-room,
+.meter-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
+.meter-identity strong,
+.meter-room strong {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meter-room small,
+.meter-state small {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meter-identity :deep(.el-tag),
+.meter-state :deep(.el-tag) {
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
+}
 </style>

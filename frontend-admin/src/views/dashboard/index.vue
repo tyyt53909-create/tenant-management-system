@@ -19,7 +19,7 @@
             <div class="month-grid"><span v-for="label in weekdays" :key="label" class="weekday">{{ label }}</span>
               <template v-for="(day, index) in days" :key="index"><span v-if="!day" /><button v-else :class="['calendar-day', { selected: selectedDay === day, today: todayKey === dayKey(day) }]" :aria-label="`${month + 1}月${day}日`" :aria-pressed="selectedDay === day" @click="selectedDay = day">{{ day }}<i v-if="billDays.has(dayKey(day))" /></button></template>
             </div></div>
-            <div class="day-agenda"><span class="agenda-caption">选中日期</span><div class="agenda-number">{{ selectedDay }}<small>日</small></div><span class="agenda-caption">{{ year }} 年 {{ month + 1 }} 月</span>
+            <div :key="`${year}-${month}-${selectedDay}`" class="day-agenda"><span class="agenda-caption">选中日期</span><div class="agenda-number">{{ selectedDay }}<small>日</small></div><span class="agenda-caption">{{ year }} 年 {{ month + 1 }} 月</span>
               <router-link v-for="bill in dayBills.slice(0, 3)" :key="bill.id" to="/bills" class="agenda-event"><strong>{{ bill.billType === 'RENT' ? '租金账单' : '费用账单' }}到期</strong><span>{{ bill.contract?.room?.roomNumber || bill.billNumber }} · {{ formatMoney(bill.amount) }}</span></router-link>
               <p v-if="!dayBills.length" class="agenda-empty">这一天没有近期账单到期。<br>片刻从容，有序生活。</p><router-link to="/bills" class="agenda-link">查看全部账单 →</router-link>
             </div>
@@ -191,13 +191,18 @@ onMounted(loadDashboard);
 .month-heading button:active{transform:scale(0.94)}
 .month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .weekday{font-size:var(--font-micro);text-align:center;color:var(--text-subtle);padding:4px 0 10px}
-.calendar-day{position:relative;height:36px;border:0;border-radius:8px;background:transparent;color:#69675f;font-size:12px;transition:transform .18s cubic-bezier(.16,1,.3,1),background .18s ease;cursor:pointer}
-.calendar-day:hover{background:#f1eee8;transform:scale(1.08)}
+.calendar-day{position:relative;height:36px;border:0;border-radius:8px;background:transparent;color:#69675f;font-size:12px;cursor:pointer;transform:translateZ(0);transition:transform .38s cubic-bezier(.22,1,.36,1),background-color .3s ease,color .24s ease,box-shadow .38s cubic-bezier(.22,1,.36,1)}
+.calendar-day:hover{background:#f1eee8;transform:scale(1.07)}
+.calendar-day:active{transform:scale(.92);transition-duration:.12s}
+.calendar-day:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .calendar-day.today{font-weight:700;color:#535b43}
-.calendar-day.selected{background:var(--primary);color:white;transform:scale(1.04)}
+.calendar-day.selected{background:var(--primary);color:white;transform:scale(1.04);box-shadow:0 5px 14px rgba(83,91,67,.2),0 0 0 3px rgba(83,91,67,.08);animation:calendar-day-select .42s cubic-bezier(.22,1,.36,1)}
+.calendar-day.selected:active{transform:scale(.97);transition-duration:.1s}
 .calendar-day i{position:absolute;bottom:4px;left:calc(50% - 2px);width:3px;height:3px;border-radius:50%;background:#b87648}
 .calendar-day.selected i{background:#ede4c8}
-.day-agenda{padding-left:21px;border-left:1px solid #eeeae1}
+@keyframes calendar-day-select{0%{transform:scale(.9)}55%{transform:scale(1.09)}100%{transform:scale(1.04)}}
+.day-agenda{padding-left:21px;border-left:1px solid #eeeae1;animation:agenda-in .34s cubic-bezier(.22,1,.36,1) both}
+@keyframes agenda-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 .agenda-caption{font-size:var(--font-micro);color:var(--text-subtle)}
 .agenda-number{font-size:43px;font-weight:500;letter-spacing:-.05em;margin:7px 0 5px}
 .agenda-number small{font-size:12px;letter-spacing:0;margin-left:5px;color:var(--text-muted)}

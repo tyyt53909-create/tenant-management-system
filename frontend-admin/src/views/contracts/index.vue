@@ -29,55 +29,72 @@
         :empty-text="emptyText"
         :default-sort="{ prop: 'endDate', order: 'descending' }"
       >
-        <el-table-column prop="contractNumber" label="合同 / 签约人" :min-width="detailVisible ? 200 : 250" sortable><template #default="{row}"><button class="record-cell" @click="openDetail(row as Contract)"><span class="record-glyph"><el-icon><Document /></el-icon></span><span><strong>{{ row.contractNumber }}</strong><small>{{ row.room?.roomNumber || '未关联房源' }} · {{ row.tenant?.name || '未关联租客' }}</small></span></button></template></el-table-column>
-        <el-table-column v-if="detailVisible" prop="endDate" sort-by="endDateOnly" label="合同期限" width="130" sortable><template #default="{row}">{{ formatDateOnly(row.startDate) }}<span class="table-subline">{{ formatDateOnly(row.endDate) }}</span></template></el-table-column>
-        <el-table-column v-if="!detailVisible" prop="startDate" sort-by="startDateOnly" label="开始日期" width="120" sortable>
+        <el-table-column prop="contractNumber" label="合同 / 签约人" min-width="260" sortable>
           <template #default="{ row }">
-            {{ formatDateOnly(row.startDate) }}
+            <button class="record-cell" @click="openDetail(row as Contract)">
+              <span class="record-glyph"><el-icon><Document /></el-icon></span>
+              <span>
+                <strong :title="row.contractNumber">{{ row.contractNumber }}</strong>
+                <small :title="`${row.room?.roomNumber || '未关联房源'} · ${row.tenant?.name || '未关联租客'}`">
+                  {{ row.room?.roomNumber || '未关联房源' }} · {{ row.tenant?.name || '未关联租客' }}
+                </small>
+              </span>
+            </button>
           </template>
         </el-table-column>
-        <el-table-column v-if="!detailVisible" prop="endDate" sort-by="endDateOnly" label="结束日期" width="120" sortable>
+
+        <el-table-column prop="endDate" label="合同期限 / 付款" width="150" sortable>
           <template #default="{ row }">
-            {{ formatDateOnly(row.endDate) }}
+            <div class="contract-term">
+              <strong>{{ formatDateOnly(row.startDate) }}</strong>
+              <small>至 {{ formatDateOnly(row.endDate) }} · {{ paymentCycleMap[row.paymentCycle] }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column v-if="detailVisible" prop="rentAmount" label="租金 / 押金" width="125" sortable><template #default="{row}">{{ formatMoney(row.rentAmount) }}<span class="table-subline">押金 {{ formatMoney(row.depositAmount) }}</span></template></el-table-column>
-        <el-table-column v-if="!detailVisible" prop="rentAmount" sort-by="rentAmount" label="租金" width="120" sortable>
+
+        <el-table-column prop="rentAmount" sort-by="rentAmount" label="租金 / 押金" width="140" sortable>
           <template #default="{ row }">
-            {{ formatMoney(row.rentAmount) }}
+            <div class="contract-money">
+              <strong>{{ formatMoney(row.rentAmount) }}</strong>
+              <small>押金 {{ formatMoney(row.depositAmount) }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column v-if="!detailVisible" prop="depositAmount" sort-by="depositAmount" label="押金" width="120" sortable>
+
+        <el-table-column prop="status" label="状态" width="150">
           <template #default="{ row }">
-            {{ formatMoney(row.depositAmount) }}
+            <div class="contract-status">
+              <el-tag :type="statusTypeMap[row.status]">{{ statusMap[row.status] }}</el-tag>
+              <el-tooltip
+                v-if="row.status === 'RENEWED' || row.renewedFromId"
+                placement="top"
+                :content="row.status === 'RENEWED' ? '本合同已被新合同替代，可用「续签」查看链路' : '本合同由上一份合同续签而来'"
+              >
+                <el-tag type="info" size="small" effect="plain">
+                  {{ row.status === 'RENEWED' ? '已续签' : '续签而来' }}
+                </el-tag>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="paymentCycle" label="付款周期" :width="detailVisible ? 75 : 100">
+
+        <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            {{ paymentCycleMap[row.paymentCycle] }}
-          </template>
-        </el-table-column>
-        <!-- 续签关系合并进状态列：原先单列「续签」多为「—」，占位无信息 -->
-        <el-table-column prop="status" label="状态" :width="detailVisible ? 85 : 150">
-          <template #default="{ row }">
-            <el-tag :type="statusTypeMap[row.status]">
-              {{ statusMap[row.status] }}
-            </el-tag>
-            <el-tooltip
-              v-if="row.status === 'RENEWED' || row.renewedFromId"
-              placement="top"
-              :content="row.status === 'RENEWED' ? '本合同已被新合同替代，可用「续签」查看链路' : '本合同由上一份合同续签而来'"
-            >
-              <el-tag type="info" size="small" effect="plain" style="margin-left: 4px">
-                {{ row.status === 'RENEWED' ? '已续签' : '续签而来' }}
-              </el-tag>
-            </el-tooltip>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link @click="openDetail(row as Contract)">详情</el-button>
-            <el-dropdown><el-button text aria-label="更多合同操作">···</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item :disabled="!canRenew(row as Contract)" @click="handleRenew(row as Contract)">发起续签</el-dropdown-item><el-dropdown-item @click="handleEdit(row as Contract)">编辑合同</el-dropdown-item><el-dropdown-item @click="handleDelete(row as Contract)">删除合同</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+            <div class="table-actions">
+              <el-button class="table-action" @click="openDetail(row as Contract)">详情</el-button>
+              <el-dropdown trigger="click" @command="handleContractCommand($event, row as Contract)">
+                <el-button class="table-action table-action--icon" aria-label="更多合同操作">
+                  <el-icon><MoreFilled /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="renew" :disabled="!canRenew(row as Contract)">发起续签</el-dropdown-item>
+                    <el-dropdown-item command="edit">编辑合同</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided style="color: var(--error-text)">删除合同</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -209,7 +226,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { formatMoney, formatDateOnly } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Document } from '@element-plus/icons-vue';
+import { Document, MoreFilled } from '@element-plus/icons-vue';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
 import ExportCurrent from '@/components/common/ExportCurrent.vue';
@@ -366,6 +383,12 @@ const handleDelete = async (row: Contract) => {
   }
 };
 
+function handleContractCommand(command: string, row: Contract) {
+  if (command === 'renew') handleRenew(row);
+  else if (command === 'edit') handleEdit(row);
+  else if (command === 'delete') void handleDelete(row);
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return;
   await formRef.value.validate(async (valid) => {
@@ -478,4 +501,35 @@ watch(detailVisible,open=>{if(!open&&route.query.detail===detailId.value)void ro
 .contracts-page { padding: 0; }
 .muted { color: var(--text-muted); }
 .hint { margin-left: 8px; color: var(--text-muted); font-size: 12px; }
+
+.contract-term strong,
+.contract-money strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.contract-term small,
+.contract-money small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contract-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.contract-status :deep(.el-tag) {
+  height: 18px;
+  padding: 0 5px;
+  font-size: var(--font-micro);
+}
 </style>
