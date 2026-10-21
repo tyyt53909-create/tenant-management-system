@@ -2,10 +2,10 @@
   <section class="contract-plan" :aria-label="`${renderModel.building.name} 空间平面`">
     <div class="plan-summary" aria-label="房源统计">
       <span>共 {{ renderModel.summary.total }} 间</span><span>已租 {{ renderModel.summary.occupied }}</span>
-      <span>可租 {{ renderModel.summary.rentable }}</span><span>{{ renderModel.layoutMode }}</span>
+      <span>可租 {{ renderModel.summary.rentable }}</span><span>{{ layoutLabel(renderModel.layoutMode) }}</span>
     </div>
     <div v-for="floor in renderModel.floors" :key="floor.floor" class="floor-card">
-      <header><strong>{{ floor.floor }}F</strong><span>{{ floor.layoutMode }}</span></header>
+      <header><strong>{{ floor.floor }}F</strong><span>{{ layoutLabel(floor.layoutMode) }}</span></header>
       <div v-if="floor.rooms.length === 0 && floor.unplacedRooms.length === 0" class="empty-floor">此层暂无房源</div>
       <svg v-else class="floor-svg" viewBox="0 0 820 250" role="group" :aria-label="`${floor.floor}层平面图`" preserveAspectRatio="xMidYMid meet">
         <g v-for="room in floor.rooms" :key="room.id" class="room" :class="{ selected: selectedId === room.id }"
@@ -36,6 +36,7 @@ import { buildSpaceContractModel, CONTRACT_STATE_META, type ContractRenderRoom }
 const props = defineProps<{ model: SpaceModelContract; selectedId?: string }>();
 defineEmits<{ select: [room: ContractRenderRoom] }>();
 const renderModel = computed(() => buildSpaceContractModel(props.model));
+const layoutLabel = (mode: string) => mode === 'AUTHORED' ? '平面图' : mode === 'MIXED' ? '混合' : '示意图';
 const scaleX = computed(() => 760 / Math.max(1, ...renderModel.value.floors.map((floor) => floor.width)));
 const scaleY = computed(() => 210 / Math.max(1, ...renderModel.value.floors.map((floor) => floor.depth)));
 const bounds = (room: ContractRenderRoom) => {

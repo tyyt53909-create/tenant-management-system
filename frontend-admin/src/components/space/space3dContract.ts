@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import type { SpaceRoomContract, SpaceShape, SpaceState } from '@/types/space';
 
 export const SPACE_STATE_STYLE: Record<SpaceState, { label: string; color: string }> = {
-  OCCUPIED: { label: '已出租', color: '#82927a' },
-  RESERVED: { label: '已预订', color: '#c3a36f' },
-  RENTABLE: { label: '可出租', color: '#a8b995' },
-  PENDING_CLEAN: { label: '待清洁', color: '#d2a36c' },
-  CLEANING: { label: '清洁中', color: '#8eabb0' },
-  MAINTENANCE: { label: '维修中', color: '#bd8175' },
+  OCCUPIED: { label: '已出租', color: '#6b8ba6' },
+  RESERVED: { label: '已预订', color: '#9a84a8' },
+  RENTABLE: { label: '可出租', color: '#6f9a66' },
+  PENDING_CLEAN: { label: '待清洁', color: '#d47a55' },
+  CLEANING: { label: '清洁中', color: '#c45d4c' },
+  MAINTENANCE: { label: '维修中', color: '#a6473c' },
   UNKNOWN: { label: '状态异常', color: '#9b8fa8' },
 };
 

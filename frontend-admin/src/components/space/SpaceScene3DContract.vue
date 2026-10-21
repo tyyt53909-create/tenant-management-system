@@ -58,6 +58,7 @@ let disposed = false;
 let pointerDown: { x: number; y: number } | undefined;
 let materialMap = new Map<string, THREE.MeshStandardMaterial>();
 let selectionLines: THREE.LineSegments | undefined;
+let shell: THREE.Group | undefined;
 
 function requestRender() {
   if (disposed || frame) return;
@@ -82,8 +83,8 @@ function fit(target: THREE.Object3D = root!) {
   requestRender();
 }
 function materialFor(room: SpaceRoomContract) {
-  const alertColor = roomAlertColor(room);
-  const color = alertColor || SPACE_STATE_STYLE[room.state].color;
+  // 房間底色只代表房態；逾期/到期/報修是額外標記，不覆蓋房態顏色。
+  const color = SPACE_STATE_STYLE[room.state].color;
   if (!materialMap.has(color)) materialMap.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.02 }));
   return materialMap.get(color)!;
 }
@@ -97,6 +98,7 @@ function disposeRoot() {
   scene?.remove(root);
   materialMap.forEach((material) => material.dispose());
   materialMap.clear();
+  shell = undefined;
 }
 function build() {
   if (!scene) return;
@@ -128,13 +130,48 @@ function build() {
       mesh.userData.room = room; mesh.userData.floor = floor.floor;
       group.add(mesh); meshes.push(mesh);
       if (room.alerts.length) {
-        const marker = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: roomAlertColor(room) }));
-        const box = new THREE.Box3().setFromObject(mesh);
-        marker.position.set(box.max.x - root!.position.x - 0.28, 2.65, box.min.z - root!.position.z + 0.28);
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.22, 8, 6),
+          new THREE.MeshBasicMaterial({ color: roomAlertColor(room) }),
+        );
+        const firstPoint = shape.kind === 'POLYGON' ? shape.points[0] : [shape.x, shape.y];
+        marker.position.set(
+          (firstPoint?.[0] ?? 0) + 0.35,
+          2.65,
+          (firstPoint?.[1] ?? 0) + 0.35,
+        );
+        marker.userData.temporaryMaterial = true;
         group.add(marker);
       }
     });
   }
+  shell = new THREE.Group();
+  shell.visible = !exploded.value;
+  const topY = Math.max(5, floors.length * 3.2 + 2.7);
+  const frameMaterial = new THREE.MeshStandardMaterial({ color: '#c9c1b3', roughness: 0.9 });
+  for (const x of [0, maxWidth]) {
+    for (const z of [0, maxDepth]) {
+      const column = new THREE.Mesh(new THREE.BoxGeometry(0.22, topY, 0.22), frameMaterial);
+      column.position.set(x, topY / 2, z);
+      column.userData.temporaryMaterial = true;
+      shell.add(column);
+    }
+  }
+  const roofFrame = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(maxWidth + 1.1, 0.08, maxDepth + 1.1)),
+    new THREE.LineBasicMaterial({ color: '#b9b0a1', transparent: true, opacity: 0.72 }),
+  );
+  roofFrame.position.set(maxWidth / 2, topY + 0.12, maxDepth / 2);
+  roofFrame.userData.temporaryMaterial = true;
+  shell.add(roofFrame);
+  const plinth = new THREE.Mesh(
+    new THREE.BoxGeometry(maxWidth + 1.3, 0.22, maxDepth + 1.3),
+    new THREE.MeshStandardMaterial({ color: '#ddd6c9', roughness: 1 }),
+  );
+  plinth.position.set(maxWidth / 2, -0.24, maxDepth / 2);
+  plinth.userData.temporaryMaterial = true;
+  shell.add(plinth);
+  root.add(shell);
   scene.add(root);
   selectionLines = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: '#29352c', linewidth: 2 }));
   selectionLines.visible = false; scene.add(selectionLines);
@@ -161,6 +198,7 @@ function applyFloor() {
 }
 function toggleExploded() {
   exploded.value = !exploded.value;
+  if (shell) shell.visible = !exploded.value;
   floors.forEach((group) => { group.position.y = (group.userData.baseY as number) + (exploded.value ? Number(group.userData.level) * 1.5 : 0); });
   fit();
 }
