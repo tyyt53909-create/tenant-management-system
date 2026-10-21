@@ -25,6 +25,7 @@
           </el-option>
         </el-select>
         <el-button :loading="spaceLoading" @click="loadSpace">刷新</el-button>
+        <el-button @click="router.push({ path: '/space/editor', query: { building: buildingId } })">编辑平面图</el-button>
       </div>
     </section>
 
