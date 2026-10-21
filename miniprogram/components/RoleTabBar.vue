@@ -41,10 +41,14 @@ export default {
 <style scoped>
 .role-tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
+  left: 50%;
   bottom: 0;
   z-index: 40;
+  width: 100%;
+  /* 与 pages.json 的 rpxCalcMaxDeviceWidth 保持一致：H5 宽屏时与内容区同宽居中 */
+  max-width: 430px;
+  box-sizing: border-box;
+  transform: translateX(-50%);
   display: flex;
   align-items: flex-start;
   padding: 14rpx 24rpx calc(12rpx + env(safe-area-inset-bottom));
