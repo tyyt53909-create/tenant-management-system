@@ -1,13 +1,13 @@
 ---
-status: in_progress
+status: completed
 task_id: T227
 stage: 第五阶段（房源空间可视化 / Wave 2）
 priority: P1
 model_tier: 强
 branch: feature/T227-space-roles-mini
 start_time: 2026-10-21
-complete_time: null
-handoff: null
+complete_time: 2026-10-21
+handoff: docs/handoff/2026-10-21-T225-T227-房源模型Wave2.md
 ---
 
 # T227: CLEANER / TENANT 空间视图（小程序）
@@ -73,4 +73,6 @@ T222 的 Space API 已支援 CLEANER / TENANT 投影。T227 把空间视图下�
 - 工作树：`/Users/Admin/ai/tenant-system-worktrees/T227-space-roles-mini`
 - 基线：`feature/T221-space-platform` @ `2adfdfd`
 - 开始时间：2026-10-21
-- 状态：in_progress
+- 完成时间：2026-10-21
+- 合并 PR：#43、#47
+- 状态：completed
