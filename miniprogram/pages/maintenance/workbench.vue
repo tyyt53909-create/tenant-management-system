@@ -9,8 +9,19 @@
       <button class="wb-logout" :disabled="loading || !!busyId" @tap="logout">退出</button>
     </view>
 
+    <view class="wb-brief">
+      <view class="wb-brief-main">
+        <text class="wb-brief-label">{{ viewLabel }}</text>
+        <text class="wb-brief-hint">{{ viewHint }}</text>
+      </view>
+      <view class="wb-brief-count">
+        <text class="wb-brief-number">{{ total }}</text>
+        <text class="wb-brief-unit">单</text>
+      </view>
+    </view>
+
     <view class="wb-toolbar">
-      <text>{{ authorized ? `当前 ${total} 单` : loading ? '正在确认登录身份' : '工单暂未加载' }}</text>
+      <text class="wb-sync">{{ loading ? '正在同步工单…' : '以最新工单状态为准' }}</text>
       <view class="wb-tools">
         <view class="wb-tool" @tap="goToNotifications">
           <text>通知</text>
@@ -33,26 +44,45 @@
 
     <view v-if="error" class="q-error" @tap="refresh">{{ error }} · 点此重试</view>
 
-    <view v-if="loading && orders.length === 0" class="q-skeleton"><view /><view /><view /></view>
-    <view v-else-if="!error && authorized && orders.length === 0" class="q-surface q-empty wb-empty">
+    <view v-if="loading && orders.length === 0" class="wb-skeleton">
+      <view v-for="n in 3" :key="n" class="wb-skeleton-card" />
+    </view>
+    <view v-else-if="!error && authorized && orders.length === 0" class="q-surface wb-empty">
+      <view class="wb-empty-icon"><QIcon name="check" :size="56" /></view>
       <text class="q-empty-title">{{ emptyTitle }}</text>
       <text>{{ emptyHint }}</text>
+      <button class="q-outline wb-empty-action" @tap="refresh">刷新任务</button>
     </view>
 
-    <view v-for="order in orders" :key="order.id" class="q-surface repair-card" @tap="openDetail(order.id)">
-      <view class="repair-icon"><QIcon name="repair" :size="46" /></view>
-      <view class="repair-copy">
-        <view class="repair-card-header">
-          <text>{{ order.title }}</text>
+    <view v-for="order in orders" :key="order.id" class="q-surface wb-card" @tap="openDetail(order.id)">
+      <view class="wb-room">
+        <text class="wb-room-number">{{ order.roomNumber }}</text>
+        <text class="wb-room-floor">{{ order.floor ? `${order.floor}F` : '—' }}</text>
+      </view>
+      <view class="wb-card-copy">
+        <view class="wb-card-head">
+          <text class="wb-card-title">{{ order.title }}</text>
           <text :class="['q-pill', statusClass(order)]">{{ statusLabel(order) }}</text>
         </view>
-        <text class="repair-description">{{ order.description }}</text>
-        <text class="repair-date">{{ order.buildingName }} · {{ order.roomNumber }} · {{ categoryLabel(order.category) }} · {{ formatDate(order.createdAt) }}<text v-if="order.priority === 'URGENT'" class="repair-urgent"> · 紧急</text></text>
+        <text class="wb-card-desc">{{ order.description }}</text>
+        <view class="wb-card-meta">
+          <text>{{ order.buildingName }}</text>
+          <text class="wb-sep">·</text>
+          <text>{{ categoryLabel(order.category) }}</text>
+          <text class="wb-sep">·</text>
+          <text>{{ formatDate(order.createdAt) }}</text>
+        </view>
+        <view class="wb-card-foot">
+          <view class="wb-tags">
+            <text v-if="order.priority === 'URGENT'" class="wb-tag wb-tag-urgent">紧急</text>
+            <text v-if="order.photoCount" class="wb-tag">{{ order.photoCount }} 张照片</text>
+          </view>
+          <button v-if="view === 'pool'" class="wb-claim" :disabled="loading || !!busyId" :loading="busyId === order.id" @tap.stop="claim(order)">
+            {{ order.isPool ? '接单' : '开始' }}
+          </button>
+          <text v-else class="wb-arrow">详情 ›</text>
+        </view>
       </view>
-      <button v-if="view === 'pool'" class="repair-claim" :disabled="loading || !!busyId" :loading="busyId === order.id" @tap.stop="claim(order)">
-        {{ order.isPool ? '接单' : '开始' }}
-      </button>
-      <text v-else class="repair-arrow">›</text>
     </view>
 
     <button v-if="authorized && orders.length > 0 && page < totalPages" class="wb-more" :disabled="loading || !!busyId" :loading="loading" @tap="loadMore">加载更多</button>
@@ -79,6 +109,16 @@ export default {
     }
   },
   computed: {
+    viewLabel() {
+      return { pool: '待接单', active: '进行中', done: '已完成' }[this.view]
+    },
+    viewHint() {
+      return {
+        pool: '公共池先接先得，紧急工单优先处理',
+        active: '已接下的工单，处理完请提交结果',
+        done: '确认完成的工单会留在这里',
+      }[this.view]
+    },
     emptyTitle() {
       return { pool: '公共池暂无待接工单', active: '没有进行中的工单', done: '还没有完成的工单' }[this.view]
     },
@@ -260,24 +300,54 @@ export default {
 .wb-heading { flex: 1; min-width: 0; }
 .wb-logout { flex-shrink: 0; margin: 0; padding: 16rpx 8rpx; background: transparent; color: #68715b; font-size: 24rpx; line-height: 1.5; }
 .wb-logout::after { border: none; }
-.wb-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; font-size: 24rpx; color: #817e76; margin-bottom: 8rpx; }
-.wb-tools { display: flex; align-items: center; gap: 24rpx; }
+
+.wb-brief { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; padding: 26rpx 30rpx; margin-bottom: 20rpx; border: 1rpx solid #dfe4d9; border-radius: 24rpx; background: #ecf0e9; }
+.wb-brief-main { flex: 1; min-width: 0; }
+.wb-brief-label { display: block; font-size: 24rpx; font-weight: 550; color: #4e5845; }
+.wb-brief-hint { display: block; margin-top: 8rpx; font-size: 20rpx; line-height: 1.6; color: #68715b; }
+.wb-brief-count { display: flex; align-items: baseline; gap: 4rpx; flex-shrink: 0; }
+.wb-brief-number { font-size: 56rpx; line-height: 1; letter-spacing: -2rpx; font-weight: 550; color: #4e5845; font-variant-numeric: tabular-nums; }
+.wb-brief-unit { font-size: 20rpx; color: #68715b; }
+
+.wb-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; font-size: 22rpx; color: #817e76; margin-bottom: 8rpx; }
+.wb-sync { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-tools { display: flex; align-items: center; gap: 24rpx; flex-shrink: 0; }
 .wb-tool { display: flex; align-items: center; gap: 6rpx; color: #68715b; }
 .wb-badge { min-width: 30rpx; height: 30rpx; line-height: 30rpx; padding: 0 8rpx; border-radius: 15rpx; background: #c16f62; color: #fffefa; font-size: 18rpx; text-align: center; }
-.wb-empty { margin-top: 24rpx; }
-.repair-card { display: flex; align-items: center; gap: 18rpx; padding: 28rpx 24rpx; margin-bottom: 22rpx; }
-.repair-icon { width: 70rpx; height: 76rpx; background: #ecf0e9; display: flex; align-items: center; justify-content: center; border-radius: 22rpx; flex-shrink: 0; }
-.repair-copy { flex: 1; min-width: 0; }
-.repair-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10rpx; }
-.repair-card-header > text:first-child { font-size: 24rpx; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.repair-description { display: block; font-size: 22rpx; color: #817e76; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 12rpx; }
-.repair-date { display: block; font-size: 19rpx; color: #a49f95; margin-top: 12rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.repair-urgent { color: #ad735a; }
-.repair-arrow { font-size: 32rpx; color: #a49f95; flex-shrink: 0; }
-.repair-claim { flex-shrink: 0; margin: 0; padding: 14rpx 22rpx; border-radius: 16rpx; background: #68715b; color: #fffefa; font-size: 22rpx; line-height: 1.4; }
-.repair-claim::after { border: none; }
+
+.wb-skeleton { display: flex; flex-direction: column; gap: 20rpx; margin-top: 24rpx; }
+.wb-skeleton-card { height: 190rpx; border-radius: 28rpx; background: #e9e5dc; animation: wb-pulse 1.5s ease-in-out infinite; }
+@keyframes wb-pulse { 50% { opacity: .5 } }
+
+.wb-empty { margin-top: 24rpx; padding: 56rpx 30rpx; display: flex; flex-direction: column; align-items: center; }
+.wb-empty-icon { width: 104rpx; height: 104rpx; border-radius: 50%; background: #ecf0e9; display: flex; align-items: center; justify-content: center; margin-bottom: 22rpx; }
+.wb-empty-action { margin-top: 26rpx; min-width: 220rpx; }
+
+.wb-card { display: flex; gap: 22rpx; padding: 28rpx 26rpx; margin-bottom: 20rpx; transition: transform .18s ease-out, background-color .18s ease-out; }
+.wb-card:active { transform: scale(.992); background: #fdfbf6; }
+.wb-room { width: 96rpx; height: 96rpx; align-self: flex-start; padding: 10rpx 6rpx; box-sizing: border-box; border-radius: 22rpx; background: #f0ece3; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; }
+.wb-room-number { font-size: 32rpx; line-height: 1.1; letter-spacing: -1rpx; font-weight: 600; color: #4e5845; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; text-align: center; }
+.wb-room-floor { margin-top: 6rpx; font-size: 18rpx; color: #8e8a80; }
+.wb-card-copy { flex: 1; min-width: 0; }
+.wb-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12rpx; }
+.wb-card-title { flex: 1; min-width: 0; font-size: 28rpx; font-weight: 550; line-height: 1.45; overflow-wrap: anywhere; }
+.wb-card-desc { margin-top: 10rpx; font-size: 22rpx; line-height: 1.7; color: #716b60; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.wb-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6rpx; margin-top: 14rpx; font-size: 19rpx; color: #8e8a80; }
+.wb-sep { color: #c9c4b8; }
+.wb-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 18rpx; }
+.wb-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 10rpx; flex: 1; min-width: 0; }
+.wb-tag { padding: 6rpx 12rpx; border-radius: 10rpx; background: #f0ece3; color: #716b60; font-size: 18rpx; line-height: 1.5; }
+.wb-tag-urgent { background: #f8ece5; color: #ad735a; }
+.wb-claim { flex-shrink: 0; margin: 0; padding: 16rpx 26rpx; border-radius: 16rpx; background: #68715b; color: #fffefa; font-size: 22rpx; line-height: 1.4; }
+.wb-claim::after { border: none; }
+.wb-arrow { flex-shrink: 0; font-size: 20rpx; color: #8e8a80; }
+
 .wb-more { margin-top: 8rpx; padding: 22rpx; background: transparent; color: #68715b; font-size: 24rpx; border: 1rpx solid #d7d8cc; border-radius: 20rpx; }
 .wb-more::after { border: none; }
-.wb-end { display: block; text-align: center; padding: 24rpx; font-size: 20rpx; color: #a49f95; }
+.wb-end { display: block; text-align: center; padding: 24rpx; font-size: 20rpx; color: #8e8a80; }
 button[disabled] { opacity: .55; }
+@media (prefers-reduced-motion: reduce) {
+  .wb-card { transition: none; }
+  .wb-skeleton-card { animation: none; }
+}
 </style>
