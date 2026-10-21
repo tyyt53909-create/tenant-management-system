@@ -19,7 +19,7 @@ export class MaintenanceController {
 
   @Post()
   @UseGuards(RolesGuard, CapabilityGuard)
-  @Roles('TENANT', 'ADMIN')
+  @Roles('TENANT', 'ADMIN', 'CLEANER', 'MAINTENANCE')
   @RequireCapability('tenant.maintenance.create')
   create(@CurrentUser() userParam: CurrentUserParam, @Body() createMaintenanceDto: CreateMaintenanceDto) {
     const user = resolveAuthUser(userParam);
@@ -59,6 +59,14 @@ export class MaintenanceController {
   findWorkbenchOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
     const user = resolveAuthUser(userParam);
     return this.maintenanceService.findOneForWorker(id, user.userId);
+  }
+
+  // 管理处联系方式（保洁/维修/管理员）
+  @Get('contact')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'CLEANER', 'MAINTENANCE')
+  findContact() {
+    return this.maintenanceService.findStaffContact();
   }
 
   // 管理员派单候选人（静态路径必须声明在 :id 之前）

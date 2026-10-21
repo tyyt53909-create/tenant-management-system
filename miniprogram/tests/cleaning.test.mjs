@@ -292,6 +292,12 @@ test('保洁设置页读取账号与未读，并可进入主题设置', async ()
   assert.deepEqual(navigation, ['/pages/theme/theme'])
 })
 
+test('保洁任务卡片可带房间进入上报页', () => {
+  const vm = instance(cleaningPage)
+  vm.reportIssue({ id: 'room-1', roomNumber: '101', buildingName: 'A栋' })
+  assert.deepEqual(navigation, ['/pages/staff-report/report?roomId=room-1&roomName=101&buildingName=A%E6%A0%8B'])
+})
+
 test('保洁工作台按待清洁/清洁中本地切换', () => {
   const vm = instance(cleaningPage)
   vm.authorized = true

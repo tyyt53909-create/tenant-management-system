@@ -231,7 +231,7 @@ test('工作台只保留维修所需字段，不泄露租客资料', async () =>
   assert.equal(vm.orders.length, 1)
   assert.deepEqual(Object.keys(vm.orders[0]).sort(), [
     'assignedTo', 'buildingName', 'category', 'createdAt', 'description', 'floor',
-    'id', 'isPool', 'photoCount', 'priority', 'roomNumber', 'status', 'title',
+    'id', 'isPool', 'photoCount', 'priority', 'roomId', 'roomNumber', 'status', 'title',
   ])
   assert.ok(!JSON.stringify(vm.orders).includes('PRIVATE'))
   assert.ok(!JSON.stringify(vm.orders).includes('13800000000'))
@@ -245,6 +245,12 @@ test('非维修角色打开工作台会被送回自己的首页', async () => {
   assert.equal(vm.authorized, false)
   assert.equal(vm.orders.length, 0)
   assert.deepEqual(navigation, ['/pages/index/index'])
+})
+
+test('维修工单可带房间进入上报页', () => {
+  const vm = instance(workbenchPage)
+  vm.reportIssue({ roomId: 'room-1', roomNumber: '101', buildingName: 'A栋' })
+  assert.deepEqual(navigation, ['/pages/staff-report/report?roomId=room-1&roomName=101&buildingName=A%E6%A0%8B'])
 })
 
 test('接单成功后重新拉取列表，避免显示过期状态', async () => {

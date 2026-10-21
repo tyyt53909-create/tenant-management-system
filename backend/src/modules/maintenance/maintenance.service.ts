@@ -55,7 +55,7 @@ export class MaintenanceService {
 
   async create(dto: CreateMaintenanceDto, user: { userId: string; role: string; tenantId?: string }) {
     let roomId = dto.roomId;
-    let tenantId = dto.tenantId;
+    let tenantId: string | null | undefined = dto.tenantId;
 
     if (user.role === 'TENANT') {
       // 租客自助报修：租客身份与房间均由服务端推导（忽略请求体中的 ID，防伪造）
@@ -74,20 +74,35 @@ export class MaintenanceService {
 
       tenantId = user.tenantId;
       roomId = contract.roomId;
+    } else if (user.role === 'CLEANER' || user.role === 'MAINTENANCE') {
+      // T225：保洁/维修巡查上报。房间由请求指定；有生效合同时自动关联租客，
+      // 空置房/公共区域则允许 tenantId 为空，不再伪造租客。
+      if (!dto.roomId) {
+        throw new BadRequestException('请选择要上报的房间');
+      }
+      roomId = dto.roomId;
+      const contract = await this.prisma.contract.findFirst({
+        where: { roomId, status: 'ACTIVE' as const },
+        select: { tenantId: true },
+      });
+      tenantId = contract?.tenantId ?? null;
     }
 
-    if (!roomId || !tenantId) {
+    if (!roomId) {
+      throw new BadRequestException('请指定房间');
+    }
+    if (user.role === 'ADMIN' && !tenantId) {
       throw new BadRequestException('管理员需指定 roomId 与 tenantId');
     }
 
-    // 验证房源和租客存在
+    // 验证房源；租客存在时一并验证（空置房工单可以没有租客）
     const [room, tenant] = await Promise.all([
       this.prisma.room.findUnique({ where: { id: roomId } }),
-      this.prisma.tenant.findUnique({ where: { id: tenantId } }),
+      tenantId ? this.prisma.tenant.findUnique({ where: { id: tenantId } }) : Promise.resolve(null),
     ]);
 
     if (!room) throw new BadRequestException('房源不存在');
-    if (!tenant) throw new BadRequestException('租客不存在');
+    if (tenantId && !tenant) throw new BadRequestException('租客不存在');
 
     // 照片与工单同事务落库，避免「有照片记录但无工单」的中间态。
     // MaintenancePhoto.fileSize 为必填：优先取上报的大小，取不到以 0 占位
@@ -100,7 +115,8 @@ export class MaintenanceService {
       const request = await tx.maintenanceRequest.create({
         data: {
           roomId,
-          tenantId,
+          tenantId: tenantId ?? null,
+          createdById: user.userId,
           title: dto.title,
           description: dto.description,
           category: dto.category as MaintenanceCategory,
@@ -338,6 +354,27 @@ export class MaintenanceService {
     }
 
     return this.findOneForWorker(id, userId);
+  }
+
+  /** 管理处联系方式：供保洁/维修遇到问题时联系。 */
+  async findStaffContact() {
+    const building = await this.prisma.building.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { name: true, metadata: true },
+    });
+    const meta = (building?.metadata as Record<string, unknown> | null) ?? {};
+    const text = (value: unknown, fallback: string) =>
+      typeof value === 'string' && value.trim() ? value.trim() : fallback;
+
+    return {
+      buildingName: building?.name ?? '',
+      name: text(meta.landlordName ?? meta.managerName, '管理处'),
+      phone: text(meta.landlordPhone ?? meta.managerPhone, ''),
+      wechat: text(meta.landlordWechat ?? meta.managerWechat, ''),
+      serviceHours: text(meta.serviceHours, '09:00 - 21:00'),
+      notice: text(meta.notice, '遇到无法处理的问题，请联系管理处。'),
+    };
   }
 
   /** 管理员派单候选人：启用中的维修人员。 */

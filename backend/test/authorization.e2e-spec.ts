@@ -205,6 +205,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
             complete: vi.fn().mockResolvedValue({ id: 'mr-pool', status: 'PENDING_CONFIRM' }),
             release: vi.fn().mockResolvedValue({ id: 'mr-pool', status: 'ASSIGNED' }),
             findAssignees: vi.fn().mockResolvedValue([]),
+            findStaffContact: vi.fn().mockResolvedValue({ name: '管理处', phone: '13800138000' }),
             create: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
@@ -448,6 +449,14 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
     it('GET /maintenance/assignees 仅管理员可访问', async () => {
       await as(request(app.getHttpServer()).get('/maintenance/assignees'), 'ADMIN').expect(200);
       await as(request(app.getHttpServer()).get('/maintenance/assignees'), 'MAINTENANCE').expect(403);
+    });
+
+    it('POST /maintenance 保洁/维修可上报，租客不可访问 contact', async () => {
+      await as(request(app.getHttpServer()).post('/maintenance').send({ roomId: 'room-1', title: '巡查发现问题', description: '灯坏了', category: 'ELECTRICAL' }), 'CLEANER').expect(201);
+      await as(request(app.getHttpServer()).post('/maintenance').send({ roomId: 'room-1', title: '巡查发现问题', description: '灯坏了', category: 'ELECTRICAL' }), 'MAINTENANCE').expect(201);
+      await as(request(app.getHttpServer()).get('/maintenance/contact'), 'CLEANER').expect(200);
+      await as(request(app.getHttpServer()).get('/maintenance/contact'), 'MAINTENANCE').expect(200);
+      await as(request(app.getHttpServer()).get('/maintenance/contact'), 'TENANT', 'tenant-self').expect(403);
     });
 
     it('维修人员不能访问管理/租客接口', async () => {

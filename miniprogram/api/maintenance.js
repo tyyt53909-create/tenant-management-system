@@ -31,6 +31,12 @@ export const getMyMaintenance = (params) => {
 export const getMaintenanceDetail = (id) => request.get(`/maintenance/${encodeURIComponent(id)}`)
 
 /**
+ * 管理处联系方式（保洁/维修/管理员）
+ * @returns {Promise<{ buildingName: string, name: string, phone: string, wechat: string, serviceHours: string, notice: string }>}
+ */
+export const getStaffContact = () => request.get('/maintenance/contact')
+
+/**
  * 创建新报修工单
  * @param {CreateMaintenancePayload} data
  * @returns {Promise<any>}

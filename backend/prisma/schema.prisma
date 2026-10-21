@@ -374,6 +374,7 @@ model User {
   notifications       Notification[]
   deviceTokens        DeviceToken[]
   capabilityOverrides UserCapabilityOverride[]
+  reportedMaintenance MaintenanceRequest[] @relation("ReportedMaintenance")
 
   createdInviteCodes InviteCode[] @relation("CreatedInviteCodes")
   usedInviteCode     InviteCode?  @relation("UsedInviteCode")
@@ -531,8 +532,8 @@ model LateFee {
 // 11. PrepayAccount（预付账户）
 model PrepayAccount {
   id       String @id @default(cuid())
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
   roomId   String
 
   balanceCache        Int @default(0)
@@ -633,8 +634,8 @@ model MaintenanceRequest {
   id       String @id @default(cuid())
   roomId   String
   room     Room   @relation(fields: [roomId], references: [id])
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
 
   title       String
   description String              @db.Text
@@ -654,7 +655,11 @@ model MaintenanceRequest {
 
   photos MaintenancePhoto[]
 
+  createdById String?
+  createdBy   User?   @relation("ReportedMaintenance", fields: [createdById], references: [id], onDelete: SetNull)
+
   @@index([roomId, status])
+  @@index([createdById])
   @@index([tenantId, status])
   @@index([status, createdAt])
   @@map("maintenance_requests")

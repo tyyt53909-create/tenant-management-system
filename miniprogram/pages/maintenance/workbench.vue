@@ -97,6 +97,7 @@
           <view class="wb-tags">
             <text v-if="order.priority === 'URGENT'" class="wb-tag wb-tag-urgent">紧急</text>
             <text v-if="order.photoCount" class="wb-tag">{{ order.photoCount }} 张照片</text>
+            <text v-if="order.roomId" class="wb-tag wb-tag-report" @tap.stop="reportIssue(order)">上报问题</text>
           </view>
           <button v-if="view === 'pool'" class="wb-claim" :disabled="loading || !!busyId" :loading="busyId === order.id" @tap.stop="claim(order)">
             {{ order.isPool ? '接单' : '开始' }}
@@ -243,6 +244,7 @@ export default {
         status: order.status,
         assignedTo: order.assignedTo,
         isPool: order.status === 'ASSIGNED' && !order.assignedTo,
+        roomId: order.room?.id || '',
         roomNumber: order.room?.roomNumber || '未关联房源',
         floor: order.room?.floor ?? null,
         buildingName: order.room?.building?.name || '未命名楼栋',
@@ -326,6 +328,12 @@ export default {
     openDetail(id) {
       uni.navigateTo({ url: `/pages/maintenance/detail?id=${encodeURIComponent(id)}` })
     },
+    reportIssue(order) {
+      if (!order.roomId) return
+      uni.navigateTo({
+        url: `/pages/staff-report/report?roomId=${encodeURIComponent(order.roomId)}&roomName=${encodeURIComponent(order.roomNumber)}&buildingName=${encodeURIComponent(order.buildingName)}`,
+      })
+    },
     statusClass(order) {
       if (order.isPool || order.status === 'PENDING_CONFIRM') return 'warn'
       if (order.status === 'COMPLETED' || order.status === 'CANCELLED') return 'quiet'
@@ -400,6 +408,7 @@ export default {
 .wb-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 10rpx; flex: 1; min-width: 0; }
 .wb-tag { padding: 6rpx 12rpx; border-radius: 10rpx; background: #f0ece3; color: #716b60; font-size: 18rpx; line-height: 1.5; }
 .wb-tag-urgent { background: #f8ece5; color: #ad735a; }
+.wb-tag-report { background: #f8ece5; color: #ad735a; }
 .wb-claim { flex-shrink: 0; margin: 0; padding: 16rpx 26rpx; border-radius: 16rpx; background: #68715b; color: #fffefa; font-size: 22rpx; line-height: 1.4; }
 .wb-claim::after { border: none; }
 .wb-arrow { flex-shrink: 0; font-size: 20rpx; color: #8e8a80; }

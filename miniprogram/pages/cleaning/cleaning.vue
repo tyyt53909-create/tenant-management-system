@@ -71,6 +71,7 @@
             <text>房间 {{ room.roomNumber }}</text>
             <text class="cl-sep">·</text>
             <text>{{ room.floor ? `${room.floor} 楼` : '楼层待确认' }}</text>
+            <text class="cl-report" @tap.stop="reportIssue(room)">上报问题</text>
           </view>
         </view>
       </view>
@@ -224,6 +225,11 @@ export default {
         this.loading = false
       }
     },
+    reportIssue(room) {
+      uni.navigateTo({
+        url: `/pages/staff-report/report?roomId=${encodeURIComponent(room.id)}&roomName=${encodeURIComponent(room.roomNumber)}&buildingName=${encodeURIComponent(room.buildingName)}`,
+      })
+    },
     async handleAction(room) {
       if (!this.authorized || this.loading || this.busyId) return
       if (!Number.isInteger(room.version) || room.version < 0) {
@@ -319,6 +325,7 @@ export default {
 .cl-note { display: block; margin-top: 10rpx; font-size: 22rpx; line-height: 1.7; color: #716b60; }
 .cl-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6rpx; margin-top: 14rpx; font-size: 19rpx; color: #8e8a80; }
 .cl-sep { color: #c9c4b8; }
+.cl-report { margin-left: auto; padding: 6rpx 12rpx; border-radius: 10rpx; background: #f8ece5; color: #ad735a; font-size: 18rpx; }
 .cl-action { margin-top: 24rpx; min-height: 78rpx; font-size: 24rpx; border-radius: 20rpx; }
 
 .cl-more { margin-top: 8rpx; padding: 22rpx; background: transparent; color: #68715b; font-size: 24rpx; border: 1rpx solid #d7d8cc; border-radius: 20rpx; }

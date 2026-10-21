@@ -59,6 +59,8 @@
       <text v-if="!loading">新任务会出现在这里，下拉可刷新。</text>
     </view>
 
+    <StaffContactCard />
+
     <text class="q-note">栖居 · 每一间房，都值得被认真对待</text>
     <RoleTabBar active="home" variant="cleaner" />
   </view>
@@ -67,11 +69,12 @@
 <script>
 import QIcon from '../../components/QIcon.vue'
 import RoleTabBar from '../../components/RoleTabBar.vue'
+import StaffContactCard from '../../components/StaffContactCard.vue'
 import { getCleaningRooms, getUnreadCount } from '../../api/index.js'
 import { ensureSession, openHome } from '../../utils/session.js'
 
 export default {
-  components: { QIcon, RoleTabBar },
+  components: { QIcon, RoleTabBar, StaffContactCard },
   data() {
     const d = new Date()
     return {

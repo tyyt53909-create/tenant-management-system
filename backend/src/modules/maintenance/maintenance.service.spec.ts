@@ -32,6 +32,7 @@ describe('MaintenanceService', () => {
       tenant: { findUnique: vi.fn() },
       contract: { findFirst: vi.fn() },
       user: { findUnique: vi.fn(), findMany: vi.fn() },
+      building: { findFirst: vi.fn() },
       maintenancePhoto: { createMany: vi.fn() },
     };
     prismaMock.user.findUnique.mockResolvedValue({
@@ -98,6 +99,80 @@ describe('MaintenanceService', () => {
         service.create({ ...baseDto } as any, { userId: 'u-1', role: 'TENANT' }),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.contract.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('保洁/维修上报：按房间自动关联生效合同的租客', async () => {
+      prisma.contract.findFirst.mockResolvedValue({ tenantId: 'tenant-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.maintenanceRequest.create.mockImplementation(async ({ data }: any) => {
+        prisma.maintenanceRequest.__created = data;
+        return { id: 'mr-staff', ...data };
+      });
+
+      await service.create(
+        { ...baseDto, roomId: 'room-1' } as any,
+        { userId: 'cleaner-1', role: 'CLEANER' },
+      );
+
+      expect(prisma.maintenanceRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          roomId: 'room-1',
+          tenantId: 'tenant-1',
+          createdById: 'cleaner-1',
+        }),
+      });
+    });
+
+    it('保洁/维修上报空置房：tenantId 为空，不伪造租客', async () => {
+      prisma.contract.findFirst.mockResolvedValue(null);
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-vacant' });
+      prisma.maintenanceRequest.create.mockImplementation(async ({ data }: any) => {
+        prisma.maintenanceRequest.__created = data;
+        return { id: 'mr-vacant', ...data };
+      });
+
+      await service.create(
+        { ...baseDto, roomId: 'room-vacant' } as any,
+        { userId: 'maint-1', role: 'MAINTENANCE' },
+      );
+
+      expect(prisma.maintenanceRequest.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          roomId: 'room-vacant',
+          tenantId: null,
+          createdById: 'maint-1',
+        }),
+      });
+    });
+
+    it('保洁/维修上报必须指定房间', async () => {
+      await expect(
+        service.create({ ...baseDto } as any, { userId: 'cleaner-1', role: 'CLEANER' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.maintenanceRequest.create).not.toHaveBeenCalled();
+    });
+
+    it('管理处联系方式只取启用楼栋的管家字段', async () => {
+      prisma.building.findFirst.mockResolvedValue({
+        name: 'A栋',
+        metadata: {
+          landlordName: '陈管家',
+          landlordPhone: '13800138000',
+          landlordWechat: 'qiju_service',
+          serviceHours: '09:00 - 21:00',
+          notice: '有问题请联系管理处',
+        },
+      });
+
+      const result = await service.findStaffContact();
+
+      expect(result).toMatchObject({
+        buildingName: 'A栋',
+        name: '陈管家',
+        phone: '13800138000',
+        wechat: 'qiju_service',
+      });
     });
 
     it('管理员未指定 IDs：400', async () => {

@@ -31,6 +31,14 @@
       }
     },
     {
+      "path": "pages/staff-report/report",
+      "style": {
+        "navigationBarTitleText": "上报问题",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": false
+      }
+    },
+    {
       "path": "pages/maintenance/home",
       "style": {
         "navigationBarTitleText": "维修首页",

@@ -4817,6 +4817,43 @@
         ]
       }
     },
+    "/api/maintenance/contact": {
+      "get": {
+        "operationId": "MaintenanceController_findContact",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Maintenance"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/maintenance/assignees": {
       "get": {
         "operationId": "MaintenanceController_findAssignees",
