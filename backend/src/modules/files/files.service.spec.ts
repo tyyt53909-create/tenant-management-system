@@ -34,7 +34,10 @@ describe('FilesService', () => {
     uploadDir = await mkdtemp(join(tmpdir(), 'files-'));
     process.env.UPLOAD_DIR = uploadDir;
     process.env.STORAGE_DRIVER = 'local';
-    const prismaMock: any = { fileAsset: { create: vi.fn(), findUnique: vi.fn() } };
+    const prismaMock: any = {
+      fileAsset: { create: vi.fn(), findUnique: vi.fn() },
+      maintenancePhoto: { findFirst: vi.fn() },
+    };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FilesService,
@@ -211,5 +214,32 @@ describe('FilesService', () => {
     await expect(service.assertCanRead('k', { role: 'CLEANER', userId: 'c-1' })).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('维修人员可读公共池工单的租客照片（T225）', async () => {
+    prisma.fileAsset.findUnique.mockResolvedValue({ uploadedBy: 'tenant-user' });
+    prisma.maintenancePhoto.findFirst.mockResolvedValue({ id: 'mp-1' });
+
+    await expect(
+      service.assertCanRead('photo-key', { role: 'MAINTENANCE', userId: 'm-1' }),
+    ).resolves.toBeUndefined();
+    expect(prisma.maintenancePhoto.findFirst).toHaveBeenCalledWith({
+      where: {
+        fileUrl: '/api/files/photo-key',
+        request: {
+          OR: [{ assignedTo: 'm-1' }, { status: 'ASSIGNED', assignedTo: null }],
+        },
+      },
+      select: { id: true },
+    });
+  });
+
+  it('维修人员不能读取未挂在自己可见工单上的文件（T225）', async () => {
+    prisma.fileAsset.findUnique.mockResolvedValue({ uploadedBy: 'tenant-user' });
+    prisma.maintenancePhoto.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.assertCanRead('private-key', { role: 'MAINTENANCE', userId: 'm-1' }),
+    ).rejects.toThrow(NotFoundException);
   });
 });

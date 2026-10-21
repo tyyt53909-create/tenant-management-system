@@ -311,6 +311,35 @@ export class MaintenanceService {
     return this.findOneForWorker(id, userId);
   }
 
+  /** 维修人员退回公共池：IN_PROGRESS → ASSIGNED，清空指派人。 */
+  async release(id: string, userId: string) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      select: { id: true, status: true, assignedTo: true },
+    });
+
+    if (!request) {
+      throw new NotFoundException('报修工单不存在');
+    }
+    if (request.assignedTo !== userId) {
+      throw new ForbiddenException('仅可退回自己接下的工单');
+    }
+    if (request.status !== 'IN_PROGRESS') {
+      throw new ConflictException('仅可退回维修中的工单');
+    }
+
+    const result = await this.prisma.maintenanceRequest.updateMany({
+      where: { id, status: 'IN_PROGRESS', assignedTo: userId },
+      data: { status: 'ASSIGNED', assignedTo: null, assignedAt: null },
+    });
+
+    if (result.count === 0) {
+      throw new ConflictException('工单状态已变化，请刷新后重试');
+    }
+
+    return this.findOneForWorker(id, userId);
+  }
+
   /** 管理员派单候选人：启用中的维修人员。 */
   async findAssignees() {
     return this.prisma.user.findMany({

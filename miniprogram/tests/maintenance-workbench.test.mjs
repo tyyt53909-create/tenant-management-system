@@ -7,6 +7,7 @@ import {
   getWorkbenchOrder,
   claimMaintenance,
   completeMaintenance,
+  releaseMaintenance,
 } from '../api/index.js'
 import { openHome, ensureSession, ensureTenantSession } from '../utils/session.js'
 
@@ -92,11 +93,12 @@ const ready = () => {
 }
 
 test('维修 API：列表、详情、接单与完工路径正确', async () => {
-  replies.push({ data: {} }, { data: {} }, { data: {} }, { data: {} })
+  replies.push({ data: {} }, { data: {} }, { data: {} }, { data: {} }, { data: {} })
   await getWorkbenchOrders({ view: 'pool', page: 1, limit: 20 })
   await getWorkbenchOrder('a/b')
   await claimMaintenance('a/b')
   await completeMaintenance('c/d', { resolution: '已修好' })
+  await releaseMaintenance('e/f')
 
   assert.ok(calls[0].url.includes('/maintenance/workbench'))
   assert.deepEqual(calls[0].data, { view: 'pool', page: 1, limit: 20 })
@@ -106,6 +108,8 @@ test('维修 API：列表、详情、接单与完工路径正确', async () => {
   assert.equal(calls[3].method, 'PATCH')
   assert.ok(calls[3].url.endsWith('/maintenance/c%2Fd/complete'))
   assert.deepEqual(calls[3].data, { resolution: '已修好' })
+  assert.equal(calls[4].method, 'PATCH')
+  assert.ok(calls[4].url.endsWith('/maintenance/e%2Ff/release'))
 })
 
 test('维修角色进入维修首页，不进入租客首页', () => {
@@ -298,6 +302,27 @@ test('完工结果为空时拒绝提交', async () => {
 
   assert.equal(calls.filter(call => call.method === 'PATCH').length, 0)
   assert.ok(toasts.includes('请填写处理结果'))
+})
+
+test('退回公共池后重新加载为待接单', async () => {
+  replies.push(
+    { data: { role: 'MAINTENANCE' } },
+    { data: detail({ status: 'IN_PROGRESS', assignedTo: 'maint-1' }) },
+    { data: { id: 'mr-1', status: 'ASSIGNED' } },
+    { data: { role: 'MAINTENANCE' } },
+    { data: detail({ status: 'ASSIGNED', assignedTo: null }) },
+  )
+  const vm = instance(detailPage)
+  vm.id = 'mr-1'
+  await vm.load()
+
+  await vm.releaseOrder()
+
+  const patch = calls.find(call => call.method === 'PATCH')
+  assert.ok(patch.url.endsWith('/maintenance/mr-1/release'))
+  assert.equal(vm.record.status, 'ASSIGNED')
+  assert.equal(vm.record.assignedTo, null)
+  assert.ok(toasts.includes('已退回公共池'))
 })
 
 test('完工提交去除首尾空格并刷新为待确认', async () => {

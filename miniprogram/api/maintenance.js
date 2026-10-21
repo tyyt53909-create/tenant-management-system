@@ -70,6 +70,14 @@ export const completeMaintenance = (id, data) =>
   request.patch(`/maintenance/${encodeURIComponent(id)}/complete`, data)
 
 /**
+ * 退回公共池（仅本人已接、维修中的工单）
+ * @param {string} id
+ * @returns {Promise<any>}
+ */
+export const releaseMaintenance = (id) =>
+  request.patch(`/maintenance/${encodeURIComponent(id)}/release`, {})
+
+/**
  * 上传单张报修照片（multipart/form-data，字段名 file）
  * @param {string} filePath - 本地图片临时路径
  * @returns {Promise<{ key: string, url: string, fileName: string, fileSize: number, mimeType: string }>}

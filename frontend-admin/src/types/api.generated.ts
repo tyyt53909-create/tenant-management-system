@@ -1093,6 +1093,22 @@ export interface paths {
         patch: operations["MaintenanceController_complete"];
         trace?: never;
     };
+    "/api/maintenance/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["MaintenanceController_release"];
+        trace?: never;
+    };
     "/api/meters/reconciliation": {
         parameters: {
             query?: never;
@@ -5384,6 +5400,39 @@ export interface operations {
                 "application/json": components["schemas"]["CompleteMaintenanceDto"];
             };
         };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MaintenanceController_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description 成功 */
             200: {

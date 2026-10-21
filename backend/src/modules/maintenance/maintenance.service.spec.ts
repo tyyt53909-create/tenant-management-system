@@ -482,8 +482,33 @@ describe('MaintenanceService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
-    it('完工：提交解决方案并进入 PENDING_CONFIRM', async () => {
+    it('退回公共池：清空指派人并恢复 ASSIGNED', async () => {
       prisma.maintenanceRequest.findUnique
+        .mockResolvedValueOnce({ id: 'mr-1', status: 'IN_PROGRESS', assignedTo: 'maint-1' })
+        .mockResolvedValueOnce({ id: 'mr-1', status: 'ASSIGNED', assignedTo: null });
+      prisma.maintenanceRequest.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.release('mr-1', 'maint-1');
+
+      expect(prisma.maintenanceRequest.updateMany).toHaveBeenCalledWith({
+        where: { id: 'mr-1', status: 'IN_PROGRESS', assignedTo: 'maint-1' },
+        data: { status: 'ASSIGNED', assignedTo: null, assignedAt: null },
+      });
+      expect(result.status).toBe('ASSIGNED');
+    });
+
+    it('退回公共池：非本人工单 → 403', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        status: 'IN_PROGRESS',
+        assignedTo: 'other',
+      });
+
+      await expect(service.release('mr-1', 'maint-1')).rejects.toThrow(ForbiddenException);
+      expect(prisma.maintenanceRequest.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('完工：提交解决方案并进入 PENDING_CONFIRM', async () => {      prisma.maintenanceRequest.findUnique
         .mockResolvedValueOnce({ id: 'mr-1', status: 'IN_PROGRESS', assignedTo: 'maint-1' })
         .mockResolvedValueOnce({ id: 'mr-1', status: 'PENDING_CONFIRM', assignedTo: 'maint-1' });
       prisma.maintenanceRequest.updateMany.mockResolvedValue({ count: 1 });

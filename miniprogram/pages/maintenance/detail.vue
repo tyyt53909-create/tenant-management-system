@@ -24,6 +24,7 @@
         <textarea v-model="resolution" class="action-textarea" maxlength="2000" placeholder="写下处理过程、更换的配件、需要租客注意的事项…" />
         <text class="action-count">{{ resolution.length }} / 2000</text>
         <button class="q-primary action-button" :loading="submitting" :disabled="submitting" @tap="submitComplete">{{ submitting ? '正在提交…' : '提交处理结果' }}</button>
+        <button class="q-outline action-secondary" :disabled="submitting || releasing" @tap="releaseOrder">无法处理，退回公共池</button>
         <text class="action-hint action-center">提交后进入「待确认」，租客确认后才算完成。</text>
       </template>
       <template v-else-if="record.status === 'PENDING_CONFIRM'">
@@ -51,12 +52,13 @@ import {
   getWorkbenchOrder,
   claimMaintenance,
   completeMaintenance,
+  releaseMaintenance,
   getUserInfo,
 } from '../../api/index.js'
 import { openHome, hasCapability } from '../../utils/session.js'
 export default {
   components: { QIcon, ProtectedPhoto },
-  data() { return { id: '', record: null, role: '', loading: false, error: '', blocked: false, claiming: false, submitting: false, resolution: '', steps: [{ status: 'SUBMITTED', title: '已提交', description: '已收到你的报修申请' }, { status: 'ACKNOWLEDGED', title: '已受理', description: '管理者已受理，准备安排维修' }, { status: 'ASSIGNED', title: '已派单', description: '维修人员已安排' }, { status: 'IN_PROGRESS', title: '处理中', description: '工作人员正在跟进维修' }, { status: 'PENDING_CONFIRM', title: '待确认', description: '维修已处理，等待结果确认' }, { status: 'COMPLETED', title: '已完成', description: '本次报修服务已完成' }] } },
+  data() { return { id: '', record: null, role: '', loading: false, error: '', blocked: false, claiming: false, submitting: false, releasing: false, resolution: '', steps: [{ status: 'SUBMITTED', title: '已提交', description: '已收到你的报修申请' }, { status: 'ACKNOWLEDGED', title: '已受理', description: '管理者已受理，准备安排维修' }, { status: 'ASSIGNED', title: '已派单', description: '维修人员已安排' }, { status: 'IN_PROGRESS', title: '处理中', description: '工作人员正在跟进维修' }, { status: 'PENDING_CONFIRM', title: '待确认', description: '维修已处理，等待结果确认' }, { status: 'COMPLETED', title: '已完成', description: '本次报修服务已完成' }] } },
   computed: {
     isMaintenance() { return this.role === 'MAINTENANCE' },
     currentStep() { return this.steps.findIndex(s => s.status === this.record?.status) },
@@ -139,6 +141,25 @@ export default {
         if ([404, 409].includes(err.statusCode)) await this.load()
       } finally { this.submitting = false }
     },
+    async releaseOrder() {
+      if (this.releasing || this.submitting) return
+      const confirmed = await new Promise(resolve => uni.showModal({
+        title: '退回公共池',
+        content: '确定把这张工单退回公共池吗？其他维修人员可以重新接单。',
+        success: result => resolve(result.confirm),
+        fail: () => resolve(false),
+      }))
+      if (!confirmed) return
+      this.releasing = true; this.error = ''
+      try {
+        await releaseMaintenance(this.id)
+        uni.showToast({ title: '已退回公共池', icon: 'success' })
+        await this.load()
+      } catch (err) {
+        this.error = err.statusCode === 409 ? '工单状态已变化，请刷新后重试' : (err.message || '退回失败，请重试')
+        if ([404, 409].includes(err.statusCode)) await this.load()
+      } finally { this.releasing = false }
+    },
     back() {
       if (this.isMaintenance) uni.reLaunch({ url: '/pages/maintenance/workbench' })
       else uni.switchTab({ url: '/pages/maintenance/maintenance' })
@@ -147,4 +168,4 @@ export default {
 }
 </script>
 <style scoped>.repair-photos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14rpx}.resolution-block{margin-top:26rpx}.resolution-heading{display:block;font-weight:550;font-size:25rpx}.resolution-copy{display:block;font-size:23rpx;line-height:1.9;color:#716b60;margin-top:18rpx;white-space:pre-wrap;overflow-wrap:anywhere}</style>
-<style scoped>.repair-banner{display:flex;gap:24rpx;align-items:flex-start}.repair-banner>view{flex:1;min-width:0}.banner-title{display:block;font-size:26rpx;font-weight:550}.banner-description{display:block;font-size:23rpx;color:#817e76;line-height:1.8;margin-top:14rpx;overflow-wrap:anywhere}.flow-surface{padding:42rpx 38rpx 18rpx}.flow-step{display:flex;gap:26rpx;position:relative;min-height:126rpx}.flow-step:before{content:'';position:absolute;left:19rpx;top:40rpx;bottom:0;width:2rpx;background:#e3dfd5}.flow-step:last-child:before{display:none}.flow-node{width:40rpx;height:40rpx;border-radius:50%;border:2rpx solid #d7d6ca;display:flex;align-items:center;justify-content:center;color:#fffefa;font-size:23rpx;flex-shrink:0}.done .flow-node,.current .flow-node{background:#68715b;border-color:#68715b}.current .flow-node{box-shadow:0 0 0 7rpx #ecf0e9}.flow-title{display:block;font-size:26rpx;margin-top:1rpx;font-weight:550}.flow-description{display:block;font-size:22rpx;color:#817e76;margin-top:14rpx;line-height:1.6}.future .flow-title,.future .flow-description{color:#a49f95}.record-information{margin-top:26rpx}.return-button{margin-top:32rpx}.action-block{margin-top:32rpx;padding:32rpx}.action-heading{display:block;font-size:28rpx;font-weight:550}.action-hint{display:block;margin-top:14rpx;font-size:22rpx;color:#817e76;line-height:1.8}.action-center{text-align:center}.action-button{margin-top:26rpx}.action-textarea{box-sizing:border-box;width:100%;min-height:240rpx;margin-top:20rpx;padding:24rpx;border:1rpx solid #e3dfd5;border-radius:20rpx;background:#fbf9f4;font-size:24rpx;line-height:1.8;color:#302f2a}.action-count{display:block;margin-top:10rpx;text-align:right;font-size:19rpx;color:#a49f95}.wb-facts{display:flex;align-items:stretch;gap:0;margin-top:22rpx;padding:22rpx 10rpx}.wb-fact{flex:1;min-width:0;padding:0 18rpx;border-right:1rpx solid #e9e6de}.wb-fact:last-child{border-right:none}.wb-fact-label{display:block;font-size:18rpx;color:#8e8a80}.wb-fact-value{display:block;margin-top:8rpx;font-size:23rpx;font-weight:550;color:#302f2a;overflow-wrap:anywhere}.wb-fact-urgent{color:#ad735a}</style>
+<style scoped>.repair-banner{display:flex;gap:24rpx;align-items:flex-start}.repair-banner>view{flex:1;min-width:0}.banner-title{display:block;font-size:26rpx;font-weight:550}.banner-description{display:block;font-size:23rpx;color:#817e76;line-height:1.8;margin-top:14rpx;overflow-wrap:anywhere}.flow-surface{padding:42rpx 38rpx 18rpx}.flow-step{display:flex;gap:26rpx;position:relative;min-height:126rpx}.flow-step:before{content:'';position:absolute;left:19rpx;top:40rpx;bottom:0;width:2rpx;background:#e3dfd5}.flow-step:last-child:before{display:none}.flow-node{width:40rpx;height:40rpx;border-radius:50%;border:2rpx solid #d7d6ca;display:flex;align-items:center;justify-content:center;color:#fffefa;font-size:23rpx;flex-shrink:0}.done .flow-node,.current .flow-node{background:#68715b;border-color:#68715b}.current .flow-node{box-shadow:0 0 0 7rpx #ecf0e9}.flow-title{display:block;font-size:26rpx;margin-top:1rpx;font-weight:550}.flow-description{display:block;font-size:22rpx;color:#817e76;margin-top:14rpx;line-height:1.6}.future .flow-title,.future .flow-description{color:#a49f95}.record-information{margin-top:26rpx}.return-button{margin-top:32rpx}.action-block{margin-top:32rpx;padding:32rpx}.action-heading{display:block;font-size:28rpx;font-weight:550}.action-hint{display:block;margin-top:14rpx;font-size:22rpx;color:#817e76;line-height:1.8}.action-center{text-align:center}.action-button{margin-top:26rpx}.action-secondary{margin-top:16rpx;color:#ad7356;border-color:#e6c9c0}.action-textarea{box-sizing:border-box;width:100%;min-height:240rpx;margin-top:20rpx;padding:24rpx;border:1rpx solid #e3dfd5;border-radius:20rpx;background:#fbf9f4;font-size:24rpx;line-height:1.8;color:#302f2a}.action-count{display:block;margin-top:10rpx;text-align:right;font-size:19rpx;color:#a49f95}.wb-facts{display:flex;align-items:stretch;gap:0;margin-top:22rpx;padding:22rpx 10rpx}.wb-fact{flex:1;min-width:0;padding:0 18rpx;border-right:1rpx solid #e9e6de}.wb-fact:last-child{border-right:none}.wb-fact-label{display:block;font-size:18rpx;color:#8e8a80}.wb-fact-value{display:block;margin-top:8rpx;font-size:23rpx;font-weight:550;color:#302f2a;overflow-wrap:anywhere}.wb-fact-urgent{color:#ad735a}</style>

@@ -203,6 +203,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
             }),
             claim: vi.fn().mockResolvedValue({ id: 'mr-pool', status: 'IN_PROGRESS' }),
             complete: vi.fn().mockResolvedValue({ id: 'mr-pool', status: 'PENDING_CONFIRM' }),
+            release: vi.fn().mockResolvedValue({ id: 'mr-pool', status: 'ASSIGNED' }),
             findAssignees: vi.fn().mockResolvedValue([]),
             create: vi.fn(),
             update: vi.fn(),
@@ -436,6 +437,12 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         expect.objectContaining({ resolution: '已更换水龙头' }),
       );
       await as(request(app.getHttpServer()).patch('/maintenance/mr-pool/complete').send({ resolution: 'x' }), 'TENANT', 'tenant-self').expect(403);
+    });
+
+    it('PATCH /maintenance/:id/release 维修人员 → 200；保洁 → 403', async () => {
+      await as(request(app.getHttpServer()).patch('/maintenance/mr-pool/release'), 'MAINTENANCE').expect(200);
+      expect(app.get(MaintenanceService).release).toHaveBeenCalledWith('mr-pool', 'user-maintenance');
+      await as(request(app.getHttpServer()).patch('/maintenance/mr-pool/release'), 'CLEANER').expect(403);
     });
 
     it('GET /maintenance/assignees 仅管理员可访问', async () => {

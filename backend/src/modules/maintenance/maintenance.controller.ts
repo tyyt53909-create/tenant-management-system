@@ -107,6 +107,15 @@ export class MaintenanceController {
     return this.maintenanceService.complete(id, user.userId, dto);
   }
 
+  // 维修人员退回公共池
+  @Patch(':id/release')
+  @UseGuards(RolesGuard)
+  @Roles('MAINTENANCE')
+  release(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    return this.maintenanceService.release(id, user.userId);
+  }
+
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')

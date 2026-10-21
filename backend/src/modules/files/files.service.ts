@@ -115,9 +115,26 @@ export class FilesService {
       select: { uploadedBy: true },
     });
 
-    if (!asset || !actor?.userId || asset.uploadedBy !== actor.userId) {
-      throw new NotFoundException('文件不存在');
+    if (asset && actor?.userId && asset.uploadedBy === actor.userId) {
+      return;
     }
+
+    // T225：维修人员需要查看租客提交的报修照片。文件本身的 uploadedBy 是租客，
+    // 因此额外按「照片确实挂在自己可见的工单上」授权，且只允许公共池或本人已接工单。
+    if (actor?.role === 'MAINTENANCE' && actor.userId) {
+      const photo = await this.prisma.maintenancePhoto.findFirst({
+        where: {
+          fileUrl: `/api/files/${key}`,
+          request: {
+            OR: [{ assignedTo: actor.userId }, { status: 'ASSIGNED', assignedTo: null }],
+          },
+        },
+        select: { id: true },
+      });
+      if (photo) return;
+    }
+
+    throw new NotFoundException('文件不存在');
   }
 
   filePath(key: string) {
