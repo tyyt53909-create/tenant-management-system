@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { FloorPlansService } from './floor-plans.service.js';
+import { ShapeKindDto } from './dto/save-floor-plan.dto.js';
 
 const setup = () => {
   const prisma = {
@@ -25,7 +26,7 @@ describe('FloorPlansService', () => {
 
   it('returns 409 for duplicate room bindings in one save', async () => {
     const { service } = setup();
-    const shape = { roomId: 'r1', kind: 'RECT' as const, x: 0, y: 0, width: 10, depth: 10 };
+    const shape = { roomId: 'r1', kind: ShapeKindDto.RECT, x: 0, y: 0, width: 10, depth: 10 };
     await expect(service.save('b1', 1, { width: 10, depth: 10, version: 0, shapes: [shape, shape] })).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -33,7 +34,7 @@ describe('FloorPlansService', () => {
     const { service, prisma } = setup();
     prisma.floorPlan.findUnique.mockResolvedValue({ id: 'p1', version: 2 });
     const tx = { floorPlan: { findUnique: prisma.floorPlan.findUnique, updateMany: vi.fn(), findUniqueOrThrow: vi.fn() }, roomShape: { deleteMany: vi.fn(), createMany: vi.fn() } };
-    prisma.$transaction.mockImplementation(async (fn: (tx: typeof tx) => unknown) => fn(tx));
+    prisma.$transaction.mockImplementation(async (fn: (client: unknown) => unknown) => fn(tx));
     await expect(service.save('b1', 1, { width: 10, depth: 10, version: 1, shapes: [] })).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -44,6 +45,6 @@ describe('FloorPlansService', () => {
     prisma.floorPlan.create.mockImplementation(async ({ data, include }: any) => ({ ...data, shapes: include ? data.shapes.create : undefined }));
     const result = await service.createTemplate('b1', 2);
     expect(result.shapes).toHaveLength(5);
-    expect(result.shapes.map((shape: { roomId: string }) => shape.roomId)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4']);
+    expect(result.shapes.map((shape: { roomId: string | null }) => shape.roomId)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4']);
   });
 });
