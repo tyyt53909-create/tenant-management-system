@@ -259,6 +259,7 @@ model Building {
   contracts          Contract[]
   meters             Meter[]
   publicUtilityBills PublicUtilityBill[]
+  floorPlans         FloorPlan[]
 
   @@index([isActive])
   @@map("buildings")
@@ -292,11 +293,55 @@ model Room {
   checkoutRecords     CheckoutRecord[]
   photos              RoomPhoto[]
   utilityAllocations  PublicUtilityAllocation[]
+  roomShape           RoomShape?
 
   @@unique([buildingId, floor, roomNumber])
   @@index([buildingId, status])
   @@index([status, cleanStatus])
   @@map("rooms")
+}
+
+model FloorPlan {
+  id            String      @id @default(cuid())
+  buildingId    String
+  building      Building    @relation(fields: [buildingId], references: [id])
+  floor         Int
+  width         Float
+  depth         Float
+  backgroundUrl String?
+  version       Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  shapes        RoomShape[]
+
+  @@unique([buildingId, floor])
+  @@index([buildingId])
+  @@map("floor_plans")
+}
+
+model RoomShape {
+  id          String    @id @default(cuid())
+  floorPlanId String
+  floorPlan   FloorPlan @relation(fields: [floorPlanId], references: [id], onDelete: Cascade)
+  roomId      String?   @unique
+  room        Room?     @relation(fields: [roomId], references: [id])
+  kind        ShapeKind @default(RECT)
+  x           Float
+  y           Float
+  width       Float
+  depth       Float
+  polygon     Json?
+  rotation    Float     @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([floorPlanId])
+  @@map("room_shapes")
+}
+
+enum ShapeKind {
+  RECT
+  POLYGON
 }
 
 // 3. PublicArea（公共区域）
