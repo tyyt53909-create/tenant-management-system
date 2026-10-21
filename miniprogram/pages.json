@@ -15,6 +15,21 @@
       }
     },
     {
+      "path": "pages/maintenance/home",
+      "style": {
+        "navigationBarTitleText": "维修首页",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/maintenance/settings",
+      "style": {
+        "navigationBarTitleText": "设置",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/maintenance/workbench",
       "style": {
         "navigationBarTitleText": "维修工作台",

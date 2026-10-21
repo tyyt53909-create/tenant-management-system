@@ -6,7 +6,6 @@
         <text class="q-title">把问题处理好。</text>
         <text class="q-description">公共池工单先接先得；标记「指派给我」的工单由你负责。</text>
       </view>
-      <button class="wb-logout" :disabled="loading || !!busyId" @tap="logout">退出</button>
     </view>
 
     <view class="wb-brief">
@@ -87,16 +86,19 @@
 
     <button v-if="authorized && orders.length > 0 && page < totalPages" class="wb-more" :disabled="loading || !!busyId" :loading="loading" @tap="loadMore">加载更多</button>
     <text v-else-if="orders.length > 0" class="wb-end">已显示全部工单</text>
+
+    <RoleTabBar active="work" />
   </view>
 </template>
 
 <script>
 import QIcon from '../../components/QIcon.vue'
+import RoleTabBar from '../../components/RoleTabBar.vue'
 import { getUserInfo, getWorkbenchOrders, claimMaintenance, getUnreadCount } from '../../api/index.js'
-import { logoutSession, openHome } from '../../utils/session.js'
+import { openHome } from '../../utils/session.js'
 
 export default {
-  components: { QIcon },
+  components: { QIcon, RoleTabBar },
   data() {
     return {
       authorized: false, view: 'pool', orders: [], total: 0, page: 0, totalPages: 0,
@@ -129,6 +131,9 @@ export default {
         done: '完成并确认的工单会留在这里，方便回看处理记录。',
       }[this.view]
     },
+  },
+  onLoad(query) {
+    if (['pool', 'active', 'done'].includes(query?.view)) this.view = query.view
   },
   onShow() {
     this.refresh()
@@ -276,30 +281,14 @@ export default {
     formatDate(date) {
       return date?.replace('T', ' ').slice(0, 16) || '—'
     },
-    logout() {
-      if (this.loading || this.busyId) return
-      uni.showModal({
-        title: '退出登录',
-        content: '确定退出维修工作台吗？',
-        success: result => {
-          if (!result.confirm) return
-          this.authorized = false
-          this.orders = []
-          logoutSession()
-          uni.reLaunch({ url: '/pages/login/login' })
-        },
-      })
-    },
   },
 }
 </script>
 
 <style scoped>
-.workbench-page { padding-bottom: 64rpx; }
+.workbench-page { padding-bottom: calc(150rpx + env(safe-area-inset-bottom)); }
 .wb-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; margin-bottom: 30rpx; }
 .wb-heading { flex: 1; min-width: 0; }
-.wb-logout { flex-shrink: 0; margin: 0; padding: 16rpx 8rpx; background: transparent; color: #68715b; font-size: 24rpx; line-height: 1.5; }
-.wb-logout::after { border: none; }
 
 .wb-brief { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; padding: 26rpx 30rpx; margin-bottom: 20rpx; border: 1rpx solid #dfe4d9; border-radius: 24rpx; background: #ecf0e9; }
 .wb-brief-main { flex: 1; min-width: 0; }

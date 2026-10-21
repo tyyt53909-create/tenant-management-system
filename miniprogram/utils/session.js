@@ -2,7 +2,7 @@ import { getUserInfo } from '../api/index.js'
 import { API_BASE_URL } from './api-config.js'
 
 export const CLEANER_PAGE = '/pages/cleaning/cleaning'
-export const MAINTENANCE_PAGE = '/pages/maintenance/workbench'
+export const MAINTENANCE_PAGE = '/pages/maintenance/home'
 
 export function openHome(role) {
   if (role === 'CLEANER') uni.reLaunch({ url: CLEANER_PAGE })

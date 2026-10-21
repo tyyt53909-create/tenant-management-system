@@ -23,6 +23,8 @@ async function loadPage(path) {
 const workbenchPage = await loadPage('../pages/maintenance/workbench.vue')
 const detailPage = await loadPage('../pages/maintenance/detail.vue')
 const loginPage = await loadPage('../pages/login/login.vue')
+const homePage = await loadPage('../pages/maintenance/home.vue')
+const settingsPage = await loadPage('../pages/maintenance/settings.vue')
 
 function instance(page) {
   const vm = page.data()
@@ -106,12 +108,12 @@ test('维修 API：列表、详情、接单与完工路径正确', async () => {
   assert.deepEqual(calls[3].data, { resolution: '已修好' })
 })
 
-test('维修角色进入维修工作台，不进入租客首页', () => {
+test('维修角色进入维修首页，不进入租客首页', () => {
   openHome('MAINTENANCE')
   openHome('CLEANER')
   openHome('TENANT')
   assert.deepEqual(navigation, [
-    '/pages/maintenance/workbench',
+    '/pages/maintenance/home',
     '/pages/cleaning/cleaning',
     '/pages/index/index',
   ])
@@ -121,7 +123,43 @@ test('维修会话不会被当作租客放行', async () => {
   replies.push({ data: { role: 'MAINTENANCE' } })
   const allowed = await ensureTenantSession()
   assert.equal(allowed, false)
-  assert.deepEqual(navigation, ['/pages/maintenance/workbench'])
+  assert.deepEqual(navigation, ['/pages/maintenance/home'])
+})
+
+test('维修首页汇总三类工单并进入对应视图', async () => {
+  replies.push(
+    { data: { id: 'maint-1', role: 'MAINTENANCE' } },
+    { data: { data: [order], meta: { total: 2 } } },
+    { data: { data: [], meta: { total: 1 } } },
+    { data: { data: [], meta: { total: 3 } } },
+    { data: { unreadCount: 2 } },
+  )
+  const vm = instance(homePage)
+  await vm.load()
+
+  assert.deepEqual(vm.counts, { pool: 2, active: 1, done: 3 })
+  assert.equal(vm.recent.length, 1)
+  assert.equal(vm.unreadCount, 2)
+  assert.equal(vm.greeting.length > 0, true)
+
+  vm.goWork('active')
+  assert.deepEqual(navigation, ['/pages/maintenance/workbench?view=active'])
+})
+
+test('维修设置页读取账号与未读，并可进入主题设置', async () => {
+  replies.push(
+    { data: { id: 'maint-1', email: 'maint@example.com', role: 'MAINTENANCE' } },
+    { data: { unreadCount: 4 } },
+  )
+  const vm = instance(settingsPage)
+  await vm.load()
+
+  assert.equal(vm.email, 'maint@example.com')
+  assert.equal(vm.initial, 'M')
+  assert.equal(vm.unreadCount, 4)
+
+  vm.goTheme()
+  assert.deepEqual(navigation, ['/pages/theme/theme'])
 })
 
 test('通知中心对所有已登录角色开放，不把维修人员送回工作台', async () => {
@@ -152,7 +190,7 @@ test('员工激活：角色邀请码注册后直接进入维修工作台', async
   })
   assert.equal(storage.get('user_role'), 'MAINTENANCE')
   assert.equal(storage.get('access_token'), 'staff-access')
-  assert.deepEqual(navigation, ['/pages/maintenance/workbench'])
+  assert.deepEqual(navigation, ['/pages/maintenance/home'])
 })
 
 test('工作台只保留维修所需字段，不泄露租客资料', async () => {
