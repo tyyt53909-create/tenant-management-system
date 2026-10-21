@@ -41,7 +41,7 @@
         <router-link class="icon-button" to="/notifications" aria-label="通知中心"><el-icon :size="20"><Bell /></el-icon><i v-if="notificationStore.unreadCount" class="unread-dot" /></router-link>
       </header>
       <main id="workspace-content" class="qiju-content" tabindex="-1">
-        <div v-if="route.path !== '/dashboard'" class="page-intro">
+        <div v-if="route.path !== '/dashboard' && route.path !== '/space/editor'" class="page-intro">
           <div><span class="eyebrow">{{ currentPage.label }}</span><h1>{{ currentPage.title }}</h1><p>{{ currentPage.description }}</p></div><div id="page-head-actions" class="page-head-actions" />
         </div>
         <router-view />
@@ -114,7 +114,13 @@ const navigation = [
   { path: '/buildings', title: '楼栋管理', icon: OfficeBuilding, label: 'BUILDINGS / 楼栋', description: '管理楼栋与空间，为房源建立清晰的归属。' },
   { path: '/audit', title: '审计日志', icon: Tickets, label: 'AUDIT / 操作记录', description: '关键操作留痕，方便核查与追溯。' },
 ];
-const currentPage = computed(() => navigation.find((item) => item.path === route.path) || navigation[0]!);
+const currentPage = computed(() =>
+  navigation.find((item) => item.path === route.path) ||
+  navigation
+    .filter((item) => route.path.startsWith(`${item.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0] ||
+  navigation[0]!,
+);
 const today = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date());
 const userInitial = computed(() => userStore.user?.email?.slice(0, 1).toUpperCase() || '管');
 /** 侧栏账户卡的第二行：让「这个账号是谁」一眼可见，不必展开菜单 */
