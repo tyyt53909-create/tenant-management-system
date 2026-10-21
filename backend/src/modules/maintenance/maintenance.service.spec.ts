@@ -362,8 +362,13 @@ describe('MaintenanceService', () => {
 
       const where = prisma.maintenanceRequest.findMany.mock.calls[0][0].where;
       expect(where).toEqual({
-        status: 'ASSIGNED',
-        OR: [{ assignedTo: null }, { assignedTo: 'maint-1' }],
+        AND: [
+          {
+            status: 'ASSIGNED',
+            OR: [{ assignedTo: null }, { assignedTo: 'maint-1' }],
+          },
+          {},
+        ],
       });
     });
 
@@ -374,8 +379,40 @@ describe('MaintenanceService', () => {
       await service.findWorkbench('maint-1', { view: 'active' } as any);
 
       expect(prisma.maintenanceRequest.findMany.mock.calls[0][0].where).toEqual({
-        assignedTo: 'maint-1',
-        status: { in: ['IN_PROGRESS', 'PENDING_CONFIRM'] },
+        AND: [
+          {
+            assignedTo: 'maint-1',
+            status: { in: ['IN_PROGRESS', 'PENDING_CONFIRM'] },
+          },
+          {},
+        ],
+      });
+    });
+
+    it('筛选只收窄范围：优先级、类别与关键字不改变角色范围', async () => {
+      prisma.maintenanceRequest.findMany.mockResolvedValue([]);
+      prisma.maintenanceRequest.count.mockResolvedValue(0);
+
+      await service.findWorkbench('maint-1', {
+        view: 'pool',
+        priority: 'URGENT',
+        category: 'PLUMBING',
+        keyword: '101',
+      } as any);
+
+      const where: any = prisma.maintenanceRequest.findMany.mock.calls[0][0].where;
+      expect(where.AND[0]).toEqual({
+        status: 'ASSIGNED',
+        OR: [{ assignedTo: null }, { assignedTo: 'maint-1' }],
+      });
+      expect(where.AND[1]).toEqual({
+        priority: 'URGENT',
+        category: 'PLUMBING',
+        OR: [
+          { title: { contains: '101', mode: 'insensitive' } },
+          { description: { contains: '101', mode: 'insensitive' } },
+          { room: { roomNumber: { contains: '101', mode: 'insensitive' } } },
+        ],
       });
     });
 

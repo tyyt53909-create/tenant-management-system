@@ -119,6 +119,31 @@ test('维修角色进入维修首页，不进入租客首页', () => {
   ])
 })
 
+test('工单筛选与关键字只作为查询条件提交', async () => {
+  const vm = instance(workbenchPage)
+  vm.activeFilter = 'urgent'
+  vm.keyword = '  101  '
+  replies.push({ data: list([]) })
+  await vm.fetchPage(1)
+
+  assert.deepEqual(calls[0].data, {
+    view: 'pool', page: 1, limit: 20, priority: 'URGENT', keyword: '101',
+  })
+})
+
+test('取消筛选恢复全部条件', async () => {
+  const vm = instance(workbenchPage)
+  vm.activeFilter = 'PLUMBING'
+  vm.keyword = '水槽'
+  replies.push({ data: { role: 'MAINTENANCE' } }, { data: list([]) })
+  await vm.clearFilters()
+
+  assert.equal(vm.activeFilter, 'all')
+  assert.equal(vm.keyword, '')
+  assert.equal(calls[1].data.category, undefined)
+  assert.equal(calls[1].data.keyword, undefined)
+})
+
 test('维修会话不会被当作租客放行', async () => {
   replies.push({ data: { role: 'MAINTENANCE' } })
   const allowed = await ensureTenantSession()

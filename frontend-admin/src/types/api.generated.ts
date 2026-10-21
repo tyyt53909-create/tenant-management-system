@@ -5137,6 +5137,10 @@ export interface operations {
                 page?: number;
                 limit?: number;
                 view?: "pool" | "active" | "done";
+                priority?: "LOW" | "NORMAL" | "URGENT";
+                category?: "PLUMBING" | "ELECTRICAL" | "APPLIANCE" | "FURNITURE" | "DOOR_WINDOW" | "OTHER";
+                /** @description 搜索标题、描述或房间号 */
+                keyword?: string;
             };
             header?: never;
             path?: never;

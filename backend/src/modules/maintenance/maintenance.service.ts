@@ -170,11 +170,11 @@ export class MaintenanceService {
    * - done：我已完成的工单。
    */
   async findWorkbench(userId: string, query: QueryWorkbenchDto) {
-    const { page = 1, limit = 20, view = WorkbenchView.POOL } = query;
+    const { page = 1, limit = 20, view = WorkbenchView.POOL, priority, category, keyword } = query;
     const skip = (page - 1) * limit;
 
     // 维修人员的范围必须由服务端固定，不能由请求参数放宽。
-    const where: Prisma.MaintenanceRequestWhereInput =
+    const scope: Prisma.MaintenanceRequestWhereInput =
       view === WorkbenchView.POOL
         ? {
             status: 'ASSIGNED',
@@ -189,6 +189,19 @@ export class MaintenanceService {
               assignedTo: userId,
               status: 'COMPLETED',
             };
+
+    // 筛选只收窄范围，不允许改变上面的角色范围。
+    const filters: Prisma.MaintenanceRequestWhereInput = {};
+    if (priority) filters.priority = priority as MaintenancePriority;
+    if (category) filters.category = category as MaintenanceCategory;
+    if (keyword) {
+      filters.OR = [
+        { title: { contains: keyword, mode: 'insensitive' } },
+        { description: { contains: keyword, mode: 'insensitive' } },
+        { room: { roomNumber: { contains: keyword, mode: 'insensitive' } } },
+      ];
+    }
+    const where: Prisma.MaintenanceRequestWhereInput = { AND: [scope, filters] };
 
     const [data, total] = await Promise.all([
       this.prisma.maintenanceRequest.findMany({

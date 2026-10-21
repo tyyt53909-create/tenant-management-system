@@ -41,6 +41,28 @@
       </view>
     </view>
 
+    <view class="wb-search">
+      <input
+        v-model="keyword"
+        class="wb-search-input"
+        confirm-type="search"
+        placeholder="搜索房间、标题或描述"
+        placeholder-style="color:#a49f95"
+        @confirm="applySearch"
+      />
+      <text v-if="keyword" class="wb-search-clear" @tap="clearKeyword">×</text>
+    </view>
+    <scroll-view scroll-x class="wb-filters" :show-scrollbar="false">
+      <view
+        v-for="option in filterOptions"
+        :key="option.key"
+        :class="['wb-filter', { active: activeFilter === option.key }]"
+        @tap="selectFilter(option.key)"
+      >
+        {{ option.label }}
+      </view>
+    </scroll-view>
+
     <view v-if="error" class="q-error" @tap="refresh">{{ error }} · 点此重试</view>
 
     <view v-if="loading && orders.length === 0" class="wb-skeleton">
@@ -50,7 +72,7 @@
       <view class="wb-empty-icon"><QIcon name="check" :size="56" /></view>
       <text class="q-empty-title">{{ emptyTitle }}</text>
       <text>{{ emptyHint }}</text>
-      <button class="q-outline wb-empty-action" @tap="refresh">刷新任务</button>
+      <button class="q-outline wb-empty-action" @tap="hasFilters ? clearFilters() : refresh()">{{ hasFilters ? '清除筛选' : '刷新任务' }}</button>
     </view>
 
     <view v-for="order in orders" :key="order.id" class="q-surface wb-card" @tap="openDetail(order.id)">
@@ -103,6 +125,17 @@ export default {
     return {
       authorized: false, view: 'pool', orders: [], total: 0, page: 0, totalPages: 0,
       loading: false, busyId: '', error: '', unreadCount: 0,
+      keyword: '', activeFilter: 'all',
+      filterOptions: [
+        { key: 'all', label: '全部' },
+        { key: 'urgent', label: '紧急' },
+        { key: 'PLUMBING', label: '水管' },
+        { key: 'ELECTRICAL', label: '电路' },
+        { key: 'APPLIANCE', label: '家电' },
+        { key: 'FURNITURE', label: '家具' },
+        { key: 'DOOR_WINDOW', label: '门窗' },
+        { key: 'OTHER', label: '其他' },
+      ],
       tabs: [
         { value: 'pool', label: '待接单' },
         { value: 'active', label: '进行中' },
@@ -111,6 +144,14 @@ export default {
     }
   },
   computed: {
+    hasFilters() {
+      return this.activeFilter !== 'all' || this.keyword.trim().length > 0
+    },
+    filterParams() {
+      if (this.activeFilter === 'urgent') return { priority: 'URGENT' }
+      if (this.activeFilter !== 'all') return { category: this.activeFilter }
+      return {}
+    },
     viewLabel() {
       return { pool: '待接单', active: '进行中', done: '已完成' }[this.view]
     },
@@ -122,9 +163,11 @@ export default {
       }[this.view]
     },
     emptyTitle() {
+      if (this.hasFilters) return '没有符合条件的工单'
       return { pool: '公共池暂无待接工单', active: '没有进行中的工单', done: '还没有完成的工单' }[this.view]
     },
     emptyHint() {
+      if (this.hasFilters) return '试试清除筛选，或换一个关键字。'
       return {
         pool: '管理者派单后会出现在这里，下拉可刷新。',
         active: '接单后的工单会在这里，完成后等待租客确认。',
@@ -186,7 +229,10 @@ export default {
       }
     },
     async fetchPage(page) {
-      const result = await getWorkbenchOrders({ view: this.view, page, limit: 20 })
+      const params = { view: this.view, page, limit: 20, ...this.filterParams }
+      const keyword = this.keyword.trim()
+      if (keyword) params.keyword = keyword
+      const result = await getWorkbenchOrders(params)
       // 白名单投影：不保存租客姓名、电话等资料，列表只展示维修所需信息。
       const orders = (result.data || []).map(order => ({
         id: order.id,
@@ -227,6 +273,26 @@ export default {
       this.page = 0
       this.total = 0
       this.totalPages = 0
+      this.refresh()
+    },
+    selectFilter(key) {
+      if (this.loading || this.busyId || this.activeFilter === key) return
+      this.activeFilter = key
+      this.refresh()
+    },
+    applySearch() {
+      if (this.loading || this.busyId) return
+      this.refresh()
+    },
+    clearKeyword() {
+      if (!this.keyword) return
+      this.keyword = ''
+      this.refresh()
+    },
+    clearFilters() {
+      if (!this.hasFilters) return
+      this.activeFilter = 'all'
+      this.keyword = ''
       this.refresh()
     },
     async claim(order) {
@@ -297,6 +363,13 @@ export default {
 .wb-brief-count { display: flex; align-items: baseline; gap: 4rpx; flex-shrink: 0; }
 .wb-brief-number { font-size: 56rpx; line-height: 1; letter-spacing: -2rpx; font-weight: 550; color: #4e5845; font-variant-numeric: tabular-nums; }
 .wb-brief-unit { font-size: 20rpx; color: #68715b; }
+
+.wb-search { display: flex; align-items: center; gap: 10rpx; height: 76rpx; margin-top: 18rpx; padding: 0 24rpx; border: 1rpx solid #e9e6de; border-radius: 20rpx; background: #fffefa; }
+.wb-search-input { flex: 1; min-width: 0; height: 76rpx; font-size: 23rpx; color: #302f2a; }
+.wb-search-clear { width: 40rpx; height: 40rpx; line-height: 38rpx; text-align: center; border-radius: 50%; background: #f0ece3; color: #817e76; font-size: 28rpx; flex-shrink: 0; }
+.wb-filters { width: 100%; margin-top: 14rpx; white-space: nowrap; }
+.wb-filter { display: inline-flex; align-items: center; margin-right: 10rpx; padding: 11rpx 22rpx; border-radius: 14rpx; background: #ebe7df; color: #817e76; font-size: 21rpx; line-height: 1.4; }
+.wb-filter.active { background: #68715b; color: #fffefa; }
 
 .wb-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; font-size: 22rpx; color: #817e76; margin-bottom: 8rpx; }
 .wb-sync { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

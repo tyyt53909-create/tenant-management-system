@@ -4697,6 +4697,45 @@
                 "done"
               ]
             }
+          },
+          {
+            "name": "priority",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "LOW",
+                "NORMAL",
+                "URGENT"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PLUMBING",
+                "ELECTRICAL",
+                "APPLIANCE",
+                "FURNITURE",
+                "DOOR_WINDOW",
+                "OTHER"
+              ]
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "搜索标题、描述或房间号",
+            "schema": {
+              "maxLength": 50,
+              "type": "string"
+            }
           }
         ],
         "responses": {
