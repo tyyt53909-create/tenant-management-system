@@ -2,7 +2,7 @@
   <div class="space-page">
     <section class="space-controlbar">
       <div class="space-controlbar-title">
-        <strong>{{ model?.buildingName || '房源模型' }}</strong>
+        <strong>{{ model?.building.name || '房源模型' }}</strong>
         <span v-if="model">{{ model.summary.total }} 间 · {{ model.floors.length }} 层</span>
       </div>
       <div class="space-controlbar-actions">
@@ -12,7 +12,7 @@
           filterable
           class="space-building-select"
           :loading="buildingsLoading"
-          @change="loadRooms"
+          @change="loadSpace"
         >
           <el-option
             v-for="building in buildings"
@@ -24,7 +24,8 @@
             <small class="space-option-meta">{{ building.floors || building.totalFloors }} 层</small>
           </el-option>
         </el-select>
-        <el-button :loading="roomsLoading" @click="loadRooms">刷新</el-button>
+        <el-button :loading="spaceLoading" @click="loadSpace">刷新</el-button>
+        <el-button @click="router.push({ path: '/space/editor', query: { building: buildingId } })">编辑平面图</el-button>
       </div>
     </section>
 
@@ -60,42 +61,17 @@
           </button>
         </div>
 
-        <div class="space-stage-actions">
-          <el-select
-            v-if="mode === '3d' && model && model.floors.length > 1"
-            v-model="isolatedFloor"
-            clearable
-            placeholder="全部楼层"
-            class="space-floor-select"
-            @change="applyFloorIsolation"
-          >
-            <el-option
-              v-for="floor in model.floors"
-              :key="floor.floor"
-              :label="`${floor.floor}F`"
-              :value="floor.floor"
-            />
-          </el-select>
-          <el-button
-            v-if="mode === '3d'"
-            :type="exploded ? 'primary' : 'default'"
-            @click="toggleExploded"
-          >
-            {{ exploded ? '合拢楼层' : '展开楼层' }}
-          </el-button>
-          <el-button v-if="mode === '3d'" @click="resetView">重置视角</el-button>
-        </div>
       </header>
 
-      <div v-if="buildingsLoading || roomsLoading" class="space-loading" aria-busy="true">
+      <div v-if="buildingsLoading || spaceLoading" class="space-loading" aria-busy="true">
         <div class="space-loading-stage" />
-        <p>正在读取楼栋与房源…</p>
+        <p>正在读取楼栋与空间模型…</p>
       </div>
 
       <div v-else-if="loadError" class="space-error" role="alert">
         <strong>空间模型未能加载</strong>
         <p>{{ loadError }}</p>
-        <el-button @click="loadRooms">重新加载</el-button>
+        <el-button @click="loadSpace">重新加载</el-button>
       </div>
 
       <div v-else-if="!buildings.length" class="space-empty">
@@ -105,7 +81,7 @@
       </div>
 
       <div v-else-if="model && model.summary.total === 0" class="space-empty">
-        <strong>{{ model.buildingName }} 还没有房源</strong>
+        <strong>{{ model.building.name }} 还没有房源</strong>
         <p>这栋楼目前只有楼层骨架。新增房源后，房间会直接出现在模型里。</p>
         <el-button type="primary" @click="router.push('/rooms')">前往房源管理</el-button>
       </div>
@@ -126,15 +102,14 @@
           </button>
         </div>
 
-        <SpacePlan2D
+        <SpacePlan2DContract
           v-if="mode === '2d'"
           :model="model"
           :selected-id="selectedRoomId"
           @select="openRoom"
         />
-        <SpaceScene3D
+        <SpaceScene3DContract
           v-else
-          ref="sceneRef"
           :model="model"
           :selected-id="selectedRoomId"
           @select="openRoom"
@@ -142,88 +117,54 @@
         />
 
         <footer class="space-stage-foot">
-          <span v-if="mode === '2d'">按楼层排列的示意图；房号顺序不代表真实方位。</span>
+          <span v-if="mode === '2d'">按楼层排列的示意或平面图；AUTHORED 楼层的方位来自平面图资料。</span>
           <span v-else>等轴模型用于观察楼层与房间状态；可拖拽旋转、滚轮缩放。</span>
-          <span v-if="truncated" class="space-truncated">
-            房源超过 {{ ALL_ROOMS_LIMIT }} 条，当前只加载前 {{ ALL_ROOMS_LIMIT }} 条。
-          </span>
         </footer>
       </template>
     </section>
 
     <PropertyDetailPanel
-      ref="detailPanelRef"
       v-model="detailVisible"
       kind="rooms"
       :id="selectedRoomId"
       @edit="handleEdit"
       @status="handleStatus"
     />
-    <RoomStatusDialog
-      v-model="statusDialogVisible"
-      :room="statusRoom"
-      @success="handleStatusSuccess"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getBuildings } from '@/api/buildings';
-import { ALL_ROOMS_LIMIT, fetchAllRooms } from '@/api/rooms';
-import type { Building, Room } from '@/types';
+import { getBuildingSpace } from '@/api/space';
+import type { Building } from '@/types';
+import type { SpaceModelContract, SpaceRoomContract, SpaceState } from '@/types/space';
 import type { ResourceRecord } from '@/utils/resource';
-import {
-  SPACE_STATE_META,
-  SPACE_STATE_ORDER,
-  buildSpaceModel,
-  type SpaceModel,
-  type SpaceRoom,
-  type SpaceState,
-} from '@/utils/spaceModel';
-import SpacePlan2D from '@/components/space/SpacePlan2D.vue';
+import { SPACE_STATE_META, SPACE_STATE_ORDER } from '@/utils/spaceModel';
+import SpacePlan2DContract from '@/components/space/SpacePlan2DContract.vue';
 import PropertyDetailPanel from '@/components/common/PropertyDetailPanel.vue';
-import RoomStatusDialog from '@/views/rooms/components/RoomStatusDialog.vue';
 
-const SpaceScene3D = defineAsyncComponent(() => import('@/components/space/SpaceScene3D.vue'));
+const SpaceScene3DContract = defineAsyncComponent(
+  () => import('@/components/space/SpaceScene3DContract.vue'),
+);
 
 type BuildingWithFloors = Building & { floors?: number };
-type SpaceSceneInstance = {
-  resetView: () => void;
-  isolateFloor: (floor: number | null) => void;
-  setExploded: (value: boolean) => void;
-};
 
 const router = useRouter();
 const route = useRoute();
 
 const buildings = ref<BuildingWithFloors[]>([]);
 const buildingId = ref('');
-const rooms = ref<Room[]>([]);
+const model = ref<SpaceModelContract | null>(null);
 const buildingsLoading = ref(false);
-const roomsLoading = ref(false);
+const spaceLoading = ref(false);
 const loadError = ref('');
-const truncated = ref(false);
 const mode = ref<'2d' | '3d'>('3d');
-const isolatedFloor = ref<number | null>(null);
-const exploded = ref(false);
 const selectedRoomId = ref('');
 const detailVisible = ref(false);
-const statusDialogVisible = ref(false);
-const statusRoom = ref<Room | null>(null);
-const sceneRef = ref<SpaceSceneInstance>();
-const detailPanelRef = ref<{ reload?: () => void }>();
 
-let roomRequest = 0;
-
-const selectedBuilding = computed(() =>
-  buildings.value.find((building) => building.id === buildingId.value),
-);
-
-const model = computed<SpaceModel | null>(() =>
-  selectedBuilding.value ? buildSpaceModel(selectedBuilding.value, rooms.value) : null,
-);
+let spaceRequest = 0;
 
 const summaryItems = computed(() => {
   if (!model.value) return [];
@@ -265,7 +206,7 @@ async function loadBuildings() {
     const queryId = typeof route.query.building === 'string' ? route.query.building : '';
     const preferred = buildings.value.find((building) => building.id === queryId);
     buildingId.value = preferred?.id || buildings.value[0]?.id || '';
-    await loadRooms();
+    await loadSpace();
   } catch {
     loadError.value = '请检查连接后重试；空间模型不会显示旧的楼栋数据。';
   } finally {
@@ -273,30 +214,28 @@ async function loadBuildings() {
   }
 }
 
-async function loadRooms() {
+async function loadSpace() {
   if (!buildingId.value) {
-    rooms.value = [];
+    model.value = null;
     return;
   }
-  const requestId = ++roomRequest;
-  roomsLoading.value = true;
+  const requestId = ++spaceRequest;
+  spaceLoading.value = true;
   loadError.value = '';
   try {
-    const result = await fetchAllRooms({ buildingId: buildingId.value });
-    if (requestId !== roomRequest) return;
-    rooms.value = result.data;
-    truncated.value = result.truncated;
+    const result = await getBuildingSpace(buildingId.value);
+    if (requestId !== spaceRequest) return;
+    model.value = result;
   } catch {
-    if (requestId !== roomRequest) return;
-    rooms.value = [];
-    truncated.value = false;
-    loadError.value = '房源列表未能加载，请稍后重试。';
+    if (requestId !== spaceRequest) return;
+    model.value = null;
+    loadError.value = '空间模型未能加载，请确认后端已更新并稍后重试。';
   } finally {
-    if (requestId === roomRequest) roomsLoading.value = false;
+    if (requestId === spaceRequest) spaceLoading.value = false;
   }
 }
 
-function openRoom(room: SpaceRoom) {
+function openRoom(room: Pick<SpaceRoomContract, 'id'>) {
   selectedRoomId.value = room.id;
   detailVisible.value = true;
 }
@@ -310,39 +249,14 @@ function handleEdit(record: ResourceRecord) {
 
 function handleStatus(record: ResourceRecord) {
   const id = record.id;
-  if (typeof id !== 'string' || !id) return;
-  const source = rooms.value.find((room) => room.id === id);
-  if (!source) return;
-  statusRoom.value = source;
-  statusDialogVisible.value = true;
-}
-
-function handleStatusSuccess() {
-  void loadRooms();
-  nextTick(() => detailPanelRef.value?.reload?.());
+  if (typeof id === 'string' && id) {
+    // 空間 API 只回傳投影狀態；房態操作回到房源頁的既有詳情/流轉流程。
+    void router.push({ path: '/rooms', query: { detail: id } });
+  }
 }
 
 function setMode(nextMode: '2d' | '3d') {
   mode.value = nextMode;
-  if (nextMode === '3d') {
-    void nextTick(() => {
-      sceneRef.value?.isolateFloor(isolatedFloor.value);
-      sceneRef.value?.setExploded(exploded.value);
-    });
-  }
-}
-
-function applyFloorIsolation() {
-  sceneRef.value?.isolateFloor(isolatedFloor.value);
-}
-
-function toggleExploded() {
-  exploded.value = !exploded.value;
-  sceneRef.value?.setExploded(exploded.value);
-}
-
-function resetView() {
-  sceneRef.value?.resetView();
 }
 
 function focusLegend(state: SpaceState) {
@@ -359,8 +273,6 @@ function handleUnsupported() {
 watch(
   () => buildingId.value,
   () => {
-    isolatedFloor.value = null;
-    exploded.value = false;
     selectedRoomId.value = '';
     detailVisible.value = false;
     if (typeof route.query.building === 'string' && route.query.building !== buildingId.value) {

@@ -17,6 +17,13 @@ async function loadPage(path) {
 }
 const cleaningPage = await loadPage('../pages/cleaning/cleaning.vue')
 const loginPage = await loadPage('../pages/login/login.vue')
+async function loadComponent(path) {
+  const url = new URL(path, import.meta.url)
+  const source = await readFile(url, 'utf8')
+  const script = source.match(/<script>([\s\S]*?)<\/script>/)[1]
+  return (await import(`data:text/javascript;base64,${Buffer.from(script).toString('base64')}`)).default
+}
+const spaceMiniMap = await loadComponent('../components/SpaceMiniMap.vue')
 function instance(page) {
   const vm = page.data()
   for (const [key, method] of Object.entries(page.methods)) vm[key] = method.bind(vm)
@@ -132,6 +139,24 @@ test('cleaner list only retains safe room fields and cleanable rooms', async () 
   assert.equal(vm.rooms.length, 1)
   assert.deepEqual(Object.keys(vm.rooms[0]).sort(), ['id', 'roomNumber', 'floor', 'buildingName', 'cleanStatus', 'version'].sort())
   assert.ok(!JSON.stringify(vm.rooms).includes('PRIVATE'))
+})
+test('task-map selection focuses only the matching task card', () => {
+  const vm = ready(); let scroll
+  vm.$nextTick = callback => callback()
+  uni.pageScrollTo = options => { scroll = options }
+  vm.focusTask('room-1')
+  assert.equal(vm.focusedRoomId, 'room-1')
+  assert.deepEqual(scroll, { selector: '#task-room-1', duration: 250 })
+})
+test('space map separates cleaner tasks in different buildings on the same floor', () => {
+  const floors = spaceMiniMap.computed.floors.call({ rooms: [
+    { id: 'a-301', buildingName: '棲居一號樓', floor: 3, roomNumber: '301' },
+    { id: 'a-302', buildingName: '棲居一號樓', floor: 3, roomNumber: '302' },
+    { id: 'b-301', buildingName: '棲居二號樓', floor: 3, roomNumber: '301' }
+  ] })
+  assert.equal(floors.length, 2)
+  assert.deepEqual(floors.map(row => row.label), ['棲居一號樓 · 3楼', '棲居二號樓 · 3楼'])
+  assert.deepEqual(floors.map(row => row.rooms.map(item => item.id)), [['a-301', 'a-302'], ['b-301']])
 })
 test('tenant cannot load cleaner tasks', async () => {
   replies.push({ data: { role: 'TENANT' } })

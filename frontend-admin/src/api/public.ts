@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import type { SpaceModelContract } from '@/types/space';
 
 /** 公开看房（P1 / T155）：无需登录，后端仅返回可租房源白名单字段 */
 export interface PublicRoom {
@@ -22,6 +23,10 @@ export interface PublicBuilding {
 export const getPublicBuildings = (): Promise<PublicBuilding[]> => {
   return request.get('/public/buildings');
 };
+
+/** 公開空間投影；後端只回傳可租房間。 */
+export const getPublicBuildingSpace = (buildingId: string): Promise<SpaceModelContract> =>
+  request.get(`/public/buildings/${encodeURIComponent(buildingId)}/space`);
 
 export const getPublicRooms = (params: {
   page?: number;

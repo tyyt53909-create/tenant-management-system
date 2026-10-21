@@ -35,6 +35,11 @@
         </el-form-item>
       </el-form>
 
+      <section v-if="publicSpace" class="public-space" aria-label="可租房源分布">
+        <h3>可租房源分佈</h3>
+        <SpacePlan2DContract :model="rentableOnlySpace" />
+      </section>
+
       <el-empty v-if="!loading && tableData.length === 0" description="暂无可租房源" />
 
       <el-row v-else :gutter="16" v-loading="loading">
@@ -108,16 +113,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { getPublicBuildings, getPublicRooms } from '@/api/public';
+import { getPublicBuildings, getPublicRooms, getPublicBuildingSpace } from '@/api/public';
 import type { PublicBuilding, PublicRoom } from '@/api/public';
+import type { SpaceModelContract } from '@/types/space';
+import SpacePlan2DContract from '@/components/space/SpacePlan2DContract.vue';
 
 const loading = ref(false);
 const buildings = ref<PublicBuilding[]>([]);
 const tableData = ref<PublicRoom[]>([]);
 const detailVisible = ref(false);
 const detail = ref<PublicRoom | null>(null);
+const publicSpace = ref<SpaceModelContract | null>(null);
+const rentableOnlySpace = computed<SpaceModelContract>(() => {
+  const model = publicSpace.value!;
+  const floors = model.floors.map((floor) => ({
+    ...floor,
+    rooms: floor.rooms.filter((room) => room.state === 'RENTABLE').map((room) => ({
+      id: room.id, roomNumber: room.roomNumber, floor: room.floor, shape: room.shape,
+      state: room.state, alerts: [], version: room.version, unplaced: room.unplaced,
+    })),
+  }));
+  const total = floors.reduce((count, floor) => count + floor.rooms.length, 0);
+  return {
+    ...model, view: 'PUBLIC', capabilities: { canSeeTenant: false, canSeeRent: false, canOperateStatus: false, canOperateCleaning: false }, floors,
+    summary: { total, occupied: 0, reserved: 0, rentable: total, pendingClean: 0, cleaning: 0, maintenance: 0, unknown: 0, occupancyRate: 0, rentableRate: total ? 100 : 0 },
+  };
+});
 
 const query = reactive<{ buildingId?: string; roomType?: string; floor?: number }>({});
 const pagination = reactive({ page: 1, limit: 12, total: 0 });
@@ -151,6 +174,7 @@ const fetchData = async () => {
 
 const handleQuery = () => {
   pagination.page = 1;
+  loadPublicSpace(query.buildingId);
   fetchData();
 };
 
@@ -169,8 +193,22 @@ const openDetail = (room: PublicRoom) => {
 const loadBuildings = async () => {
   try {
     buildings.value = await getPublicBuildings();
+    if (!query.buildingId && buildings.value.length) {
+      query.buildingId = buildings.value[0].id;
+      await loadPublicSpace(query.buildingId);
+    }
   } catch {
     // 楼栋列表失败不阻断房源列表
+  }
+};
+
+const loadPublicSpace = async (buildingId?: string) => {
+  publicSpace.value = null;
+  if (!buildingId) return;
+  try {
+    publicSpace.value = await getPublicBuildingSpace(buildingId);
+  } catch {
+    // 平面图失败不阻断公开房源列表。
   }
 };
 
@@ -182,6 +220,8 @@ onMounted(() => {
 
 <style scoped>
 .public-rooms { padding: 0; }
+.public-space { margin: 4px 0 20px; min-width: 0; }
+.public-space h3 { margin: 0 0 10px; font-size: 16px; }
 .header { display: flex; justify-content: space-between; align-items: flex-start; }
 .title { margin: 0; font-size: 20px; }
 .sub { margin: 6px 0 0; color: var(--text-muted); font-size: 13px; }
