@@ -39,6 +39,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '房源模型', icon: 'Grid' },
       },
       {
+        path: '/space/editor',
+        name: 'SpaceEditor',
+        component: () => import('@/views/space/editor.vue'),
+        meta: { title: '编辑平面图' },
+      },
+      {
         path: '/cleaning',
         name: 'Cleaning',
         component: () => import('@/views/cleaning/index.vue'),
