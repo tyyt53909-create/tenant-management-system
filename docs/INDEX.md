@@ -1,11 +1,11 @@
 # 文档索引
 
 > 本文档是所有项目文档的唯一注册表
-> 最后更新: 2026-10-18
-> 文档总数: 114 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 43、draft 7、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 126 份（含本索引与归档）
-> 任务书: 87 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 最后更新: 2026-10-21
+> 文档总数: 116 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 45、draft 7、archived 48（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 128 份（含本索引与归档）
+> 任务书: 92 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -37,6 +37,7 @@
 | [14-下一阶段计划（草案）.md](./14-下一阶段计划（草案）.md) | 下一阶段计划（草案） | 过程类 | draft | strong | docs/**、backend/**、frontend-admin/**、miniprogram/** | 2026-10-18 | 文檔二草案：只彙整已有证据的剩余工作，**范围待人工确认** |
 | [13-架构与现有代码优化计划.md](./13-架构与现有代码优化计划.md) | 架构与现有代码优化计划 | 过程类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\* | 2026-10-15 | OPT-01～OPT-28，不加新业务功能 |
 | [15-管理后台设计系统.md](./15-管理后台设计系统.md) | 管理后台设计系统 | 事实来源类 | active | medium | frontend-admin/src/styles/\*\*、frontend-admin/src/style.css、frontend-admin/src/components/common/ResourcePanel.vue、frontend-admin/src/views/\*\* | 2026-10-18 | 令牌唯一来源、WCAG AA 对比度表、11px 字级地板、页面骨架与顶栏断点 |
+| [16-房源模型接口契约.md](./16-房源模型接口契约.md) | 房源模型接口契约 | 事实来源类 | active | strong | backend/src/modules/space/\*\*、backend/src/modules/floor-plans/\*\*、frontend-admin/src/types/space.ts、frontend-admin/src/components/space/\*\* | 2026-10-21 | SpaceModel v1、座標系、FloorPlan/RoomShape、角色投影與 fixture；T221～T227 共享契約 |
 
 ---
 
@@ -52,6 +53,7 @@
 
 ## 3. 任务与交接
 
+- [2026-10-21-T220-房源模型系统.md](./handoff/2026-10-21-T220-房源模型系统.md)：T220，Phase 1 房源模型（2D SVG 剖面 + 3D 等轴模型、六態、楼层隔离/展开、详情联动），PR #37 合併；真实平面图与角色投影交给 T221～T227。
 - [2026-10-18-T209-落地页重做.md](./handoff/2026-10-18-T209-落地页重做.md)：T209，落地页改用栖居设计语言并重排为 9 节，手机 mockup 依现行小程序重画，九张产品截图经重建的流水线从当前界面重新产生（含列表裸 UUID、网页标题与 favicon 修复）。
 - [2026-10-18-T212-计划收口与看板校准.md](./handoff/2026-10-18-T212-计划收口与看板校准.md)：T212，看板校准（基准改报 main/develop、任务号动态推导、验收缺口实扫 docs/13）、OPT-08 三条收口、文檔二草案（docs/14）。
 - [2026-10-18-T211-生产可重现性与数据库约束.md](./handoff/2026-10-18-T211-生产可重现性与数据库约束.md)：T211，生产变量清单与接手路径（`.env.prod.example`）、同房源唯一性的数据库部分唯一索引与前置重复检查。
