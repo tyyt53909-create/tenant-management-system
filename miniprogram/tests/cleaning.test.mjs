@@ -16,10 +16,13 @@ async function loadPage(path) {
   return (await import(`data:text/javascript;base64,${Buffer.from(script).toString('base64')}`)).default
 }
 const cleaningPage = await loadPage('../pages/cleaning/cleaning.vue')
+const cleaningHome = await loadPage('../pages/cleaning/home.vue')
+const cleaningSettings = await loadPage('../pages/cleaning/settings.vue')
 const loginPage = await loadPage('../pages/login/login.vue')
 function instance(page) {
   const vm = page.data()
   for (const [key, method] of Object.entries(page.methods)) vm[key] = method.bind(vm)
+  for (const [key, getter] of Object.entries(page.computed || {})) Object.defineProperty(vm, key, { get: () => getter.call(vm) })
   return vm
 }
 
@@ -33,8 +36,10 @@ beforeEach(() => {
     removeStorageSync: key => storage.delete(key),
     reLaunch: options => navigation.push(options.url),
     switchTab: options => navigation.push(options.url),
+    navigateTo: options => navigation.push(options.url),
     showToast: options => toasts.push(options.title),
     showModal: options => options.success({ confirm: modalConfirm }),
+    pageScrollTo: () => {},
     request: options => {
       calls.push(options)
       const reply = replies.shift()
@@ -87,7 +92,7 @@ test('network failure rejects', async () => {
 })
 test('role routes separate cleaners and tenants', () => {
   openHome('CLEANER'); openHome('TENANT')
-  assert.deepEqual(navigation, ['/pages/cleaning/cleaning', '/pages/index/index'])
+  assert.deepEqual(navigation, ['/pages/cleaning/home', '/pages/index/index'])
 })
 test('old cleaner session is identified before tenant API requests', async () => {
   replies.push({ data: { role: 'CLEANER' } })
@@ -230,7 +235,7 @@ test('cleaner login goes directly to work page', async () => {
   replies.push({ data: { accessToken: 'token', refreshToken: 'refresh', user: { role: 'CLEANER' } } })
   await vm.handleLogin()
   assert.equal(storage.get('user_role'), 'CLEANER')
-  assert.deepEqual(navigation, ['/pages/cleaning/cleaning'])
+  assert.deepEqual(navigation, ['/pages/cleaning/home'])
 })
 test('tenant login preserves existing home tab', async () => {
   const vm = instance(loginPage); vm.form = { account: 'tenant@example.test', password: 'test-only' }
@@ -250,6 +255,56 @@ for (const [path, method] of [
     await instance(page)[method]()
     assert.equal(calls.length, 1)
     assert.ok(calls[0].url.endsWith('/auth/me'))
-    assert.deepEqual(navigation, ['/pages/cleaning/cleaning'])
+    assert.deepEqual(navigation, ['/pages/cleaning/home'])
   })
 }
+
+test('保洁首页汇总待清洁与清洁中，并可直达任务视图', async () => {
+  replies.push(
+    { data: { id: 'cleaner-1', email: 'cleaner@example.com', role: 'CLEANER' } },
+    { data: list([room, { ...room, id: 'room-2', roomNumber: '205', cleanStatus: 'CLEANING' }]) },
+    { data: { unreadCount: 1 } },
+  )
+  const vm = instance(cleaningHome)
+  await vm.load()
+
+  assert.deepEqual(vm.counts, { pending: 1, cleaning: 1 })
+  assert.equal(vm.recent.length, 1)
+  assert.equal(vm.unreadCount, 1)
+
+  vm.goWork('cleaning')
+  assert.deepEqual(navigation, ['/pages/cleaning/cleaning?view=cleaning'])
+})
+
+test('保洁设置页读取账号与未读，并可进入主题设置', async () => {
+  replies.push(
+    { data: { id: 'cleaner-1', email: 'cleaner@example.com', role: 'CLEANER' } },
+    { data: { unreadCount: 3 } },
+  )
+  const vm = instance(cleaningSettings)
+  await vm.load()
+
+  assert.equal(vm.email, 'cleaner@example.com')
+  assert.equal(vm.initial, 'C')
+  assert.equal(vm.unreadCount, 3)
+
+  vm.goTheme()
+  assert.deepEqual(navigation, ['/pages/theme/theme'])
+})
+
+test('保洁工作台按待清洁/清洁中本地切换', () => {
+  const vm = instance(cleaningPage)
+  vm.authorized = true
+  vm.rooms = [room, { ...room, id: 'room-2', cleanStatus: 'CLEANING' }]
+
+  vm.view = 'pending'
+  assert.equal(vm.visibleRooms.length, 1)
+  assert.equal(vm.visibleRooms[0].cleanStatus, 'PENDING_CLEAN')
+
+  vm.view = 'cleaning'
+  assert.equal(vm.visibleRooms.length, 1)
+  assert.equal(vm.visibleRooms[0].cleanStatus, 'CLEANING')
+
+  vm.view = 'all'
+  assert.equal(vm.visibleRooms.length, 2)
+})

@@ -57,7 +57,7 @@ test('保洁进入新增详情页时不请求租客数据', async () => {
   }
   assert.equal(calls.length, 2)
   assert.ok(calls.every(call => call.url.endsWith('/auth/me')))
-  assert.deepEqual(navigation, ['/pages/cleaning/cleaning', '/pages/cleaning/cleaning'])
+  assert.deepEqual(navigation, ['/pages/cleaning/home', '/pages/cleaning/home'])
 })
 test('首页仍是默认入口，详情页不混入原生四个 tab', async () => {
   const pages = JSON.parse(await readFile(new URL('../pages.json', import.meta.url), 'utf8'))
@@ -115,5 +115,5 @@ test('保洁不能进入合同附件接口',async()=>{
   const vm=await page('contract/contract');replies.push({role:'CLEANER'})
   await vm.loadContract()
   assert.equal(calls.length,1);assert.equal(vm.contract,null)
-  assert.deepEqual(navigation,['/pages/cleaning/cleaning'])
+  assert.deepEqual(navigation,['/pages/cleaning/home'])
 })

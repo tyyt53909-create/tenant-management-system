@@ -2,9 +2,9 @@
 
 > 最后更新: 2026-10-21
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: 发布分支 `main` `dd042e2`、集成分支 `develop` `950d4c7`（T001~T225 全量完成；生成时 HEAD 在 `feature/T225-multi-role-workbench`（数字含未合并提交））
+> 进度基准: 发布分支 `main` `dd042e2`、集成分支 `develop` `53df199`（T001~T225 全量完成；生成时 HEAD 在 `feature/T225-multi-role-workbench`（数字含未合并提交））
 > 整体进度: **100%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
-> 质量状态: 后端 (88 文件 910 测例)、管理后台 (13 文件 61 测例 + Playwright 7 流程)、小程序 (128 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
+> 质量状态: 后端 (88 文件 910 测例)、管理后台 (13 文件 61 测例 + Playwright 7 流程)、小程序 (131 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
 
 ---
 
@@ -19,7 +19,7 @@
 | **阻塞问题** | 0 | 无阻塞 |
 | **数据模型** | 32 张实体表 | Prisma schema 实际 model 严密对齐 |
 | **OpenAPI 路由** | 141 条路由 | 全自动化生成规范，类型 100% 导出前端 |
-| **自动化测试** | 1099 测例全绿 | 后端 910 + 小程序 128 + 前端 61，100% 通过率 |
+| **自动化测试** | 1102 测例全绿 | 后端 910 + 小程序 131 + 前端 61，100% 通过率 |
 | **验收缺口** | 1 项 | OPT-02(1) 未达标/未验证；逐条原因见 `docs/13`（本行由脚本实扫 docs/13，不手写数字） |
 | **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
 
@@ -105,15 +105,15 @@
 |------|----------------|----------|
 | 后端（NestJS） | 17365 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
 | 网页后台（Vue3） | 25333 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
-| 小程序（uni-app） | 7669 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
+| 小程序（uni-app） | 8084 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
 
 - **数据模型**：`grep -c '^model ' backend/prisma/schema.prisma` = **32**（与 docs/02 严格一致）
 - **OpenAPI 路由**：`backend/openapi.json` = **141** 条路由
 - **自动化测试**（实测：`npm test` 于 `backend/`、`frontend-admin/`、`miniprogram/` 分别执行后解析）：
   - 后端 Vitest：**88** 个测试文件，**910** 个测例全绿
   - 管理后台：**13** 个测试文件，**61** 个单元测试 + **7** 条 Playwright e2e 核心流程全绿
-  - 微信小程序：**128** 个测试用例全绿
-  - **总计测试用例**：**1099** 个测试，100% 通过率
+  - 微信小程序：**131** 个测试用例全绿
+  - **总计测试用例**：**1102** 个测试，100% 通过率
 - **文档体系**：
   - 核心文档与交接记录：**115** 份（CI 范围，docs/INDEX.md 100% 编目）
   - 任务书：**89** 个任务书文件

@@ -8,10 +8,26 @@
       }
     },
     {
+      "path": "pages/cleaning/home",
+      "style": {
+        "navigationBarTitleText": "保洁首页",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
       "path": "pages/cleaning/cleaning",
       "style": {
         "navigationBarTitleText": "保洁工作台",
+        "navigationStyle": "custom",
         "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/cleaning/settings",
+      "style": {
+        "navigationBarTitleText": "设置",
+        "navigationStyle": "custom"
       }
     },
     {

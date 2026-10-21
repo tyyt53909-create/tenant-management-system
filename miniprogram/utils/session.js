@@ -1,7 +1,7 @@
 import { getUserInfo } from '../api/index.js'
 import { API_BASE_URL } from './api-config.js'
 
-export const CLEANER_PAGE = '/pages/cleaning/cleaning'
+export const CLEANER_PAGE = '/pages/cleaning/home'
 export const MAINTENANCE_PAGE = '/pages/maintenance/home'
 
 export function openHome(role) {

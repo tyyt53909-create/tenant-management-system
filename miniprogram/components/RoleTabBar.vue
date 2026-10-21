@@ -15,19 +15,27 @@
 <script>
 import QIcon from './QIcon.vue'
 
+const MAINTENANCE_ITEMS = [
+  { key: 'home', label: '首页', icon: 'home', path: '/pages/maintenance/home' },
+  { key: 'work', label: '工单', icon: 'repair', path: '/pages/maintenance/workbench' },
+  { key: 'settings', label: '设置', icon: 'user', path: '/pages/maintenance/settings' },
+]
+const CLEANER_ITEMS = [
+  { key: 'home', label: '首页', icon: 'home', path: '/pages/cleaning/home' },
+  { key: 'work', label: '清洁', icon: 'check', path: '/pages/cleaning/cleaning' },
+  { key: 'settings', label: '设置', icon: 'user', path: '/pages/cleaning/settings' },
+]
+
 export default {
   components: { QIcon },
   props: {
     active: { type: String, default: 'home' },
+    variant: { type: String, default: 'maintenance' },
   },
-  data() {
-    return {
-      items: [
-        { key: 'home', label: '首页', icon: 'home', path: '/pages/maintenance/home' },
-        { key: 'work', label: '工单', icon: 'repair', path: '/pages/maintenance/workbench' },
-        { key: 'settings', label: '设置', icon: 'user', path: '/pages/maintenance/settings' },
-      ],
-    }
+  computed: {
+    items() {
+      return this.variant === 'cleaner' ? CLEANER_ITEMS : MAINTENANCE_ITEMS
+    },
   },
   methods: {
     go(item) {

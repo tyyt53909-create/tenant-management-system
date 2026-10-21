@@ -118,7 +118,7 @@ test('维修角色进入维修首页，不进入租客首页', () => {
   openHome('TENANT')
   assert.deepEqual(navigation, [
     '/pages/maintenance/home',
-    '/pages/cleaning/cleaning',
+    '/pages/cleaning/home',
     '/pages/index/index',
   ])
 })
