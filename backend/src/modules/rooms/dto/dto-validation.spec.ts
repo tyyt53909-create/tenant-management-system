@@ -67,6 +67,62 @@ describe('Rooms DTO 校验（回归）', () => {
 
       expect(errors.some((error) => error.property === 'floor')).toBe(true);
     });
+
+    it('应接受文件上传接口返回的照片地址', async () => {
+      const dto = plainToInstance(CreateRoomDto, {
+        ...base,
+        buildingId: 'building-001',
+        photos: [
+          {
+            fileUrl: '/api/files/1712345678901-abc.jpg',
+            thumbnail: '/api/files/1712345678901-abc.thumb.jpg',
+            fileSize: 2048,
+          },
+        ],
+      });
+
+      const errors = await validateLikeGlobalPipe(dto);
+
+      expect(errors).toHaveLength(0);
+    });
+
+    it('应拒绝站外照片地址', async () => {
+      const dto = plainToInstance(CreateRoomDto, {
+        ...base,
+        buildingId: 'building-001',
+        photos: [{ fileUrl: 'https://evil.example.com/tracker.png' }],
+      });
+
+      const errors = await validateLikeGlobalPipe(dto);
+
+      expect(errors.some((error) => error.property === 'photos')).toBe(true);
+    });
+
+    it('照片超过 20 张应被拒绝', async () => {
+      const dto = plainToInstance(CreateRoomDto, {
+        ...base,
+        buildingId: 'building-001',
+        photos: Array.from({ length: 21 }, (_, index) => ({
+          fileUrl: `/api/files/${index}.jpg`,
+        })),
+      });
+
+      const errors = await validateLikeGlobalPipe(dto);
+
+      expect(errors.some((error) => error.property === 'photos')).toBe(true);
+    });
+
+    it('照片对象夹带未声明字段应被拒绝', async () => {
+      const dto = plainToInstance(CreateRoomDto, {
+        ...base,
+        buildingId: 'building-001',
+        photos: [{ fileUrl: '/api/files/a.jpg', isCover: true }],
+      });
+
+      const errors = await validateLikeGlobalPipe(dto);
+
+      expect(errors.some((error) => error.property === 'photos')).toBe(true);
+    });
   });
 
   describe('QueryRoomsDto', () => {

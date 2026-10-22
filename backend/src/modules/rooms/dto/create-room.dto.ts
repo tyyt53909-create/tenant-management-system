@@ -1,4 +1,16 @@
-import { IsString, IsNotEmpty, IsInt, IsNumber, IsEnum, IsOptional, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsString,
+  IsNotEmpty,
+  IsInt,
+  IsNumber,
+  IsEnum,
+  IsOptional,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { MAX_ROOM_PHOTOS, RoomPhotoDto } from './room-photo.dto.js';
 
 export enum RoomType {
   SINGLE = 'SINGLE',
@@ -35,4 +47,14 @@ export class CreateRoomDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  /**
+   * 房源照片（先 POST /api/files/upload 取得 url 再提交）。
+   * 数组顺序即展示顺序，第一张作为封面；最多 20 张。
+   */
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => RoomPhotoDto)
+  @ArrayMaxSize(MAX_ROOM_PHOTOS, { message: `房源照片最多 ${MAX_ROOM_PHOTOS} 张` })
+  photos?: RoomPhotoDto[];
 }

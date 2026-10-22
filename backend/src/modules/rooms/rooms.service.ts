@@ -14,6 +14,7 @@ import { UpdateRoomDto } from './dto/update-room.dto.js';
 import { UpdateRoomStatusDto } from './dto/update-room-status.dto.js';
 import { MarkCleanDto } from './dto/mark-clean.dto.js';
 import { QueryRoomsDto } from './dto/query-rooms.dto.js';
+import { MAX_ROOM_PHOTOS, type RoomPhotoDto } from './dto/room-photo.dto.js';
 
 /** 允许的房态流转（docs/04-状态机.md §1.3，键与值均为 `status+cleanStatus`） */
 const ALLOWED_ROOM_TRANSITIONS: Record<string, string[]> = {
@@ -57,7 +58,8 @@ export class RoomsService {
       throw new ConflictException('该楼栋下该楼层的房号已存在');
     }
 
-    // 3. 创建房源
+    // 3. 创建房源（照片随房源同事务嵌套写入，避免出现半套记录）
+    const photos = this.buildRoomPhotoRows(dto.photos ?? []);
     return this.prisma.room.create({
       data: {
         roomNumber: dto.roomNumber,
@@ -69,8 +71,28 @@ export class RoomsService {
         description: dto.description,
         status: 'VACANT', // 默认空闲
         cleanStatus: 'CLEAN', // 默认已清洁
+        ...(photos.length > 0 ? { photos: { create: photos } } : {}),
+      },
+      include: {
+        photos: {
+          select: { id: true, fileUrl: true, thumbnail: true, fileSize: true, sortOrder: true },
+          orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+        },
       },
     });
+  }
+
+  /** 校验照片上限并生成落库字段；数组顺序即 sortOrder，第一张为封面。 */
+  private buildRoomPhotoRows(photos: RoomPhotoDto[]) {
+    if (photos.length > MAX_ROOM_PHOTOS) {
+      throw new BadRequestException(`房源照片最多 ${MAX_ROOM_PHOTOS} 张`);
+    }
+    return photos.map((photo, index) => ({
+      fileUrl: photo.fileUrl,
+      thumbnail: photo.thumbnail ?? null,
+      fileSize: photo.fileSize ?? 0,
+      sortOrder: index,
+    }));
   }
 
   async findAll(query: QueryRoomsDto, actorRole?: string, actorTenantId?: string) {
@@ -152,7 +174,7 @@ export class RoomsService {
       where: { id },
       include: {
         ...(actorRole === 'ADMIN' ? { photos: {
-          select: { id: true, fileUrl: true }, orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }], take: 20,
+          select: { id: true, fileUrl: true, thumbnail: true, fileSize: true, sortOrder: true }, orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }], take: 20,
         } } : {}),
         building: {
           select: {
@@ -240,12 +262,51 @@ export class RoomsService {
     await this.assertTransitionAllowed(room, targetStatus, targetCleanStatus);
 
     // 4. 更新（乐观锁：提供 version 时校验；每次成功更新 version 递增）
-    const { version: expectedVersion, facilities, ...fields } = dto;
+    const { version: expectedVersion, facilities, photos, ...fields } = dto;
     const data: Prisma.RoomUncheckedUpdateInput = {
       ...fields,
       ...(facilities !== undefined ? { facilities: facilities as Prisma.InputJsonValue } : {}),
       version: { increment: 1 },
     };
+
+    // 提供 photos 时全量替换照片；房源与照片同事务，避免「照片删了但房源没更新」。
+    if (photos !== undefined) {
+      const photoRows = this.buildRoomPhotoRows(photos);
+      const updated = await this.prisma.$transaction(async (tx) => {
+        if (expectedVersion !== undefined) {
+          const result = await tx.room.updateMany({
+            where: { id, version: expectedVersion },
+            data,
+          });
+
+          if (result.count === 0) {
+            throw new ConflictException(VERSION_CONFLICT_MESSAGE);
+          }
+        } else {
+          await tx.room.update({ where: { id }, data });
+        }
+
+        await tx.roomPhoto.deleteMany({ where: { roomId: id } });
+        if (photoRows.length > 0) {
+          await tx.roomPhoto.createMany({
+            data: photoRows.map((photo) => ({ ...photo, roomId: id })),
+          });
+        }
+
+        return tx.room.findUniqueOrThrow({
+          where: { id },
+          include: {
+            photos: {
+              select: { id: true, fileUrl: true, thumbnail: true, fileSize: true, sortOrder: true },
+              orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+            },
+          },
+        });
+      });
+
+      await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
+      return updated;
+    }
 
     if (expectedVersion !== undefined) {
       const result = await this.prisma.room.updateMany({
@@ -458,22 +519,22 @@ export class RoomsService {
       throw new NotFoundException('房源不存在');
     }
 
-    // 2. 关联数据检查（合同/水表/报修/退租/照片），有则拒绝删除（T139）
-    const [contracts, meters, maintenanceRequests, checkoutRecords, photos] =
+    // 2. 关联数据检查（合同/水表/报修/退租），有则拒绝删除（T139）
+    // 房源照片随房间级联删除，属于房源自身属性，不再作为删除阻断条件（T230）。
+    const [contracts, meters, maintenanceRequests, checkoutRecords] =
       await Promise.all([
         this.prisma.contract.count({ where: { roomId: id } }),
         this.prisma.meter.count({ where: { roomId: id } }),
         this.prisma.maintenanceRequest.count({ where: { roomId: id } }),
         this.prisma.checkoutRecord.count({ where: { roomId: id } }),
-        this.prisma.roomPhoto.count({ where: { roomId: id } }),
       ]);
 
     const relatedCount =
-      contracts + meters + maintenanceRequests + checkoutRecords + photos;
+      contracts + meters + maintenanceRequests + checkoutRecords;
 
     if (relatedCount > 0) {
       throw new BadRequestException(
-        '该房间存在关联数据（合同/水表/报修/退租/照片），不能删除',
+        '该房间存在关联数据（合同/水表/报修/退租），不能删除',
       );
     }
 

@@ -1,10 +1,10 @@
 # 项目状态跟踪
 
-> 最后更新: 2026-10-19
+> 最后更新: 2026-10-22
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: 发布分支 `main` `dd042e2`、集成分支 `develop` `f39b273`（T001~T218 全量完成）
+> 进度基准: 发布分支 `main` `dd042e2`、集成分支 `develop` `53df199`（T001~T230 全量完成；生成时 HEAD 在 `chore/T232-board-docs-calibration`（数字含未合并提交））
 > 整体进度: **100%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
-> 质量状态: 后端 (88 文件 891 测例)、管理后台 (12 文件 52 测例 + Playwright 6 流程)、小程序 (110 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
+> 质量状态: 后端 (90 文件 911 测例)、管理后台 (17 文件 79 测例 + Playwright 9 流程)、小程序 (112 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
 
 ---
 
@@ -14,12 +14,12 @@
 |------|-----|------|
 | **当前阶段** | 阶段0~阶段4 全量收官；架构优化计划 M1~M4 全部完成 | 房态状态机、滞纳金核销、水电表MQTT模拟器、预付闭环、OTP/限流加固、生产编排与灾备演练全量交付 |
 | **整体进度** | **100%** | 唯一事实来源：五阶段进度严格加权均值 100% |
-| **活跃任务** | T218 | 见 `tasks/T218-*.md`（由 scripts/generate-status.mjs 从 tasks/ 推导） |
-| **已完成任务** | T001~T218 | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 优化（任务书 87 份） |
+| **活跃任务** | T230 | 见 `tasks/T230-*.md`（由 scripts/generate-status.mjs 从 tasks/ 推导） |
+| **已完成任务** | T001~T230 | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 优化（任务书 97 份） |
 | **阻塞问题** | 0 | 无阻塞 |
-| **数据模型** | 32 张实体表 | Prisma schema 实际 model 严密对齐 |
-| **OpenAPI 路由** | 135 条路由 | 全自动化生成规范，类型 100% 导出前端 |
-| **自动化测试** | 1053 测例全绿 | 后端 891 + 小程序 110 + 前端 52，100% 通过率 |
+| **数据模型** | 34 张实体表 | Prisma schema 实际 model 严密对齐 |
+| **OpenAPI 路由** | 140 条路由 | 全自动化生成规范，类型 100% 导出前端 |
+| **自动化测试** | 1102 测例全绿 | 后端 911 + 小程序 112 + 前端 79，100% 通过率 |
 | **验收缺口** | 1 项 | OPT-02(1) 未达标/未验证；逐条原因见 `docs/13`（本行由脚本实扫 docs/13，不手写数字） |
 | **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
 
@@ -34,7 +34,7 @@
 - [x] 配置四套 GitHub Actions CI/CD 工作流
 
 ### 阶段 1：核心骨架与样板模块 — 100%
-- [x] 数据库迁移与种子数据（28 张表全部完成）
+- [x] 数据库迁移与种子数据（34 张表全部完成）
 - [x] 认证与授权模块（JWT 轮换、Cookie 加固、Google 登录、邮箱 OTP、独立邀请码）
 - [x] 权限守卫与审计日志（AuditLog 记录关键变更）
 - [x] 文件存储抽象（本地与 S3 存储适配、EXIF 脱敏与缩略图）
@@ -60,7 +60,7 @@
 
 ### 阶段 4：测试、部署、灾备与交付 — 100%
 - [x] 前端管理后台四道 CI 门禁（oxlint / vue-tsc / vitest / vite build）
-- [x] 端到端自动化验收（后端 e2e 27 项断言 + 管理后台 Playwright 5 条核心业务流程）
+- [x] 端到端自动化验收（后端 e2e 27 项断言 + 管理后台 Playwright 9 条核心业务流程）
 - [x] 生产容器化部署工件（多阶段非 root Dockerfile、Nginx 反代安全标头、`docker-compose.prod.yml`）
 - [x] 生产环境备份恢复演练（PostgreSQL 物理/逻辑灾备，RTO 2.4s、RPO 0 数据丢失）
 - [x] 100 并发性能基线达标（k6 压测 P95 66.75ms，错误率 0.00%）
@@ -84,7 +84,11 @@
 
 ## 💬 最新更新
 
-### 2026-10-19
+### 2026-10-22
+- ✅ **T230 房源照片上传**：新增/编辑房源支持最多 20 张照片（JPG/PNG/WebP、单张 ≤10MB），`sortOrder` 持久化排序、首张为封面，管理端可拖拽排序与删除。
+- ✅ **T220–T228 房源空间模型**：楼层平面图与房间形状数据模型、空间 API 与角色投影、2D/3D 渲染器、平面图编辑器、授权 e2e 与公开视图、CLEANER/TENANT 空间视图、小区/楼栋模型视觉重做。
+- ✅ **T215–T218 运营与对账**：租客标签管理、旧资料导入、公共水电分摊、水电对账。
+- ✅ **T205–T212 质量收口**：插槽类型与 dts、安全权限修复、金流与资料完整性、排程部署与 CI、落地页重做、审查剩余项、生产可重现性与数据库约束、看板校准。
 - ✅ **T204 管理后台 Element Plus 按需引入（OPT-19#3 达标）**：`unplugin-vue-components` + `ElementPlusResolver` 按需引入元件与指令，`main.ts` 不再全量注册，语言包改由 `el-config-provider` 提供；实测首屏 JS 1069 KB → **125 KB（−88.3%）**，16/16 路由零组件解析告警。
 - ✅ **T203 技术债与验证缺口收口**：`process.env` 收敛至 config 层（`src/` 非 config 层 0 处实际读取，新增 `bootstrap.config.ts`）；`check-docs.js` 出现 ❌ 改为 exit 1，文档门禁在 CI 真正生效；首屏 JS 体积完成前后实测；`ENCRYPTION_KEY` 生产必填补测试。
 - ✅ **T202 计划收口与度量看板实测化**：`generate-status.mjs` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；`check-docs.js` 新增 `.env.example` 与部署文档变量清单一致性校验（OPT-07）；修复 `scoped-where` 类型错误（原致 `nest build` 失败）、`openapi.json` 漂移与 `ENCRYPTION_KEY` 运行时缺陷。
@@ -92,8 +96,8 @@
 - ✅ **T200 仓库卫生与分支治理 (OPT-27)**：清理已合并的 29 个旧分支与无效 worktree；归档根目录 8 份游离文档；重构主指南 `README.md`。
 - ✅ **T199 备份恢复演练与性能基线 (OPT-26)**：完成 PostgreSQL 灾备演练（RTO 2.4s、RPO 0）；完成 100 并发 k6 压力基线实测（P95 66.75ms、0 错误）。
 - ✅ **T198 生产部署工件 (OPT-25)**：生产容器编排 `docker-compose.prod.yml` 与非 root 镜像。
-- ✅ **T197 e2e 与 UI 自动化测试 (OPT-24)**：Playwright 6 条核心流程（5 个 spec）与后端 e2e 接入 CI。
-- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，891 测例全绿。
+- ✅ **T197 e2e 与 UI 自动化测试 (OPT-24)**：Playwright 9 条核心流程（8 个 spec）与后端 e2e 接入 CI。
+- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，911 测例全绿。
 
 ---
 
@@ -103,20 +107,20 @@
 
 | 项目 | 非测试代码行数 | 统计命令 |
 |------|----------------|----------|
-| 后端（NestJS） | 16966 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
-| 网页后台（Vue3） | 22107 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
-| 小程序（uni-app） | 6558 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
+| 后端（NestJS） | 17369 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
+| 网页后台（Vue3） | 27678 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
+| 小程序（uni-app） | 6638 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
 
-- **数据模型**：`grep -c '^model ' backend/prisma/schema.prisma` = **32**（与 docs/02 严格一致）
-- **OpenAPI 路由**：`backend/openapi.json` = **135** 条路由
+- **数据模型**：`grep -c '^model ' backend/prisma/schema.prisma` = **34**（与 docs/02 严格一致）
+- **OpenAPI 路由**：`backend/openapi.json` = **140** 条路由
 - **自动化测试**（实测：`npm test` 于 `backend/`、`frontend-admin/`、`miniprogram/` 分别执行后解析）：
-  - 后端 Vitest：**88** 个测试文件，**891** 个测例全绿
-  - 管理后台：**12** 个测试文件，**52** 个单元测试 + **6** 条 Playwright e2e 核心流程全绿
-  - 微信小程序：**110** 个测试用例全绿
-  - **总计测试用例**：**1053** 个测试，100% 通过率
+  - 后端 Vitest：**90** 个测试文件，**911** 个测例全绿
+  - 管理后台：**17** 个测试文件，**79** 个单元测试 + **9** 条 Playwright e2e 核心流程全绿
+  - 微信小程序：**112** 个测试用例全绿
+  - **总计测试用例**：**1102** 个测试，100% 通过率
 - **文档体系**：
-  - 核心文档与交接记录：**114** 份（CI 范围，docs/INDEX.md 100% 编目）
-  - 任务书：**87** 个任务书文件
+  - 核心文档与交接记录：**120** 份（CI 范围，docs/INDEX.md 100% 编目）
+  - 任务书：**97** 个任务书文件
 
 ---
 
