@@ -39,6 +39,18 @@ const headNote =
   headBranch === 'main' || headBranch === 'develop'
     ? ''
     : `；生成时 HEAD 在 \`${headBranch}\`（数字含未合并提交）`;
+// 工作区有未提交改动时，实测数字同样包含这些改动（T230 验收曾因此把未提交代码算进看板）
+const dirtyNote = (() => {
+  try {
+    // node_modules 属构建产物（worktree 常用软链接共享依赖），不算代码改动
+    const changed = execSync('git status --porcelain', { cwd: repoRoot, encoding: 'utf8' })
+      .split('\n')
+      .filter((line) => line.trim() && !/node_modules/.test(line));
+    return changed.length ? '；工作区有未提交改动' : '';
+  } catch {
+    return '';
+  }
+})();
 
 // 2. 统计数据模型
 const schemaPath = path.join(repoRoot, 'backend/prisma/schema.prisma');
@@ -170,11 +182,11 @@ function parseVitestSuite(output) {
   return { files: files.passed, tests: tests.passed, failed: files.failed + tests.failed };
 }
 
-/** 小程序使用 node --test（TAP 汇总），例：`ℹ pass 108` / `ℹ fail 0` */
+/** 小程序使用 node --test：TTY 下是 spec 报告（`ℹ pass 108`），管道/CI 下是 TAP（`# pass 108`），两种都要认 */
 function parseNodeTestSuite(output) {
   const clean = output.replace(ANSI_PATTERN, '');
-  const pass = clean.match(/ℹ pass (\d+)/);
-  const fail = clean.match(/ℹ fail (\d+)/);
+  const pass = clean.match(/^(?:ℹ|#)\s*pass\s+(\d+)/m);
+  const fail = clean.match(/^(?:ℹ|#)\s*fail\s+(\d+)/m);
   return {
     files: countFiles("miniprogram/tests/*.test.mjs"),
     tests: Number(pass?.[1] ?? 0),
@@ -244,7 +256,7 @@ const content = `# 项目状态跟踪
 
 > 最后更新: ${dateStr}
 > 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: 发布分支 \`main\` \`${mainCommit}\`、集成分支 \`develop\` \`${developCommit}\`（T001~T${latestTaskNumber} 全量完成${headNote}）
+> 进度基准: 发布分支 \`main\` \`${mainCommit}\`、集成分支 \`develop\` \`${developCommit}\`（T001~T${latestTaskNumber} 全量完成${headNote}${dirtyNote}）
 > 整体进度: **${overallProgress}%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
 > 质量状态: 后端 (${backendTestFiles} 文件 ${backendTests} 测例)、管理后台 (${frontendTestFiles} 文件 ${frontendTests} 测例 + Playwright ${playwrightStats.tests} 流程)、小程序 (${miniprogramTests} 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
 
@@ -276,7 +288,7 @@ const content = `# 项目状态跟踪
 - [x] 配置四套 GitHub Actions CI/CD 工作流
 
 ### 阶段 1：核心骨架与样板模块 — 100%
-- [x] 数据库迁移与种子数据（28 张表全部完成）
+- [x] 数据库迁移与种子数据（34 张表全部完成）
 - [x] 认证与授权模块（JWT 轮换、Cookie 加固、Google 登录、邮箱 OTP、独立邀请码）
 - [x] 权限守卫与审计日志（AuditLog 记录关键变更）
 - [x] 文件存储抽象（本地与 S3 存储适配、EXIF 脱敏与缩略图）
@@ -302,7 +314,7 @@ const content = `# 项目状态跟踪
 
 ### 阶段 4：测试、部署、灾备与交付 — 100%
 - [x] 前端管理后台四道 CI 门禁（oxlint / vue-tsc / vitest / vite build）
-- [x] 端到端自动化验收（后端 e2e 27 项断言 + 管理后台 Playwright 5 条核心业务流程）
+- [x] 端到端自动化验收（后端 e2e 27 项断言 + 管理后台 Playwright ${playwrightStats.tests} 条核心业务流程）
 - [x] 生产容器化部署工件（多阶段非 root Dockerfile、Nginx 反代安全标头、\`docker-compose.prod.yml\`）
 - [x] 生产环境备份恢复演练（PostgreSQL 物理/逻辑灾备，RTO 2.4s、RPO 0 数据丢失）
 - [x] 100 并发性能基线达标（k6 压测 P95 66.75ms，错误率 0.00%）
@@ -327,6 +339,10 @@ const content = `# 项目状态跟踪
 ## 💬 最新更新
 
 ### ${dateStr}
+- ✅ **T230 房源照片上传**：新增/编辑房源支持最多 20 张照片（JPG/PNG/WebP、单张 ≤10MB），\`sortOrder\` 持久化排序、首张为封面，管理端可拖拽排序与删除。
+- ✅ **T220–T228 房源空间模型**：楼层平面图与房间形状数据模型、空间 API 与角色投影、2D/3D 渲染器、平面图编辑器、授权 e2e 与公开视图、CLEANER/TENANT 空间视图、小区/楼栋模型视觉重做。
+- ✅ **T215–T218 运营与对账**：租客标签管理、旧资料导入、公共水电分摊、水电对账。
+- ✅ **T205–T212 质量收口**：插槽类型与 dts、安全权限修复、金流与资料完整性、排程部署与 CI、落地页重做、审查剩余项、生产可重现性与数据库约束、看板校准。
 - ✅ **T204 管理后台 Element Plus 按需引入（OPT-19#3 达标）**：\`unplugin-vue-components\` + \`ElementPlusResolver\` 按需引入元件与指令，\`main.ts\` 不再全量注册，语言包改由 \`el-config-provider\` 提供；实测首屏 JS 1069 KB → **125 KB（−88.3%）**，16/16 路由零组件解析告警。
 - ✅ **T203 技术债与验证缺口收口**：\`process.env\` 收敛至 config 层（\`src/\` 非 config 层 0 处实际读取，新增 \`bootstrap.config.ts\`）；\`check-docs.js\` 出现 ❌ 改为 exit 1，文档门禁在 CI 真正生效；首屏 JS 体积完成前后实测；\`ENCRYPTION_KEY\` 生产必填补测试。
 - ✅ **T202 计划收口与度量看板实测化**：\`generate-status.mjs\` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；\`check-docs.js\` 新增 \`.env.example\` 与部署文档变量清单一致性校验（OPT-07）；修复 \`scoped-where\` 类型错误（原致 \`nest build\` 失败）、\`openapi.json\` 漂移与 \`ENCRYPTION_KEY\` 运行时缺陷。

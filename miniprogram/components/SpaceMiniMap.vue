@@ -20,6 +20,13 @@
 </template>
 
 <script>
+// 楼栋名按码点顺序比较：各运行时（JSCore / 浏览器 / Node）的 localeCompare
+// 排序规则不一致（中文拼音排序会把「二」排在「一」前），会让楼层分组顺序漂移。
+function compareBuildingName(a, b) {
+  if (a === b) return 0
+  return a < b ? -1 : 1
+}
+
 export default {
   props: {
     rooms: { type: Array, default: () => [] },
@@ -40,7 +47,7 @@ export default {
         grouped.get(groupKey).rooms.push(room)
       })
       return [...grouped.entries()]
-        .sort(([, a], [, b]) => a.buildingName.localeCompare(b.buildingName) || a.floor - b.floor)
+        .sort(([, a], [, b]) => compareBuildingName(a.buildingName, b.buildingName) || a.floor - b.floor)
         .map(([key, group]) => ({
           key,
           ...group,
