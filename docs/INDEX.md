@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-23
-> 文档总数: 124 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 68、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 136 份（含本索引与归档）
-> 任务书: 101 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 文档总数: 125 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 69、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 137 份（含本索引与归档）
+> 任务书: 102 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -54,6 +54,7 @@
 
 ## 3. 任务与交接
 
+- [T254-OPS-03-Nginx边界加固.md](../tasks/T254-OPS-03-Nginx边界加固.md)：OPS-03，nginx 上传上限 10MB 与 413 JSON、CSP/Permissions-Policy 等安全头、边缘限流 429、HTTPS 叠加配置（TLS 1.2/1.3 + HSTS + HTTP/2）。
 - [T253-OPS-02-Node24与优雅关闭.md](../tasks/T253-OPS-02-Node24与优雅关闭.md)：OPS-02，生产镜像升级 Node 24 LTS、SIGTERM 优雅关闭与 25s 看门狗、Redis 停机 QUIT、容器只读根文件系统与最小权限。
 - [T252-OPS-01-生产可启动性.md](../tasks/T252-OPS-01-生产可启动性.md)：OPS-01，环境变量集中校验、Redis URL/密码与断线重连、`/health/live`、生产模板与一致性门禁。
 - [T250-M0生产化收口.md](../tasks/T250-M0生产化收口.md)：M0 治理收口（docs/19 路线图、T250–T314 编号、DEC 登记、任务书 schema、STATUS 真实化）；不改业务代码。
@@ -277,6 +278,7 @@
 
 ### 3.4 交接记录
 
+- [2026-10-23-T254-Nginx边界加固.md](./handoff/2026-10-23-T254-Nginx边界加固.md)：T254，nginx 上传上限 10MB 与 JSON 413、CSP/Permissions-Policy 安全头、30r/s 边缘限流 429、HTTPS 叠加配置（TLS 1.2/1.3 + HSTS + HTTP/2）；实测 8MB 通过、11MB 413、120 并发 56×429。
 - [2026-10-23-T253-Node24与优雅关闭.md](./handoff/2026-10-23-T253-Node24与优雅关闭.md)：T253，生产镜像升级 Node 24 LTS、SIGTERM 优雅关闭（实测 72ms）与 25s 看门狗、Redis QUIT、只读根文件系统与最小权限；含 `.dockerignore` 修复。
 - [2026-10-23-T252-生产可启动性.md](./handoff/2026-10-23-T252-生产可启动性.md)：T252，环境变量 schema 集中校验与生产 fail-fast、Redis URL/密码与断线重连、`/health/live`、生产模板与 CI 一致性门禁；含升级必填项说明。
 - [2026-10-23-T250-M0生产化收口.md](./handoff/2026-10-23-T250-M0生产化收口.md)：T250，第二轮路线图与编号（T250–T314）、DEC-01~09 登记、任务书 schema 与看板消费、README/STATUS 真实化；M0 不改业务代码，OPS-08 staging 留 T251。
