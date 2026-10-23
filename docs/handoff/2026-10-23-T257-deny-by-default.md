@@ -7,7 +7,7 @@ applies_to:
   - backend/src/app.module.ts
   - backend/test/route-policy.snapshot.json
 last_verified: 2026-10-23
-verified_commit: 0bae3be
+verified_commit: f82defd
 supersedes: null
 superseded_by: null
 version: 1.0
@@ -20,7 +20,7 @@ version: 1.0
 任务: T257-SEC-01-deny-by-default
 对话ID: session-t257
 模型: DeepSeek V4.1 Flash
-状态: in_progress（实现与本地验证完成，待 PR / 合并）
+状态: completed（PR #62 已合并，merge commit `f82defd`；分支按约定保留）
 ---
 
 ## 完成内容
@@ -65,8 +65,8 @@ version: 1.0
 
 ## 下一步
 
-- 创建 PR 到 `develop`，CI 绿后等待人工授权合并。
-- 合并后回填 `merge_commit`、任务书/handoff 置 completed，并重新生成 STATUS。
+- ✅ 已创建 PR #62 并合并（merge commit `f82defd`）。
+- ✅ 已回填 `merge_commit`、任务书/handoff 置 completed，并重新生成 STATUS。
 - 下一个无依赖 M1 任务：T258（SEC-02 JWT 与会话强化）。
 
 ## 附加信息
@@ -74,7 +74,7 @@ version: 1.0
 ### 提交记录
 - 分支：`feature/T257-sec-01`
 - 工作树：`/home/user/development/worktrees/tenant-management-system/T257-sec-01`
-- PR：待创建
+- PR：#62（已合并，merge commit `f82defd`）
 
 ### 资源
 - 任务书：`tasks/T257-SEC-01-deny-by-default授权.md`

@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T257
 plan_ref: SEC-01
 stage: M1
@@ -8,8 +8,8 @@ priority: P0
 model_tier: 强
 branch: feature/T257-sec-01
 start_time: 2026-10-23
-complete_time:
-merge_commit:
+complete_time: 2026-10-23
+merge_commit: f82defd
 blocked_by:
 depends_on:
 acceptance_evidence: tasks/evidence/T257.md
@@ -70,7 +70,9 @@ handoff: docs/handoff/2026-10-23-T257-deny-by-default.md
 - 基线：`0bae3be`（`origin/develop`，含 T256）
 - 模型：DeepSeek V4.1 Flash
 - 开始日期：2026-10-23
-- 状态：in_progress
+- 完成日期：2026-10-23
+- 合并：PR #62，merge commit `f82defd`
+- 状态：completed
 
 ## 风险
 
