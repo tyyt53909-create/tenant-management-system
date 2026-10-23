@@ -329,7 +329,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
 
       await expect(service.update('room-123', { status: 'OCCUPIED' } as any)).rejects.toThrow(
-        BadRequestException,
+        '不允许的房态流转',
       );
       expect(prisma.room.update).not.toHaveBeenCalled();
     });
@@ -369,7 +369,7 @@ describe('RoomsService', () => {
 
       await expect(
         service.update('room-123', { description: 'x', version: 4 } as any),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow('房间状态已被其他用户修改');
     });
 
     it('编辑时提供 photos：事务内全量替换并按顺序落库', async () => {
@@ -518,7 +518,7 @@ describe('RoomsService', () => {
 
       await expect(
         service.updateStatus('room-123', { status: 'OCCUPIED', version: 3 } as any),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('不允许的房态流转');
     });
 
     it('退租流转缺少退租记录被拒绝', async () => {
@@ -529,7 +529,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.checkoutRecord, 'findFirst').mockResolvedValue(null);
 
       await expect(
-        service.updateStatus('room-123', { cleanStatus: 'PENDING_CLEAN', version: 3 } as any),
+        service.updateStatus('room-123', { status: 'VACANT', cleanStatus: 'PENDING_CLEAN', version: 3 } as any),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -569,7 +569,7 @@ describe('RoomsService', () => {
 
       await expect(
         service.updateStatus('room-123', { status: 'RESERVED', version: 999 } as any),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow('房间状态已被其他用户修改');
     });
 
     it('未提供 status/cleanStatus：400', async () => {
@@ -704,7 +704,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 0 } as any);
 
       await expect(service.markClean('room-c1', { version: 1 })).rejects.toThrow(
-        ConflictException,
+        '房间状态已被其他用户修改',
       );
     });
 

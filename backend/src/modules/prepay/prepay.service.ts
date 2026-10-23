@@ -9,6 +9,7 @@ import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 
 @Injectable()
 export class PrepayService {
@@ -219,7 +220,7 @@ export class PrepayService {
         });
 
         if (result.count === 0) {
-          throw new BadRequestException('余额不足，无法扣费/退款');
+          throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '余额不足，无法扣费/退款');
         }
 
         updated = await tx.prepayAccount.findUniqueOrThrow({ where: { id: accountId } });

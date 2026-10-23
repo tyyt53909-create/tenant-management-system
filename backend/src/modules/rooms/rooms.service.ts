@@ -15,6 +15,7 @@ import { UpdateRoomStatusDto } from './dto/update-room-status.dto.js';
 import { MarkCleanDto } from './dto/mark-clean.dto.js';
 import { QueryRoomsDto } from './dto/query-rooms.dto.js';
 import { MAX_ROOM_PHOTOS, type RoomPhotoDto } from './dto/room-photo.dto.js';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 
 /** 允许的房态流转（docs/04-状态机.md §1.3，键与值均为 `status+cleanStatus`） */
 const ALLOWED_ROOM_TRANSITIONS: Record<string, string[]> = {
@@ -25,8 +26,6 @@ const ALLOWED_ROOM_TRANSITIONS: Record<string, string[]> = {
   'VACANT+PENDING_CLEAN': ['VACANT+CLEANING'],
   'VACANT+CLEANING': ['VACANT+CLEAN'],
 };
-
-const VERSION_CONFLICT_MESSAGE = '房间状态已被其他用户修改，请刷新后重试';
 
 @Injectable()
 export class RoomsService {
@@ -280,7 +279,7 @@ export class RoomsService {
           });
 
           if (result.count === 0) {
-            throw new ConflictException(VERSION_CONFLICT_MESSAGE);
+            throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
           }
         } else {
           await tx.room.update({ where: { id }, data });
@@ -315,7 +314,7 @@ export class RoomsService {
       });
 
       if (result.count === 0) {
-        throw new ConflictException(VERSION_CONFLICT_MESSAGE);
+        throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
       }
 
       const updated = await this.prisma.room.findUniqueOrThrow({ where: { id } });
@@ -346,7 +345,7 @@ export class RoomsService {
 
     const allowed = ALLOWED_ROOM_TRANSITIONS[from] ?? [];
     if (!allowed.includes(to)) {
-      throw new BadRequestException(`不允许的房态流转：${from} → ${to}`);
+      throw apiError(ErrorCode.ROOM_NOT_AVAILABLE, `不允许的房态流转：${from} → ${to}`);
     }
 
     if (to === 'RESERVED+CLEAN') {
@@ -419,7 +418,7 @@ export class RoomsService {
     });
 
     if (result.count === 0) {
-      throw new ConflictException(VERSION_CONFLICT_MESSAGE);
+      throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
     }
 
     const updated = await this.prisma.room.findUniqueOrThrow({ where: { id } });
@@ -453,7 +452,7 @@ export class RoomsService {
       });
 
       if (result.count === 0) {
-        throw new ConflictException(VERSION_CONFLICT_MESSAGE);
+        throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
       }
     } else {
       await this.prisma.room.update({
