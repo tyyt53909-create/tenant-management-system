@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T253
 plan_ref: OPS-02
 stage: M1（可上线）
@@ -8,6 +8,8 @@ priority: P0
 model_tier: 强
 branch: feature/T253-ops-02
 start_time: 2026-10-23
+complete_time: 2026-10-23
+merge_commit: 46a07ff
 blocked_by:
 depends_on: T252
 acceptance_evidence: tasks/evidence/T253.md
@@ -61,7 +63,9 @@ handoff: docs/handoff/2026-10-23-T253-Node24与优雅关闭.md
 - 工作树：`/home/user/development/worktrees/tenant-management-system/T253-ops-02`
 - 模型：DeepSeek V4.1 Flash
 - 开始日期：2026-10-23
-- 状态：active
+- 完成日期：2026-10-23
+- 合并：PR #56，merge commit `46a07ff`
+- 状态：completed
 
 ## 风险
 
