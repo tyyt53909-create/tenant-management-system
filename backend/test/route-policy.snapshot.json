@@ -1,0 +1,1095 @@
+[
+  {
+    "method": "GET",
+    "path": "/api",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-logs",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/bind-invite-code",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/google",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/google/client-id",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/invite-codes",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/invite-codes",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/auth/invite-codes/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/login",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/login-email-code",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/logout",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/logout-all",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/me",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/refresh",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/register",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/send-email-code",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/bills",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/bills/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/:id",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/bills/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/:id/late-fees",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/bills/:id/late-fees",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/:id/payments",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/bills/:id/payments",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/:id/receipt",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/export",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/bills/recognize",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/buildings",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/buildings",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/buildings/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/buildings/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/buildings/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/buildings/:id/floor-plans",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PUT",
+    "path": "/api/buildings/:id/floor-plans/:floor",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/buildings/:id/floor-plans/:floor/template",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/buildings/:id/space",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "CLEANER",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/checkout",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/checkout",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/checkout/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/checkout/:id",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/checkout/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/checkout/:id/voucher",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/checkout/export",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/contracts/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/:id",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/contracts/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/:id/attachments",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/:id/attachments",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/:id/attachments/:attachmentId/file",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/:id/renew",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/management-summary",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/revenue-trend",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/room-status",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/search",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/stats",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/files/:key",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/files/upload",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/health",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/health/live",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/health/ready",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/imports/:entity/commit",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/imports/:entity/preview",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/imports/:entity/template",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/maintenance",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/maintenance",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/maintenance/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/maintenance/:id",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/maintenance/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/maintenance/my",
+    "public": false,
+    "roles": [
+      "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/meters",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/meters/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/meters/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters/:id/readings",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/meters/:id/readings",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/meters/:id/settle",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters/:id/unsettled-usage",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/meters/batch-readings",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters/batch-sheet",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters/readings/export",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters/reconciliation",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/meters/settle-batch",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/meters/simulator/run",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters/usage-overview",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/notifications",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/notifications/:id",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/notifications/:id/read",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/notifications/read-all",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/notifications/unread-count",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/prepay-accounts",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/prepay-accounts",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/prepay-accounts/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/prepay-accounts/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/prepay-accounts/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/prepay-accounts/:id/transactions",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/prepay-accounts/:id/transactions",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/prepay-accounts/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/prepay-accounts/transactions",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/prepay-accounts/transactions/export",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/public-utilities",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/public-utilities",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/public-utilities/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/public-utilities/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/public-utilities/:id/generate-bills",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/public-utilities/preview",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/public/buildings",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/public/buildings/:id/space",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/public/rooms",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/public/rooms/:id",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/rooms",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/rooms",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/rooms/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/rooms/:id",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/rooms/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/rooms/:id/clean",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "CLEANER"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/rooms/:id/status",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "CLEANER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/scheduler/jobs/:name/run",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/scheduler/run-daily",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/scheduler/run-monthly-bills",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/statistics/overview",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tags",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT",
+      "CLEANER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/tags",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/tags/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/tags/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tenants",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/tenants",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/tenants/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tenants/:id",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/tenants/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tenants/:id/account",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/tenants/:id/account",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tenants/:id/capabilities",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PUT",
+    "path": "/api/tenants/:id/capabilities",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tenants/:id/id-number",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  }
+]

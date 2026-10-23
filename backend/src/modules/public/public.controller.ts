@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Public } from '../../common/decorators/public.decorator.js';
 import { PublicService } from './public.service.js';
 import { QueryPublicRoomsDto } from './dto/query-public-rooms.dto.js';
 
@@ -9,6 +10,7 @@ import { QueryPublicRoomsDto } from './dto/query-public-rooms.dto.js';
  * 便于在网关或反代层单独限流。
  */
 @Controller('public')
+@Public()
 export class PublicController {
   constructor(private readonly publicService: PublicService) {}
 

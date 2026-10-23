@@ -2,6 +2,7 @@ import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { Public } from '../../common/decorators/public.decorator.js';
 import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 import { SpaceService } from './space.service.js';
 
@@ -19,6 +20,7 @@ export class SpaceController {
 }
 
 @Controller('public/buildings')
+@Public()
 export class PublicSpaceController {
   constructor(private readonly spaceService: SpaceService) {}
 

@@ -9,6 +9,7 @@ import { QueryInviteCodesDto } from './dto/query-invite-codes.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
+import { Public } from '../../common/decorators/public.decorator.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import { AuthThrottle, OtpEmailThrottle } from '../../common/decorators/throttle.decorators.js';
@@ -33,6 +34,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @Public()
   @AuthThrottle()
   async register(
     @Body() dto: RegisterDto,
@@ -46,6 +48,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Public()
   @AuthThrottle()
   async login(
     @Body() dto: LoginDto,
@@ -92,6 +95,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Public()
   async refresh(
     @Body() dto?: RefreshTokenDto,
     @Req() req?: Request,
@@ -109,6 +113,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @Public()
   async logout(
     @Body() dto?: RefreshTokenDto,
     @Req() req?: Request,
@@ -149,6 +154,7 @@ export class AuthController {
    * 获取 Google Client ID 配置（供前端动态挂载 Google GIS SDK）
    */
   @Get('google/client-id')
+  @Public()
   getGoogleClientId() {
     return this.authService.getGoogleClientId();
   }
@@ -157,6 +163,7 @@ export class AuthController {
    * Google 登录 / 注册入口
    */
   @Post('google')
+  @Public()
   @AuthThrottle()
   async googleAuth(
     @Body() dto: GoogleAuthDto,
@@ -173,6 +180,7 @@ export class AuthController {
    * 发送邮箱验证码 (OTP)
    */
   @Post('send-email-code')
+  @Public()
   @OtpEmailThrottle()
   async sendEmailCode(@Body() dto: SendEmailCodeDto) {
     return this.authService.sendEmailCode(dto);
@@ -182,6 +190,7 @@ export class AuthController {
    * 邮箱验证码免密登录 / 自动注册
    */
   @Post('login-email-code')
+  @Public()
   @AuthThrottle()
   async loginWithEmailCode(
     @Body() dto: LoginEmailCodeDto,
