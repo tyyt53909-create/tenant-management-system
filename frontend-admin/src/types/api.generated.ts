@@ -1741,6 +1741,13 @@ export interface components {
         BindInviteCodeDto: {
             inviteCode: string;
         };
+        RoomPhotoDto: {
+            fileUrl: string;
+            /** @description 缩略图地址；上传接口未生成缩略图时可为空。 */
+            thumbnail?: string | null;
+            /** @description 文件大小（字节），仅用于展示；取不到时按 0 记录。 */
+            fileSize?: number;
+        };
         CreateRoomDto: {
             roomNumber: string;
             buildingId: string;
@@ -1750,6 +1757,11 @@ export interface components {
             area?: number;
             facilities?: Record<string, never>;
             description?: string;
+            /**
+             * @description 房源照片（先 POST /api/files/upload 取得 url 再提交）。
+             *     数组顺序即展示顺序，第一张作为封面；最多 20 张。
+             */
+            photos?: components["schemas"]["RoomPhotoDto"][];
         };
         UpdateRoomStatusDto: {
             /** @enum {string} */
@@ -1777,6 +1789,11 @@ export interface components {
             cleanStatus?: "CLEAN" | "PENDING_CLEAN" | "CLEANING";
             /** @description 乐观锁版本号（来自查询结果；提供时执行并发冲突检查，冲突返回 409） */
             version?: number;
+            /**
+             * @description 房源照片全量替换（省略则不修改照片）。
+             *     数组顺序即展示顺序，第一张作为封面；最多 20 张。
+             */
+            photos?: components["schemas"]["RoomPhotoDto"][];
         };
         CreateNotificationDto: {
             userId: string;
@@ -2893,22 +2910,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": Record<string, never>;
+                };
             };
             /** @description 错误 */
             default: {
@@ -4954,12 +4962,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description 成功 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description 错误 */

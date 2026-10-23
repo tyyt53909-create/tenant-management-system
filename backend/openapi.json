@@ -1043,19 +1043,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -4347,11 +4343,12 @@
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -7897,6 +7894,29 @@
           "inviteCode"
         ]
       },
+      "RoomPhotoDto": {
+        "type": "object",
+        "properties": {
+          "fileUrl": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "thumbnail": {
+            "type": "string",
+            "nullable": true,
+            "description": "缩略图地址；上传接口未生成缩略图时可为空。",
+            "maxLength": 500
+          },
+          "fileSize": {
+            "type": "number",
+            "description": "文件大小（字节），仅用于展示；取不到时按 0 记录。",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "fileUrl"
+        ]
+      },
       "CreateRoomDto": {
         "type": "object",
         "properties": {
@@ -7929,6 +7949,13 @@
           },
           "description": {
             "type": "string"
+          },
+          "photos": {
+            "description": "房源照片（先 POST /api/files/upload 取得 url 再提交）。\n数组顺序即展示顺序，第一张作为封面；最多 20 张。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomPhotoDto"
+            }
           }
         },
         "required": [
@@ -8028,6 +8055,13 @@
             "type": "number",
             "description": "乐观锁版本号（来自查询结果；提供时执行并发冲突检查，冲突返回 409）",
             "minimum": 0
+          },
+          "photos": {
+            "description": "房源照片全量替换（省略则不修改照片）。\n数组顺序即展示顺序，第一张作为封面；最多 20 张。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomPhotoDto"
+            }
           }
         }
       },
