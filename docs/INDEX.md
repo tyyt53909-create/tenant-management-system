@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-23
-> 文档总数: 121 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 65、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 133 份（含本索引与归档）
-> 任务书: 98 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 文档总数: 122 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 66、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 134 份（含本索引与归档）
+> 任务书: 99 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -56,6 +56,8 @@
 
 - [T250-M0生产化收口.md](../tasks/T250-M0生产化收口.md)：M0 治理收口（docs/19 路线图、T250–T314 编号、DEC 登记、任务书 schema、STATUS 真实化）；不改业务代码。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
+- [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-21-T230-房源照片上传.md](./handoff/2026-10-21-T230-房源照片上传.md)：T230，RoomPhoto 启用；后端 `photos` DTO 与事务替换、前端照片编辑器、Playwright 09 通过。
 - [2026-10-21-T228-房源模型视觉重做.md](./handoff/2026-10-21-T228-房源模型视觉重做.md)：T228，小區模型 → 點樓棟 → 2D 樓層、單棟建築外殼、綠色可租／藍色已租／紅色待處理配色，Playwright 06/07 通過。
 - [2026-10-21-T225-T227-房源模型Wave2.md](./handoff/2026-10-21-T225-T227-房源模型Wave2.md)：T225～T227 Wave 2（平面圖編輯器、Space/floor-plans 授權 e2e、公開頁可租分佈、CLEANER/TENANT 小程式地圖），三個 PR 已合併 integration branch。
 - [2026-10-21-T221-T224-房源模型Wave1.md](./handoff/2026-10-21-T221-T224-房源模型Wave1.md)：T221～T224 Wave 1 并行交付（FloorPlan/RoomShape schema、Space API 角色投影、契約 2D/3D renderer），四個 PR 已進 integration branch；renderer 已於 Wave 3 整合。
