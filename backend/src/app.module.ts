@@ -3,6 +3,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { createThrottleModuleOptions } from './config/throttle.config.js';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
+import { RolesGuard } from './common/guards/roles.guard.js';
 import { RedisModule } from './redis/redis.module.js';
 import { RedisService } from './redis/redis.service.js';
 import { RedisThrottlerStorage } from './redis/redis-throttler.storage.js';
@@ -86,6 +88,13 @@ import { SpaceModule } from './modules/space/space.module.js';
     StatisticsModule,
   ],
   controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // T257 / SEC-01：全域默认拒绝。未标注 @Public() 的路由一律要求有效 JWT；
+    // RolesGuard 紧随其后，按 @Roles() 元数据校验角色（无元数据则放行）。
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AppModule {}
