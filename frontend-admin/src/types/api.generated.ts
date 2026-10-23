@@ -4962,15 +4962,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 成功 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description 错误 */
