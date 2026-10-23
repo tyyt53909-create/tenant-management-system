@@ -1,6 +1,6 @@
 # 项目状态跟踪
 
-> 分支: `feature/T252-ops-01`
+> 分支: `docs/T252-backfill`
 > 集成基準: `origin/develop` @ `3928ac1`
 > 發布就緒: **NO-GO**
 > Gates: 11 pass / 0 fail / 3 not-run
