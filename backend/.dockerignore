@@ -1,0 +1,11 @@
+# 构建上下文只保留源码与 Prisma 资产；依赖在镜像内 npm ci 安装。
+node_modules
+dist
+dist-seed
+coverage
+uploads
+test
+.env
+.env.*
+*.log
+.git

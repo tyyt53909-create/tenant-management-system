@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import RedisImport from 'ioredis';
 import type { RedisOptions } from 'ioredis';
@@ -20,9 +20,10 @@ interface RedisInstance extends RedisCommandClient {
 const Redis = RedisImport as unknown as new (options: RedisOptions) => RedisInstance;
 
 const INITIAL_CONNECT_TIMEOUT_MS = 3000;
+const QUIT_TIMEOUT_MS = 2000;
 
 @Injectable()
-export class RedisService {
+export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   client: RedisCommandClient | null = null;
   ready = false;
@@ -76,12 +77,36 @@ export class RedisService {
       redis.disconnect();
       this.client = null;
       this.ready = false;
-      const reason = error instanceof Error ? error.message : 'unknown';
+      const reason = (error instanceof Error ? error.message : 'unknown').replace(/[.。]+$/, '');
       const message = `无法连接 Redis（${target}）：${reason}`;
       if (this.isProduction()) {
         throw new Error(`生产环境${message}，拒绝启动`);
       }
       this.logger.warn(`${message}。OTP 与限流降级为进程内存`);
+    }
+  }
+
+  /**
+   * 优雅关闭：先 QUIT 让服务端释放连接，最多等 2 秒；失败或超时立即断开。
+   * 停机路径不抛错，避免一个连接问题拖住整个进程。
+   */
+  async onModuleDestroy(): Promise<void> {
+    const client = this.client;
+    this.client = null;
+    this.ready = false;
+    if (!client) return;
+
+    try {
+      await withTimeout(client.quit(), QUIT_TIMEOUT_MS);
+      this.logger.log('Redis 连接已关闭');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'unknown';
+      this.logger.warn(`Redis 关闭时 QUIT 失败（${reason}），改为立即断开`);
+      try {
+        client.disconnect?.();
+      } catch {
+        // 已断开或底层已销毁，忽略。
+      }
     }
   }
 

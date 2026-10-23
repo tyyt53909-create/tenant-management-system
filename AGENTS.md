@@ -1,7 +1,7 @@
 # AGENTS.md - AI 协作开发总规则
 
 > 本文档是所有 AI 模型的必读文档
-> 版本: 1.3
+> 版本: 1.4
 > 最后更新: 2026-10-23
 
 ---
@@ -26,7 +26,7 @@
 
 | 技术 | 版本 | 说明 |
 |------|------|------|
-| **Node.js** | 20.x | LTS 版本（小程序构建/测试按 Node 20 验证） |
+| **Node.js** | 20.x（本地/CI）；24.x（生产镜像） | 生产镜像自 T253 起用 `node:24-alpine`；CI 暂按 Node 20 验证，统一版本由 OPS-08 处理 |
 | **TypeScript** | 5.9 | 严格模式（`backend/package.json`: ^5.9.3） |
 | **NestJS** | 12.x | 后端框架（@nestjs/* ^12.0.1） |
 | **Prisma** | 5.22 | ORM，类型安全查询 |
@@ -967,6 +967,7 @@ npm run test:cov
 
 ## 13. 更新日志
 
+- **2026-10-23 v1.4**: 技术栈注明生产镜像自 T253 / OPS-02 起为 Node 24 LTS（本地与 CI 仍为 Node 20，统一由 OPS-08 处理）
 - **2026-10-23 v1.3**: 增加第 14 节"生产化补充规则（第二轮路线图）"；任务书新增 `execution_status`/`plan_ref`/`blocked_by`/`acceptance_evidence` 字段与编号治理（T250 起）
 - **2026-10-13 v1.2**: 技术栈纠错（NestJS 12 / TypeScript 5.9（后端）、Vitest 4 / oxlint，替代 NestJS 10 / Jest）；目录结构纠错（任务书在仓库根目录 `tasks/`，后端子项目在 `backend/`，根目录无 package.json）；测试命令对齐 `backend/package.json`（移除不存在的 `test:unit`）
 - **2026-10-11 v1.1**: 增加"统筹者+子智能体并行协作"章节

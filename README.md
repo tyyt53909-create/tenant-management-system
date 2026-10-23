@@ -76,7 +76,7 @@ tenant-system/
 
 ### 1. 环境准备
 
-- **Node.js**: `20.x` LTS
+- **Node.js**: `20.x` LTS（本地与 CI）；生产镜像自 T253 起为 `node:24-alpine`，统一版本由 OPS-08 处理
 - **Docker & Docker Compose**: 运行中
 - **包管理器**: `npm` (v10+)
 - **微信开发者工具**（可选，调试小程序时需安装）

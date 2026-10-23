@@ -66,6 +66,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: always
+    # T253 / OPS-02：优雅关闭与最小权限运行。
+    init: true
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     environment:
       NODE_ENV: production
       PORT: 3000

@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OtpRecord } from '../modules/auth/otp-store.js';
 import type { RedisCommandClient } from './redis.client.js';
 import { RedisOtpStore } from './redis-otp.store.js';
@@ -132,5 +132,60 @@ describe('RedisService 启动策略', () => {
     await service.connect();
     expect(service.ready).toBe(false);
     expect(service.client).toBeNull();
+  });
+});
+
+describe('RedisService 优雅关闭', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function serviceWith(client: RedisCommandClient) {
+    const service = new RedisService(new ConfigService({}));
+    service.client = client;
+    service.ready = true;
+    return service;
+  }
+
+  it('QUIT 成功后清空客户端并标记未就绪', async () => {
+    const quit = vi.fn().mockResolvedValue('OK');
+    const disconnect = vi.fn();
+    const service = serviceWith({ quit, disconnect } as unknown as RedisCommandClient);
+
+    await service.onModuleDestroy();
+
+    expect(quit).toHaveBeenCalledOnce();
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(service.client).toBeNull();
+    expect(service.ready).toBe(false);
+  });
+
+  it('QUIT 失败时回退 disconnect，且不抛错', async () => {
+    const quit = vi.fn().mockRejectedValue(new Error('Connection is closed'));
+    const disconnect = vi.fn();
+    const service = serviceWith({ quit, disconnect } as unknown as RedisCommandClient);
+
+    await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(service.client).toBeNull();
+  });
+
+  it('QUIT 卡住超过 2 秒时断开连接', async () => {
+    vi.useFakeTimers();
+    const quit = vi.fn().mockReturnValue(new Promise(() => {}));
+    const disconnect = vi.fn();
+    const service = serviceWith({ quit, disconnect } as unknown as RedisCommandClient);
+
+    const closing = service.onModuleDestroy();
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(closing).resolves.toBeUndefined();
+
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(service.client).toBeNull();
+  });
+
+  it('没有客户端时直接返回', async () => {
+    const service = new RedisService(new ConfigService({}));
+    await expect(service.onModuleDestroy()).resolves.toBeUndefined();
   });
 });
