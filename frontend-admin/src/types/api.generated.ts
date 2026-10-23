@@ -37,6 +37,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/health/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 与 `/health` 同义；供容器编排使用 `/health/live` 探针。 */
+        get: operations["HealthController_liveness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health/ready": {
         parameters: {
             query?: never;
@@ -2140,6 +2157,37 @@ export interface operations {
         };
     };
     HealthController_live: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    HealthController_liveness: {
         parameters: {
             query?: never;
             header?: never;

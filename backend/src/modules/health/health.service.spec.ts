@@ -61,6 +61,10 @@ describe('健康检查', () => {
     expect(live.status).toBe(200);
     expect(live.body).toEqual({ status: 'ok' });
 
+    const liveness = await request(app.getHttpServer()).get('/health/live');
+    expect(liveness.status).toBe(200);
+    expect(liveness.body).toEqual({ status: 'ok' });
+
     const ready = await request(app.getHttpServer()).get('/health/ready');
     expect(ready.status).toBe(503);
     expect(ready.body).toEqual({
