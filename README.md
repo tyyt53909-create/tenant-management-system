@@ -6,7 +6,7 @@
 
 ## 🏗️ 架构概览
 
-本系统采用现代前后端分离与移动端协同架构，后端支持多实例水平扩展，共享状态下沉至 Redis，核心业务具备幂等性与字段级加密防护。
+本系统采用现代前后端分离与移动端协同架构，共享状态下沉至 Redis，核心业务具备幂等性与字段级加密防护。当前部署形态为**单实例**（见 `docs/19-生产化路线图.md` DEC-07）；多实例与本地文件存储的无状态化在 OPS-06 完成前不作保证。
 
 ```mermaid
 flowchart TD
@@ -20,15 +20,14 @@ flowchart TD
         G["Nginx / 安全反向代理<br/>SSL / Gzip / Rate Limit / Security Headers"]
     end
 
-    subgraph Backend["服务端层 (Backend Cluster)"]
-        S1["NestJS 12 应用实例 1<br/>Port: 3100"]
-        S2["NestJS 12 应用实例 2<br/>Port: 3101"]
-        SCHED["分布式定时任务 (Redlock 选主互斥)<br/>账单生成 / 滞纳金计算 / 催缴提醒"]
+    subgraph Backend["服务端层 (Backend)"]
+        S1["NestJS 12 应用实例<br/>Port: 3100（当前单实例）"]
+        SCHED["定时任务 (PostgreSQL advisory lock 防重入)<br/>账单生成 / 滞纳金计算 / 催缴提醒"]
     end
 
     subgraph Storage["数据与中间件层 (Data & Middleware)"]
-        DB[("PostgreSQL 16<br/>26 张表 / 幂等约束 / 审计日志")]
-        RDS[("Redis 6+<br/>Token 黑名单 / OTP / 频控 / 分布式锁")]
+        DB[("PostgreSQL 16<br/>34 张表 / 幂等约束 / 审计日志")]
+        RDS[("Redis 6+<br/>Token 黑名单 / OTP / 频控 / 会话")]
         OSS["阿里云 OSS / 本地存储适配器<br/>合同凭证 / 维修与抄表图片"]
     end
 
@@ -36,13 +35,9 @@ flowchart TD
     B --> G
     C --> G
     G --> S1
-    G --> S2
     S1 --> DB
     S1 --> RDS
     S1 --> OSS
-    S2 --> DB
-    S2 --> RDS
-    S2 --> OSS
     SCHED --> DB
     SCHED --> RDS
 ```
@@ -55,7 +50,7 @@ flowchart TD
 tenant-system/
 ├── backend/                  # NestJS 12 + Prisma 5.22 + TypeScript 5.9 后端
 │   ├── src/                  # 业务源码 (auth, rooms, tenants, contracts, bills, meters...)
-│   ├── prisma/               # Prisma Schema (26 张表) 与数据库迁移
+│   ├── prisma/               # Prisma Schema (34 张表，以 schema 为准) 与数据库迁移
 │   └── test/                 # 单元测试、集成测试与 e2e 测试 (Vitest)
 ├── frontend-admin/           # Vue 3.5 + Element Plus + Vite 8 管理后台
 │   ├── src/                  # 视图、组件、Pinia Store、路由、OpenAPI 类型
@@ -66,7 +61,7 @@ tenant-system/
 ├── landing/                  # 官方看房与品牌落地页静态工件
 ├── docker/                   # 生产 Nginx 配置、反向代理与安全标头
 ├── docs/                     # 📚 架构设计、数据模型、API 规范与交接记录 (已编目于 docs/INDEX.md)
-├── tasks/                    # 📋 任务开发书与执行记录 (T001 ~ T201)
+├── tasks/                    # 📋 任务开发书与执行记录 (T001 ~ T314，编号规划见 docs/19)
 ├── scripts/                  # 运维、测试基线、数据库灾备与文档门禁脚本
 ├── docker-compose.yml        # 本地基础服务开发环境 (PostgreSQL 16 + Redis 6)
 ├── docker-compose.prod.yml   # 生产一键编排配置 (后端、后台、数据库、Redis)
@@ -218,12 +213,29 @@ npm run build:mp-weixin
 ### 文档治理与一致性门禁 (根目录)
 
 ```bash
-# 运行文档元信息与索引一致性检查
+# 运行文档元信息与索引一致性检查（需要 glob：npm install -g glob）
 node scripts/check-docs.js
 
-# 自动生成 STATUS.md 真实度量数据
-node scripts/generate-status.mjs
+# 执行所有 gate 并写出结构化证据（即使有 gate 失败也会写报告）
+node scripts/collect-gates.mjs
+
+# 由 gate 证据生成 STATUS.md（不重跑测试）
+node scripts/generate-status.mjs --gates artifacts/gates.json
+
+# CI 用：只比对 Gate/任务/模型数，不比较 branch、dirty 数等环境字段
+node scripts/generate-status.mjs --gates artifacts/gates.json --check-gates
+
+# 本机严格比对（byte-level，适合确认是否忘了重新生成）
+node scripts/generate-status.mjs --check
+
+# 检查任务书元信息与 strict 任务的 merge/handoff/INDEX 证据（--report 只报告不失败）
+node scripts/task-check.mjs
+
+# 只读审计 worktree（--check 有违规时 exit 1；不会删除或修改 worktree）
+node scripts/worktree-audit.mjs --check
 ```
+
+`STATUS.md` 现在是证据看板：任务是否完成由 merge commit、handoff 与 `docs/INDEX.md` 判定；`integration`、`security`、`manual-uat` 没有证据时一律显示 `not-run`，不会写成 pass。看板出现 `NO-GO` 时，先看 Gate 表与「阻擋發布」区块。
 
 ---
 

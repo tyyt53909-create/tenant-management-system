@@ -138,6 +138,13 @@ load-test-results/
 docs/**/*-draft.md
 docs/**/*-temp.md
 
+# 生成的狀態看板預覽與 gate 證據
+STATUS.generated.md
+artifacts/
+
+# 外部投递的分析素材（不進版本庫）
+.orca/
+
 # 数据库备份（本地测试用）
 *.sql
 *.dump

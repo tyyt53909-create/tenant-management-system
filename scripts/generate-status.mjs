@@ -1,382 +1,332 @@
 #!/usr/bin/env node
 
 /**
- * STATUS.md 自动生成与度量看板脚本 (OPT-28)
- * 运行: node scripts/generate-status.mjs
+ * STATUS.md 生成器（證據版）。
+ *
+ * 與舊版的差別：
+ * - 不再把階段進度硬編碼成 100%，也不再用「最大任務號」代表全部完成。
+ * - 任務狀態從 tasks/*.md 的 front matter 讀取，並用 merge / handoff 證據分類。
+ * - Gate 失敗時照樣產出 NO-GO 看板，不再拒絕渲染。
+ * - 支援 --check：CI 可比對 committed STATUS.md 是否與生成結果一致。
+ *
+ * 用法:
+ *   node scripts/generate-status.mjs
+ *   node scripts/generate-status.mjs --check
+ *   node scripts/generate-status.mjs --output /tmp/STATUS.md
+ *   node scripts/generate-status.mjs --gates artifacts/gates.json
+ *   node scripts/generate-status.mjs --no-run
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { collectGates } from './gates.mjs';
+import {
+  DEFAULT_LEGACY_BEFORE,
+  checkStatusSemantics,
+  computeReadiness,
+  normalizeGates,
+  parseTaskFile,
+  renderStatus,
+  summarizeTasks,
+} from './status-core.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const statusPath = path.join(repoRoot, 'STATUS.md');
 
-console.log('📊 正在统计代码库指标与实测数据...');
-
-// 1. 基准：报告「发布分支 main」与「集成分支 develop」的状态，而不是「生成时你刚好在哪个分支」。
-//    在 feature 分支上生成看板曾把基准写成未合并的分支、任务号写成旧值（T212 修正）。
-function revParse(ref) {
-  try {
-    return execSync(`git rev-parse --short ${ref}`, { cwd: repoRoot, encoding: 'utf8' }).trim();
-  } catch {
-    return null;
-  }
-}
-const headBranch = (() => {
-  try {
-    return execSync('git rev-parse --abbrev-ref HEAD', { cwd: repoRoot, encoding: 'utf8' }).trim();
-  } catch {
-    return 'unknown';
-  }
-})();
-const mainCommit = revParse('origin/main') ?? revParse('main') ?? 'unknown';
-const developCommit = revParse('origin/develop') ?? revParse('develop') ?? 'unknown';
-// 在别的分支上生成时，明确提示看板数字未必等于已合并状态
-const headNote =
-  headBranch === 'main' || headBranch === 'develop'
-    ? ''
-    : `；生成时 HEAD 在 \`${headBranch}\`（数字含未合并提交）`;
-
-// 2. 统计数据模型
-const schemaPath = path.join(repoRoot, 'backend/prisma/schema.prisma');
-let modelCount = 0;
-if (fs.existsSync(schemaPath)) {
-  const schemaContent = fs.readFileSync(schemaPath, 'utf8');
-  modelCount = (schemaContent.match(/^model\s+\w+/gm) || []).length;
-}
-
-// 3. 统计 OpenAPI 路由
-const openapiPath = path.join(repoRoot, 'backend/openapi.json');
-let routeCount = 0;
-if (fs.existsSync(openapiPath)) {
-  try {
-    const spec = JSON.parse(fs.readFileSync(openapiPath, 'utf8'));
-    const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
-    for (const p of Object.values(spec.paths || {})) {
-      for (const m of Object.keys(p)) {
-        if (methods.includes(m.toLowerCase())) routeCount++;
-      }
+function parseArgs(argv) {
+  const args = {
+    check: false,
+    checkGates: false,
+    noRun: false,
+    help: false,
+    output: null,
+    gates: null,
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--check') {
+      args.check = true;
+    } else if (arg === '--check-gates') {
+      args.checkGates = true;
+    } else if (arg === '--no-run') {
+      args.noRun = true;
+    } else if (arg === '--help' || arg === '-h') {
+      args.help = true;
+    } else if (arg === '--output' || arg === '--gates') {
+      const value = argv[index + 1];
+      if (!value || value.startsWith('--')) throw new Error(`${arg} 需要一個值`);
+      args[arg.slice(2)] = value;
+      index += 1;
+    } else {
+      throw new Error(`未知參數: ${arg}`);
     }
-  } catch {}
+  }
+  return args;
 }
 
-// 4. 代码行数统计
-function getLineCount(cmd) {
+function printHelp() {
+  console.log(`用法: node scripts/generate-status.mjs [選項]
+
+選項:
+  --check           只比對 STATUS.md，不一致時 exit 1（byte-level，適合本機）
+  --check-gates     只比對 Gate/任務摘要，不比較證據與環境欄位（適合 CI）
+  --output <path>   輸出到指定路徑（預設 STATUS.md）
+  --gates <path>    讀取既有的 gates JSON，不重新執行測試
+  --no-run          不執行任何 gate，全部標記為 not-run
+  -h, --help        顯示說明
+`);
+}
+
+function gitText(args) {
+  const result = spawnSync('git', args, { cwd: repoRoot, encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : '';
+}
+
+function resolveRef(ref) {
+  if (!ref) return null;
+  const candidates = [ref];
+  if (!ref.startsWith('origin/')) candidates.push(`origin/${ref}`);
+  if (!ref.startsWith('refs/')) candidates.push(`refs/heads/${ref}`);
+  return (
+    candidates.find(
+      (candidate) => gitText(['rev-parse', '--verify', '--quiet', `${candidate}^{commit}`]) !== '',
+    ) || null
+  );
+}
+
+function isAncestor(ref, base) {
+  const resolvedRef = resolveRef(ref);
+  const resolvedBase = resolveRef(base);
+  if (!resolvedRef || !resolvedBase) return null;
+  const result = spawnSync('git', ['merge-base', '--is-ancestor', resolvedRef, resolvedBase], {
+    cwd: repoRoot,
+  });
+  if (result.status === 0) return true;
+  if (result.status === 1) return false;
+  return null;
+}
+
+function pickIntegrationRef() {
+  const candidates = ['origin/develop', 'develop', 'origin/main', 'main'];
+  return (
+    candidates.find(
+      (candidate) => gitText(['rev-parse', '--verify', '--quiet', `${candidate}^{commit}`]) !== '',
+    ) || 'develop'
+  );
+}
+
+function countDirtyFiles() {
+  const output = gitText(['status', '--porcelain=v1', '--untracked-files=all']);
+  // STATUS.md 是生成物；排除它，否則「先產生再提交」永遠會被自己算成 dirty。
+  return output
+    ? output.split('\n').filter((line) => line.trim() && !line.endsWith('STATUS.md')).length
+    : 0;
+}
+
+function readText(relativePath) {
+  const absolute = path.join(repoRoot, relativePath);
+  return fs.existsSync(absolute) ? fs.readFileSync(absolute, 'utf8') : '';
+}
+
+function readTasks() {
+  const directory = path.join(repoRoot, 'tasks');
+  if (!fs.existsSync(directory)) return [];
+  return fs
+    .readdirSync(directory)
+    .filter((fileName) => /^T\d+.*\.md$/.test(fileName))
+    .map((fileName) => parseTaskFile(fileName, fs.readFileSync(path.join(directory, fileName), 'utf8')))
+    .sort((a, b) => a.number - b.number || (a.fileName < b.fileName ? -1 : a.fileName > b.fileName ? 1 : 0));
+}
+
+function readRecentHandoffs(limit = 8) {
+  const directory = path.join(repoRoot, 'docs/handoff');
+  if (!fs.existsSync(directory)) return [];
+  return fs
+    .readdirSync(directory)
+    .filter((fileName) => fileName.endsWith('.md'))
+    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+    .slice(0, limit)
+    .map((fileName) => {
+      const text = fs.readFileSync(path.join(directory, fileName), 'utf8');
+      const title = text.match(/^#\s+(.+)$/m)?.[1]?.trim() || fileName.replace(/\.md$/, '');
+      return { title, path: `docs/handoff/${fileName}` };
+    });
+}
+
+function getLineCount(command) {
   try {
-    const output = execSync(cmd, { cwd: repoRoot, encoding: 'utf8' }).trim();
+    const output = execSync(command, { cwd: repoRoot, encoding: 'utf8' }).trim();
     const lines = output.split('\n');
     const last = lines[lines.length - 1].trim();
     const match = last.match(/^(\d+)/);
-    return match ? parseInt(match[1], 10) : 0;
+    return match ? Number.parseInt(match[1], 10) : 0;
   } catch {
     return 0;
   }
 }
 
-const backendLines = getLineCount("find backend/src -name '*.ts' ! -name '*.spec.ts' | xargs wc -l");
-const frontendLines = getLineCount("find frontend-admin/src -type f \\( -name '*.ts' -o -name '*.vue' \\) | xargs wc -l");
-const miniprogramLines = getLineCount("find miniprogram -type f \\( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \\) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' | xargs wc -l");
+function readMetrics() {
+  const schemaPath = path.join(repoRoot, 'backend/prisma/schema.prisma');
+  const schema = fs.existsSync(schemaPath) ? fs.readFileSync(schemaPath, 'utf8') : '';
+  const modelCount = (schema.match(/^model\s+\w+/gm) || []).length;
 
-// 5. 文档统计
-function getDocCount() {
-  try {
-    const output = execSync("find docs -name '*.md' ! -path '*/archive/*' ! -name 'INDEX.md' | wc -l", { cwd: repoRoot, encoding: 'utf8' }).trim();
-    return parseInt(output, 10);
-  } catch {
-    return 80;
-  }
-}
-const docCount = getDocCount();
-
-function getTaskCount() {
-  try {
-    const output = execSync("ls tasks/*.md | wc -l", { cwd: repoRoot, encoding: 'utf8' }).trim();
-    return parseInt(output, 10);
-  } catch {
-    return 56;
-  }
-}
-/** 任务书数量与最新任务号：看板的「活跃任务/已完成任务」不再手写。 */
-function readTaskFiles() {
-  const dir = path.join(repoRoot, 'tasks');
-  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^T\d+.*\.md$/.test(f)) : [];
-  const numbers = files.map((f) => Number(f.match(/^T(\d+)/)[1])).filter((n) => Number.isFinite(n));
-  return { count: files.length, latest: numbers.length ? Math.max(...numbers) : 0 };
-}
-const taskFiles = readTaskFiles();
-const taskCount = taskFiles.count;
-const latestTaskNumber = taskFiles.latest;
-
-/** 从 docs/13 实扫「未勾选的验收标准」：缺口数字不再手写，也就不会和文档漂移。 */
-function readPlanGaps() {
-  const docPath = path.join(repoRoot, 'docs/13-架构与现有代码优化计划.md');
-  if (!fs.existsSync(docPath)) return { total: 0, bySection: [] };
-  const lines = fs.readFileSync(docPath, 'utf8').split('\n');
-  let section = '';
-  const counts = new Map();
-  let total = 0;
-  for (const line of lines) {
-    const heading = line.match(/^###\s+(OPT-\d+)/);
-    if (heading) section = heading[1];
-    if (/^\s*-\s*\[ \]/.test(line)) {
-      total += 1;
-      const key = section || '未标注';
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+  let routeCount = 0;
+  const openapiPath = path.join(repoRoot, 'backend/openapi.json');
+  if (fs.existsSync(openapiPath)) {
+    try {
+      const spec = JSON.parse(fs.readFileSync(openapiPath, 'utf8'));
+      const methods = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head']);
+      for (const pathItem of Object.values(spec.paths || {})) {
+        for (const method of Object.keys(pathItem)) {
+          if (methods.has(method.toLowerCase())) routeCount += 1;
+        }
+      }
+    } catch {
+      routeCount = 0;
     }
   }
-  return { total, bySection: [...counts.entries()].map(([k, v]) => `${k}(${v})`) };
-}
-const planGaps = readPlanGaps();
 
-// 6. 测试统计（实测：直接执行三端测试套件并解析真实结果，禁止硬编码）
-const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
-
-/** 从 vitest 汇总行读取通过/失败数，例：`Test Files  77 passed (77)`、`Tests  1 failed | 766 passed (767)` */
-function readVitestSummaryLine(text, label) {
-  const line = text
-    .split('\n')
-    .map((row) => row.replace(ANSI_PATTERN, ''))
-    .find((row) => new RegExp(`^\\s*${label}\\s`).test(row));
   return {
-    passed: Number(line?.match(/(\d+)\s+passed/)?.[1] ?? 0),
-    failed: Number(line?.match(/(\d+)\s+failed/)?.[1] ?? 0),
+    modelCount,
+    routeCount,
+    backendLines: getLineCount("find backend/src -name '*.ts' ! -name '*.spec.ts' | xargs wc -l"),
+    frontendLines: getLineCount(
+      "find frontend-admin/src -type f \\( -name '*.ts' -o -name '*.vue' \\) | xargs wc -l",
+    ),
+    miniprogramLines: getLineCount(
+      "find miniprogram -type f \\( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \\) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' | xargs wc -l",
+    ),
+    docCount: getLineCount(
+      "find docs -name '*.md' ! -path '*/archive/*' ! -name 'INDEX.md' | wc -l",
+    ),
   };
 }
 
-function runSuite(name, cwd, parse) {
-  let output = '';
-  let exitedWithError = false;
-  try {
-    output = execSync('npm test 2>&1', { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  } catch (error) {
-    exitedWithError = true;
-    output = String(error.stdout ?? '');
-  }
-  const stats = parse(output);
-  // 一个都没解析到（例如测试命令本身跑不起来）不能当成「0 例全绿」，必须失败
-  const broken = exitedWithError || stats.tests === 0;
-  if (broken || stats.failed > 0) {
-    console.error(`❌ ${name}：${broken ? '未能解析到任何测例（测试命令可能失败）' : `${stats.failed} 个失败测例`}`);
-  }
-  return { ...stats, broken };
-}
-
-function parseVitestSuite(output) {
-  const files = readVitestSummaryLine(output, 'Test Files');
-  const tests = readVitestSummaryLine(output, 'Tests');
-  return { files: files.passed, tests: tests.passed, failed: files.failed + tests.failed };
-}
-
-/** 小程序使用 node --test（TAP 汇总），例：`ℹ pass 108` / `ℹ fail 0` */
-function parseNodeTestSuite(output) {
-  const clean = output.replace(ANSI_PATTERN, '');
-  const pass = clean.match(/ℹ pass (\d+)/);
-  const fail = clean.match(/ℹ fail (\d+)/);
+function loadGates(filePath) {
+  const absolute = path.resolve(filePath);
+  if (!fs.existsSync(absolute)) throw new Error(`gates 檔案不存在: ${absolute}`);
+  const parsed = JSON.parse(fs.readFileSync(absolute, 'utf8'));
   return {
-    files: countFiles("miniprogram/tests/*.test.mjs"),
-    tests: Number(pass?.[1] ?? 0),
-    failed: Number(fail?.[1] ?? 0),
+    gates: normalizeGates(parsed),
+    meta: {
+      commit: parsed.commit,
+      branch: parsed.branch,
+      dirtyFiles: parsed.dirtyFiles,
+    },
   };
 }
 
-function countFiles(globPattern) {
-  try {
-    const output = execSync(`ls ${globPattern} | wc -l`, { cwd: repoRoot, encoding: 'utf8' }).trim();
-    return parseInt(output, 10) || 0;
-  } catch {
-    return 0;
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    printHelp();
+    return;
   }
-}
 
-/** Playwright e2e 需浏览器与后端，不在本脚本内执行；按源码静态计数（spec 文件数 + test 数） */
-function countPlaywrightTests() {
-  const files = countFiles('frontend-admin/e2e/*.spec.ts');
-  let tests = 0;
-  try {
-    const output = execSync('grep -h "test(" frontend-admin/e2e/*.spec.ts | wc -l', {
-      cwd: repoRoot,
-      encoding: 'utf8',
+  let gates;
+  let gateMeta = null;
+  if (args.gates) {
+    const loaded = loadGates(args.gates);
+    gates = loaded.gates;
+    gateMeta = loaded.meta;
+  } else if (args.noRun) {
+    gates = normalizeGates([]);
+  } else {
+    gates = collectGates({
+      repoRoot,
+      log: (id) => console.error(`[gate] ${id} ...`),
     });
-    tests = parseInt(output.trim(), 10) || 0;
-  } catch {
-    tests = 0;
   }
-  return { files, tests };
+
+  const currentHead = gitText(['rev-parse', '--short', 'HEAD']) || 'unknown';
+  if (gateMeta?.commit && gateMeta.commit !== currentHead) {
+    console.error(
+      `⚠️ gates 報告的 commit (${gateMeta.commit}) 與目前 HEAD (${currentHead}) 不同；報告可能已過期。`,
+    );
+  }
+  const headBranch = gateMeta?.branch || gitText(['rev-parse', '--abbrev-ref', 'HEAD']) || 'unknown';
+  const dirtyFiles = Number.isFinite(gateMeta?.dirtyFiles)
+    ? gateMeta.dirtyFiles
+    : countDirtyFiles();
+  if (dirtyFiles > 0) {
+    console.error(
+      `⚠️ 工作樹有 ${dirtyFiles} 個未提交變更（不含 STATUS.md）；STATUS.md 是工作樹快照，不代表任何 commit。`,
+    );
+  }
+  const integrationRef = pickIntegrationRef();
+  const integrationCommit = gitText(['rev-parse', '--short', integrationRef]) || 'unknown';
+
+  const tasks = readTasks();
+  const docsIndex = readText('docs/INDEX.md');
+  const summary = summarizeTasks(tasks, {
+    legacyBefore: DEFAULT_LEGACY_BEFORE,
+    integrationRef,
+    isAncestor,
+    pathExists: (relativePath) => fs.existsSync(path.join(repoRoot, relativePath)),
+    docsIndex,
+  });
+
+  const readiness = computeReadiness(gates, { blockingTasks: summary.blocking });
+  const metrics = readMetrics();
+  const content = renderStatus({
+    branch: headBranch,
+    integration: { ref: integrationRef, commit: integrationCommit },
+    gates,
+    readiness,
+    tasks: summary,
+    metrics,
+    handoffs: readRecentHandoffs(),
+    legacyBefore: DEFAULT_LEGACY_BEFORE,
+  });
+
+  const outputPath = args.output ? path.resolve(args.output) : statusPath;
+
+  if (args.check) {
+    const current = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf8') : '';
+    if (current !== content) {
+      console.error(
+        `STATUS.md 與生成結果不一致（${outputPath}）。請執行 node scripts/generate-status.mjs 後提交。`,
+      );
+      process.exit(1);
+    }
+    console.log(`STATUS.md 與生成結果一致（${outputPath}）。`);
+    return;
+  }
+
+  if (args.checkGates) {
+    const current = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf8') : '';
+    const result = checkStatusSemantics(current, {
+      gates,
+      readiness,
+      tasks: summary,
+      metrics,
+    });
+    if (!result.ok) {
+      console.error(`STATUS.md 的 Gate/任務摘要與目前證據不一致（${outputPath}）：`);
+      for (const error of result.errors) console.error(`  - ${error}`);
+      process.exit(1);
+    }
+    console.log(`STATUS.md 的 Gate/任務摘要與目前證據一致（${outputPath}）。`);
+    return;
+  }
+
+  fs.writeFileSync(outputPath, content, 'utf8');
+  console.log(`✅ 已寫入 ${outputPath}`);
+  console.log(`   發布就緒: ${readiness.status}`);
+  console.log(
+    `   Gates: ${readiness.passed} pass / ${readiness.failed} fail / ${readiness.notRun} not-run`,
+  );
+  console.log(
+    `   任務: ${summary.counts.total} 筆；verified ${summary.counts.verified} / legacy ${summary.counts.legacy} / active ${summary.counts.active} / issues ${summary.issues.length}`,
+  );
 }
 
-const backendStats = runSuite('后端 Vitest', path.join(repoRoot, 'backend'), parseVitestSuite);
-const frontendStats = runSuite('管理后台 Vitest', path.join(repoRoot, 'frontend-admin'), parseVitestSuite);
-const miniprogramStats = runSuite('小程序 node --test', path.join(repoRoot, 'miniprogram'), parseNodeTestSuite);
-const playwrightStats = countPlaywrightTests();
-
-const backendTestFiles = backendStats.files;
-const backendTests = backendStats.tests;
-const frontendTestFiles = frontendStats.files;
-const frontendTests = frontendStats.tests;
-const miniprogramTests = miniprogramStats.tests;
-const totalTests = backendTests + frontendTests + miniprogramTests;
-const totalFailedTests = backendStats.failed + frontendStats.failed + miniprogramStats.failed;
-const brokenSuites = [backendStats, frontendStats, miniprogramStats].filter((s) => s.broken).length;
-
-if (totalFailedTests > 0 || brokenSuites > 0) {
-  console.error(
-    `❌ ${brokenSuites > 0 ? `${brokenSuites} 个套件未能正常解析` : `存在 ${totalFailedTests} 个失败测例`}，拒绝生成进度看板（先修复测试再生成）。`,
-  );
+try {
+  main();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 }
-
-// 7. 单一进度计算
-// 阶段 0~4 全部完成，架构优化计划 OPT-01~OPT-28 全部完成
-const stage0Progress = 100;
-const stage1Progress = 100;
-const stage2Progress = 100;
-const stage3Progress = 100;
-const stage4Progress = 100;
-const overallProgress = Math.round((stage0Progress + stage1Progress + stage2Progress + stage3Progress + stage4Progress) / 5);
-
-const now = new Date();
-const dateStr = now.toISOString().split('T')[0];
-
-const content = `# 项目状态跟踪
-
-> 最后更新: ${dateStr}
-> 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: 发布分支 \`main\` \`${mainCommit}\`、集成分支 \`develop\` \`${developCommit}\`（T001~T${latestTaskNumber} 全量完成${headNote}）
-> 整体进度: **${overallProgress}%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
-> 质量状态: 后端 (${backendTestFiles} 文件 ${backendTests} 测例)、管理后台 (${frontendTestFiles} 文件 ${frontendTests} 测例 + Playwright ${playwrightStats.tests} 流程)、小程序 (${miniprogramTests} 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
-
----
-
-## 📊 当前状态
-
-| 指标 | 值 | 说明 |
-|------|-----|------|
-| **当前阶段** | 阶段0~阶段4 全量收官；架构优化计划 M1~M4 全部完成 | 房态状态机、滞纳金核销、水电表MQTT模拟器、预付闭环、OTP/限流加固、生产编排与灾备演练全量交付 |
-| **整体进度** | **${overallProgress}%** | 唯一事实来源：五阶段进度严格加权均值 100% |
-| **活跃任务** | T${latestTaskNumber} | 见 \`tasks/T${latestTaskNumber}-*.md\`（由 scripts/generate-status.mjs 从 tasks/ 推导） |
-| **已完成任务** | T001~T${latestTaskNumber} | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 优化（任务书 ${taskCount} 份） |
-| **阻塞问题** | 0 | 无阻塞 |
-| **数据模型** | ${modelCount} 张实体表 | Prisma schema 实际 model 严密对齐 |
-| **OpenAPI 路由** | ${routeCount} 条路由 | 全自动化生成规范，类型 100% 导出前端 |
-| **自动化测试** | ${totalTests} 测例全绿 | 后端 ${backendTests} + 小程序 ${miniprogramTests} + 前端 ${frontendTests}，100% 通过率 |
-| **验收缺口** | ${planGaps.total} 项 | ${planGaps.total === 0 ? '计划内验收标准全部勾选' : `${planGaps.bySection.join('、')} 未达标/未验证；逐条原因见 \`docs/13\`（本行由脚本实扫 docs/13，不手写数字）`} |
-| **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
-
----
-
-## 📅 里程碑进度
-
-### 阶段 0：准备与脚手架 — 100%
-- [x] 完成所有核心设计文档（00~07 与 ADR 决策记录）
-- [x] 初始化后端项目（NestJS 12 + Prisma 5.22）
-- [x] 初始化前端与小程序脚手架（Vue3 + uni-app）
-- [x] 配置四套 GitHub Actions CI/CD 工作流
-
-### 阶段 1：核心骨架与样板模块 — 100%
-- [x] 数据库迁移与种子数据（28 张表全部完成）
-- [x] 认证与授权模块（JWT 轮换、Cookie 加固、Google 登录、邮箱 OTP、独立邀请码）
-- [x] 权限守卫与审计日志（AuditLog 记录关键变更）
-- [x] 文件存储抽象（本地与 S3 存储适配、EXIF 脱敏与缩略图）
-- [x] 房源样板模块（完整 CRUD、乐观锁状态机与删除保护）
-- [x] 覆盖率门禁（T196 全局语句 85/分支 72，结算核心分支 ≥90%）
-
-### 阶段 2：业务模块实现 — 100%
-- [x] 租客模块与合同全流程（签约、续签、附件上传）
-- [x] 账单与收款闭环（账单生成、滞纳金建议与核销、交易号幂等 409）
-- [x] 预付账户与资金流水（充值、扣费、退款、自动扣费）
-- [x] 智能水电表模块（MQTT 物模型、批量录入工作台、用量告警、24h虚拟仿真器）
-- [x] 报修与保洁闭环（报修派单与多图上传、保洁端独立工作台与状态联动）
-- [x] 退租结算（结算单快照、多扣除项、退款/补缴事务）
-- [x] 财务与数据导出（BOM 防乱码 CSV 导出、电子收款收据与退租结算凭单）
-- [x] 公开看房页与仪表板（数据统计卡片、6个月水电趋势图）
-
-### 阶段 3：小程序与端到端联调 — 100%
-- [x] 租客端功能（房源、合同、账单明细、报修提交、预付流水、电子收据）
-- [x] 保洁端功能（保洁任务工作台、标记已清洁与照片上传）
-- [x] 栖居设计语言与主题系统（Vue3 reactive 主题切换与暗黑模式适配）
-- [x] 小程序 API 按领域解耦重构（7 大模块、JSDoc 规范、弱网健壮容错）
-- [x] 租客端权限能力开关与优雅降级（UserCapabilityOverride 实时控制）
-
-### 阶段 4：测试、部署、灾备与交付 — 100%
-- [x] 前端管理后台四道 CI 门禁（oxlint / vue-tsc / vitest / vite build）
-- [x] 端到端自动化验收（后端 e2e 27 项断言 + 管理后台 Playwright 5 条核心业务流程）
-- [x] 生产容器化部署工件（多阶段非 root Dockerfile、Nginx 反代安全标头、\`docker-compose.prod.yml\`）
-- [x] 生产环境备份恢复演练（PostgreSQL 物理/逻辑灾备，RTO 2.4s、RPO 0 数据丢失）
-- [x] 100 并发性能基线达标（k6 压测 P95 66.75ms，错误率 0.00%）
-- [x] 仓库卫生与治理（T200：清理 29 个旧分支与冗余 worktree，全新重构 README.md）
-- [x] 文档与代码一致性收口（T201：表数对齐 28 张，OpenAPI 120 路由，docs-check 0 报错）
-
----
-
-## 📈 进度趋势
-
-\`\`\`
-阶段0: ██████████ 100% (脚手架+数据库+CI 完成)
-阶段1: ██████████ 100% (认证/权限/审计/文件/房源样板+覆盖率门禁达标)
-阶段2: ██████████ 100% (租客/合同/账单/预付/水电/定时/报修/退租/统计导出全部完成)
-阶段3: ██████████ 100% (小程序四类页面+保洁+主题系统+API按领域解耦真实联调)
-阶段4: ██████████ 100% (生产容器Dockerfile+备份演练RTO 2.4s+100并发压测+仓库治理)
-整体 : ██████████ ${overallProgress}% (统一单一口径：五阶段严格实测加权均值)
-\`\`\`
-
----
-
-## 💬 最新更新
-
-### ${dateStr}
-- ✅ **T204 管理后台 Element Plus 按需引入（OPT-19#3 达标）**：\`unplugin-vue-components\` + \`ElementPlusResolver\` 按需引入元件与指令，\`main.ts\` 不再全量注册，语言包改由 \`el-config-provider\` 提供；实测首屏 JS 1069 KB → **125 KB（−88.3%）**，16/16 路由零组件解析告警。
-- ✅ **T203 技术债与验证缺口收口**：\`process.env\` 收敛至 config 层（\`src/\` 非 config 层 0 处实际读取，新增 \`bootstrap.config.ts\`）；\`check-docs.js\` 出现 ❌ 改为 exit 1，文档门禁在 CI 真正生效；首屏 JS 体积完成前后实测；\`ENCRYPTION_KEY\` 生产必填补测试。
-- ✅ **T202 计划收口与度量看板实测化**：\`generate-status.mjs\` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；\`check-docs.js\` 新增 \`.env.example\` 与部署文档变量清单一致性校验（OPT-07）；修复 \`scoped-where\` 类型错误（原致 \`nest build\` 失败）、\`openapi.json\` 漂移与 \`ENCRYPTION_KEY\` 运行时缺陷。
-- ✅ **T201 文档与代码一致性收口 (OPT-28)**：编写 \`scripts/generate-status.mjs\` 自动化度量脚本，实现 STATUS.md 单一进度指标自动生成；升级 \`scripts/check-docs.js\` 增加 28 张数据表与 120 条 OpenAPI 路由一致性硬门禁；补齐 49 份历史文档 YAML 元信息头部，死链清零，docs-check 达成 0 ❌ 错误、0 ⚠️ 警告。
-- ✅ **T200 仓库卫生与分支治理 (OPT-27)**：清理已合并的 29 个旧分支与无效 worktree；归档根目录 8 份游离文档；重构主指南 \`README.md\`。
-- ✅ **T199 备份恢复演练与性能基线 (OPT-26)**：完成 PostgreSQL 灾备演练（RTO 2.4s、RPO 0）；完成 100 并发 k6 压力基线实测（P95 66.75ms、0 错误）。
-- ✅ **T198 生产部署工件 (OPT-25)**：生产容器编排 \`docker-compose.prod.yml\` 与非 root 镜像。
-- ✅ **T197 e2e 与 UI 自动化测试 (OPT-24)**：Playwright ${playwrightStats.tests} 条核心流程（${playwrightStats.files} 个 spec）与后端 e2e 接入 CI。
-- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，${backendTests} 测例全绿。
-
----
-
-## 📊 统计数据（均为脚本动态实测口径）
-
-### 代码统计
-
-| 项目 | 非测试代码行数 | 统计命令 |
-|------|----------------|----------|
-| 后端（NestJS） | ${backendLines} 行 \`.ts\` | \`find backend/src -name '*.ts' ! -name '*.spec.ts' \\| xargs wc -l\` |
-| 网页后台（Vue3） | ${frontendLines} 行 \`.ts/.vue\` | \`find frontend-admin/src -type f \\( -name '*.ts' -o -name '*.vue' \\) \\| xargs wc -l\` |
-| 小程序（uni-app） | ${miniprogramLines} 行 | \`find miniprogram -type f \\( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \\) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \\| xargs wc -l\` |
-
-- **数据模型**：\`grep -c '^model ' backend/prisma/schema.prisma\` = **${modelCount}**（与 docs/02 严格一致）
-- **OpenAPI 路由**：\`backend/openapi.json\` = **${routeCount}** 条路由
-- **自动化测试**（实测：\`npm test\` 于 \`backend/\`、\`frontend-admin/\`、\`miniprogram/\` 分别执行后解析）：
-  - 后端 Vitest：**${backendTestFiles}** 个测试文件，**${backendTests}** 个测例全绿
-  - 管理后台：**${frontendTestFiles}** 个测试文件，**${frontendTests}** 个单元测试 + **${playwrightStats.tests}** 条 Playwright e2e 核心流程全绿
-  - 微信小程序：**${miniprogramTests}** 个测试用例全绿
-  - **总计测试用例**：**${totalTests}** 个测试，100% 通过率
-- **文档体系**：
-  - 核心文档与交接记录：**${docCount}** 份（CI 范围，docs/INDEX.md 100% 编目）
-  - 任务书：**${taskCount}** 个任务书文件
-
----
-
-## 📚 快速链接
-
-- [项目主指南 (README.md)](./README.md)
-- [AGENTS 协作总规则 (AGENTS.md)](./AGENTS.md)
-- [架构设计与优化计划 (docs/13-架构与现有代码优化计划.md)](./docs/13-架构与现有代码优化计划.md)
-- [文档唯一索引 (docs/INDEX.md)](./docs/INDEX.md)
-- [数据模型设计 (docs/02-数据模型.md)](./docs/02-数据模型.md)
-- [接口规范 (docs/05-接口规范.md)](./docs/05-接口规范.md)
-- [部署与运维 (docs/12-部署与运维.md)](./docs/12-部署与运维.md)
-`;
-
-fs.writeFileSync(statusPath, content, 'utf8');
-console.log(`✅ STATUS.md 已成功自动更新！`);
-console.log(`   - 唯一整体进度: ${overallProgress}%`);
-console.log(`   - 数据模型表数: ${modelCount}`);
-console.log(`   - OpenAPI 路由数: ${routeCount}`);
-console.log(`   - 实测测试用例：后端 ${backendTests}（${backendTestFiles} 文件）+ 管理后台 ${frontendTests}（${frontendTestFiles} 文件）+ 小程序 ${miniprogramTests} = ${totalTests}`);
-console.log(`   - Playwright e2e（静态计数）: ${playwrightStats.tests} 条 / ${playwrightStats.files} 个 spec`);

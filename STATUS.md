@@ -1,131 +1,132 @@
 # 项目状态跟踪
 
-> 最后更新: 2026-10-19
-> 当前阶段: 阶段0~阶段4 核心业务研发与双端UI全量交付；架构优化计划 OPT-01~OPT-28（M1~M4）全线收官
-> 进度基准: 发布分支 `main` `dd042e2`、集成分支 `develop` `f39b273`（T001~T218 全量完成）
-> 整体进度: **100%**（唯一进度口径，全链路自动化验证与生产容器部署就绪）
-> 质量状态: 后端 (88 文件 891 测例)、管理后台 (12 文件 52 测例 + Playwright 6 流程)、小程序 (110 测例) 全数实测通过，0 oxlint 错误，0 docs-check 报错
+> 分支: `docs/T250-m0-closeout`
+> 集成基準: `origin/develop` @ `53df199`
+> 發布就緒: **NO-GO**
+> Gates: 11 pass / 0 fail / 3 not-run
+
+### NO-GO 原因
+  - 整合測試: not-run
+  - 安全掃描: not-run
+  - 人工 UAT: not-run
+  - T230: unmerged
 
 ---
 
-## 📊 当前状态
+## 發布 Gate
 
-| 指标 | 值 | 说明 |
-|------|-----|------|
-| **当前阶段** | 阶段0~阶段4 全量收官；架构优化计划 M1~M4 全部完成 | 房态状态机、滞纳金核销、水电表MQTT模拟器、预付闭环、OTP/限流加固、生产编排与灾备演练全量交付 |
-| **整体进度** | **100%** | 唯一事实来源：五阶段进度严格加权均值 100% |
-| **活跃任务** | T218 | 见 `tasks/T218-*.md`（由 scripts/generate-status.mjs 从 tasks/ 推导） |
-| **已完成任务** | T001~T218 | 完整交付全业务链路、生产部署工件与架构优化 M1/M2/M3/M4 优化（任务书 87 份） |
-| **阻塞问题** | 0 | 无阻塞 |
-| **数据模型** | 32 张实体表 | Prisma schema 实际 model 严密对齐 |
-| **OpenAPI 路由** | 135 条路由 | 全自动化生成规范，类型 100% 导出前端 |
-| **自动化测试** | 1053 测例全绿 | 后端 891 + 小程序 110 + 前端 52，100% 通过率 |
-| **验收缺口** | 1 项 | OPT-02(1) 未达标/未验证；逐条原因见 `docs/13`（本行由脚本实扫 docs/13，不手写数字） |
-| **文档治理** | 100% 编目 | docs-check 0 ❌ 错误、0 ⚠️ 警告 |
-
----
-
-## 📅 里程碑进度
-
-### 阶段 0：准备与脚手架 — 100%
-- [x] 完成所有核心设计文档（00~07 与 ADR 决策记录）
-- [x] 初始化后端项目（NestJS 12 + Prisma 5.22）
-- [x] 初始化前端与小程序脚手架（Vue3 + uni-app）
-- [x] 配置四套 GitHub Actions CI/CD 工作流
-
-### 阶段 1：核心骨架与样板模块 — 100%
-- [x] 数据库迁移与种子数据（28 张表全部完成）
-- [x] 认证与授权模块（JWT 轮换、Cookie 加固、Google 登录、邮箱 OTP、独立邀请码）
-- [x] 权限守卫与审计日志（AuditLog 记录关键变更）
-- [x] 文件存储抽象（本地与 S3 存储适配、EXIF 脱敏与缩略图）
-- [x] 房源样板模块（完整 CRUD、乐观锁状态机与删除保护）
-- [x] 覆盖率门禁（T196 全局语句 85/分支 72，结算核心分支 ≥90%）
-
-### 阶段 2：业务模块实现 — 100%
-- [x] 租客模块与合同全流程（签约、续签、附件上传）
-- [x] 账单与收款闭环（账单生成、滞纳金建议与核销、交易号幂等 409）
-- [x] 预付账户与资金流水（充值、扣费、退款、自动扣费）
-- [x] 智能水电表模块（MQTT 物模型、批量录入工作台、用量告警、24h虚拟仿真器）
-- [x] 报修与保洁闭环（报修派单与多图上传、保洁端独立工作台与状态联动）
-- [x] 退租结算（结算单快照、多扣除项、退款/补缴事务）
-- [x] 财务与数据导出（BOM 防乱码 CSV 导出、电子收款收据与退租结算凭单）
-- [x] 公开看房页与仪表板（数据统计卡片、6个月水电趋势图）
-
-### 阶段 3：小程序与端到端联调 — 100%
-- [x] 租客端功能（房源、合同、账单明细、报修提交、预付流水、电子收据）
-- [x] 保洁端功能（保洁任务工作台、标记已清洁与照片上传）
-- [x] 栖居设计语言与主题系统（Vue3 reactive 主题切换与暗黑模式适配）
-- [x] 小程序 API 按领域解耦重构（7 大模块、JSDoc 规范、弱网健壮容错）
-- [x] 租客端权限能力开关与优雅降级（UserCapabilityOverride 实时控制）
-
-### 阶段 4：测试、部署、灾备与交付 — 100%
-- [x] 前端管理后台四道 CI 门禁（oxlint / vue-tsc / vitest / vite build）
-- [x] 端到端自动化验收（后端 e2e 27 项断言 + 管理后台 Playwright 5 条核心业务流程）
-- [x] 生产容器化部署工件（多阶段非 root Dockerfile、Nginx 反代安全标头、`docker-compose.prod.yml`）
-- [x] 生产环境备份恢复演练（PostgreSQL 物理/逻辑灾备，RTO 2.4s、RPO 0 数据丢失）
-- [x] 100 并发性能基线达标（k6 压测 P95 66.75ms，错误率 0.00%）
-- [x] 仓库卫生与治理（T200：清理 29 个旧分支与冗余 worktree，全新重构 README.md）
-- [x] 文档与代码一致性收口（T201：表数对齐 28 张，OpenAPI 120 路由，docs-check 0 报错）
+| Gate | 狀態 | 證據 |
+|---|---|---|
+| 後端 lint | ✅ pass | exit 0 |
+| 後端型別檢查 | ✅ pass | exit 0 |
+| 後端單元測試 | ✅ pass | 90 files / 911 tests |
+| 後端 e2e | ✅ pass | 2 files / 58 tests |
+| 管理後台 lint | ✅ pass | exit 0 |
+| 管理後台單元測試 | ✅ pass | 17 files / 79 tests |
+| 管理後台 build | ✅ pass | exit 0 |
+| 小程序單元測試 | ✅ pass | 112 tests |
+| 小程序 build | ✅ pass | exit 0 |
+| OpenAPI 生成物 | ✅ pass | exit 0 |
+| 文檔檢查 | ✅ pass | exit 0 |
+| 整合測試 | ⏸ not-run | T231 尚未提供可執行套件 |
+| 安全掃描 | ⏸ not-run | 尚無 CI artifact |
+| 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
 ---
 
-## 📈 进度趋势
+## 任務狀態
 
-```
-阶段0: ██████████ 100% (脚手架+数据库+CI 完成)
-阶段1: ██████████ 100% (认证/权限/审计/文件/房源样板+覆盖率门禁达标)
-阶段2: ██████████ 100% (租客/合同/账单/预付/水电/定时/报修/退租/统计导出全部完成)
-阶段3: ██████████ 100% (小程序四类页面+保洁+主题系统+API按领域解耦真实联调)
-阶段4: ██████████ 100% (生产容器Dockerfile+备份演练RTO 2.4s+100并发压测+仓库治理)
-整体 : ██████████ 100% (统一单一口径：五阶段严格实测加权均值)
-```
+| 狀態 | 數量 |
+|---|---|
+| 已驗證完成 | 0 |
+| 歷史完成（缺 merge 證據） | 76 |
+| 已完成但未合併 | 1 |
+| 已完成但缺 handoff | 0 |
+| handoff 未登記 INDEX | 0 |
+| 已完成但缺 merge 證據（strict） | 0 |
+| 進行中 | 1 |
+| 文件 active（不計入進行中） | 12 |
+| 草稿 | 7 |
+| 阻塞 | 0 |
+| 無法分類 | 2 |
 
----
+### 進行中
+- **T250 M0 生产化收口**（active，plan M0，`docs/T250-m0-closeout`）
 
-## 💬 最新更新
+### 阻擋發布
+- **T230 房源照片上传**：completed，但 feature/T230-room-photos 尚未合併進 origin/develop
 
-### 2026-10-19
-- ✅ **T204 管理后台 Element Plus 按需引入（OPT-19#3 达标）**：`unplugin-vue-components` + `ElementPlusResolver` 按需引入元件与指令，`main.ts` 不再全量注册，语言包改由 `el-config-provider` 提供；实测首屏 JS 1069 KB → **125 KB（−88.3%）**，16/16 路由零组件解析告警。
-- ✅ **T203 技术债与验证缺口收口**：`process.env` 收敛至 config 层（`src/` 非 config 层 0 处实际读取，新增 `bootstrap.config.ts`）；`check-docs.js` 出现 ❌ 改为 exit 1，文档门禁在 CI 真正生效；首屏 JS 体积完成前后实测；`ENCRYPTION_KEY` 生产必填补测试。
-- ✅ **T202 计划收口与度量看板实测化**：`generate-status.mjs` 改为真正执行三端测试套件并解析实测结果（不再硬编码测试数），失败即拒绝生成看板；`check-docs.js` 新增 `.env.example` 与部署文档变量清单一致性校验（OPT-07）；修复 `scoped-where` 类型错误（原致 `nest build` 失败）、`openapi.json` 漂移与 `ENCRYPTION_KEY` 运行时缺陷。
-- ✅ **T201 文档与代码一致性收口 (OPT-28)**：编写 `scripts/generate-status.mjs` 自动化度量脚本，实现 STATUS.md 单一进度指标自动生成；升级 `scripts/check-docs.js` 增加 28 张数据表与 120 条 OpenAPI 路由一致性硬门禁；补齐 49 份历史文档 YAML 元信息头部，死链清零，docs-check 达成 0 ❌ 错误、0 ⚠️ 警告。
-- ✅ **T200 仓库卫生与分支治理 (OPT-27)**：清理已合并的 29 个旧分支与无效 worktree；归档根目录 8 份游离文档；重构主指南 `README.md`。
-- ✅ **T199 备份恢复演练与性能基线 (OPT-26)**：完成 PostgreSQL 灾备演练（RTO 2.4s、RPO 0）；完成 100 并发 k6 压力基线实测（P95 66.75ms、0 错误）。
-- ✅ **T198 生产部署工件 (OPT-25)**：生产容器编排 `docker-compose.prod.yml` 与非 root 镜像。
-- ✅ **T197 e2e 与 UI 自动化测试 (OPT-24)**：Playwright 6 条核心流程（5 个 spec）与后端 e2e 接入 CI。
-- ✅ **T196 覆盖率门禁 (OPT-23)**：Vitest 覆盖率阈值门禁生效，891 测例全绿。
-
----
-
-## 📊 统计数据（均为脚本动态实测口径）
-
-### 代码统计
-
-| 项目 | 非测试代码行数 | 统计命令 |
-|------|----------------|----------|
-| 后端（NestJS） | 16966 行 `.ts` | `find backend/src -name '*.ts' ! -name '*.spec.ts' \| xargs wc -l` |
-| 网页后台（Vue3） | 22107 行 `.ts/.vue` | `find frontend-admin/src -type f \( -name '*.ts' -o -name '*.vue' \) \| xargs wc -l` |
-| 小程序（uni-app） | 6558 行 | `find miniprogram -type f \( -name '*.js' -o -name '*.vue' -o -name '*.ts' -o -name '*.json' \) ! -path '*/node_modules/*' ! -path '*/dist/*' ! -name 'package-lock.json' \| xargs wc -l` |
-
-- **数据模型**：`grep -c '^model ' backend/prisma/schema.prisma` = **32**（与 docs/02 严格一致）
-- **OpenAPI 路由**：`backend/openapi.json` = **135** 条路由
-- **自动化测试**（实测：`npm test` 于 `backend/`、`frontend-admin/`、`miniprogram/` 分别执行后解析）：
-  - 后端 Vitest：**88** 个测试文件，**891** 个测例全绿
-  - 管理后台：**12** 个测试文件，**52** 个单元测试 + **6** 条 Playwright e2e 核心流程全绿
-  - 微信小程序：**110** 个测试用例全绿
-  - **总计测试用例**：**1053** 个测试，100% 通过率
-- **文档体系**：
-  - 核心文档与交接记录：**114** 份（CI 范围，docs/INDEX.md 100% 编目）
-  - 任务书：**87** 个任务书文件
+### 資料品質警告
+- **T144 保洁小程序**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T145 修复小程序构建工具链**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T146 主题系统迁移至 Vue 3（reactive）**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T147 MVP 端到端验收脚本**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T148 安全收口**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T149 管理后台保洁状态视图**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T164 栖居主题设计迁移**：無法解析 status
+- **T165 前端后台栖居主题迁移**：無法解析 status
+- **T165 主题工作树后续：后台运行修复**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T166 批量抄表与录入工作台**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T167 财务与业务数据 CSV 导出**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T168 电子收款收据与退租结算凭单**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T169 Google 统一认证与第三方登录**：文件 status=active，但缺 execution_status/start_time；不計入進行中
+- **T170 邮箱验证码登录与邀请码延迟绑定**：文件 status=active，但缺 execution_status/start_time；不計入進行中
 
 ---
 
-## 📚 快速链接
+## 階段
 
-- [项目主指南 (README.md)](./README.md)
-- [AGENTS 协作总规则 (AGENTS.md)](./AGENTS.md)
-- [架构设计与优化计划 (docs/13-架构与现有代码优化计划.md)](./docs/13-架构与现有代码优化计划.md)
-- [文档唯一索引 (docs/INDEX.md)](./docs/INDEX.md)
-- [数据模型设计 (docs/02-数据模型.md)](./docs/02-数据模型.md)
-- [接口规范 (docs/05-接口规范.md)](./docs/05-接口规范.md)
-- [部署与运维 (docs/12-部署与运维.md)](./docs/12-部署与运维.md)
+| 階段 | 任務數 | 已完成 | 已驗證 | 未完成 | 其他 |
+|---|---:|---:|---:|---:|---:|
+| 階段 0 | 6 | 1 | 0 | 5 | 0 |
+| 階段 1 | 17 | 17 | 0 | 0 | 0 |
+| 階段 2 | 10 | 9 | 0 | 1 | 0 |
+| 階段 5 | 10 | 10 | 0 | 0 | 0 |
+| 優化計畫 | 33 | 33 | 0 | 0 | 0 |
+| 未分類 | 23 | 7 | 0 | 2 | 14 |
+
+---
+
+## 近期交接
+
+- [交接记录：T250 M0 生产化收口](docs/handoff/2026-10-23-T250-M0生产化收口.md)
+- [交接记录：T230 房源照片上传](docs/handoff/2026-10-21-T230-房源照片上传.md)
+- [交接记录：T228 房源模型视觉重做](docs/handoff/2026-10-21-T228-房源模型视觉重做.md)
+- [交接记录：T225～T227 房源模型 Wave 2](docs/handoff/2026-10-21-T225-T227-房源模型Wave2.md)
+- [交接记录：T221～T224 房源模型 Wave 1](docs/handoff/2026-10-21-T221-T224-房源模型Wave1.md)
+- [交接记录：T220-房源模型系统（Phase 1）](docs/handoff/2026-10-21-T220-房源模型系统.md)
+- [交接记录：T218-水电对账](docs/handoff/2026-10-18-T218-水电对账.md)
+- [交接记录：T217-公共水电分摊](docs/handoff/2026-10-18-T217-公共水电分摊.md)
+
+---
+
+## 統計
+
+- 資料模型：**34** 張表
+- OpenAPI 路由：**140** 條
+- 後端程式碼：**17369** 行
+- 管理後台程式碼：**27686** 行
+- 小程序程式碼：**6631** 行
+- 文件：**122** 份
+
+### 測試
+- 後端單元：90 files / 911 tests
+- 後端 e2e：2 files / 58 tests
+- 管理後台單元：17 files / 79 tests
+- 小程序單元：112 tests
+
+---
+
+## 快速連結
+
+- [項目主指南 (README.md)](./README.md)
+- [AGENTS 協作總規則 (AGENTS.md)](./AGENTS.md)
+- [架構設計與優化計畫 (docs/13-架构与现有代码优化计划.md)](./docs/13-架构与现有代码优化计划.md)
+- [文檔唯一索引 (docs/INDEX.md)](./docs/INDEX.md)
+- [數據模型設計 (docs/02-数据模型.md)](./docs/02-数据模型.md)
+- [接口規範 (docs/05-接口规范.md)](./docs/05-接口规范.md)
+- [部署與運維 (docs/12-部署与运维.md)](./docs/12-部署与运维.md)
+
+---
+
+_由 `scripts/collect-gates.mjs` + `scripts/generate-status.mjs` 生成；請勿手改。Legacy 門檻：T230。_
