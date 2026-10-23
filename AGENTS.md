@@ -1,8 +1,8 @@
 # AGENTS.md - AI 协作开发总规则
 
 > 本文档是所有 AI 模型的必读文档
-> 版本: 1.2
-> 最后更新: 2026-10-13
+> 版本: 1.3
+> 最后更新: 2026-10-23
 
 ---
 
@@ -967,9 +967,81 @@ npm run test:cov
 
 ## 13. 更新日志
 
+- **2026-10-23 v1.3**: 增加第 14 节"生产化补充规则（第二轮路线图）"；任务书新增 `execution_status`/`plan_ref`/`blocked_by`/`acceptance_evidence` 字段与编号治理（T250 起）
 - **2026-10-13 v1.2**: 技术栈纠错（NestJS 12 / TypeScript 5.9（后端）、Vitest 4 / oxlint，替代 NestJS 10 / Jest）；目录结构纠错（任务书在仓库根目录 `tasks/`，后端子项目在 `backend/`，根目录无 package.json）；测试命令对齐 `backend/package.json`（移除不存在的 `test:unit`）
 - **2026-10-11 v1.1**: 增加"统筹者+子智能体并行协作"章节
 - **2026-10-11 v1.0**: 初始版本，包含技术栈、Git 工作流、文档治理、安全红线
+
+---
+
+## 14. 生产化补充规则（第二轮路线图）
+
+执行主体是 `docs/19-生产化路线图.md`。本节只约束 M1 起的实现；与第 1–13 节冲突时，以本节更严格者为准。
+
+### 14.1 测试：真实数据库优先
+
+- 涉及唯一索引、事务、并发、金额、状态机的改动，必须有 **BE-INT**（真实 PostgreSQL）用例，不能只靠 mock Prisma。
+- 每个 P0 任务至少覆盖一条关键旅程（J1–J7），并在任务书 `acceptance_evidence` 记录命令与结果。
+- 禁止把「mock 通过」写成「集成通过」；未运行的门禁一律写 NOT_RUN。
+
+### 14.2 数据与迁移
+
+- Schema 变更采用 expand/contract：先加可空列/新表，再双写/回填，最后删旧列；一个 PR 只做一步。
+- 迁移必须可前滚、可重复执行；禁止在迁移里写业务逻辑。
+- 财务记录（收款、退款、账单、押金台账）**只能作废/冲正，不得硬删除**。
+- 金额一律以「分」整数存储与计算；日期计算一律经 `BusinessClock`，禁止 `new Date()` 直接算业务日。
+
+### 14.3 生成物与契约
+
+- `backend/openapi.json` 与 `frontend-admin/src/types/api.generated.ts` 只能由 `npm run openapi:generate` 生成，禁止手改；提交前跑 `npm run openapi:check`。
+- 前端以错误码判断，不以中文 `message` 判断。
+- 外部服务（邮件、支付、短信、OSS）不得在数据库事务内调用；用 Outbox/任务队列。
+
+### 14.4 反模式（发现即拒绝合并）
+
+- 空 `catch {}` 吞掉数据库/锁错误。
+- `@Optional()` 或 `?? new X()` 静默降级关键依赖。
+- `Math.random()` 生成 OTP、令牌、单号。
+- 用本地时区计算业务日期。
+- 硬删除财务数据；无幂等键的收款/退款/回调。
+- 手写「100% 完成」「全部通过」；STATUS/README 与证据不符。
+- 在任务书里写 YAML 列表块（`parseFrontMatter` 只解析单行 `key: value`）。
+
+### 14.5 任务书新字段（T250 起）
+
+```yaml
+---
+status: active
+execution_status: active
+task_id: T250
+plan_ref: M0                  # M0–M5 或 SEC-01 / FIN-01 / OPS-08 / QLT-03
+blocked_by: DEC-04, needs-human   # 单行逗号分隔；无则留空
+acceptance_evidence: tasks/evidence/T250.md
+branch: docs/T250-m0-closeout
+depends_on: T255
+handoff: docs/handoff/2026-10-23-T250-M0生产化收口.md
+---
+```
+
+- `execution_status` 优先于 `status`；`completed` 必须有可验证的 merge 证据、handoff 文件、handoff 已登记 INDEX。
+- `blocked_by` 只允许 `T\d{3}`、`DEC-0[1-9]`、`M[0-5]`、`needs-human`；completed 不得带 blockers。
+- `acceptance_evidence` 固定放 `tasks/evidence/`（不受 docs-check 的 frontmatter/INDEX 强制）。
+- 一个计划任务可拆多份任务书，但一份任务书只能有一个 `plan_ref`；拆出的新任务书另取后续空号。
+
+### 14.6 编号治理
+
+- `T230` 及以前为历史任务；`T231`–`T249` 已被其他分支/工作树占用，**不得复用**。
+- 第二轮计划任务固定为 `T250`–`T314`，映射见 `docs/19`；新增任务从 `T315` 起。
+- 任务书、分支、handoff、PR 标题使用同一任务号；不要一号多义。
+
+### 14.7 停止规则
+
+遇到以下情况立即停止并记录到 `docs/09`，不得猜测或绕过：
+
+- 文档与代码不一致，且无法从测试/迁移判定谁正确。
+- 需要 DEC 拍板、外部资质或人工凭据。
+- 需要修改 `docs/06`、`docs/17`、`docs/18`、`tasks/T231–T248` 或其他工作树。
+- 为让 CI 变绿而需要放宽安全/权限/金额校验。
 
 ---
 

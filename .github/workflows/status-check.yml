@@ -1,0 +1,166 @@
+name: Status Check
+
+# 唯一目的：讓 STATUS.md 的數字與 gate 結果由 CI 產生/比對，而不是由人手寫。
+# 注意：這個 workflow 目前會重跑三端測試；Phase B 可改成消費既有 workflow 的 artifacts 去重。
+# 若 Check STATUS.md 失敗：下載 status-gates artifact，把 STATUS.generated.md 複製為 STATUS.md 後提交。
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'backend/**'
+      - 'frontend-admin/**'
+      - 'miniprogram/**'
+      - 'scripts/**'
+      - 'tasks/**'
+      - 'docs/**'
+      - 'STATUS.md'
+      - '.github/workflows/status-check.yml'
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    name: Truthful status & gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d test_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      TZ: UTC
+      DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_SECRET: test-jwt-secret
+      ENCRYPTION_KEY: ci-test-encryption-key-32-bytes!
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 任務的 merge 證據需要 origin/develop 與各任務 branch 的遠端 ref；
+      # actions/checkout 在 PR 上只保證 checkout 的 ref，這裡明確補齊。
+      - name: Fetch all branches for task evidence
+        run: git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend-admin/package-lock.json
+            miniprogram/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      # status job 會重跑 backend-e2e；提供與 backend-ci 相同的資料庫，並套用遷移。
+      - name: Prepare test database
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Install admin dependencies
+        working-directory: frontend-admin
+        run: npm ci
+
+      - name: Install miniprogram dependencies
+        working-directory: miniprogram
+        run: npm ci
+
+      # check-docs.js 目前 require('glob')，CI 以全域安裝 + NODE_PATH 提供。
+      - name: Install docs-check dependency
+        run: |
+          npm install -g glob
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+
+      - name: Test status core
+        run: node --test scripts/status-core.test.mjs scripts/gates.test.mjs scripts/task-check.test.mjs scripts/worktree-audit.test.mjs
+
+      # T250：在 develop 基線上確認 errors=0（legacy 警告不阻擋），改為真正阻擋。
+      - name: Task metadata check
+        run: node scripts/task-check.mjs
+
+      - name: Collect gates
+        run: node scripts/collect-gates.mjs --output artifacts/gates.json
+
+      - name: Verify gate report commit
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('artifacts/gates.json', 'utf8'));
+          const sha = (process.env.GITHUB_SHA || '').slice(0, 7);
+          if (sha && report.commit !== sha) {
+            console.error(`gate report commit ${report.commit} != GITHUB_SHA ${sha}`);
+            process.exit(1);
+          }
+          NODE
+
+      # 先產生一份可直接提交的 STATUS.md；即使下面的檢查失敗，也會上傳為 artifact。
+      - name: Generate status preview
+        run: node scripts/generate-status.mjs --gates artifacts/gates.json --output STATUS.generated.md
+
+      # CI 用語意檢查：比對 Gate 狀態、任務計數、模型/路由數。
+      # 不比較 branch、gate evidence 等環境相關欄位。
+      - name: Check STATUS.md
+        run: node scripts/generate-status.mjs --gates artifacts/gates.json --check-gates
+
+      - name: Gate summary
+        if: always() && hashFiles('artifacts/gates.json') != ''
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('artifacts/gates.json', 'utf8'));
+          const bad = report.gates.filter((gate) => gate.status === 'fail' || gate.status === 'blocked');
+          console.log(`commit ${report.commit} / branch ${report.branch} / node ${report.node}`);
+          for (const gate of report.gates) {
+            console.log(`${gate.status.padEnd(8)} ${gate.id.padEnd(20)} ${gate.evidence}`);
+          }
+          if (bad.length) {
+            console.error(`\n${bad.length} gate(s) failed.`);
+            process.exit(1);
+          }
+          NODE
+
+      - name: Upload gate report and status preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: status-gates
+          path: |
+            artifacts/gates.json
+            STATUS.generated.md
+          retention-days: 14
+          if-no-files-found: warn

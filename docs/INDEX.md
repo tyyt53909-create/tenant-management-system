@@ -1,11 +1,11 @@
 # 文档索引
 
 > 本文档是所有项目文档的唯一注册表
-> 最后更新: 2026-10-21
-> 文档总数: 120 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 48、draft 7、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 132 份（含本索引与归档）
-> 任务书: 97 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 最后更新: 2026-10-23
+> 文档总数: 122 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 66、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 134 份（含本索引与归档）
+> 任务书: 99 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -38,6 +38,7 @@
 | [13-架构与现有代码优化计划.md](./13-架构与现有代码优化计划.md) | 架构与现有代码优化计划 | 过程类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\* | 2026-10-15 | OPT-01～OPT-28，不加新业务功能 |
 | [15-管理后台设计系统.md](./15-管理后台设计系统.md) | 管理后台设计系统 | 事实来源类 | active | medium | frontend-admin/src/styles/\*\*、frontend-admin/src/style.css、frontend-admin/src/components/common/ResourcePanel.vue、frontend-admin/src/views/\*\* | 2026-10-18 | 令牌唯一来源、WCAG AA 对比度表、11px 字级地板、页面骨架与顶栏断点 |
 | [16-房源模型接口契约.md](./16-房源模型接口契约.md) | 房源模型接口契约 | 事实来源类 | active | strong | backend/src/modules/space/\*\*、backend/src/modules/floor-plans/\*\*、frontend-admin/src/types/space.ts、frontend-admin/src/components/space/\*\* | 2026-10-21 | SpaceModel v1、座標系、FloorPlan/RoomShape、角色投影與 fixture；T221～T227 共享契約 |
+| [19-生产化路线图.md](./19-生产化路线图.md) | 生产化路线图（第二轮） | 过程类 | active | strong | tasks/\*\*、docs/09-待确认清单.md、AGENTS.md、scripts/task-check.mjs、scripts/status-core.mjs、.github/workflows/status-check.yml | 2026-10-23 | M0–M5 里程碑、65 个计划任务与 T250–T314 映射、DEC-01~09、任务书 schema、ISS 摘要 |
 
 ---
 
@@ -53,6 +54,8 @@
 
 ## 3. 任务与交接
 
+- [T250-M0生产化收口.md](../tasks/T250-M0生产化收口.md)：M0 治理收口（docs/19 路线图、T250–T314 编号、DEC 登记、任务书 schema、STATUS 真实化）；不改业务代码。
+- [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
 - [2026-10-21-T230-房源照片上传.md](./handoff/2026-10-21-T230-房源照片上传.md)：T230，RoomPhoto 启用；后端 `photos` DTO 与事务替换、前端照片编辑器、Playwright 09 通过。
 - [2026-10-21-T228-房源模型视觉重做.md](./handoff/2026-10-21-T228-房源模型视觉重做.md)：T228，小區模型 → 點樓棟 → 2D 樓層、單棟建築外殼、綠色可租／藍色已租／紅色待處理配色，Playwright 06/07 通過。
@@ -272,6 +275,7 @@
 
 ### 3.4 交接记录
 
+- [2026-10-23-T250-M0生产化收口.md](./handoff/2026-10-23-T250-M0生产化收口.md)：T250，第二轮路线图与编号（T250–T314）、DEC-01~09 登记、任务书 schema 与看板消费、README/STATUS 真实化；M0 不改业务代码，OPS-08 staging 留 T251。
 - [2026-10-18-T218-水电对账.md](./handoff/2026-10-18-T218-水电对账.md)：T218，读数/扣费/账单三方交叉核对的只读对账视图（`GET /meters/reconciliation`，仅 ADMIN）；逐表列出读数差、扣费合计、UTILITY 账单合计与应收差额，模拟读数不计入。
 - [2026-10-18-T217-公共水电分摊.md](./handoff/2026-10-18-T217-公共水电分摊.md)：T217，docs/09 §7 的公共水电分摊落地；`PublicUtilityBill`/`PublicUtilityAllocation` 两表、按面积分摊（每笔向下取整、余额补给最大一笔使合计等于总额）、预览与「生成补缴账单」幂等开单。
 - [2026-10-18-T216-旧资料导入.md](./handoff/2026-10-18-T216-旧资料导入.md)：T216，上线前数据补录阻塞项；租客/合同/账单 CSV 模板、预检（逐行错误）与单事务写入，任一行有错整批不写、判重 skipped、`commit` 默认 dryRun，后台「资料导入」分步页。
