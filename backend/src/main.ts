@@ -1,8 +1,12 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import { configureSecurityAndMiddleware } from './config/security.config.js';
 import { loadBootstrapConfig } from './config/bootstrap.config.js';
+import {
+  DEFAULT_SHUTDOWN_TIMEOUT_MS,
+  registerShutdownWatchdog,
+} from './config/shutdown.config.js';
 import { AllExceptionsFilter, requestIdMiddleware } from './common/filters/all-exceptions.filter.js';
 import { createHttpLogger } from './logging/http-logger.js';
 import { mountOpenApi } from './openapi/openapi.document.js';
@@ -44,6 +48,15 @@ async function bootstrap() {
     }),
   );
   mountOpenApi(app, { enabled: !config.isProduction });
+
+  // SIGTERM/SIGINT 由 Nest 处理：依次关闭 HTTP server、定时任务与各模块的
+  // onModuleDestroy（Prisma、Redis）。看门狗只负责「关不完就强制退出」。
+  app.enableShutdownHooks();
+  registerShutdownWatchdog(process, {
+    timeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
+    logger: new Logger('Shutdown'),
+    exit: (code) => process.exit(code),
+  });
 
   await app.listen(config.port);
 }

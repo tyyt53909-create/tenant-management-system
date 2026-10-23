@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-23
-> 文档总数: 123 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 67、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 135 份（含本索引与归档）
-> 任务书: 100 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 文档总数: 124 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 68、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 136 份（含本索引与归档）
+> 任务书: 101 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -54,6 +54,7 @@
 
 ## 3. 任务与交接
 
+- [T253-OPS-02-Node24与优雅关闭.md](../tasks/T253-OPS-02-Node24与优雅关闭.md)：OPS-02，生产镜像升级 Node 24 LTS、SIGTERM 优雅关闭与 25s 看门狗、Redis 停机 QUIT、容器只读根文件系统与最小权限。
 - [T252-OPS-01-生产可启动性.md](../tasks/T252-OPS-01-生产可启动性.md)：OPS-01，环境变量集中校验、Redis URL/密码与断线重连、`/health/live`、生产模板与一致性门禁。
 - [T250-M0生产化收口.md](../tasks/T250-M0生产化收口.md)：M0 治理收口（docs/19 路线图、T250–T314 编号、DEC 登记、任务书 schema、STATUS 真实化）；不改业务代码。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
@@ -276,6 +277,7 @@
 
 ### 3.4 交接记录
 
+- [2026-10-23-T253-Node24与优雅关闭.md](./handoff/2026-10-23-T253-Node24与优雅关闭.md)：T253，生产镜像升级 Node 24 LTS、SIGTERM 优雅关闭（实测 72ms）与 25s 看门狗、Redis QUIT、只读根文件系统与最小权限；含 `.dockerignore` 修复。
 - [2026-10-23-T252-生产可启动性.md](./handoff/2026-10-23-T252-生产可启动性.md)：T252，环境变量 schema 集中校验与生产 fail-fast、Redis URL/密码与断线重连、`/health/live`、生产模板与 CI 一致性门禁；含升级必填项说明。
 - [2026-10-23-T250-M0生产化收口.md](./handoff/2026-10-23-T250-M0生产化收口.md)：T250，第二轮路线图与编号（T250–T314）、DEC-01~09 登记、任务书 schema 与看板消费、README/STATUS 真实化；M0 不改业务代码，OPS-08 staging 留 T251。
 - [2026-10-18-T218-水电对账.md](./handoff/2026-10-18-T218-水电对账.md)：T218，读数/扣费/账单三方交叉核对的只读对账视图（`GET /meters/reconciliation`，仅 ADMIN）；逐表列出读数差、扣费合计、UTILITY 账单合计与应收差额，模拟读数不计入。

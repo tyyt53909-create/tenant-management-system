@@ -14,4 +14,6 @@ export interface RedisCommandClient {
   ping(): Promise<string>;
   connect(): Promise<unknown>;
   quit(): Promise<unknown>;
+  /** 立即断开（QUIT 失败时的兜底）；测试替身可以不实现。 */
+  disconnect?(): void;
 }

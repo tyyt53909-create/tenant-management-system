@@ -4,14 +4,15 @@
 #   runner  -> 非 root 运行；app / migrate / seed 共用同一镜像
 #              （seed 为预编译 JS，运行时不需要 TS 执行器）
 # 构建：docker build -f backend/Dockerfile ./backend
+# T253 / OPS-02：运行在 Node 24 LTS（CI 仍为 Node 20，统一由 OPS-08 处理）。
 
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY prisma/schema.prisma ./prisma/
 RUN npm ci
 
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 # Alpine 上 Prisma 自动探测 OpenSSL 经常失败，显式锁定 musl + openssl3 引擎；
 # openssl 运行库 builder/runner 都要（generate/seed/migrate/app 都加载引擎）。
@@ -43,10 +44,12 @@ RUN ARCH="$(uname -m)" \
   && if [ "$ARCH" = "aarch64" ] && ! echo "$ENG" | grep -q "arm64" ; then echo "❌ arm64 镜像里出现非 arm64 引擎: $ENG"; exit 1; fi \
   && if [ "$ARCH" != "aarch64" ] && echo "$ENG" | grep -q "arm64" ; then echo "❌ 非 arm64 构建里出现 arm64 引擎: $ENG"; exit 1; fi
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
   PORT=3000
+# 显式声明停机信号，并给应用 30 秒完成优雅关闭（应用自身 25 秒看门狗兜底）。
+STOPSIGNAL SIGTERM
 # 非 root 运行（验收项）
 RUN apk add --no-cache openssl \
   && addgroup -S app && adduser -S -u 1001 -G app app \
@@ -60,5 +63,5 @@ COPY --from=builder --chown=app:app /app/prisma ./prisma
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 CMD ["node", "dist/main"]
