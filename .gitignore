@@ -89,6 +89,8 @@ temp/
 .dockerignore
 # 后端构建上下文必须排除 node_modules 等本地产物（T253）。
 !backend/.dockerignore
+# TLS 证书绝不入库（T254 / OPS-03）。
+certs/
 
 # Git
 .git/

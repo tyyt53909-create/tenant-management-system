@@ -1,0 +1,11 @@
+# T254 / OPS-03：HTTPS 叠加配置
+# 用法：
+#   mkdir -p certs && cp fullchain.pem privkey.pem certs/
+#   docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml --env-file .env.prod up -d
+# 不叠加本文件时保持纯 HTTP（8080→:80），证书缺失不会阻止启动。
+services:
+  web:
+    ports:
+      - "${WEB_TLS_PORT:-443}:8443"
+    volumes:
+      - ./docker/nginx-admin-tls.conf:/etc/nginx/conf.d/tls.conf:ro
