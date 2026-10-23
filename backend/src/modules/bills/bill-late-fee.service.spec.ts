@@ -17,7 +17,9 @@ describe('BillLateFeeService', () => {
   it('rejects absent, immutable, not-yet-overdue and fully paid bills', async () => {
     prisma.bill.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(lateBill({ status: 'PAID' })).mockResolvedValueOnce(lateBill({ status: 'CANCELLED' })).mockResolvedValueOnce(lateBill({ dueDate: new Date(Date.now() + 86400000) })).mockResolvedValueOnce(lateBill({ paidAmount: 10000 }));
     await expect(service.addLateFee('b1', {}, 'op')).rejects.toThrow(NotFoundException);
-    for (let i = 0; i < 4; i++) await expect(service.addLateFee('b1', {}, 'op')).rejects.toThrow(BadRequestException);
+    for (let i = 0; i < 3; i++) await expect(service.addLateFee('b1', {}, 'op')).rejects.toThrow(BadRequestException);
+    // 已缴清走显式错误码 BILL_ALREADY_PAID（422），不再依赖消息兜底。
+    await expect(service.addLateFee('b1', {}, 'op')).rejects.toThrow('账单已缴清，无需计算滞纳金');
   });
 
   it('creates and refreshes suggestions', async () => {

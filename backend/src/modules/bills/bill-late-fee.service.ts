@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException }
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { LateFeeRule, LateFeeUtil } from './utils/late-fee.util.js';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 
 @Injectable()
 export class BillLateFeeService {
@@ -38,7 +39,7 @@ export class BillLateFeeService {
 
       const baseAmount = bill.amount - bill.paidAmount;
       if (baseAmount <= 0) {
-        throw new BadRequestException('账单已缴清，无需计算滞纳金');
+        throw apiError(ErrorCode.BILL_ALREADY_PAID, '账单已缴清，无需计算滞纳金');
       }
 
       const result = LateFeeUtil.calculate(

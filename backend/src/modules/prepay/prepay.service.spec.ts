@@ -116,7 +116,7 @@ describe('PrepayService', () => {
           { type: 'DEDUCTION', amount: 20000, description: '扣款' } as any,
           operatorId,
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('余额不足，无法扣费/退款');
       expect(prisma.prepayTransaction.create).not.toHaveBeenCalled();
     });
 
@@ -130,7 +130,7 @@ describe('PrepayService', () => {
           { type: 'REFUND', amount: 8000, description: '余额退还' } as any,
           operatorId,
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('余额不足，无法扣费/退款');
       expect(prisma.prepayAccount.updateMany).toHaveBeenCalledWith({
         where: { id: accountId, balanceCache: { gte: 8000 } },
         data: { balanceCache: { decrement: 8000 } },
