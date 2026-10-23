@@ -171,11 +171,16 @@
             <el-checkbox label="WiFi">WiFi</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
+        <el-form-item label="房源照片">
+          <div v-loading="editLoading" class="room-photo-field">
+            <RoomPhotoEditor v-model="formData.photos" />
+          </div>
+        </el-form-item>
       </el-form>
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitLoading" @click="handleSubmit">
+        <el-button type="primary" :loading="submitLoading" :disabled="editLoading" @click="handleSubmit">
           确定
         </el-button>
       </template>
@@ -202,16 +207,19 @@ import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import PropertyDetailPanel from '@/components/common/PropertyDetailPanel.vue';
 import EntitySelect from '@/components/common/EntitySelect.vue';
 import RoomStatusDialog from './components/RoomStatusDialog.vue';
+import RoomPhotoEditor from './components/RoomPhotoEditor.vue';
 import type { FormInstance, FormRules } from 'element-plus';
 import {
   ALL_ROOMS_LIMIT,
   createRoom,
   deleteRoom,
   fetchAllRooms,
+  getRoomById,
   getRooms,
   updateRoom,
 } from '@/api/rooms';
-import type { CleanStatus, Room, RoomStatus } from '@/types';
+import type { CleanStatus, Room, RoomPhoto, RoomStatus } from '@/types';
+import { toRoomPhotoPayload } from '@/utils/roomPhotos';
 import {
   CLEAN_STATUS_OPTIONS,
   ROOM_STATUS_OPTIONS,
@@ -230,6 +238,7 @@ const detailVisible=ref(false);const detailId=ref('');
 const detailPanel=ref<InstanceType<typeof PropertyDetailPanel>>();
 function openDetail(row:Room){detailId.value=row.id;detailVisible.value=true;if(route.query.detail!==row.id)void router.replace({query:{...route.query,detail:row.id}});}
 const submitLoading = ref(false);
+const editLoading = ref(false);
 const dialogVisible = ref(false);
 const dialogTitle = ref('新增房源');
 const formRef = ref<FormInstance>();
@@ -280,13 +289,22 @@ const localFilterTip = computed(() => {
     : base;
 });
 
-const formData = reactive({
+const formData = reactive<{
+  buildingId: string;
+  roomNumber: string;
+  floor: number;
+  roomType: string;
+  area: number;
+  facilities: string[];
+  photos: RoomPhoto[];
+}>({
   buildingId: 'building-001',
   roomNumber: '',
   floor: 1,
   roomType: '',
   area: 0,
-  facilities: [] as string[],
+  facilities: [],
+  photos: [],
 });
 
 const rules: FormRules = {
@@ -387,10 +405,12 @@ const handleCreate = () => {
   handleDialogClose();
   dialogTitle.value = '新增房源';
   currentEditId.value = '';
+  editLoading.value = false;
   dialogVisible.value = true;
 };
 
-const handleEdit = (row: Room) => {
+const handleEdit = async (row: Room) => {
+  handleDialogClose();
   dialogTitle.value = '编辑房源';
   currentEditId.value = row.id;
   currentVersion.value = row.version;
@@ -401,8 +421,27 @@ const handleEdit = (row: Room) => {
     roomType: row.roomType,
     area: Number(row.area || 0),
     facilities: row.facilities || [],
+    photos: row.photos || [],
   });
   dialogVisible.value = true;
+  editLoading.value = true;
+
+  try {
+    // 列表接口不带照片，编辑必须以详情为准；加载失败则不打开保存，避免误删已有照片。
+    const detail = await getRoomById(row.id);
+    if (currentEditId.value !== row.id) return;
+    Object.assign(formData, {
+      photos: detail.photos || [],
+    });
+    currentVersion.value = detail.version;
+  } catch {
+    if (currentEditId.value === row.id) {
+      dialogVisible.value = false;
+      ElMessage.error('房源详情加载失败，请刷新后重试');
+    }
+  } finally {
+    if (currentEditId.value === row.id) editLoading.value = false;
+  }
 };
 
 // 房态流转
@@ -447,7 +486,7 @@ const handleSubmit = async () => {
 
     submitLoading.value = true;
     try {
-      const data: any = { ...formData };
+      const data: any = { ...formData, photos: toRoomPhotoPayload(formData.photos) };
 
       if (currentEditId.value) {
         // 乐观锁：携带版本号，冲突时后端返回 409
@@ -471,6 +510,7 @@ const handleSubmit = async () => {
 
 const handleDialogClose = () => {
   formRef.value?.resetFields();
+  editLoading.value = false;
   Object.assign(formData, {
     buildingId: 'building-001',
     roomNumber: '',
@@ -478,6 +518,7 @@ const handleDialogClose = () => {
     roomType: '',
     area: 0,
     facilities: [],
+    photos: [],
   });
 };
 
@@ -533,5 +574,9 @@ watch(detailVisible,open=>{if(!open&&route.query.detail===detailId.value)void ro
   height: 18px;
   padding: 0 5px;
   font-size: var(--font-micro);
+}
+.room-photo-field {
+  width: 100%;
+  min-height: 58px;
 }
 </style>

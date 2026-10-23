@@ -1,6 +1,15 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsEnum, IsInt, IsOptional, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { CreateRoomDto } from './create-room.dto.js';
+import { MAX_ROOM_PHOTOS, RoomPhotoDto } from './room-photo.dto.js';
 
 export enum RoomStatus {
   VACANT = 'VACANT',
@@ -29,4 +38,14 @@ export class UpdateRoomDto extends PartialType(CreateRoomDto) {
   @Min(0)
   @IsOptional()
   version?: number;
+
+  /**
+   * 房源照片全量替换（省略则不修改照片）。
+   * 数组顺序即展示顺序，第一张作为封面；最多 20 张。
+   */
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => RoomPhotoDto)
+  @ArrayMaxSize(MAX_ROOM_PHOTOS, { message: `房源照片最多 ${MAX_ROOM_PHOTOS} 张` })
+  photos?: RoomPhotoDto[];
 }

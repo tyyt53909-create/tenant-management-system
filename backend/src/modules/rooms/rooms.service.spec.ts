@@ -55,10 +55,13 @@ describe('RoomsService', () => {
             roomPhoto: {
               count: vi.fn(),
               create: vi.fn(),
+              createMany: vi.fn(),
+              deleteMany: vi.fn(),
             },
             user: {
               findMany: vi.fn(),
             },
+            $transaction: vi.fn(),
           },
         },
         { provide: NotificationsService, useValue: notifications },
@@ -75,6 +78,9 @@ describe('RoomsService', () => {
     vi.mocked(prisma.meter.count).mockResolvedValue(0);
     vi.mocked(prisma.roomPhoto.count).mockResolvedValue(0);
     vi.mocked(prisma.user.findMany).mockResolvedValue([]);
+
+    // 事务测试：回调直接复用同一组 mock，专注断言业务写入顺序。
+    (prisma.$transaction as any).mockImplementation(async (callback: any) => callback(prisma));
   });
 
   describe('create', () => {
@@ -104,7 +110,61 @@ describe('RoomsService', () => {
           status: 'VACANT',
           cleanStatus: 'CLEAN',
         }),
+        include: expect.anything(),
       });
+    });
+
+    it('带照片创建房源：按数组顺序写入 sortOrder，第一张为封面', async () => {
+      const mockBuilding = { id: 'building-001', name: '默认楼栋' };
+      const mockRoom = { id: 'room-123', ...dto, status: 'VACANT', photos: [] };
+      const dtoWithPhotos = {
+        ...dto,
+        photos: [
+          { fileUrl: '/api/files/cover.jpg', thumbnail: '/api/files/cover.thumb.jpg', fileSize: 2048 },
+          { fileUrl: '/api/files/second.png' },
+        ],
+      };
+
+      vi.spyOn(prisma.building, 'findUnique').mockResolvedValue(mockBuilding as any);
+      vi.spyOn(prisma.room, 'findFirst').mockResolvedValue(null);
+      vi.spyOn(prisma.room, 'create').mockResolvedValue(mockRoom as any);
+
+      await service.create(dtoWithPhotos as any);
+
+      expect(prisma.room.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            photos: {
+              create: [
+                {
+                  fileUrl: '/api/files/cover.jpg',
+                  thumbnail: '/api/files/cover.thumb.jpg',
+                  fileSize: 2048,
+                  sortOrder: 0,
+                },
+                {
+                  fileUrl: '/api/files/second.png',
+                  thumbnail: null,
+                  fileSize: 0,
+                  sortOrder: 1,
+                },
+              ],
+            },
+          }),
+        }),
+      );
+    });
+
+    it('超过 20 张照片应拒绝（服务层兜底）', async () => {
+      vi.spyOn(prisma.building, 'findUnique').mockResolvedValue({ id: 'building-001' } as any);
+      vi.spyOn(prisma.room, 'findFirst').mockResolvedValue(null);
+
+      const photos = Array.from({ length: 21 }, (_, index) => ({
+        fileUrl: `/api/files/${index}.jpg`,
+      }));
+
+      await expect(service.create({ ...dto, photos } as any)).rejects.toThrow(BadRequestException);
+      expect(prisma.room.create).not.toHaveBeenCalled();
     });
 
     it('应该拒绝不存在的楼栋', async () => {
@@ -208,7 +268,7 @@ describe('RoomsService', () => {
       await service.findOne('r1', 'ADMIN');
       expect(prisma.room.findUnique).toHaveBeenLastCalledWith(expect.objectContaining({
         include: expect.objectContaining({
-          photos: { select: { id: true, fileUrl: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], take: 20 },
+          photos: { select: { id: true, fileUrl: true, thumbnail: true, fileSize: true, sortOrder: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], take: 20 },
         }),
       }));
       await service.findOne('r1', 'CLEANER');
@@ -310,6 +370,77 @@ describe('RoomsService', () => {
       await expect(
         service.update('room-123', { description: 'x', version: 4 } as any),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('编辑时提供 photos：事务内全量替换并按顺序落库', async () => {
+      const mockRoom = {
+        id: 'room-123',
+        roomNumber: '101',
+        buildingId: 'building-001',
+        floor: 1,
+        status: 'VACANT',
+        cleanStatus: 'CLEAN',
+        version: 3,
+      };
+      const updated = { ...mockRoom, version: 4, photos: [] };
+
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue(updated as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 });
+      vi.spyOn(prisma.roomPhoto, 'deleteMany').mockResolvedValue({ count: 1 });
+      vi.spyOn(prisma.roomPhoto, 'createMany').mockResolvedValue({ count: 2 });
+
+      const result = await service.update('room-123', {
+        description: '新描述',
+        version: 3,
+        photos: [
+          { fileUrl: '/api/files/new-cover.jpg' },
+          { fileUrl: '/api/files/new-second.jpg', fileSize: 1024 },
+        ],
+      } as any);
+
+      expect(prisma.roomPhoto.deleteMany).toHaveBeenCalledWith({ where: { roomId: 'room-123' } });
+      expect(prisma.roomPhoto.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            roomId: 'room-123',
+            fileUrl: '/api/files/new-cover.jpg',
+            thumbnail: null,
+            fileSize: 0,
+            sortOrder: 0,
+          },
+          {
+            roomId: 'room-123',
+            fileUrl: '/api/files/new-second.jpg',
+            thumbnail: null,
+            fileSize: 1024,
+            sortOrder: 1,
+          },
+        ],
+      });
+      expect(prisma.room.updateMany).toHaveBeenCalledWith({
+        where: { id: 'room-123', version: 3 },
+        data: expect.objectContaining({ description: '新描述', version: { increment: 1 } }),
+      });
+      expect(result.version).toBe(4);
+    });
+
+    it('编辑时照片超过 20 张应拒绝且不写库', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue({
+        id: 'room-123',
+        status: 'VACANT',
+        cleanStatus: 'CLEAN',
+        version: 1,
+      } as any);
+
+      const photos = Array.from({ length: 21 }, (_, index) => ({
+        fileUrl: `/api/files/${index}.jpg`,
+      }));
+
+      await expect(
+        service.update('room-123', { photos } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('应该拒绝不存在的房源', async () => {
@@ -459,6 +590,18 @@ describe('RoomsService', () => {
   });
 
   describe('remove', () => {
+    it('仅有房源照片时不阻断删除（照片随房间级联删除）', async () => {
+      const mockRoom = { id: 'room-123', roomNumber: '101' };
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
+      vi.spyOn(prisma.room, 'delete').mockResolvedValue(mockRoom as any);
+      vi.mocked(prisma.roomPhoto.count).mockResolvedValue(3);
+
+      const result = await service.remove('room-123');
+
+      expect(prisma.room.delete).toHaveBeenCalledWith({ where: { id: 'room-123' } });
+      expect(result.message).toBe('房源已删除');
+    });
+
     it('应该成功删除房源（无关联数据）', async () => {
       const mockRoom = { id: 'room-123', roomNumber: '101' };
 

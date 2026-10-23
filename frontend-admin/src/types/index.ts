@@ -26,6 +26,15 @@ export type RoomStatus = 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
 /** 清洁状态（与后端 CleanStatus 枚举一致） */
 export type CleanStatus = 'CLEAN' | 'PENDING_CLEAN' | 'CLEANING';
 
+/** 房源照片（RoomPhoto）；数组顺序即 sortOrder，第一张为封面。 */
+export interface RoomPhoto {
+  id?: string;
+  fileUrl: string;
+  thumbnail?: string | null;
+  fileSize?: number;
+  sortOrder?: number;
+}
+
 // 房源
 export interface Room {
   id: string;
@@ -41,6 +50,8 @@ export interface Room {
   version: number;
   /** 列表接口附带楼栋信息（GET /rooms 返回值） */
   building?: { id: string; name: string };
+  /** 管理端详情/编辑返回的房源照片 */
+  photos?: RoomPhoto[];
   contracts?: {id:string;contractNumber:string;status:string;rentAmount:number;startDate:string;endDate:string;tenant?:{name:string};bills?:{dueDate:string}[]}[];
   createdAt: string;
   updatedAt: string;
