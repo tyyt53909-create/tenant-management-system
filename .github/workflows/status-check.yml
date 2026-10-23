@@ -81,10 +81,9 @@ jobs:
       - name: Test status core
         run: node --test scripts/status-core.test.mjs scripts/gates.test.mjs scripts/task-check.test.mjs scripts/worktree-audit.test.mjs
 
-      # Phase 3：先以 --report 非阻擋方式暴露任務 metadata 缺口。
-      # T230 合併後本地確認 errors=0，再把 --report 移除，讓 strict violation 真正阻擋。
-      - name: Task metadata report
-        run: node scripts/task-check.mjs --report
+      # T250：在 develop 基線上確認 errors=0（legacy 警告不阻擋），改為真正阻擋。
+      - name: Task metadata check
+        run: node scripts/task-check.mjs
 
       - name: Collect gates
         run: node scripts/collect-gates.mjs --output artifacts/gates.json
