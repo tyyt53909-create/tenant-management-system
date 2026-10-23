@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `feature/T256-sec-09`
-> 集成基準: `origin/develop` @ `10e45c1`
+> 分支: `feature/T257-sec-01`
+> 集成基準: `origin/develop` @ `0bae3be`
 > 發布就緒: **NO-GO**
 > Gates: 11 pass / 0 fail / 3 not-run
 
@@ -18,8 +18,8 @@
 |---|---|---|
 | 後端 lint | ✅ pass | exit 0 |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 93 files / 937 tests |
-| 後端 e2e | ✅ pass | 2 files / 58 tests |
+| 後端單元測試 | ✅ pass | 95 files / 946 tests |
+| 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | exit 0 |
 | 管理後台單元測試 | ✅ pass | 17 files / 79 tests |
 | 管理後台 build | ✅ pass | exit 0 |
@@ -43,7 +43,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 1 |
+| 進行中 | 2 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 7 |
 | 阻塞 | 0 |
@@ -51,6 +51,7 @@
 
 ### 進行中
 - **T256 错误码目录（SEC-09）**（active，plan SEC-09，`feature/T256-sec-09`）
+- **T257 全域 deny-by-default 授权 + 路由策略快照（SEC-01）**（active，plan SEC-01，`feature/T257-sec-01`）
 
 ### 阻擋發布
 - 無
@@ -82,12 +83,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 27 | 11 | 4 | 2 | 14 |
+| 未分類 | 28 | 11 | 4 | 3 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T257 全域 deny-by-default 授权](docs/handoff/2026-10-23-T257-deny-by-default.md)
 - [交接记录：T256 错误码目录](docs/handoff/2026-10-23-T256-错误码目录.md)
 - [交接记录：T254 Nginx 边界——上传上限、TLS、安全头与限流](docs/handoff/2026-10-23-T254-Nginx边界加固.md)
 - [交接记录：T253 Node 24 LTS、优雅关闭与镜像加固](docs/handoff/2026-10-23-T253-Node24与优雅关闭.md)
@@ -95,7 +97,6 @@
 - [交接记录：T250 M0 生产化收口](docs/handoff/2026-10-23-T250-M0生产化收口.md)
 - [交接记录：T230 房源照片上传](docs/handoff/2026-10-21-T230-房源照片上传.md)
 - [交接记录：T228 房源模型视觉重做](docs/handoff/2026-10-21-T228-房源模型视觉重做.md)
-- [交接记录：T225～T227 房源模型 Wave 2](docs/handoff/2026-10-21-T225-T227-房源模型Wave2.md)
 
 ---
 
@@ -103,14 +104,14 @@
 
 - 資料模型：**34** 張表
 - OpenAPI 路由：**141** 條
-- 後端程式碼：**17952** 行
+- 後端程式碼：**18016** 行
 - 管理後台程式碼：**27734** 行
 - 小程序程式碼：**6631** 行
-- 文件：**126** 份
+- 文件：**127** 份
 
 ### 測試
-- 後端單元：93 files / 937 tests
-- 後端 e2e：2 files / 58 tests
+- 後端單元：95 files / 946 tests
+- 後端 e2e：3 files / 63 tests
 - 管理後台單元：17 files / 79 tests
 - 小程序單元：112 tests
 
