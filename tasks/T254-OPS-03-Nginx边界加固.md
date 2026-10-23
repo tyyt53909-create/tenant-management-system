@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T254
 plan_ref: OPS-03
 stage: M1（可上线）
@@ -8,6 +8,8 @@ priority: P0
 model_tier: 强
 branch: feature/T254-ops-03
 start_time: 2026-10-23
+complete_time: 2026-10-23
+merge_commit: c8bd1c9
 blocked_by:
 depends_on: T253
 acceptance_evidence: tasks/evidence/T254.md
@@ -61,7 +63,9 @@ nginx 默认 `client_max_body_size 1m`，手机照片直接 413；413 返回 HTM
 - 工作树：`/home/user/development/worktrees/tenant-management-system/T254-ops-03`
 - 模型：DeepSeek V4.1 Flash
 - 开始日期：2026-10-23
-- 状态：active
+- 完成日期：2026-10-23
+- 合并：PR #58，merge commit `c8bd1c9`
+- 状态：completed
 
 ## 风险
 
