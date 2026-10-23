@@ -3,12 +3,23 @@ import { ConfigService } from '@nestjs/config';
 import RedisImport from 'ioredis';
 import type { RedisOptions } from 'ioredis';
 import type { RedisCommandClient } from './redis.client.js';
+import {
+  describeRedisConnection,
+  redisRetryDelay,
+  resolveRedisConnection,
+} from './redis.config.js';
+
+interface RedisInstance extends RedisCommandClient {
+  on(event: 'error', listener: (error: Error) => void): void;
+  on(event: 'ready' | 'close', listener: () => void): void;
+  on(event: 'reconnecting', listener: (delay: number) => void): void;
+  disconnect(): void;
+}
 
 // ioredis 同样是 CommonJS 默认导出，NodeNext 下不能直接 new。
-const Redis = RedisImport as unknown as new (options: RedisOptions) => RedisCommandClient & {
-  on(event: 'error', listener: () => void): void;
-  disconnect(): void;
-};
+const Redis = RedisImport as unknown as new (options: RedisOptions) => RedisInstance;
+
+const INITIAL_CONNECT_TIMEOUT_MS = 3000;
 
 @Injectable()
 export class RedisService {
@@ -23,32 +34,50 @@ export class RedisService {
     if (this.started) return;
     this.started = true;
 
-    const host = this.read('REDIS_HOST') || 'localhost';
-    const port = Number(this.read('REDIS_PORT') || '6379');
+    const connection = resolveRedisConnection((key) => this.read(key));
+    const target = describeRedisConnection(connection);
     const redis = new Redis({
-      host,
-      port,
+      ...connection,
       lazyConnect: true,
-      connectTimeout: 1000,
-      maxRetriesPerRequest: 1,
-      retryStrategy: () => null,
-      enableOfflineQueue: false,
+      connectTimeout: INITIAL_CONNECT_TIMEOUT_MS,
+      maxRetriesPerRequest: 3,
+      enableOfflineQueue: true,
+      retryStrategy: redisRetryDelay,
     });
-    redis.on('error', () => undefined);
+
+    redis.on('ready', () => {
+      this.ready = true;
+      this.logger.log(`Redis 已连接 ${target}`);
+    });
+    redis.on('close', () => {
+      this.ready = false;
+    });
+    redis.on('reconnecting', (delay) => {
+      this.ready = false;
+      this.logger.warn(`Redis 连接断开，${delay}ms 后重连（${target}）`);
+    });
+    redis.on('error', (error) => {
+      this.ready = false;
+      this.logger.error(`Redis 连接错误（${target}）：${error.message}`);
+    });
 
     try {
-      await redis.connect();
+      const connecting = redis.connect();
+      // 超时后底层连接仍可能继续重试；挂一个空 catch，避免未处理的 rejection。
+      void connecting.catch(() => undefined);
+      await withTimeout(connecting, INITIAL_CONNECT_TIMEOUT_MS);
       const pong = await redis.ping();
       if (pong !== 'PONG') {
         throw new Error(`PING 返回 ${pong}`);
       }
       this.client = redis;
       this.ready = true;
-      this.logger.log(`Redis 已连接 ${host}:${port}`);
     } catch (error) {
       redis.disconnect();
+      this.client = null;
+      this.ready = false;
       const reason = error instanceof Error ? error.message : 'unknown';
-      const message = `无法连接 Redis（${host}:${port}）：${reason}`;
+      const message = `无法连接 Redis（${target}）：${reason}`;
       if (this.isProduction()) {
         throw new Error(`生产环境${message}，拒绝启动`);
       }
@@ -64,4 +93,20 @@ export class RedisService {
     const value = this.configService.get<string>(key);
     return typeof value === 'string' ? value.trim() : '';
   }
+}
+
+function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`连接超时（${timeoutMs}ms）`)), timeoutMs);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }

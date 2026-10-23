@@ -14,6 +14,12 @@ export class HealthController {
     return this.health.live();
   }
 
+  /** 与 `/health` 同义；供容器编排使用 `/health/live` 探针。 */
+  @Get('live')
+  liveness() {
+    return this.health.live();
+  }
+
   /** 依赖不可用时返回 503。数据库停下后，这个接口失败，/health 仍然是 200。 */
   @Get('ready')
   async ready(@Res({ passthrough: true }) res: Response) {

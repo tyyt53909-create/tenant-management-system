@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import { validateEnvironment } from './env.validation.js';
+import { checkEnvironment, validateEnvironment } from './env.validation.js';
 
 const backendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -12,6 +12,8 @@ function productionEnv(overrides: Record<string, string | undefined> = {}) {
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/tenant_system',
     JWT_SECRET: 'a'.repeat(32),
     ENCRYPTION_KEY: 'c'.repeat(32),
+    CORS_ORIGINS: 'https://admin.example.com',
+    REDIS_HOST: 'redis',
     ...overrides,
   };
 }
@@ -87,5 +89,45 @@ describe('validateEnvironment', () => {
     expect(result.status).not.toBe(0);
     expect(`${result.stderr}\n${result.stdout}`).toContain('DATABASE_URL');
     expect(`${result.stderr}\n${result.stdout}`).toContain('JWT_SECRET');
+  });
+
+  it('生产模式一次列出全部缺漏，而不是只报第一个', () => {
+    const { errors } = checkEnvironment({ NODE_ENV: 'production' });
+    for (const key of ['DATABASE_URL', 'JWT_SECRET', 'ENCRYPTION_KEY', 'CORS_ORIGINS']) {
+      expect(errors.some((error) => error.includes(key))).toBe(true);
+    }
+    expect(errors.some((error) => error.includes('REDIS_URL 或 REDIS_HOST'))).toBe(true);
+  });
+
+  it('生产/预发禁止 ADMIN_PASSWORD、万能验证码与模拟开关', () => {
+    const { errors } = checkEnvironment(
+      productionEnv({
+        ADMIN_PASSWORD: 'secret-password',
+        OTP_DEV_BYPASS: 'true',
+        GOOGLE_AUTH_MOCK: 'true',
+        FEATURE_METER_SIMULATOR: 'true',
+      }),
+    );
+    expect(errors.some((error) => error.includes('ADMIN_PASSWORD'))).toBe(true);
+    expect(errors.some((error) => error.includes('OTP_DEV_BYPASS'))).toBe(true);
+    expect(errors.some((error) => error.includes('GOOGLE_AUTH_MOCK'))).toBe(true);
+    expect(errors.some((error) => error.includes('FEATURE_METER_SIMULATOR'))).toBe(true);
+  });
+
+  it('CORS 不允许通配符，REDIS_URL 必须是 redis/rediss', () => {
+    const cors = checkEnvironment(productionEnv({ CORS_ORIGINS: '*' }));
+    expect(cors.errors.some((error) => error.includes('CORS_ORIGINS'))).toBe(true);
+
+    const redis = checkEnvironment(productionEnv({ REDIS_URL: 'http://redis:6379' }));
+    expect(redis.errors.some((error) => error.includes('REDIS_URL'))).toBe(true);
+  });
+
+  it('错误信息不包含任何机密值', () => {
+    const { errors, warnings } = checkEnvironment(
+      productionEnv({ DATABASE_URL: 'not-a-url', JWT_SECRET: 'short', ENCRYPTION_KEY: 'x' }),
+    );
+    const text = [...errors, ...warnings].join('\n');
+    expect(text).not.toContain('not-a-url');
+    expect(text).not.toContain('short');
   });
 });

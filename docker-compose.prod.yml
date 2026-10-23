@@ -30,10 +30,16 @@ services:
     image: redis:7-alpine
     restart: always
     command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        [
+          "CMD-SHELL",
+          'if [ -n "$$REDIS_PASSWORD" ]; then redis-cli -a "$$REDIS_PASSWORD" ping; else redis-cli ping; fi',
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -65,10 +71,18 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${DB_USER:-tenant_user}:${DB_PASSWORD:?生产必须设置 DB_PASSWORD}@postgres:5432/${DB_NAME:-tenant_system}?schema=public
       JWT_SECRET: ${JWT_SECRET:?生产必须设置 JWT_SECRET（≥32 字节随机串）}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?生产必须设置 ENCRYPTION_KEY（32 字节）}
+      CORS_ORIGINS: ${CORS_ORIGINS:?生产必须设置 CORS_ORIGINS（逗号分隔、不允许 *）}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      # REDIS_URL 优先；未设置时用下面的 HOST/PORT/PASSWORD/DB 组装
+      REDIS_URL: ${REDIS_URL:-}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      TRUST_PROXY: 1
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       UPLOAD_DIR: /app/uploads
       OSS_BUCKET: ${OSS_BUCKET:-}
@@ -76,6 +90,21 @@ services:
       OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
       OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_AUTH_MOCK: "false"
+      OTP_DEV_BYPASS: "false"
+      FEATURE_METER_SIMULATOR: "false"
+      DEFAULT_BUILDING_ID: ${DEFAULT_BUILDING_ID:-building-001}
+      THROTTLE_GLOBAL_LIMIT: ${THROTTLE_GLOBAL_LIMIT:-}
+      THROTTLE_AUTH_LIMIT: ${THROTTLE_AUTH_LIMIT:-}
+      THROTTLE_OTP_LIMIT: ${THROTTLE_OTP_LIMIT:-}
+      THROTTLE_OTP_IP_LIMIT: ${THROTTLE_OTP_IP_LIMIT:-}
     volumes:
       - uploads:/app/uploads
     depends_on:
