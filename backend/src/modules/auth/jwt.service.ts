@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService as NestJwtService } from '@nestjs/jwt';
+import { durationMsOr } from '../../common/utils/duration.js';
 import {
   newSessionId,
   REFRESH_STORE,
@@ -14,6 +15,10 @@ import {
  * 这类竞态；只有明显超出这个窗口的重放才按令牌泄露处理（撤销整个会话家族）。
  */
 const ROTATION_RACE_GRACE_MS = 30_000;
+
+/** 只允许 HS256，避免算法混淆（alg=none / RS256 公钥当 HMAC 密钥）。 */
+const JWT_ALGORITHM = 'HS256';
+const DEFAULT_REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface JwtPayload {
   sub: string;        // userId
@@ -45,6 +50,7 @@ export class JwtAuthService {
       { ...payload, tokenType: 'ACCESS' },
       {
         secret: this.configService.get('jwt.secret'),
+        algorithm: JWT_ALGORITHM,
         expiresIn: this.configService.get('jwt.accessTokenExpiry'),
       },
     );
@@ -71,6 +77,7 @@ export class JwtAuthService {
   async verifyToken(token: string): Promise<JwtPayload> {
     return this.jwtService.verifyAsync<JwtPayload>(token, {
       secret: this.configService.get('jwt.secret'),
+      algorithms: [JWT_ALGORITHM],
     });
   }
 
@@ -89,6 +96,7 @@ export class JwtAuthService {
       { ...payload, tokenType: 'ACCESS' },
       {
         secret: this.configService.get('jwt.secret'),
+        algorithm: JWT_ALGORITHM,
         expiresIn: this.configService.get('jwt.accessTokenExpiry'),
       },
     );
@@ -144,10 +152,20 @@ export class JwtAuthService {
     return { accessToken, refreshToken: nextRefresh };
   }
 
+  /**
+   * 撤销 Refresh Token。**幂等**：无效/过期/类型不符/已撤销的令牌都视为
+   * 「已经登出」直接返回，登出接口不会因为令牌过期而回 500/401（ISS-26）。
+   * Redis/存储异常仍会抛出，避免把真实故障吞掉。
+   */
   async revokeRefreshToken(refreshToken: string): Promise<void> {
-    const verified = await this.verifyToken(refreshToken);
+    let verified: JwtPayload;
+    try {
+      verified = await this.verifyToken(refreshToken);
+    } catch {
+      return;
+    }
     if (verified.tokenType !== 'REFRESH' || !verified.jti || !this.sessions) {
-      throw new UnauthorizedException('Token 无效或已过期');
+      return;
     }
     const current = await this.sessions.get(verified.jti);
     if (!current) return;
@@ -163,6 +181,7 @@ export class JwtAuthService {
       { ...payload, tokenType: 'ACCESS' },
       {
         secret: this.configService.get('jwt.secret'),
+        algorithm: JWT_ALGORITHM,
         expiresIn: this.configService.get('jwt.accessTokenExpiry'),
       },
     );
@@ -173,18 +192,16 @@ export class JwtAuthService {
       { sub: userId, tokenType: 'REFRESH', jti, familyId },
       {
         secret: this.configService.get('jwt.secret'),
+        algorithm: JWT_ALGORITHM,
         expiresIn: this.configService.get('jwt.refreshTokenExpiry'),
       },
     );
   }
 
   private refreshTtlMs(): number {
-    const raw = this.configService.get<string>('jwt.refreshTokenExpiry') || '7d';
-    const match = /^(\d+)([smhd])$/.exec(raw);
-    if (!match) return 7 * 24 * 60 * 60 * 1000;
-    const amount = Number(match[1]);
-    const unit = match[2];
-    const scale = unit === 's' ? 1000 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 86_400_000;
-    return amount * scale;
+    return durationMsOr(
+      this.configService.get<string>('jwt.refreshTokenExpiry'),
+      DEFAULT_REFRESH_TTL_MS,
+    );
   }
 }

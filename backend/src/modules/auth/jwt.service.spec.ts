@@ -111,6 +111,22 @@ describe('JwtAuthService', () => {
       await expect(rotating.rotateRefreshToken(tokens.refreshToken)).rejects.toThrow(/无效或已过期/);
     });
 
+    it('登出对无效 token 幂等（ISS-26：不回 500/401）', async () => {
+      const rotating = rotatingService();
+      await expect(rotating.revokeRefreshToken('not-a-jwt')).resolves.toBeUndefined();
+      await expect(rotating.revokeRefreshToken('')).resolves.toBeUndefined();
+    });
+
+    it('登出对 Access Token 幂等（不误撤销会话）', async () => {
+      const rotating = rotatingService();
+      const tokens = await rotating.generateTokens({ sub: 'user-123', role: 'TENANT' });
+      await expect(rotating.revokeRefreshToken(tokens.accessToken)).resolves.toBeUndefined();
+      // Access Token 被当成登出凭据时不得撤销真正的 Refresh 会话
+      await expect(rotating.rotateRefreshToken(tokens.refreshToken)).resolves.toMatchObject({
+        accessToken: expect.any(String),
+      });
+    });
+
     it('并发刷新（宽限窗口内重复使用）→ 只报「正在轮换中」，不销毁会话家族（回归 T208）', async () => {
       const rotating = rotatingService();
       const first = await rotating.generateTokens({ sub: 'user-123', role: 'TENANT' });

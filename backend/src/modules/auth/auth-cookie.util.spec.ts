@@ -24,6 +24,17 @@ describe('auth-cookie.util', () => {
     expect(refreshTokenCookieOptions(false).secure).toBe(false);
   });
 
+  it('maxAge 与 JWT_REFRESH_EXPIRY 对齐（T258）', () => {
+    expect(refreshTokenCookieOptions(true, 3600_000).maxAge).toBe(3600_000);
+    const res = { cookie: vi.fn() } as any;
+    setRefreshTokenCookie(res, 'token', true, 3600_000);
+    expect(res.cookie).toHaveBeenCalledWith(
+      REFRESH_TOKEN_COOKIE_NAME,
+      'token',
+      expect.objectContaining({ maxAge: 3600_000 }),
+    );
+  });
+
   it('clearRefreshTokenCookie 应清除 HttpOnly Cookie', () => {
     const res = { clearCookie: vi.fn() } as any;
     clearRefreshTokenCookie(res, true);
