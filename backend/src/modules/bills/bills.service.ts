@@ -268,8 +268,8 @@ export class BillsService {
       throw new NotFoundException('账单不存在');
     }
 
-    await this.prisma.bill.delete({ where: { id } });
-    return { message: '账单已删除' };
+    // FIN-06 / T265：账单是财务凭证，只能作废（status=CANCELLED），不得硬删除。
+    throw new ConflictException('账单是财务凭证，只能作废（PATCH status=CANCELLED），不能删除');
   }
 
   // 租客查看自己的账单

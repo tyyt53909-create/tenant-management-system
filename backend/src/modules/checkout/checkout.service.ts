@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import type { Prisma, CheckoutItemType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
@@ -199,8 +199,9 @@ export class CheckoutService {
   async remove(id: string) {
     const record = await this.prisma.checkoutRecord.findUnique({ where: { id } });
     if (!record) throw new NotFoundException('退租记录不存在');
-    await this.prisma.checkoutRecord.delete({ where: { id } });
-    return { message: '退租记录已删除' };
+
+    // FIN-06 / T265：退租结算单是财务凭证，只能取消（status=CANCELLED），不得硬删除。
+    throw new ConflictException('退租结算单是财务凭证，只能取消（PATCH status=CANCELLED），不能删除');
   }
 
   /**
