@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res, NotFoundException } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res, Req, NotFoundException } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { MetersService } from './meters.service.js';
 import { MetersSimulatorService } from './meters-simulator.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
@@ -13,6 +13,7 @@ import { QueryReconciliationDto } from './dto/query-reconciliation.dto.js';
 import { MeterReconciliationService } from './meter-reconciliation.service.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
+import { SetMeterDefaultPriceDto } from './dto/set-meter-default-price.dto.js';
 import { RunSimulationDto } from './dto/run-simulation.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -66,6 +67,30 @@ export class MetersController {
   create(@CurrentUser() userParam: CurrentUserParam, @Body() createMeterDto: CreateMeterDto) {
     const user = resolveAuthUser(userParam);
     return this.metersService.create(createMeterDto, user.userId);
+  }
+
+  // 设置中心：表类型默认价（仅 ADMIN，T276）
+  @Get('price-defaults')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  listTypeDefaults() {
+    return this.metersService.listTypeDefaults();
+  }
+
+  @Post('price-defaults')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  setTypeDefault(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Body() dto: SetMeterDefaultPriceDto,
+    @Req() request: Request,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.metersService.setTypeDefault(dto, {
+      userId: user.userId,
+      ip: request.ip ?? '',
+      userAgent: request.headers['user-agent'] ?? '',
+    });
   }
 
   // 批量抄表底表（仅 ADMIN）

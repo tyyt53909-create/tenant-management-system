@@ -44,6 +44,42 @@ export class MeterPriceService {
     this.clock = clock ?? new BusinessClock(new ConfigService());
   }
 
+  /** 表类型默认价（meterId 为空）；没有配置时返回 null，由调用方决定报错还是兜底。 */
+  async resolveTypeDefault(
+    meterType: MeterType,
+    at: Date,
+    db: PriceDb = this.prisma,
+  ): Promise<number | null> {
+    const day = this.toDateOnly(at);
+    const row = await db.meterPriceHistory.findFirst({
+      where: { meterId: null, meterType, effectiveDate: { lte: day } },
+      orderBy: [{ effectiveDate: 'desc' }, { createdAt: 'desc' }],
+    });
+    return row ? row.unitPrice : null;
+  }
+
+  /** 当前各表类型的默认价（设置中心展示用）。 */
+  async listTypeDefaults(at: Date = new Date()): Promise<Array<{
+    meterType: MeterType;
+    unitPrice: number | null;
+    effectiveDate: Date | null;
+  }>> {
+    const types: MeterType[] = ['ELECTRICITY', 'WATER', 'GAS'];
+    const day = this.toDateOnly(at);
+    const rows = await this.prisma.meterPriceHistory.findMany({
+      where: { meterId: null, meterType: { in: types }, effectiveDate: { lte: day } },
+      orderBy: [{ effectiveDate: 'desc' }, { createdAt: 'desc' }],
+    });
+    return types.map((meterType) => {
+      const row = rows.find((item) => item.meterType === meterType);
+      return {
+        meterType,
+        unitPrice: row?.unitPrice ?? null,
+        effectiveDate: row?.effectiveDate ?? null,
+      };
+    });
+  }
+
   /** 单表取价；db 可传事务客户端以保证读到自己刚写入的历史。 */
   async resolveUnitPrice(
     meter: MeterPriceInput,

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { ContractsService } from './contracts.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 /**
@@ -10,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 describe('ContractsService CRUD（T157）', () => {
   let service: ContractsService;
   let prisma: any;
+  let settings: any;
 
   const baseDto = {
     buildingId: 'b-1',
@@ -44,10 +46,22 @@ describe('ContractsService CRUD（T157）', () => {
     prismaMock.$transaction = vi.fn(async (callback: any) => callback(prismaMock));
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ContractsService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        ContractsService,
+        { provide: PrismaService, useValue: prismaMock },
+        {
+          provide: SettingsService,
+          useValue: {
+            getValue: vi.fn().mockImplementation(async (key: string) =>
+              key === 'billing.defaultLateFeeRule' ? {} : 10000,
+            ),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<ContractsService>(ContractsService);
+    settings = module.get(SettingsService);
     prisma = prismaMock;
   });
 
@@ -70,6 +84,23 @@ describe('ContractsService CRUD（T157）', () => {
       expect(data.lateFeeRule).toEqual({});
       expect(data.startDate).toBeInstanceOf(Date);
       expect(res.id).toBe('c-new');
+    });
+
+    it('未传 lateFeeRule 时继承设置中心默认规则（T276）', async () => {
+      prisma.building.findUnique.mockResolvedValue({ id: 'b-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.contract.create.mockImplementation(async ({ data }: any) => data);
+      settings.getValue.mockResolvedValueOnce({ graceDays: 5, dailyRate: null, fixedDaily: 100, cap: 10000 });
+
+      await service.create(baseDto as any);
+
+      expect(prisma.contract.create.mock.calls[0][0].data.lateFeeRule).toEqual({
+        graceDays: 5,
+        dailyRate: null,
+        fixedDaily: 100,
+        cap: 10000,
+      });
     });
 
     it('传入 lateFeeRule 时原样落库', async () => {

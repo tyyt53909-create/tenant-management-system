@@ -49,6 +49,7 @@ describe('MetersService', () => {
       prepayTransaction: { create: vi.fn() },
       bill: { create: vi.fn() },
       meterPriceHistory: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+      auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
       $queryRaw: vi.fn(),
       $transaction: vi.fn(),
     };
@@ -96,6 +97,79 @@ describe('MetersService', () => {
           usage: 0,
           notes: expect.stringContaining('[INITIAL]'),
         }),
+      });
+    });
+  });
+
+  describe('设置中心：类型默认价（T276）', () => {
+    it('建表未传单价时使用类型默认价并写入自身价格历史', async () => {
+      prisma.building.findUnique.mockResolvedValue({ id: 'b-01' });
+      prisma.meter.findUnique.mockResolvedValue(null);
+      prisma.meterPriceHistory.findFirst
+        .mockResolvedValueOnce({ unitPrice: 150 })
+        .mockResolvedValueOnce(null);
+      prisma.meter.create.mockResolvedValue({ id: 'm-default', meterNumber: 'M-D', meterType: 'ELECTRICITY', unitPrice: 150, priceEffectiveDate: new Date('2026-11-01') });
+
+      await service.create({
+        buildingId: 'b-01',
+        meterType: 'ELECTRICITY' as any,
+        meterNumber: 'M-D',
+        priceEffectiveDate: '2026-11-01',
+      });
+
+      expect(prisma.meter.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ unitPrice: 150 }),
+      });
+      expect(prisma.meterPriceHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ meterId: 'm-default', unitPrice: 150 }),
+      });
+    });
+
+    it('未传单价且类型无默认价时 400，不建表', async () => {
+      prisma.building.findUnique.mockResolvedValue({ id: 'b-01' });
+      prisma.meter.findUnique.mockResolvedValue(null);
+      prisma.meterPriceHistory.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create({
+          buildingId: 'b-01',
+          meterType: 'WATER' as any,
+          meterNumber: 'M-NO-PRICE',
+          priceEffectiveDate: '2026-11-01',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.meter.create).not.toHaveBeenCalled();
+    });
+
+    it('listTypeDefaults 返回三个表类型的当前默认价', async () => {
+      prisma.meterPriceHistory.findMany.mockResolvedValue([
+        { meterType: 'WATER', unitPrice: 420, effectiveDate: new Date('2026-10-01') },
+      ]);
+
+      const rows = await service.listTypeDefaults();
+
+      expect(rows).toHaveLength(3);
+      expect(rows.find((row) => row.meterType === 'WATER')).toMatchObject({ unitPrice: 420 });
+      expect(rows.find((row) => row.meterType === 'ELECTRICITY')).toMatchObject({ unitPrice: null });
+    });
+
+    it('setTypeDefault 写入 meterId=null 的价格并记 before/after 审计', async () => {
+      prisma.meterPriceHistory.findFirst
+        .mockResolvedValueOnce({ unitPrice: 100 })
+        .mockResolvedValueOnce(null);
+      prisma.meterPriceHistory.create.mockResolvedValue({ id: 'p-new', unitPrice: 120 });
+
+      const result = await service.setTypeDefault(
+        { meterType: 'ELECTRICITY' as any, unitPrice: 120, effectiveDate: '2026-11-01' },
+        { userId: 'admin-1', ip: '127.0.0.1', userAgent: 'vitest' },
+      );
+
+      expect(result).toMatchObject({ unitPrice: 120 });
+      expect(prisma.meterPriceHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ meterId: null, meterType: 'ELECTRICITY', unitPrice: 120 }),
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ action: 'UPDATE_METER_DEFAULT_PRICE' }),
       });
     });
   });

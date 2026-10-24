@@ -26,9 +26,10 @@ export class CreateMeterDto {
   @IsNotEmpty()
   meterNumber: string;
 
+  @IsOptional()
   @IsInt()
   @Min(0)
-  unitPrice: number; // 分/度
+  unitPrice?: number; // 分/度；未传时使用设置中心的类型默认价（T276）
 
   @IsDateString()
   priceEffectiveDate: string;

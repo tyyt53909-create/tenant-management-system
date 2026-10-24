@@ -41,6 +41,17 @@ export interface LateFeeCalculation {
   rule: NormalizedLateFeeRule;
 }
 
+/** 把合同的 JSON 规则归一化为固定字段；非法/缺失一律按「不计收」处理。 */
+export function normalizeLateFeeRule(rule: LateFeeRule | null | undefined): NormalizedLateFeeRule {
+  const object = rule && typeof rule === 'object' ? rule : {};
+  return {
+    graceDays: Math.max(0, Math.floor(object.graceDays ?? 0)),
+    dailyRate: typeof object.dailyRate === 'number' ? object.dailyRate : null,
+    fixedDaily: typeof object.fixedDaily === 'number' ? object.fixedDaily : null,
+    cap: typeof object.cap === 'number' ? object.cap : null,
+  };
+}
+
 export class LateFeeUtil {
   /**
    * 计算建议滞纳金（不自动入账，仅供管理者确认）
@@ -50,12 +61,7 @@ export class LateFeeUtil {
     baseAmount: number,
     overdueDays: number,
   ): LateFeeCalculation {
-    const normalized: NormalizedLateFeeRule = {
-      graceDays: Math.max(0, Math.floor(rule?.graceDays ?? 0)),
-      dailyRate: typeof rule?.dailyRate === 'number' ? rule.dailyRate : null,
-      fixedDaily: typeof rule?.fixedDaily === 'number' ? rule.fixedDaily : null,
-      cap: typeof rule?.cap === 'number' ? rule.cap : null,
-    };
+    const normalized: NormalizedLateFeeRule = normalizeLateFeeRule(rule);
 
     const days = Math.max(0, Math.floor(overdueDays));
     const effectiveDays = Math.max(0, days - normalized.graceDays);

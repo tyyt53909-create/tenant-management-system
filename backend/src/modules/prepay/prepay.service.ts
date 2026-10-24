@@ -11,10 +11,14 @@ import { centsToYuanString } from '../../common/utils/currency.util.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { formatBusinessDateTime } from '../../common/business-clock/business-clock.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
+import { SettingsService } from '../settings/settings.service.js';
 
 @Injectable()
 export class PrepayService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
 
   async create(dto: CreatePrepayAccountDto) {
     // 验证租客存在
@@ -27,12 +31,16 @@ export class PrepayService {
     });
     if (existing) throw new ConflictException('该租客的预付账户已存在');
 
+    // 未显式传阈值时取设置中心默认值（T276）；显式 0 仍然保留（T207）
+    const lowBalanceThreshold =
+      dto.lowBalanceThreshold ??
+      (await this.settings.getValue<number>('prepay.defaultLowBalanceThreshold'));
+
     return this.prisma.prepayAccount.create({
       data: {
         tenantId: dto.tenantId,
         roomId: dto.roomId,
-        // 显式传 0（语义：不提醒）必须保留；`|| 10000` 会把 0 吞成 10000（T207）
-        lowBalanceThreshold: dto.lowBalanceThreshold ?? 10000,
+        lowBalanceThreshold,
       },
     });
   }

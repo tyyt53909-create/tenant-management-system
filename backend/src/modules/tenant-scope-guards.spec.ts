@@ -6,6 +6,7 @@ import { ContractsService } from './contracts/contracts.service.js';
 import { MaintenanceService } from './maintenance/maintenance.service.js';
 import { NotificationsService } from './notifications/notifications.service.js';
 import { PrepayService } from './prepay/prepay.service.js';
+import { SettingsService } from './settings/settings.service.js';
 import { PrismaService } from './prisma/prisma.service.js';
 
 /**
@@ -42,6 +43,14 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
         CheckoutService,
         NotificationsService,
         { provide: PrismaService, useValue: prismaMock },
+        {
+          provide: SettingsService,
+          useValue: {
+            getValue: vi.fn().mockImplementation(async (key: string) =>
+              key === 'billing.defaultLateFeeRule' ? {} : 10000,
+            ),
+          },
+        },
       ],
     }).compile();
 

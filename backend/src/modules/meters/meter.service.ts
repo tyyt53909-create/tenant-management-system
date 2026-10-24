@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
+import { SetMeterDefaultPriceDto } from './dto/set-meter-default-price.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
 import { ManualMeterAdapter } from './adapters/manual-meter.adapter.js';
@@ -42,6 +43,14 @@ export class MeterService {
 
     return this.prisma.$transaction(async (tx) => {
       const effectiveDate = this.priceService.toDateOnly(dto.priceEffectiveDate);
+      // 未传单价时使用设置中心的类型默认价（T276）；两者都没有则明确拒绝
+      const unitPrice =
+        dto.unitPrice ?? (await this.priceService.resolveTypeDefault(dto.meterType, effectiveDate, tx));
+      if (unitPrice == null) {
+        throw new BadRequestException(
+          '未提供单价，且该表类型尚未配置默认价；请先在设置中心配置水电默认价',
+        );
+      }
       const meter = await tx.meter.create({
         data: {
           buildingId: dto.buildingId,
@@ -49,7 +58,7 @@ export class MeterService {
           publicAreaId: dto.publicAreaId,
           meterType: dto.meterType as MeterType,
           meterNumber: dto.meterNumber,
-          unitPrice: dto.unitPrice,
+          unitPrice,
           priceEffectiveDate: effectiveDate,
         },
       });
@@ -187,6 +196,48 @@ export class MeterService {
     const history = await this.priceService.history(id);
     if (!history) throw new NotFoundException('水电表不存在');
     return history;
+  }
+
+  /** 设置中心：各表类型当前默认价 */
+  async listTypeDefaults() {
+    return this.priceService.listTypeDefaults();
+  }
+
+  /** 设置中心：写入类型默认价（meterId 为空），并审计 before/after（T276） */
+  async setTypeDefault(
+    dto: SetMeterDefaultPriceDto,
+    actor: { userId: string; ip: string; userAgent: string },
+  ) {
+    const effectiveDate = this.priceService.toDateOnly(dto.effectiveDate);
+
+    return this.prisma.$transaction(async (tx) => {
+      const before = await tx.meterPriceHistory.findFirst({
+        where: { meterId: null, meterType: dto.meterType, effectiveDate },
+        orderBy: { createdAt: 'desc' },
+      });
+      const price = await this.priceService.recordPriceChange(tx, {
+        meterId: null,
+        meterType: dto.meterType,
+        unitPrice: dto.unitPrice,
+        effectiveDate,
+        createdBy: actor.userId,
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId || null,
+          action: 'UPDATE_METER_DEFAULT_PRICE',
+          entityType: 'MeterPriceHistory',
+          entityId: `${dto.meterType}:${effectiveDate.toISOString().slice(0, 10)}`,
+          changes: {
+            before: before ? { unitPrice: before.unitPrice } : null,
+            after: { unitPrice: price.unitPrice, effectiveDate },
+          } as never,
+          ip: actor.ip || 'unknown',
+          userAgent: actor.userAgent || 'unknown',
+        },
+      });
+      return price;
+    });
   }
 
   async remove(id: string) {

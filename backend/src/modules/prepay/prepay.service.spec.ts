@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrepayService } from './prepay.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('PrepayService', () => {
   let service: PrepayService;
   let prisma: any;
+  let settings: any;
 
   const accountId = 'account-001';
   const operatorId = 'admin-001';
@@ -35,10 +37,18 @@ describe('PrepayService', () => {
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [PrepayService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        PrepayService,
+        { provide: PrismaService, useValue: prismaMock },
+        {
+          provide: SettingsService,
+          useValue: { getValue: vi.fn().mockResolvedValue(10000) },
+        },
+      ],
     }).compile();
 
     service = module.get<PrepayService>(PrepayService);
+    settings = module.get(SettingsService);
     prisma = prismaMock;
   });
 
@@ -254,6 +264,19 @@ describe('PrepayService', () => {
 
       expect(prisma.prepayAccount.create).toHaveBeenCalledWith({
         data: { tenantId: 'tenant-1', roomId: 'room-1', lowBalanceThreshold: 10000 },
+      });
+    });
+
+    it('create：未指定阈值时读取设置中心默认值（T276）', async () => {
+      prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+      prisma.prepayAccount.findUnique.mockResolvedValue(null);
+      prisma.prepayAccount.create.mockResolvedValue({ id: accountId });
+      settings.getValue.mockResolvedValueOnce(25000);
+
+      await service.create({ tenantId: 'tenant-1', roomId: 'room-1' } as any);
+
+      expect(prisma.prepayAccount.create).toHaveBeenCalledWith({
+        data: { tenantId: 'tenant-1', roomId: 'room-1', lowBalanceThreshold: 25000 },
       });
     });
 

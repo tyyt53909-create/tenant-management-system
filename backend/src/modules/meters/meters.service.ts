@@ -9,6 +9,7 @@ import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-rea
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
+import { SetMeterDefaultPriceDto } from './dto/set-meter-default-price.dto.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
 import { ManualMeterAdapter } from './adapters/manual-meter.adapter.js';
 import { METER_TYPE_LABEL } from './meter-types.constants.js';
@@ -79,6 +80,19 @@ export class MetersService {
   /** 价格历史（表级调价 + 类型默认价） */
   async priceHistory(id: string) {
     return this.meterService.priceHistory(id);
+  }
+
+  /** 设置中心：类型默认价列表 */
+  async listTypeDefaults() {
+    return this.meterService.listTypeDefaults();
+  }
+
+  /** 设置中心：写入类型默认价 */
+  async setTypeDefault(
+    dto: SetMeterDefaultPriceDto,
+    actor: { userId: string; ip: string; userAgent: string },
+  ) {
+    return this.meterService.setTypeDefault(dto, actor);
   }
 
   async remove(id: string) {

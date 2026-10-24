@@ -736,6 +736,22 @@
   },
   {
     "method": "GET",
+    "path": "/api/meters/price-defaults",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/meters/price-defaults",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/meters/readings/export",
     "public": false,
     "roles": [
@@ -1045,6 +1061,30 @@
   {
     "method": "POST",
     "path": "/api/scheduler/run-monthly-bills",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/:key",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/:key",
     "public": false,
     "roles": [
       "ADMIN"
