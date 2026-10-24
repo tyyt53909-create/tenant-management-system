@@ -83,8 +83,8 @@ describe('StatisticsService（统计 P1 / T155）', () => {
         { amount: 50000, bill: { billType: 'UTILITY' } },
       ]);
       prisma.bill.findMany.mockResolvedValue([
-        { amount: 400000, billType: 'RENT', status: 'PENDING' },
-        { amount: 100000, billType: 'UTILITY', status: 'OVERDUE' },
+        { amount: 400000, billType: 'RENT', status: 'PENDING', isOverdue: false },
+        { amount: 100000, billType: 'UTILITY', status: 'PENDING', isOverdue: true },
       ]);
       prisma.maintenanceRequest.count.mockResolvedValue(2);
       prisma.contract.findMany.mockResolvedValue([{ roomId: 'r1' }]);

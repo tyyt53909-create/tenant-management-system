@@ -35,7 +35,7 @@ const OPEN_MAINTENANCE_STATUSES = [
 ] as const;
 
 /** 未缴清的账单状态（用于「待缴账单」统计） */
-const UNPAID_BILL_STATUSES = ['PENDING', 'PARTIAL', 'OVERDUE'] as const;
+const UNPAID_BILL_STATUSES = ['PENDING', 'PARTIAL'] as const;
 
 const ROOM_STATUS_ORDER = ['VACANT', 'RESERVED', 'OCCUPIED', 'MAINTENANCE'] as const;
 

@@ -162,23 +162,11 @@ export class BillsService {
   }
 
   async findAll(query: QueryBillsDto) {
-    const { page = 1, limit = 20, status, billType, contractId } = query;
+    const { page = 1, limit = 20 } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.BillWhereInput = {};
-    if (status) where.status = status;
-    if (billType) where.billType = billType;
-    if (contractId) where.contractId = contractId;
-    // 与 exportBills 对齐：列表同样支持楼栋与账期区间筛选（T209 之前这三个参数被静默忽略）
-    if (query.buildingId) {
-      where.contract = { room: { buildingId: query.buildingId } };
-    }
-    if (query.startDate || query.endDate) {
-      where.dueDate = {
-        ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
-        ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
-      };
-    }
+    this.applyBillFilters(where, query);
 
     const [data, total] = await Promise.all([
       this.prisma.bill.findMany({
@@ -398,11 +386,21 @@ export class BillsService {
   /**
    * 账单数据 CSV 导出
    */
-  async exportBills(query: Partial<QueryBillsDto>) {
-    const where: Prisma.BillWhereInput = {};
-    if (query.status) where.status = query.status as BillStatus;
+  /**
+   * 账单筛选共用（FIN-04 / T272）。
+   * `status=OVERDUE` 兼容旧调用：映射为 isOverdue + 未缴清状态，不再直接匹配 status。
+   */
+  private applyBillFilters(where: Prisma.BillWhereInput, query: Partial<QueryBillsDto>) {
+    const status = query.status as string | undefined;
+    if (query.overdue || status === 'OVERDUE') {
+      where.isOverdue = true;
+      where.status = { in: ['PENDING', 'PARTIAL'] };
+    } else if (status) {
+      where.status = status as BillStatus;
+    }
     if (query.billType) where.billType = query.billType as BillType;
     if (query.contractId) where.contractId = query.contractId;
+    // 与导出对齐：列表同样支持楼栋与账期区间筛选（T209 之前这三个参数被静默忽略）
     if (query.buildingId) {
       where.contract = { room: { buildingId: query.buildingId } };
     }
@@ -412,6 +410,11 @@ export class BillsService {
         ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
       };
     }
+  }
+
+  async exportBills(query: Partial<QueryBillsDto>) {
+    const where: Prisma.BillWhereInput = {};
+    this.applyBillFilters(where, query);
 
     const bills = await this.prisma.bill.findMany({
       where,

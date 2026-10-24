@@ -215,7 +215,7 @@ describe('BillPaymentService', () => {
       await expect(service.voidPayment('b1', 'p1', 'op', 'x')).rejects.toThrow(ConflictException);
     });
 
-    it('作废后账单回退到 OVERDUE（已过期且全额回退）', async () => {
+    it('作废后账单回退到 PENDING 并保留 isOverdue（已过期且全额回退）', async () => {
       const past = new Date('2020-01-01');
       prisma.bill.findUnique.mockResolvedValue(
         bill({ amount: 1000, paidAmount: 400, status: 'PARTIAL', dueDate: past }),
@@ -235,7 +235,8 @@ describe('BillPaymentService', () => {
       prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
 
       const result = await service.voidPayment('b1', 'p1', 'op', 'x');
-      expect(result.bill.status).toBe('OVERDUE');
+      expect(result.bill.status).toBe('PENDING');
+      expect(result.bill.isOverdue).toBe(true);
     });
 
     it('作废仅滞纳金部分时账单仍为 PAID', async () => {
