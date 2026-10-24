@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { downloadCsv } from './export';
+import { downloadCsvFromServer, toCsv, csvCell } from './csv';
 import request from './request';
 import { ElMessage } from 'element-plus';
 
@@ -16,8 +16,8 @@ vi.mock('element-plus', () => ({
   },
 }));
 
-describe('downloadCsv', () => {
-  let mockClick: any;
+describe('CSV 单一管道（T275）', () => {
+  let mockClick: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -37,23 +37,28 @@ describe('downloadCsv', () => {
       }
     };
     (globalThis as any).document = {
-      body: {
-        appendChild: vi.fn(),
-        removeChild: vi.fn(),
-      },
-      createElement: vi.fn().mockReturnValue({
-        href: '',
-        download: '',
-        click: mockClick,
-      }),
+      body: { appendChild: vi.fn(), removeChild: vi.fn() },
+      createElement: vi.fn().mockReturnValue({ href: '', download: '', click: mockClick }),
     };
   });
 
-  it('成功请求并触发 a 标签下载', async () => {
-    const mockBlobData = 'test,csv,data';
-    vi.mocked(request.get).mockResolvedValueOnce(mockBlobData);
+  it('本地生成：带 BOM、转义引号并防公式注入', () => {
+    const csv = toCsv(
+      [{ name: '=SUM(A1:A2)', note: '含,逗号' }],
+      [
+        { label: '名称', value: (row) => row.name },
+        { label: '备注', value: (row) => row.note },
+      ],
+    );
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toContain(`"'=SUM(A1:A2)"`);
+    expect(csvCell('a"b')).toBe('"a""b"');
+  });
 
-    await downloadCsv('/bills/export', { status: 'PAID' }, 'bills_test.csv');
+  it('后端导出：成功请求并触发 a 标签下载', async () => {
+    vi.mocked(request.get).mockResolvedValueOnce('test,csv,data');
+
+    await downloadCsvFromServer('/bills/export', { status: 'PAID' }, 'bills_test.csv');
 
     expect(request.get).toHaveBeenCalledWith('/bills/export', {
       params: { status: 'PAID' },
@@ -61,14 +66,16 @@ describe('downloadCsv', () => {
     });
     expect((globalThis as any).window.URL.createObjectURL).toHaveBeenCalled();
     expect(mockClick).toHaveBeenCalled();
-    expect((globalThis as any).window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/test-uuid');
+    expect((globalThis as any).window.URL.revokeObjectURL).toHaveBeenCalledWith(
+      'blob:http://localhost/test-uuid',
+    );
     expect(ElMessage.success).toHaveBeenCalledWith('导出成功，文件已开始下载');
   });
 
-  it('请求失败时抛出错误并提示', async () => {
+  it('后端导出：失败时提示并抛出', async () => {
     vi.mocked(request.get).mockRejectedValueOnce(new Error('Network Error'));
 
-    await expect(downloadCsv('/bills/export')).rejects.toThrow('Network Error');
+    await expect(downloadCsvFromServer('/bills/export')).rejects.toThrow('Network Error');
     expect(ElMessage.error).toHaveBeenCalledWith('Network Error');
   });
 });

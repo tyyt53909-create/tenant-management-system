@@ -63,6 +63,7 @@ import { getNotifications } from '@/api/notifications';
 import type { Bill, Notification } from '@/types';
 import { formatMoney, formatDateOnly } from '@/utils/table';
 import { calendarDays, calendarKey } from '@/utils/calendar';
+import { centsToYuan } from '@/utils/money';
 
 const router = useRouter();
 const loading = ref(true);
@@ -131,7 +132,7 @@ const revenueOption = computed<EChartsOption>(() => ({
     {
       type: 'bar',
       barMaxWidth: 28,
-      data: revenue.value.map((item) => item.revenue / 100),
+      data: revenue.value.map((item) => centsToYuan(item.revenue)),
       itemStyle: { borderRadius: [5, 5, 0, 0] },
       emphasis: {
         itemStyle: {

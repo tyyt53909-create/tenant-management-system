@@ -7,8 +7,8 @@
   >
     <el-descriptions :column="3" border size="small" style="margin-bottom: 16px">
       <el-descriptions-item label="账单编号">{{ currentBill?.billNumber }}</el-descriptions-item>
-      <el-descriptions-item label="应付金额">{{ formatYuan(currentBill?.amount) }}</el-descriptions-item>
-      <el-descriptions-item label="未缴本金">{{ formatYuan(unpaidPrincipalCents) }}</el-descriptions-item>
+      <el-descriptions-item label="应付金额">{{ formatMoney(currentBill?.amount) }}</el-descriptions-item>
+      <el-descriptions-item label="未缴本金">{{ formatMoney(unpaidPrincipalCents) }}</el-descriptions-item>
       <el-descriptions-item label="到期日期">{{ lateFeeDueDateText }}</el-descriptions-item>
       <el-descriptions-item label="逾期天数">{{ lateFeeOverdueDaysText }}</el-descriptions-item>
       <el-descriptions-item label="账单状态">
@@ -33,7 +33,7 @@
           type="warning"
           :closable="false"
           show-icon
-          :title="'系统建议值 ' + formatYuan(currentLateFee.suggestedAmount) + '（未确认，尚未入账）'"
+          :title="'系统建议值 ' + formatMoney(currentLateFee.suggestedAmount) + '（未确认，尚未入账）'"
           description="确认后该金额才计入本账单应收；未确认时不影响收款。可在下方调整金额，填 0 表示减免。"
         />
         <el-alert
@@ -53,7 +53,7 @@
           style="margin-top: 16px"
         >
           <el-descriptions-item label="计费基数">
-            {{ formatYuan(currentLateFee.calculation.baseAmount) }}
+            {{ formatMoney(currentLateFee.calculation.baseAmount) }}
           </el-descriptions-item>
           <el-descriptions-item label="逾期天数">
             {{ currentLateFee.calculation.overdueDays }} 天
@@ -64,7 +64,7 @@
           </el-descriptions-item>
           <el-descriptions-item label="计算规则">{{ lateFeeRuleText }}</el-descriptions-item>
           <el-descriptions-item label="封顶前金额">
-            {{ formatYuan(currentLateFee.calculation.rawAmount) }}
+            {{ formatMoney(currentLateFee.calculation.rawAmount) }}
           </el-descriptions-item>
           <el-descriptions-item label="封顶">{{ lateFeeCapText }}</el-descriptions-item>
         </el-descriptions>
@@ -79,7 +79,7 @@
           <el-descriptions-item label="确认时间">
             {{ formatDateTime(currentLateFee.confirmedAt || '') }}
           </el-descriptions-item>
-          <el-descriptions-item label="已核销金额">{{ formatYuan(currentLateFee.settledAmount) }}</el-descriptions-item>
+          <el-descriptions-item label="已核销金额">{{ formatMoney(currentLateFee.settledAmount) }}</el-descriptions-item>
           <el-descriptions-item label="备注" :span="2">{{ currentLateFee.notes || '—' }}</el-descriptions-item>
         </el-descriptions>
 
@@ -133,6 +133,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { getLateFees, addLateFee } from '@/api/bills';
 import type { Bill, LateFee } from '@/types';
+import { centsToYuan, formatMoney } from '@/utils/money';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -179,7 +180,6 @@ const statusTypeMap: Record<string, any> = {
   CANCELLED: 'info',
 };
 
-const formatYuan = (cents?: number | null) => '¥' + ((cents ?? 0) / 100).toFixed(2);
 const formatDateTime = (value: string) => (value ? value.replace('T', ' ').slice(0, 19) : '-');
 
 const overdueDaysOf = (bill: Bill) => {
@@ -244,7 +244,7 @@ const lateFeeRuleText = computed(() => {
   const rule = currentLateFee.value?.calculation?.rule;
   if (!rule) return '—';
   if (rule.dailyRate && rule.dailyRate > 0) return '按未缴金额 × ' + (rule.dailyRate * 100).toFixed(2) + '%/天';
-  if (rule.fixedDaily && rule.fixedDaily > 0) return '固定 ' + formatYuan(rule.fixedDaily) + '/天';
+  if (rule.fixedDaily && rule.fixedDaily > 0) return '固定 ' + formatMoney(rule.fixedDaily) + '/天';
   return '合同未配置计费规则（建议值为 0）';
 });
 
@@ -252,7 +252,7 @@ const lateFeeCapText = computed(() => {
   const calc = currentLateFee.value?.calculation;
   if (!calc) return '—';
   if (calc.rule.cap === null) return '不封顶';
-  return calc.capped ? '已触发封顶 ' + formatYuan(calc.rule.cap) : '未触发（上限 ' + formatYuan(calc.rule.cap) + '）';
+  return calc.capped ? '已触发封顶 ' + formatMoney(calc.rule.cap) : '未触发（上限 ' + formatMoney(calc.rule.cap) + '）';
 });
 
 const lateFeeConfirmedTitle = computed(() => {
@@ -260,7 +260,7 @@ const lateFeeConfirmedTitle = computed(() => {
   if (!fee) return '';
   if (fee.confirmedAmount === 0) return '已确认减免：滞纳金 ¥0.00 不入账';
   const outstanding = outstandingOf(fee);
-  return '已确认入账 ' + formatYuan(fee.confirmedAmount) + (outstanding > 0 ? '（未核销 ' + formatYuan(outstanding) + '）' : '（已核销）');
+  return '已确认入账 ' + formatMoney(fee.confirmedAmount) + (outstanding > 0 ? '（未核销 ' + formatMoney(outstanding) + '）' : '（已核销）');
 });
 
 const lateFeeConfirmedDescription = computed(() => {
@@ -286,7 +286,7 @@ watch(
         lateFeeRecords.value = records;
         const target = records.find((item) => !isLateFeeConfirmed(item)) ?? records[0];
         if (target) {
-          form.amountYuan = isLateFeeConfirmed(target) ? 0 : target.suggestedAmount / 100;
+          form.amountYuan = isLateFeeConfirmed(target) ? 0 : centsToYuan(target.suggestedAmount);
           form.notes = target.notes ?? '';
         }
       } catch {
@@ -306,7 +306,7 @@ const handleGenerateSuggested = async () => {
   try {
     const result = await addLateFee(bill.id, form.notes ? { notes: form.notes } : {});
     lateFeeRecords.value = [result];
-    form.amountYuan = result.suggestedAmount / 100;
+    form.amountYuan = centsToYuan(result.suggestedAmount);
     try {
       lateFeeRecords.value = await getLateFees(bill.id);
     } catch {
@@ -329,11 +329,11 @@ const handleConfirmLateFee = async () => {
     if (!valid) return;
     const cents = Math.round(form.amountYuan * 100);
     const suggested = currentLateFee.value?.suggestedAmount ?? 0;
-    const adjusted = cents !== suggested ? '（系统建议值 ' + formatYuan(suggested) + '，已调整）' : '';
+    const adjusted = cents !== suggested ? '（系统建议值 ' + formatMoney(suggested) + '，已调整）' : '';
     const actionText =
       cents === 0
         ? '确认将滞纳金减免为 ¥0.00（不入账）'
-        : '确认滞纳金 ' + formatYuan(cents) + ' 入账';
+        : '确认滞纳金 ' + formatMoney(cents) + ' 入账';
 
     try {
       await ElMessageBox.confirm(

@@ -166,9 +166,7 @@
           {{ renewSource.endDate.split('T')[0] }}）
         </template>
         <div style="margin-top: 6px; line-height: 1.7">
-          原租金 ¥{{ (renewSource.rentAmount / 100).toFixed(2) }} · 原押金 ¥{{
-            (renewSource.depositAmount / 100).toFixed(2)
-          }}<br />
+          原租金 {{ formatMoney(renewSource.rentAmount) }} · 原押金 {{ formatMoney(renewSource.depositAmount) }}<br />
           续签将新建一份<b>草稿</b>合同并关联本份合同，原合同记录完整保留。
         </div>
       </el-alert>
@@ -224,7 +222,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { formatMoney, formatDateOnly } from '@/utils/table';
+import { formatDateOnly } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, MoreFilled } from '@element-plus/icons-vue';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
@@ -241,6 +239,7 @@ import {
   renewContract,
 } from '@/api/contracts';
 import type { Contract } from '@/types';
+import { centsToYuan, formatMoney } from '@/utils/money';
 
 const loading = ref(false);
 const loadError=ref('');const detailVisible=ref(false);const detailId=ref('');
@@ -360,8 +359,8 @@ const handleEdit = (row: Contract) => {
     tenantId: row.tenantId,
     startDate: row.startDate.split('T')[0],
     endDate: row.endDate.split('T')[0],
-    rentAmount: row.rentAmount / 100,
-    depositAmount: row.depositAmount / 100,
+    rentAmount: centsToYuan(row.rentAmount),
+    depositAmount: centsToYuan(row.depositAmount),
     paymentCycle: row.paymentCycle,
     paymentDay: row.paymentDay,
   });
@@ -452,8 +451,8 @@ const handleRenew = (row: Contract) => {
   end.setFullYear(end.getFullYear() + 1);
   end.setDate(end.getDate() - 1);
   renewForm.endDate = end.toISOString().slice(0, 10);
-  renewForm.rentAmount = row.rentAmount / 100;
-  renewForm.depositAmount = row.depositAmount / 100;
+  renewForm.rentAmount = centsToYuan(row.rentAmount);
+  renewForm.depositAmount = centsToYuan(row.depositAmount);
   renewForm.paymentCycle = row.paymentCycle;
   renewForm.paymentDay = row.paymentDay;
   renewVisible.value = true;

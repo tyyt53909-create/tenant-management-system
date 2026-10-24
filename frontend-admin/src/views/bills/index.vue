@@ -172,7 +172,7 @@ import VoucherRecognitionModal from '@/components/common/VoucherRecognitionModal
 import BillFormDialog from './components/BillFormDialog.vue';
 import BillPaymentDialog from './components/BillPaymentDialog.vue';
 import BillLateFeeDialog from './components/BillLateFeeDialog.vue';
-import { downloadCsv } from '@/utils/export';
+import { downloadCsvFromServer } from '@/utils/csv';
 import { getBills, deleteBill } from '@/api/bills';
 import type { Bill, LateFee } from '@/types';
 import { usePagedTable } from '@/composables';
@@ -220,8 +220,6 @@ const statusTypeMap: Record<string, any> = {
   CANCELLED: 'info',
 };
 
-const formatYuan = (cents?: number | null) => '¥' + ((cents ?? 0) / 100).toFixed(2);
-
 const isLateFeeConfirmed = (fee: LateFee | null): boolean =>
   !!fee && fee.confirmedAmount !== null && fee.confirmedAmount !== undefined;
 
@@ -255,18 +253,15 @@ const formatMonthDay = (value: unknown) => {
   return date === '—' ? date : date.slice(5);
 };
 
-const compactMoney = (cents: number) =>
-  (cents / 100).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
-
 const paymentSummary = (bill: Bill) => {
   const unpaid = unpaidOf(bill);
   if (unpaid <= 0) return '已结清';
-  if (bill.paidAmount <= 0) return `未付 ¥${compactMoney(unpaid)}`;
-  return `已付 ${compactMoney(bill.paidAmount)} / 未付 ${compactMoney(unpaid)}`;
+  if (bill.paidAmount <= 0) return `未付 ${formatMoney(unpaid)}`;
+  return `已付 ${formatMoney(bill.paidAmount)} / 未付 ${formatMoney(unpaid)}`;
 };
 
 const paymentTitle = (bill: Bill) =>
-  `已付 ${formatYuan(bill.paidAmount)} / 未付 ${formatYuan(unpaidOf(bill))}`;
+  `已付 ${formatMoney(bill.paidAmount)} / 未付 ${formatMoney(unpaidOf(bill))}`;
 
 const lateFeeDisabledReason = (bill: Bill | null): string => {
   if (!bill) return '';
@@ -291,12 +286,12 @@ const lateFeeStateOf = (fee: LateFee | null): { text: string; type: 'info' | 'wa
     return { text: '已减免', type: 'info', tip: '管理者已确认减免，滞纳金不入账' };
   }
   if (outstandingOf(fee) <= 0) {
-    return { text: '已核销', type: 'success', tip: '已确认 ' + formatYuan(fee.confirmedAmount) + '，收款时已全额核销' };
+    return { text: '已核销', type: 'success', tip: '已确认 ' + formatMoney(fee.confirmedAmount) + '，收款时已全额核销' };
   }
   return {
     text: '已确认',
     type: 'warning',
-    tip: '已确认入账 ' + formatYuan(fee.confirmedAmount) + '，未核销 ' + formatYuan(outstandingOf(fee)),
+    tip: '已确认入账 ' + formatMoney(fee.confirmedAmount) + '，未核销 ' + formatMoney(outstandingOf(fee)),
   };
 };
 
@@ -314,10 +309,10 @@ const lateFeeTextOf = (bill: Bill) => {
   const fee = lateFeeOf(bill);
   if (!fee) return '未计算';
   const amount = lateFeeDisplayAmount(fee);
-  if (!isLateFeeConfirmed(fee)) return amount > 0 ? `建议 ${formatYuan(amount)}` : '未计算';
+  if (!isLateFeeConfirmed(fee)) return amount > 0 ? `建议 ${formatMoney(amount)}` : '未计算';
   const state = lateFeeStateOf(fee);
   if (state.text === '已减免') return '已减免';
-  return `${state.text} ${formatYuan(amount)}`;
+  return `${state.text} ${formatMoney(amount)}`;
 };
 
 const lateFeeTitleOf = (bill: Bill) => {
@@ -403,7 +398,7 @@ async function handleExportCsv() {
   exporting.value = true;
   try {
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    await downloadCsv('/bills/export', queryForm, `bills-export-${dateStr}.csv`);
+    await downloadCsvFromServer('/bills/export', queryForm, `bills-export-${dateStr}.csv`);
   } finally {
     exporting.value = false;
   }

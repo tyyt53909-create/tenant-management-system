@@ -39,7 +39,7 @@
           <template #default="{ row }">
             <div class="meter-room">
               <strong>{{ row.room?.roomNumber || '公共区域' }}</strong>
-              <small>¥{{ (row.unitPrice / 100).toFixed(2) }}/{{ unitMap[row.meterType] }} · 生效 {{ row.priceEffectiveDate.split('T')[0] }}</small>
+              <small>{{ formatMoney(row.unitPrice) }}/{{ unitMap[row.meterType] }} · 生效 {{ row.priceEffectiveDate.split('T')[0] }}</small>
             </div>
           </template>
         </el-table-column>
@@ -105,10 +105,10 @@
           <el-descriptions-item label="类型">{{ meterTypeMap[currentMeter?.meterType || ''] }}</el-descriptions-item>
           <el-descriptions-item label="房源">{{ unsettledInfo?.roomNumber || '公共区域' }}</el-descriptions-item>
           <el-descriptions-item label="签约租客">{{ unsettledInfo?.tenantName || '无生效合同' }}</el-descriptions-item>
-          <el-descriptions-item label="单价">¥{{ ((currentMeter?.unitPrice || 0) / 100).toFixed(2) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
+          <el-descriptions-item label="单价">{{ formatMoney(currentMeter?.unitPrice || 0) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
           <el-descriptions-item label="预付余额">
             <span v-if="unsettledInfo && unsettledInfo.prepayBalance !== null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? 'var(--error-text)' : 'var(--success-text)', fontWeight: 'bold' }">
-              ¥{{ (unsettledInfo.prepayBalance / 100).toFixed(2) }}
+              {{ formatMoney(unsettledInfo.prepayBalance) }}
             </span>
             <span v-else style="color: var(--text-muted)">无预付账户</span>
           </el-descriptions-item>
@@ -121,7 +121,7 @@
           </el-descriptions-item>
           <el-descriptions-item label="预估结算金额">
             <span style="font-size: 15px; font-weight: bold; color: var(--warning-text)">
-              ¥{{ ((unsettledInfo?.estimatedAmount || 0) / 100).toFixed(2) }}
+              {{ formatMoney(unsettledInfo?.estimatedAmount || 0) }}
             </span>
           </el-descriptions-item>
         </el-descriptions>
@@ -202,7 +202,7 @@ import BatchReadingDialog from './BatchReadingDialog.vue';
 import MeterSimulatorDialog from './MeterSimulatorDialog.vue';
 import MeterFormDialog from './components/MeterFormDialog.vue';
 import MeterReadingDialog from './components/MeterReadingDialog.vue';
-import { downloadCsv } from '@/utils/export';
+import { downloadCsvFromServer } from '@/utils/csv';
 import {
   getMeters,
   deleteMeter,
@@ -213,6 +213,7 @@ import {
 } from '@/api/meters';
 import type { Meter } from '@/types';
 import { usePagedTable } from '@/composables';
+import { formatMoney } from '@/utils/money';
 
 const exporting = ref(false);
 const dialogVisible = ref(false);
@@ -287,7 +288,7 @@ const emptyText = computed(() =>
 const handleExportCsv = async () => {
   exporting.value = true;
   try {
-    await downloadCsv(
+    await downloadCsvFromServer(
       '/meters/export',
       queryForm.meterType ? { meterType: queryForm.meterType } : {},
       `meters-export-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -354,7 +355,7 @@ const handleConfirmSettle = async () => {
     if (!res.settled) {
       ElMessage.info(res.reason || '无待结算用量');
     } else {
-      ElMessage.success(`周期结算成功！结算用量 ${res.usage}，金额 ¥${(res.amount / 100).toFixed(2)}`);
+      ElMessage.success(`周期结算成功！结算用量 ${res.usage}，金额 ${formatMoney(res.amount)}`);
     }
     settleDialogVisible.value = false;
     fetchData();

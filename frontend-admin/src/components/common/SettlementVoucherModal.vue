@@ -39,7 +39,7 @@
           </div>
           <div class="meta-item">
             <span class="meta-label">原始押金：</span>
-            <span class="meta-value">¥{{ (voucher.depositAmount / 100).toFixed(2) }}</span>
+            <span class="meta-value">{{ formatMoney(voucher.depositAmount) }}</span>
           </div>
         </div>
 
@@ -57,7 +57,7 @@
               <td><b>押金基数</b></td>
               <td>原租赁合同履约保证金退还基数</td>
               <td style="text-align: right; color: var(--success-text)">
-                +¥{{ (voucher.depositAmount / 100).toFixed(2) }}
+                +{{ formatMoney(voucher.depositAmount) }}
               </td>
             </tr>
             <tr v-for="item in voucher.items" :key="item.id">
@@ -74,7 +74,7 @@
                 style="text-align: right"
                 :class="isDeduction(item.itemType) ? 'text-deduction' : 'text-refund'"
               >
-                {{ isDeduction(item.itemType) ? '-' : '+' }}¥{{ (item.amount / 100).toFixed(2) }}
+                {{ isDeduction(item.itemType) ? '-' : '+' }}{{ formatMoney(item.amount) }}
               </td>
             </tr>
             <tr v-if="!voucher.items || voucher.items.length === 0">
@@ -91,7 +91,7 @@
           </div>
           <div class="number-total">
             <span class="total-label">实退还租客净额：</span>
-            <span class="number-amount">¥{{ (voucher.netRefund / 100).toFixed(2) }}</span>
+            <span class="number-amount">{{ formatMoney(voucher.netRefund) }}</span>
           </div>
         </div>
 
@@ -137,6 +137,7 @@
 import { ref, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
+import { formatMoney } from '@/utils/money';
 
 const props = defineProps<{
   modelValue: boolean;

@@ -51,9 +51,9 @@
             <tr>
               <td><b>{{ receipt.billTypeLabel }}</b></td>
               <td>{{ receipt.period }}</td>
-              <td style="text-align: right">¥{{ (receipt.principalAmount / 100).toFixed(2) }}</td>
-              <td style="text-align: right">¥{{ (receipt.confirmedLateFee / 100).toFixed(2) }}</td>
-              <td style="text-align: right" class="paid-cell">¥{{ (receipt.totalPaid / 100).toFixed(2) }}</td>
+              <td style="text-align: right">{{ formatMoney(receipt.principalAmount) }}</td>
+              <td style="text-align: right">{{ formatMoney(receipt.confirmedLateFee) }}</td>
+              <td style="text-align: right" class="paid-cell">{{ formatMoney(receipt.totalPaid) }}</td>
               <td>
                 <div v-for="p in receipt.payments" :key="p.id" class="pay-sub-line">
                   <span>{{ methodLabel[p.paymentMethod] || p.paymentMethod }}</span>
@@ -73,12 +73,12 @@
           </div>
           <div class="number-amount-wrap">
             <span class="total-label">实收合计：</span>
-            <span class="number-amount">¥{{ (receipt.totalPaid / 100).toFixed(2) }}</span>
+            <span class="number-amount">{{ formatMoney(receipt.totalPaid) }}</span>
           </div>
         </div>
 
         <div v-if="receipt.unpaid > 0" class="unpaid-reminder">
-          注：本账单尚有未缴清本金 ¥{{ (receipt.unpaid / 100).toFixed(2) }} 元。
+          注：本账单尚有未缴清本金 {{ formatMoney(receipt.unpaid) }} 元。
         </div>
 
         <!-- 票据底部签章与说明 -->
@@ -119,6 +119,7 @@
 import { ref, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
+import { formatMoney } from '@/utils/money';
 
 const props = defineProps<{
   modelValue: boolean;

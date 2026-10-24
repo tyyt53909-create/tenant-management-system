@@ -661,7 +661,7 @@ describe('MetersService', () => {
   });
 
   describe('getUsageOverview', () => {
-    it('当暂无读数时，平滑回落至演示数据并标明 isDemo: true', async () => {
+    it('当暂无读数时返回真实零值与 hasData: false，不再回落演示数据', async () => {
       prisma.meter.findMany.mockResolvedValue([
         { id: 'm-1', meterType: 'WATER', unitPrice: 420 },
         { id: 'm-2', meterType: 'ELECTRICITY', unitPrice: 90 },
@@ -671,14 +671,15 @@ describe('MetersService', () => {
       const result = await service.getUsageOverview({ month: '2026-10' });
 
       expect(result.month).toBe('2026-10');
-      expect(result.isDemo).toBe(true);
-      expect(result.water.usage).toBe(32.6);
-      expect(result.electricity.usage).toBe(827);
-      expect(result.cost.total).toBe(13692 + 74430);
-      expect(result.completion.completedMeters).toBe(28);
-      expect(result.completion.totalMeters).toBe(36);
-      expect(result.completion.pendingMeters).toBe(8);
+      expect(result.hasData).toBe(false);
+      expect(result.water.usage).toBe(0);
+      expect(result.electricity.usage).toBe(0);
+      expect(result.cost.total).toBe(0);
+      expect(result.completion.completedMeters).toBe(0);
+      expect(result.completion.totalMeters).toBe(2);
+      expect(result.completion.pendingMeters).toBe(2);
       expect(result.trend).toHaveLength(6);
+      expect(result.trend.every((item) => item.waterUsage === 0 && item.electricityUsage === 0)).toBe(true);
     });
 
     it('当存在读数时，准确统计用水量、用电量、成本与环比增长率', async () => {
@@ -706,7 +707,7 @@ describe('MetersService', () => {
 
       const result = await service.getUsageOverview({ month: '2026-10' });
 
-      expect(result.isDemo).toBe(false);
+      expect(result.hasData).toBe(true);
       expect(result.water.usage).toBe(20);
       expect(result.water.momRate).toBe(100); // (20-10)/10 * 100 = 100%
       expect(result.electricity.usage).toBe(500);

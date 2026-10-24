@@ -15,7 +15,7 @@
         <el-table-column label="余额" width="140">
           <template #default="{ row }">
             <span :class="{ 'low-balance': row.balanceCache < row.lowBalanceThreshold }">
-              ¥{{ (row.balanceCache / 100).toFixed(2) }}
+              {{ formatMoney(row.balanceCache) }}
             </span>
             <el-tag v-if="row.balanceCache < row.lowBalanceThreshold" type="danger" size="small" style="margin-left: 6px">
               低余额
@@ -23,7 +23,7 @@
           </template>
         </el-table-column>
         <el-table-column label="低余额阈值" width="120">
-          <template #default="{ row }">¥{{ (row.lowBalanceThreshold / 100).toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.lowBalanceThreshold) }}</template>
         </el-table-column>
         <el-table-column label="更新时间" width="160">
           <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
@@ -76,7 +76,7 @@
       <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
         <el-descriptions-item label="租客">{{ currentAccount?.tenant?.name || '—' }}</el-descriptions-item>
         <el-descriptions-item label="当前余额">
-          ¥{{ ((currentAccount?.balanceCache || 0) / 100).toFixed(2) }}
+          {{ formatMoney(currentAccount?.balanceCache || 0) }}
         </el-descriptions-item>
       </el-descriptions>
 
@@ -124,12 +124,12 @@
         <el-table-column label="金额" width="110">
           <template #default="{ row }">
             <span :style="{ color: row.amount >= 0 ? 'var(--success-text)' : 'var(--error-text)' }">
-              {{ row.amount >= 0 ? '+' : '-' }}¥{{ (Math.abs(row.amount) / 100).toFixed(2) }}
+              {{ formatSignedMoney(row.amount) }}
             </span>
           </template>
         </el-table-column>
         <el-table-column label="操作后余额" width="110">
-          <template #default="{ row }">¥{{ (row.balanceAfter / 100).toFixed(2) }}</template>
+          <template #default="{ row }">{{ formatMoney(row.balanceAfter) }}</template>
         </el-table-column>
         <el-table-column prop="description" label="说明" show-overflow-tooltip />
       </el-table>
@@ -180,7 +180,8 @@ import {
   getPrepayTransactions,
 } from '@/api/prepay';
 import type { PrepayAccount, PrepayTransaction, PrepayTransactionType } from '@/api/prepay';
-import { downloadCsv } from '@/utils/export';
+import { downloadCsvFromServer } from '@/utils/csv';
+import { centsToYuan, formatMoney, formatSignedMoney } from '@/utils/money';
 
 const loading = ref(false);
 const loadError=ref('');
@@ -335,7 +336,7 @@ const loadTransactions = async () => {
 const handleExportCsv = async () => {
   exporting.value = true;
   try {
-    await downloadCsv(
+    await downloadCsvFromServer(
       '/prepay-accounts/transactions/export',
       {},
       `预付流水汇总_${new Date().toISOString().split('T')[0]}.csv`,
@@ -353,7 +354,7 @@ const handleExportAccountCsv = async () => {
   if (!account) return;
   exporting.value = true;
   try {
-    await downloadCsv(
+    await downloadCsvFromServer(
       '/prepay-accounts/transactions/export',
       { prepayAccountId: account.id },
       `预付账户流水_${account.roomNumber || account.roomId}_${new Date().toISOString().split('T')[0]}.csv`,
@@ -375,7 +376,7 @@ const handleViewTransactions = (row: PrepayAccount) => {
 
 const handleEditThreshold = (row: PrepayAccount) => {
   currentAccount.value = row;
-  thresholdYuan.value = row.lowBalanceThreshold / 100;
+  thresholdYuan.value = centsToYuan(row.lowBalanceThreshold);
   thresholdDialogVisible.value = true;
 };
 

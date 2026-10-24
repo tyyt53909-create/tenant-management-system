@@ -41,6 +41,7 @@ import type { FormInstance } from 'element-plus';
 import EntitySelect from '@/components/common/EntitySelect.vue';
 import { createBill, updateBill } from '@/api/bills';
 import type { Bill } from '@/types';
+import { centsToYuan } from '@/utils/money';
 
 export interface BillFormModel {
   contractId: string;
@@ -88,7 +89,7 @@ watch(
       formData.contractId = val.contractId || '';
       formData.billType = val.billType || 'RENT';
       formData.period = val.period || '';
-      formData.amount = (val.amount || 0) / 100;
+      formData.amount = centsToYuan(val.amount || 0);
       formData.dueDate = val.dueDate ? val.dueDate.split('T')[0] : '';
     } else {
       resetForm();

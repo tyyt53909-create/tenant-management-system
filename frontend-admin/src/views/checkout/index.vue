@@ -59,9 +59,9 @@
                     <span v-if="itemsOf(row as CheckoutRecord).length">（共 {{ itemsOf(row as CheckoutRecord).length }} 项）</span>
                   </span>
                   <span v-if="itemsOf(row as CheckoutRecord).length" class="items-panel__summary">
-                    退还合计：<span class="amount-refund">¥{{ formatMoney(refundTotalOf(row as CheckoutRecord)) }}</span>
+                    退还合计：<span class="amount-refund">{{ formatMoney(refundTotalOf(row as CheckoutRecord)) }}</span>
                     &nbsp;|&nbsp;
-                    扣除合计：<span class="amount-deduction">¥{{ formatMoney(deductionTotalOf(row as CheckoutRecord)) }}</span>
+                    扣除合计：<span class="amount-deduction">{{ formatMoney(deductionTotalOf(row as CheckoutRecord)) }}</span>
                   </span>
                 </div>
                 <el-table
@@ -81,7 +81,7 @@
                   <el-table-column label="金额(元)" width="120">
                     <template #default="{ row: item }">
                       <span :class="itemTypeMeta(item.itemType).isDeduction ? 'amount-deduction' : 'amount-refund'">
-                        {{ itemTypeMeta(item.itemType).isDeduction ? '-' : '+' }}¥{{ formatMoney(item.amount) }}
+                        {{ itemTypeMeta(item.itemType).isDeduction ? '-' : '+' }}{{ formatMoney(item.amount) }}
                       </span>
                     </template>
                   </el-table-column>
@@ -111,7 +111,7 @@
         <el-table-column label="退款 / 明细" width="160">
           <template #default="{ row }">
             <div class="checkout-money">
-              <strong>¥{{ formatMoney(row.totalRefund) }}</strong>
+              <strong>{{ formatMoney(row.totalRefund) }}</strong>
               <el-button class="table-action" @click="toggleDetail(row as CheckoutRecord)">
                 {{ itemsOf(row as CheckoutRecord).length ? `${itemsOf(row as CheckoutRecord).length} 项明细` : '查看明细' }}
               </el-button>
@@ -188,7 +188,8 @@ import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import SettlementVoucherModal from '@/components/common/SettlementVoucherModal.vue';
 import CheckoutFormDialog from './components/CheckoutFormDialog.vue';
 import { deleteCheckout, getCheckoutById, getCheckoutRecords } from '@/api/checkout';
-import { downloadCsv } from '@/utils/export';
+import { downloadCsvFromServer } from '@/utils/csv';
+import { formatMoney } from '@/utils/money';
 import { usePagedTable } from '@/composables';
 import type { CheckoutItem, CheckoutItemType, CheckoutRecord } from '@/types';
 
@@ -254,9 +255,6 @@ const emptyText = computed(() =>
   queryForm.status ? '没有符合条件的退租记录，试试调整状态筛选' : '暂无退租记录',
 );
 
-const formatMoney = (cents?: number | null) =>
-  ((typeof cents === 'number' && !Number.isNaN(cents) ? cents : 0) / 100).toFixed(2);
-
 const itemTypeMeta = (itemType: CheckoutItemType): ItemTypeMeta =>
   ITEM_TYPE_META[itemType] ?? { label: String(itemType), tagType: 'info', isDeduction: false };
 
@@ -311,7 +309,7 @@ const handleOpenVoucher = (row: CheckoutRecord) => {
 const handleExportCsv = async () => {
   exporting.value = true;
   try {
-    await downloadCsv(
+    await downloadCsvFromServer(
       '/checkout-records/export',
       queryForm.status ? { status: queryForm.status } : {},
       `退租结算记录_${new Date().toISOString().split('T')[0]}.csv`,

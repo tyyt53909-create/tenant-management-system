@@ -171,11 +171,11 @@ describe('MetersController', () => {
   it('getUsageOverview：透传查询参数并返回能耗概览', async () => {
     const mockOverview = {
       month: '2026-10',
-      isDemo: true,
-      water: { usage: 32.6, momRate: 7.9, count: 18 },
-      electricity: { usage: 827, momRate: 7.7, count: 22 },
-      cost: { total: 88122, waterCost: 13692, electricityCost: 74430 },
-      completion: { completedMeters: 28, totalMeters: 36, pendingMeters: 8, status: 'FOLLOW_UP' },
+      hasData: true,
+      water: { usage: 12.5, momRate: 3.2, count: 4 },
+      electricity: { usage: 320, momRate: -2.1, count: 6 },
+      cost: { total: 42000, waterCost: 6000, electricityCost: 36000 },
+      completion: { completedMeters: 10, totalMeters: 12, pendingMeters: 2, status: 'FOLLOW_UP' },
       trend: [],
     };
     vi.spyOn(service, 'getUsageOverview').mockResolvedValue(mockOverview as any);

@@ -43,7 +43,7 @@
             预计总用量: <b>{{ totalUsage.toFixed(2) }}</b>
           </div>
           <div class="stat-pill cost">
-            预计扣费: <b>¥{{ (totalCost / 100).toFixed(2) }}</b>
+            预计扣费: <b>{{ formatMoney(totalCost) }}</b>
           </div>
         </div>
       </div>
@@ -84,7 +84,7 @@
         </el-table-column>
         <el-table-column label="单价" width="95" align="right">
           <template #default="{ row }">
-            ¥{{ (row.unitPrice / 100).toFixed(2) }}
+            {{ formatMoney(row.unitPrice) }}
           </template>
         </el-table-column>
         <el-table-column label="本次读数" min-width="160">
@@ -122,7 +122,7 @@
         <el-table-column label="预估费用" width="100" align="right">
           <template #default="{ row }">
             <span v-if="hasInput(row.meterId) && !isRowInvalid(row as BatchSheetItem)">
-              ¥{{ (computeCost(row as BatchSheetItem) / 100).toFixed(2) }}
+              {{ formatMoney(computeCost(row as BatchSheetItem)) }}
             </span>
             <span v-else class="text-placeholder">-</span>
           </template>
@@ -134,7 +134,7 @@
                 size="small"
                 :type="row.prepayBalance >= computeCost(row as BatchSheetItem) ? 'success' : 'warning'"
               >
-                ¥{{ (row.prepayBalance / 100).toFixed(2) }}
+                {{ formatMoney(row.prepayBalance) }}
               </el-tag>
             </template>
             <span v-else class="text-placeholder">-</span>
@@ -169,6 +169,7 @@ import { ref, reactive, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getBatchSheet, submitBatchReadings } from '@/api/meters';
 import type { BatchSheetItem, BatchReadingSubmitItem } from '@/api/meters';
+import { formatMoney } from '@/utils/money';
 
 const props = defineProps<{
   modelValue: boolean;

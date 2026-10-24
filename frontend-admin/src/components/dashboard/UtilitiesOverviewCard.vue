@@ -6,8 +6,8 @@
         <span class="eyebrow">UTILITIES / USAGE OVERVIEW</span>
         <div class="title-row">
           <h2>水電使用概覽</h2>
-          <span :class="['pill-tag', overview?.isDemo ? 'demo' : 'live']">
-            {{ overview?.isDemo ? '演示數據' : '實時數據' }}
+          <span :class="['pill-tag', overview && !overview.hasData ? 'demo' : 'live']">
+            {{ overview && !overview.hasData ? '暫無數據' : '實時數據' }}
           </span>
         </div>
         <p class="subtitle">從抄表到費用估算，集中掌握各棟的水電消耗與異常。</p>
@@ -45,6 +45,16 @@
       </div>
     </div>
 
+    <el-alert
+      v-if="overview && !overview.hasData"
+      type="info"
+      :closable="false"
+      show-icon
+      title="暂无抄表数据"
+      description="当前月份还没有任何读数记录；完成抄表后此处会自动显示用量与费用估算。"
+      style="margin-bottom: 16px"
+    />
+
     <!-- 四大核心指标卡片 (2x2 网格) -->
     <div class="kpi-grid">
       <!-- 1. 本月累计用水 -->
@@ -54,13 +64,13 @@
           <el-icon class="kpi-icon"><Odometer /></el-icon>
         </div>
         <div class="kpi-value">
-          <span class="number">{{ formatNumber(overview?.water.usage ?? 32.6) }}</span>
+          <span class="number">{{ formatNumber(overview?.water.usage ?? 0) }}</span>
           <small class="unit">m³ / 噸</small>
         </div>
         <div class="kpi-footer">
           <span>較上月</span>
           <span :class="['mom-rate', (overview?.water.momRate || 0) >= 0 ? 'up' : 'down']">
-            {{ (overview?.water.momRate || 0) >= 0 ? '↑' : '↓' }} {{ Math.abs(overview?.water.momRate ?? 7.9) }}%
+            {{ (overview?.water.momRate || 0) >= 0 ? '↑' : '↓' }} {{ Math.abs(overview?.water.momRate ?? 0) }}%
           </span>
           <span class="dot">·</span>
           <span class="desc">已登記讀數</span>
@@ -74,13 +84,13 @@
           <el-icon class="kpi-icon"><TrendCharts /></el-icon>
         </div>
         <div class="kpi-value">
-          <span class="number">{{ formatNumber(overview?.electricity.usage ?? 827) }}</span>
+          <span class="number">{{ formatNumber(overview?.electricity.usage ?? 0) }}</span>
           <small class="unit">kWh / 度</small>
         </div>
         <div class="kpi-footer">
           <span>較上月</span>
           <span :class="['mom-rate', (overview?.electricity.momRate || 0) >= 0 ? 'up' : 'down']">
-            {{ (overview?.electricity.momRate || 0) >= 0 ? '↑' : '↓' }} {{ Math.abs(overview?.electricity.momRate ?? 7.7) }}%
+            {{ (overview?.electricity.momRate || 0) >= 0 ? '↑' : '↓' }} {{ Math.abs(overview?.electricity.momRate ?? 0) }}%
           </span>
           <span class="dot">·</span>
           <span class="desc">已登記讀數</span>
@@ -94,11 +104,11 @@
           <el-icon class="kpi-icon"><Wallet /></el-icon>
         </div>
         <div class="kpi-value">
-          <span class="number">¥{{ formatCents(overview?.cost.total ?? 88122) }}</span>
+          <span class="number">¥{{ formatMoneyPlain(overview?.cost.total ?? 0) }}</span>
         </div>
         <div class="kpi-footer">
           <span class="cost-split">
-            水費 ¥{{ formatCents(overview?.cost.waterCost ?? 13692) }} · 電費 ¥{{ formatCents(overview?.cost.electricityCost ?? 74430) }}
+            水費 ¥{{ formatMoneyPlain(overview?.cost.waterCost ?? 0) }} · 電費 ¥{{ formatMoneyPlain(overview?.cost.electricityCost ?? 0) }}
           </span>
         </div>
       </div>
@@ -110,14 +120,14 @@
           <el-icon class="kpi-icon"><Calendar /></el-icon>
         </div>
         <div class="kpi-value">
-          <span class="number">{{ overview?.completion.completedMeters ?? 28 }} / {{ overview?.completion.totalMeters ?? 36 }}</span>
+          <span class="number">{{ overview?.completion.completedMeters ?? 0 }} / {{ overview?.completion.totalMeters ?? 0 }}</span>
           <small class="unit">塊</small>
         </div>
         <div class="kpi-footer">
-          <span>{{ overview?.completion.pendingMeters ?? 8 }} 塊待抄表</span>
+          <span>{{ overview?.completion.pendingMeters ?? 0 }} 塊待抄表</span>
           <span class="dot">·</span>
-          <span :class="['status-badge', (overview?.completion.pendingMeters ?? 8) > 0 ? 'warning' : 'done']">
-            {{ (overview?.completion.pendingMeters ?? 8) > 0 ? '需跟進' : '已齊全' }}
+          <span :class="['status-badge', (overview?.completion.pendingMeters ?? 0) > 0 ? 'warning' : 'done']">
+            {{ (overview?.completion.pendingMeters ?? 0) > 0 ? '需跟進' : '已齊全' }}
           </span>
         </div>
       </div>
@@ -136,6 +146,7 @@ import { getUtilitiesOverview, type UtilitiesOverviewData } from '@/api/meters';
 import { getBuildings } from '@/api/buildings';
 import type { Building } from '@/types';
 import UtilitiesTrendPanel from './UtilitiesTrendPanel.vue';
+import { formatMoneyPlain } from '@/utils/money';
 
 const router = useRouter();
 
@@ -154,10 +165,6 @@ function formatNumber(num: number): string {
     return num.toLocaleString();
   }
   return String(num);
-}
-
-function formatCents(cents: number): string {
-  return (cents / 100).toFixed(2);
 }
 
 async function fetchData() {

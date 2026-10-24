@@ -11,18 +11,18 @@
       :closable="false"
       show-icon
       style="margin-bottom: 12px"
-      :title="'本单有未核销滞纳金 ' + formatYuan(outstandingLateFeeCents) + '，收款将先冲抵本金，余额按确认先后核销滞纳金'"
+      :title="'本单有未核销滞纳金 ' + formatMoney(outstandingLateFeeCents) + '，收款将先冲抵本金，余额按确认先后核销滞纳金'"
     />
     <el-descriptions v-loading="lateFeeLoading" :column="3" border size="small" style="margin-bottom: 16px">
       <el-descriptions-item label="账单编号">{{ currentBill?.billNumber }}</el-descriptions-item>
       <el-descriptions-item label="应付金额">
-        ¥{{ ((currentBill?.amount || 0) / 100).toFixed(2) }}
+        {{ formatMoney(currentBill?.amount) }}
       </el-descriptions-item>
       <el-descriptions-item label="已付金额">
-        ¥{{ ((currentBill?.paidAmount || 0) / 100).toFixed(2) }}
+        {{ formatMoney(currentBill?.paidAmount) }}
       </el-descriptions-item>
       <el-descriptions-item label="未缴本金">¥{{ remainingYuan.toFixed(2) }}</el-descriptions-item>
-      <el-descriptions-item label="未核销滞纳金">¥{{ (outstandingLateFeeCents / 100).toFixed(2) }}</el-descriptions-item>
+      <el-descriptions-item label="未核销滞纳金">{{ formatMoney(outstandingLateFeeCents) }}</el-descriptions-item>
       <el-descriptions-item label="应收合计">
         <span class="total-amount">¥{{ totalReceivableYuan.toFixed(2) }}</span>
       </el-descriptions-item>
@@ -39,7 +39,7 @@
         />
         <span class="payment-hint">
           元（最多可收 ¥{{ totalReceivableYuan.toFixed(2) }} ＝ 未缴本金 ¥{{ remainingYuan.toFixed(2) }} +
-          滞纳金 ¥{{ (outstandingLateFeeCents / 100).toFixed(2) }}）
+          滞纳金 {{ formatMoney(outstandingLateFeeCents) }}）
         </span>
       </el-form-item>
       <el-form-item label="收款方式" prop="paymentMethod">
@@ -74,7 +74,7 @@
         <template #default="{ row }">{{ formatDateTime(row.paidAt) }}</template>
       </el-table-column>
       <el-table-column label="金额" width="100">
-        <template #default="{ row }">¥{{ (row.amount / 100).toFixed(2) }}</template>
+        <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
       </el-table-column>
       <el-table-column label="方式" width="90">
         <template #default="{ row }">{{ paymentMethodMap[row.paymentMethod] || row.paymentMethod }}</template>
@@ -103,6 +103,7 @@ import type { FormInstance } from 'element-plus';
 import { getPayments, addPayment, getLateFees } from '@/api/bills';
 import type { PaymentRecordItem, PaymentMethod } from '@/api/bills';
 import type { Bill, LateFee } from '@/types';
+import { centsToYuan, formatMoney } from '@/utils/money';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -143,12 +144,11 @@ const rules = {
   paymentMethod: [{ required: true, message: '请选择收款方式', trigger: 'change' }],
 };
 
-const formatYuan = (cents?: number | null) => '¥' + ((cents ?? 0) / 100).toFixed(2);
 const formatDateTime = (value: string) => (value ? value.replace('T', ' ').slice(0, 19) : '-');
 
 const remainingYuan = computed(() => {
   if (!currentBill.value) return 0;
-  return Math.max(0, (currentBill.value.amount - currentBill.value.paidAmount) / 100);
+  return Math.max(0, centsToYuan(currentBill.value.amount - currentBill.value.paidAmount));
 });
 
 const outstandingLateFeeCents = computed(() => {
@@ -158,7 +158,7 @@ const outstandingLateFeeCents = computed(() => {
   }, 0);
 });
 
-const totalReceivableYuan = computed(() => remainingYuan.value + outstandingLateFeeCents.value / 100);
+const totalReceivableYuan = computed(() => remainingYuan.value + centsToYuan(outstandingLateFeeCents.value));
 
 const canReceive = (bill: Bill | null) =>
   !!bill && ['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status);
