@@ -1,9 +1,12 @@
 import { InAppChannel } from './in-app.channel.js';
 import { EmailChannel } from './email.channel.js';
+import { Logger } from '@nestjs/common';
 import type { NotificationChannel, NotificationMessage } from './notification-channel.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 export class NotificationDispatcher {
+  private readonly logger = new Logger(NotificationDispatcher.name);
+
   constructor(private readonly channels: NotificationChannel[]) {}
 
   static createDefault(prisma: PrismaService): NotificationDispatcher {
@@ -27,8 +30,13 @@ export class NotificationDispatcher {
   async dispatch(message: NotificationMessage): Promise<unknown> {
     let inAppResult: unknown;
     for (const channel of this.select(message)) {
-      const result = await channel.send(message);
-      if (channel.name === 'in-app') inAppResult = result;
+      try {
+        const result = await channel.send(message);
+        if (channel.name === 'in-app') inAppResult = result;
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.logger.error(`Notification channel ${channel.name} failed: ${reason}`);
+      }
     }
     return inAppResult;
   }
