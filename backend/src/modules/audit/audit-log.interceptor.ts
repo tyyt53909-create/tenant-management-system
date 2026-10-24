@@ -8,6 +8,10 @@ const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
 const SENSITIVE_KEY = /password|passwordhash|code|token|authorization|cookie|idnumber|idcard|phone|email/i;
 const REDACTED = '[REDACTED]';
 
+function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEY.test(key.replace(/[^a-z0-9]/gi, ''));
+}
+
 type AuditRequest = Request & { user?: AuthUser; requestId?: string };
 
 /** Copies JSON-like data while masking secrets and safely handling cycles. */
@@ -18,7 +22,7 @@ export function sanitizeAuditValue(value: unknown, seen = new WeakSet<object>())
   if (Array.isArray(value)) return value.map((item) => sanitizeAuditValue(item, seen));
   const result: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
-    result[key] = SENSITIVE_KEY.test(key) ? REDACTED : sanitizeAuditValue(child, seen);
+    result[key] = isSensitiveKey(key) ? REDACTED : sanitizeAuditValue(child, seen);
   }
   return result;
 }

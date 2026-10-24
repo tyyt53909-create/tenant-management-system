@@ -3,8 +3,8 @@ import { of } from 'rxjs';
 
 describe('audit sanitization', () => {
   it('recursively masks nested sensitive fields and array items without rewriting safe values', () => {
-    expect(sanitizeAuditValue({ keep: 'same', nested: [{ passwordHash: 'secret', phone: '123', safe: 1 }] })).toEqual({
-      keep: 'same', nested: [{ passwordHash: '[REDACTED]', phone: '[REDACTED]', safe: 1 }],
+    expect(sanitizeAuditValue({ keep: 'same', nested: [{ passwordHash: 'secret', phone: '123', id_number: '456', safe: 1 }] })).toEqual({
+      keep: 'same', nested: [{ passwordHash: '[REDACTED]', phone: '[REDACTED]', id_number: '[REDACTED]', safe: 1 }],
     });
   });
 
