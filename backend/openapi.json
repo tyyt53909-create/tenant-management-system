@@ -4591,6 +4591,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -4661,6 +4669,73 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Bills"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/bills/{id}/payments/{paymentId}/void": {
+      "post": {
+        "operationId": "BillsController_voidPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paymentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidPaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
           },
           "default": {
             "description": "错误",
@@ -8640,6 +8715,11 @@
             "type": "string",
             "description": "交易号（同一账单内幂等，重复登记将被拒绝）"
           },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "幂等键：同键同账单同金额重放返回原收款（也可用 Idempotency-Key 头）",
+            "maxLength": 128
+          },
           "paidAt": {
             "type": "string",
             "description": "收款时间（缺省为当前时间）"
@@ -8651,6 +8731,18 @@
         "required": [
           "amount",
           "paymentMethod"
+        ]
+      },
+      "VoidPaymentDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "CreateLateFeeDto": {

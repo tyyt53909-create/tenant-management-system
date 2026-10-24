@@ -1062,6 +1062,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bills/{id}/payments/{paymentId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BillsController_voidPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bills/{id}/late-fees": {
         parameters: {
             query?: never;
@@ -1977,9 +1993,14 @@ export interface components {
             paymentMethod: "CASH" | "BANK_TRANSFER" | "WECHAT" | "ALIPAY" | "OTHER";
             /** @description 交易号（同一账单内幂等，重复登记将被拒绝） */
             transactionNumber?: string;
+            /** @description 幂等键：同键同账单同金额重放返回原收款（也可用 Idempotency-Key 头） */
+            idempotencyKey?: string;
             /** @description 收款时间（缺省为当前时间） */
             paidAt?: string;
             notes?: string;
+        };
+        VoidPaymentDto: {
+            reason: string;
         };
         CreateLateFeeDto: {
             /** @description 管理者确认金额（分），可不等于建议值（允许减免为 0） */
@@ -5189,7 +5210,9 @@ export interface operations {
     BillsController_addPayment: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "idempotency-key": string;
+            };
             path: {
                 id: string;
             };
@@ -5198,6 +5221,50 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreatePaymentDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    BillsController_voidPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidPaymentDto"];
             };
         };
         responses: {

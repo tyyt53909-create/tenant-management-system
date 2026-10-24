@@ -6,6 +6,10 @@ import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
 import { QueryCheckoutsDto } from './dto/query-checkouts.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
+import {
+  formatBusinessDate,
+  formatBusinessDateTime,
+} from '../../common/business-clock/business-clock.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { isDeductionItemType, isRefundItemType } from './checkout-item-types.js';
 
@@ -235,12 +239,18 @@ export class CheckoutService {
       { header: '租客姓名', formatter: (c) => c.contract?.tenant?.name || '' },
       { header: '租客电话', formatter: (c) => c.contract?.tenant?.phone || '' },
       { header: '合同ID', key: 'contractId' },
-      { header: '退租日期', formatter: (c) => (c.checkoutDate ? new Date(c.checkoutDate).toISOString().slice(0, 10) : '') },
+      {
+        header: '退租日期',
+        formatter: (c) => (c.checkoutDate ? formatBusinessDate(new Date(c.checkoutDate)) : ''),
+      },
       { header: '明细项数', formatter: (c) => c.items?.length || 0 },
       { header: '实退总额(元)', formatter: (c) => centsToYuanString(c.totalRefund) },
       { header: '经办人', key: 'processedBy' },
       { header: '状态', formatter: (c) => CHECKOUT_STATUS_LABEL[c.status] || c.status },
-      { header: '创建时间', formatter: (c) => (c.createdAt ? new Date(c.createdAt).toLocaleString('zh-CN') : '') },
+      {
+        header: '创建时间',
+        formatter: (c) => (c.createdAt ? formatBusinessDateTime(new Date(c.createdAt)) : ''),
+      },
       { header: '备注', key: 'notes' },
     ];
 
@@ -285,7 +295,7 @@ export class CheckoutService {
     return {
       voucherNumber: `VCH-${record.id.slice(0, 8).toUpperCase()}`,
       checkoutId: record.id,
-      checkoutDate: record.checkoutDate ? new Date(record.checkoutDate).toISOString().slice(0, 10) : '',
+      checkoutDate: record.checkoutDate ? formatBusinessDate(new Date(record.checkoutDate)) : '',
       status: record.status,
       statusLabel: CHECKOUT_STATUS_LABEL[record.status] || record.status,
       roomNumber: record.room?.roomNumber || '',
@@ -293,8 +303,8 @@ export class CheckoutService {
       tenantName: record.contract?.tenant?.name || '租客',
       tenantPhone: record.contract?.tenant?.phone || '',
       contractId: record.contractId,
-      contractStart: record.contract?.startDate ? new Date(record.contract.startDate).toISOString().slice(0, 10) : '',
-      contractEnd: record.contract?.endDate ? new Date(record.contract.endDate).toISOString().slice(0, 10) : '',
+      contractStart: record.contract?.startDate ? formatBusinessDate(new Date(record.contract.startDate)) : '',
+      contractEnd: record.contract?.endDate ? formatBusinessDate(new Date(record.contract.endDate)) : '',
       depositAmount,
       totalDeduction,
       totalRefundItem,

@@ -177,6 +177,14 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/api/bills/:id/payments/:paymentId/void",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/api/bills/:id/receipt",
     "public": false,
