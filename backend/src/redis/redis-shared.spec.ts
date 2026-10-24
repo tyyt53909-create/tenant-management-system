@@ -62,10 +62,10 @@ class SharedRedis implements RedisCommandClient {
 }
 
 const record: OtpRecord = {
-  code: '654321',
+  codeHash: 'a'.repeat(64),
+  salt: 'b'.repeat(32),
   expiresAt: Date.now() + 60_000,
   lastSentAt: Date.now(),
-  failedAttempts: 0,
 };
 
 describe('两个实例共享 Redis 状态', () => {
@@ -76,18 +76,23 @@ describe('两个实例共享 Redis 状态', () => {
 
     await instanceA.set('tenant@example.com', record);
 
-    expect(await instanceB.get('tenant@example.com')).toMatchObject({ code: '654321' });
+    expect(await instanceB.get('tenant@example.com')).toMatchObject({
+      codeHash: record.codeHash,
+      salt: record.salt,
+    });
   });
 
   it('重启后未过期的验证码仍有效（新实例等于重启后的进程状态，T212 补验 OPT-08）', async () => {
     const redis = new SharedRedis();
     const beforeRestart = new RedisOtpStore(redis);
-    await beforeRestart.set('restart@example.com', { ...record, code: '135790' });
+    await beforeRestart.set('restart@example.com', record);
 
     // 重启：内存态全部丢弃，只留 Redis 里的副本
     const afterRestart = new RedisOtpStore(redis);
 
-    expect(await afterRestart.get('restart@example.com')).toMatchObject({ code: '135790' });
+    expect(await afterRestart.get('restart@example.com')).toMatchObject({
+      codeHash: record.codeHash,
+    });
   });
 
   it('已过期的验证码重启后读不到（TTL 生效）', async () => {

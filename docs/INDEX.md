@@ -54,6 +54,7 @@
 
 ## 3. 任务与交接
 
+- [T259-SEC-03-OTP与登录防护.md](../tasks/T259-SEC-03-OTP与登录防护.md)：SEC-03，验证码改用密码学安全随机源与 HMAC 摘要存储、失败计数原子化、登录失败锁定、防账号枚举、bcrypt cost 12。
 - [T258-SEC-02-JWT与会话强化.md](../tasks/T258-SEC-02-JWT与会话强化.md)：SEC-02，移除 JWT 兜底密钥、固定 HS256、登出幂等、单次鉴权查询、过期格式与 Cookie maxAge 对齐。
 - [T257-SEC-01-deny-by-default授权.md](../tasks/T257-SEC-01-deny-by-default授权.md)：SEC-01，全局 JWT/角色守卫默认拒绝、`@Public()` 公开面、141 条路由策略快照与公开白名单。
 - [T256-SEC-09-错误码目录.md](../tasks/T256-SEC-09-错误码目录.md)：SEC-09，错误码目录与 docs/05 §5.2 双向校验、`apiError()` 显式状态码、房态/财务高风险路径迁移。
@@ -63,6 +64,7 @@
 - [T250-M0生产化收口.md](../tasks/T250-M0生产化收口.md)：M0 治理收口（docs/19 路线图、T250–T314 编号、DEC 登记、任务书 schema、STATUS 真实化）；不改业务代码。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-24-T259-OTP与登录防护.md](./handoff/2026-10-24-T259-OTP与登录防护.md)：T259，验证码密码学随机 + HMAC 摘要存储 + 原子失败计数、登录失败锁定 429、防账号枚举、bcrypt cost 12、邀请码移除 Math.random。
 - [2026-10-23-T258-JWT与会话强化.md](./handoff/2026-10-23-T258-JWT与会话强化.md)：T258，JWT 密钥 fail-closed、HS256、登出幂等、单次鉴权查询、过期时间与 Cookie maxAge 对齐。
 - [2026-10-23-T257-deny-by-default.md](./handoff/2026-10-23-T257-deny-by-default.md)：T257，全局 JWT/角色守卫默认拒绝、`@Public()` 公开面标注、路由策略快照与默认拒绝 e2e。
 - [2026-10-21-T230-房源照片上传.md](./handoff/2026-10-21-T230-房源照片上传.md)：T230，RoomPhoto 启用；后端 `photos` DTO 与事务替换、前端照片编辑器、Playwright 09 通过。

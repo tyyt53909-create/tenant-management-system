@@ -239,6 +239,26 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
     validate: integerRange(0, 1_000_000),
   },
   {
+    key: 'OTP_HASH_SECRET',
+    description: 'OTP 哈希密钥（未设置时回退 JWT_SECRET）',
+    secret: true,
+  },
+  {
+    key: 'LOGIN_MAX_FAILED_ATTEMPTS',
+    description: '登录失败锁定阈值（次）',
+    validate: integerRange(1, 100),
+  },
+  {
+    key: 'LOGIN_LOCK_MS',
+    description: '登录失败锁定时长（毫秒）',
+    validate: integerRange(1_000, 86_400_000),
+  },
+  {
+    key: 'BCRYPT_ROUNDS',
+    description: 'bcrypt cost（10–14）',
+    validate: integerRange(10, 14),
+  },
+  {
     key: 'FEATURE_METER_SIMULATOR',
     description: '虚拟水电表模拟器开关；生产必须为 false',
     validate: oneOf(...BOOLEAN_VALUES),

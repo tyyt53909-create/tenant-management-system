@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { resolveBcryptRounds } from '../src/config/password.config.js';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
@@ -111,7 +112,7 @@ export async function runSeed({ prisma, env = process.env, log = (message: strin
   const adminEmail = env.ADMIN_EMAIL || SEED_DEFAULTS.ADMIN_EMAIL;
   const adminPassword = env.ADMIN_PASSWORD || SEED_DEFAULTS.ADMIN_PASSWORD;
 
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
+  const passwordHash = await bcrypt.hash(adminPassword, resolveBcryptRounds(process.env.BCRYPT_ROUNDS));
 
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
@@ -129,7 +130,7 @@ export async function runSeed({ prisma, env = process.env, log = (message: strin
   // 2.1 创建保洁账号（T143：保洁登录小程序使用）
   const cleanerEmail = env.CLEANER_EMAIL || SEED_DEFAULTS.CLEANER_EMAIL;
   const cleanerPassword = env.CLEANER_PASSWORD || SEED_DEFAULTS.CLEANER_PASSWORD;
-  const cleanerPasswordHash = await bcrypt.hash(cleanerPassword, 10);
+  const cleanerPasswordHash = await bcrypt.hash(cleanerPassword, resolveBcryptRounds(process.env.BCRYPT_ROUNDS));
 
   await prisma.user.upsert({
     where: { email: cleanerEmail },

@@ -1,6 +1,8 @@
 import { Inject, Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import nodemailer, { type Transporter } from 'nodemailer';
+import { randomOtpCode } from '../../common/utils/secure-random.js';
 import {
   MemoryOtpStore,
   OTP_MAX_FAILED_ATTEMPTS,
@@ -10,11 +12,14 @@ import {
 } from './otp-store.js';
 
 const DEV_BYPASS_CODE = '123456';
+const OTP_TTL_MS = 5 * 60 * 1000;
+const OTP_SEND_COOLDOWN_MS = 60 * 1000;
 
 @Injectable()
 export class EmailOtpService {
   private readonly logger = new Logger(EmailOtpService.name);
   private readonly otpStore: OtpStore;
+  private readonly hashSecret: Buffer;
   private transporter: Transporter | null = null;
   private readonly fromAddress: string;
 
@@ -23,6 +28,7 @@ export class EmailOtpService {
     @Optional() @Inject(OTP_STORE) otpStore?: OtpStore,
   ) {
     this.otpStore = otpStore ?? new MemoryOtpStore();
+    this.hashSecret = this.resolveHashSecret();
     const host = this.configService.get<string>('SMTP_HOST');
     const port = this.configService.get<number>('SMTP_PORT') || 465;
     const user = this.configService.get<string>('SMTP_USER');
@@ -56,21 +62,22 @@ export class EmailOtpService {
     const existing = await this.otpStore.get(normalizedEmail);
 
     // 60 秒防刷频冷却限制
-    if (existing && now - existing.lastSentAt < 60 * 1000) {
-      const waitSeconds = Math.ceil((60 * 1000 - (now - existing.lastSentAt)) / 1000);
+    if (existing && now - existing.lastSentAt < OTP_SEND_COOLDOWN_MS) {
+      const waitSeconds = Math.ceil((OTP_SEND_COOLDOWN_MS - (now - existing.lastSentAt)) / 1000);
       throw new BadRequestException(`验证码发送过于频繁，请等待 ${waitSeconds} 秒后再试`);
     }
 
-    // 生成 6 位随机验证码
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = now + 5 * 60 * 1000; // 5 分钟有效
-
+    const code = this.generateCode();
+    const salt = randomBytes(16).toString('hex');
     const record: OtpRecord = {
-      code,
-      expiresAt,
+      codeHash: this.hashCode(code, salt),
+      salt,
+      expiresAt: now + OTP_TTL_MS,
       lastSentAt: now,
-      failedAttempts: 0,
     };
+
+    // 新验证码开始新的失败计数窗口。
+    await this.otpStore.resetFailedAttempts(normalizedEmail);
     await this.otpStore.set(normalizedEmail, record);
 
     if (this.transporter) {
@@ -95,6 +102,7 @@ export class EmailOtpService {
         const reason = err instanceof Error ? err.message : 'unknown';
         if (this.isProduction()) {
           await this.otpStore.delete(normalizedEmail);
+          await this.otpStore.resetFailedAttempts(normalizedEmail);
           this.logger.error(this.redactCode(`邮件投递失败，已作废本次验证码: ${reason}`, code));
           throw new BadRequestException('验证码邮件发送失败，请稍后重试');
         }
@@ -123,28 +131,78 @@ export class EmailOtpService {
       return false;
     }
 
-    if (Date.now() > record.expiresAt || this.failedAttempts(record) >= OTP_MAX_FAILED_ATTEMPTS) {
-      await this.otpStore.delete(normalizedEmail);
+    // 兼容滚动升级：旧版记录只有明文 code、没有 codeHash/salt，一律作废重发。
+    if (typeof record.codeHash !== 'string' || typeof record.salt !== 'string') {
+      await this.invalidate(normalizedEmail);
       return false;
     }
 
-    if (record.code !== trimmedCode) {
-      const failedAttempts = this.failedAttempts(record) + 1;
+    if (Date.now() > record.expiresAt) {
+      await this.invalidate(normalizedEmail);
+      return false;
+    }
+
+    // 计数达到上限时整条记录作废，避免继续爆破。
+    if ((await this.otpStore.getFailedAttempts(normalizedEmail)) >= OTP_MAX_FAILED_ATTEMPTS) {
+      await this.invalidate(normalizedEmail);
+      return false;
+    }
+
+    if (!this.matchesCode(record, trimmedCode)) {
+      const ttlMs = Math.max(record.expiresAt - Date.now(), 1_000);
+      const failedAttempts = await this.otpStore.incrementFailedAttempts(normalizedEmail, ttlMs);
       if (failedAttempts >= OTP_MAX_FAILED_ATTEMPTS) {
-        await this.otpStore.delete(normalizedEmail);
-      } else {
-        await this.otpStore.set(normalizedEmail, { ...record, failedAttempts });
+        await this.invalidate(normalizedEmail);
       }
       return false;
     }
 
     // 验证成功后单次失效
-    await this.otpStore.delete(normalizedEmail);
+    await this.invalidate(normalizedEmail);
     return true;
   }
 
-  private failedAttempts(record: OtpRecord): number {
-    return record.failedAttempts ?? 0;
+  /** 独立方法便于测试注入固定验证码；生产实现使用密码学安全随机源。 */
+  protected generateCode(): string {
+    return randomOtpCode();
+  }
+
+  private matchesCode(record: OtpRecord, code: string): boolean {
+    const expected = Buffer.from(record.codeHash, 'hex');
+    const actual = Buffer.from(this.hashCode(code, record.salt), 'hex');
+    if (expected.length !== actual.length) {
+      return false;
+    }
+    return timingSafeEqual(expected, actual);
+  }
+
+  private hashCode(code: string, salt: string): string {
+    return createHmac('sha256', this.hashSecret).update(`${salt}:${code}`).digest('hex');
+  }
+
+  private async invalidate(email: string): Promise<void> {
+    await this.otpStore.delete(email);
+    await this.otpStore.resetFailedAttempts(email);
+  }
+
+  /**
+   * 优先使用 OTP_HASH_SECRET；未配置时回退 JWT_SECRET（生产必填，多实例一致）。
+   * 开发/测试两者都没有时使用进程内随机密钥，只影响该进程内的验证码。
+   */
+  private resolveHashSecret(): Buffer {
+    const configured =
+      this.readConfig('OTP_HASH_SECRET') ??
+      this.readConfig('jwt.secret') ??
+      this.readConfig('JWT_SECRET');
+    if (configured) {
+      return Buffer.from(configured, 'utf8');
+    }
+    if (this.isProduction()) {
+      this.logger.error('生产环境缺少 OTP_HASH_SECRET 与 JWT_SECRET，验证码哈希使用进程内随机密钥');
+    } else {
+      this.logger.warn('未配置 OTP_HASH_SECRET/JWT_SECRET，验证码哈希使用进程内随机密钥（重启后验证码失效）');
+    }
+    return randomBytes(32);
   }
 
   private isProduction(): boolean {
