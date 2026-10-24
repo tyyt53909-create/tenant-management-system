@@ -167,12 +167,24 @@ describe('InviteCodeService', () => {
       await service.consumeInviteCode('INVITE-VALID', 'user-tenant-1');
 
       expect(prisma.inviteCode.updateMany).toHaveBeenCalledWith({
-        where: { code: 'INVITE-VALID', status: 'UNUSED' },
+        where: {
+          code: 'INVITE-VALID',
+          status: 'UNUSED',
+          expiresAt: { gt: expect.any(Date) },
+        },
         data: {
           status: 'USED',
           usedById: 'user-tenant-1',
           usedAt: expect.any(Date),
         },
+      });
+    });
+
+    it('并发核销失败（count=0）时抛出 409', async () => {
+      vi.spyOn(prisma.inviteCode, 'updateMany').mockResolvedValue({ count: 0 });
+
+      await expect(service.consumeInviteCode('INVITE-USED', 'user-2')).rejects.toMatchObject({
+        status: 409,
       });
     });
   });

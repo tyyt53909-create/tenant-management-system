@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { GoogleAuthService } from './google-auth.service.js';
 import { BadRequestException } from '@nestjs/common';
@@ -64,6 +64,36 @@ describe('GoogleAuthService', () => {
     expect(payload.name).toBe('GoogleTenant');
     expect(payload.googleId).toBe('sub-998877');
     expect(payload.emailVerified).toBe(true);
+  });
+
+  it('真实 token 的 email_verified 必须显式为 true，缺失按未验证处理', async () => {
+    const stubPayload = (emailVerified: boolean | undefined) => ({
+      getPayload: () => ({
+        sub: 'google-sub-real',
+        email: 'real@example.com',
+        name: 'Real',
+        picture: 'https://avatar',
+        ...(emailVerified === undefined ? {} : { email_verified: emailVerified }),
+      }),
+    });
+
+    (service as unknown as { client: { verifyIdToken: unknown } }).client = {
+      verifyIdToken: vi.fn().mockResolvedValue(stubPayload(undefined)),
+    };
+    const missing = await service.verifyIdToken('real-token');
+    expect(missing.emailVerified).toBe(false);
+
+    (service as unknown as { client: { verifyIdToken: unknown } }).client = {
+      verifyIdToken: vi.fn().mockResolvedValue(stubPayload(false)),
+    };
+    const denied = await service.verifyIdToken('real-token');
+    expect(denied.emailVerified).toBe(false);
+
+    (service as unknown as { client: { verifyIdToken: unknown } }).client = {
+      verifyIdToken: vi.fn().mockResolvedValue(stubPayload(true)),
+    };
+    const verified = await service.verifyIdToken('real-token');
+    expect(verified.emailVerified).toBe(true);
   });
 
   it('在开发环境支持默认 mock token 解析', async () => {

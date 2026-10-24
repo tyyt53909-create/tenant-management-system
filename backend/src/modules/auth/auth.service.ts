@@ -27,6 +27,7 @@ import { TenantCapabilityService } from '../tenant-capabilities/tenant-capabilit
 import { FederatedAuthService } from './federated-auth.service.js';
 import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
 import { resolveLoginProtection, type LoginProtection } from '../../config/password.config.js';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import {
   LOGIN_ATTEMPT_STORE,
   MemoryLoginAttemptStore,
@@ -64,6 +65,9 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
+    const email = dto.email.toLowerCase().trim();
+    const phone = dto.phone?.trim() || undefined;
+
     // 1. 验证邀请码
     const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
     if (!validation.valid) {
@@ -72,70 +76,76 @@ export class AuthService {
 
     // 2. 检查邮箱是否已注册
     const existingUser = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { email },
     });
     if (existingUser) {
       throw new ConflictException('邮箱已被注册');
     }
 
     // 3. 检查手机号是否已注册（如果提供）
-    if (dto.phone) {
+    if (phone) {
       const existingPhone = await this.prisma.user.findUnique({
-        where: { phone: dto.phone },
+        where: { phone },
       });
       if (existingPhone) {
         throw new ConflictException('手机号已被注册');
       }
     }
 
-    // 4. 密码加密（cost 可配置，默认 12；旧 cost 10 哈希仍可验证）
+    // 4. 必须存在管理员预建的租客档案（DEC-03：禁止自助创建租客）
+    const preTenant = await this.findPreCreatedTenant({ email, phone });
+    if (!preTenant) {
+      throw apiError(
+        ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED,
+        '未找到匹配的预建租客档案，请联系管理员先建档再邀请',
+      );
+    }
+
+    // 5. 密码加密（cost 可配置，默认 12；旧 cost 10 哈希仍可验证）
     const passwordHash = await bcrypt.hash(dto.password, this.loginProtection().bcryptRounds);
 
-    // 5. 创建用户和租客（事务）
+    // 6. 创建用户并绑定预建租客（事务，不新建 Tenant）
     const user = await this.prisma.$transaction(async (tx) => {
-      // 创建 User
       const newUser = await tx.user.create({
         data: {
-          email: dto.email,
-          phone: dto.phone,
+          email,
+          phone,
           passwordHash,
-          role: 'TENANT',
-          invitedBy: validation.invitedBy,
+          role: validation.role ?? 'TENANT',
+          invitedBy: validation.invitedBy ?? null,
           isActive: true,
         },
       });
 
-      // 创建 Tenant
-      // Tenant.phone 必填且唯一（docs/02-数据模型.md）：注册时手机号可选，
-      // 缺失时用 userId 生成唯一占位值，避免空串触发唯一约束导致第二个注册 500（T148 / BUG-1）
-      const tenantPhone = dto.phone?.trim() ? dto.phone.trim() : `pending-${newUser.id}`;
-
-      // 邀请码一次性：注册成功后立即核销（docs/03-权限矩阵.md §4.1
-      // 「使用后立即失效」）。与建号同事务，避免
-      // 「账号已建但邀请码仍可复用」的中间态。
-      await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
-
-      await tx.tenant.create({
+      await tx.userIdentity.create({
         data: {
           userId: newUser.id,
-          name: dto.email.split('@')[0], // 使用邮箱前缀作为初始名称
-          phone: tenantPhone,
-          email: dto.email,
-          emergencyContact: dto.phone || '',
-          emergencyPhone: dto.phone || '',
+          provider: 'EMAIL',
+          providerUserId: email,
+          email,
+          // 密码注册尚未证明邮箱归属，等 OTP/Google 验证后再置时间
+          emailVerifiedAt: null,
         },
       });
+
+      await tx.tenant.update({
+        where: { id: preTenant.id },
+        data: { userId: newUser.id },
+      });
+
+      // 邀请码一次性：与建号、绑定同事务，核销失败则整体回滚
+      await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
 
       return newUser;
     });
 
-    // 6. 生成 JWT Token
+    // 7. 生成 JWT Token
     const tokens = await this.jwtService.generateTokens({
       sub: user.id,
       role: user.role,
     });
 
-    // 7. 返回结果
+    // 8. 返回结果
     return {
       ...tokens,
       user: {
@@ -400,6 +410,17 @@ export class AuthService {
 
   async bindInviteCode(userId: string, dto: BindInviteCodeDto) {
     return this.federatedAuthService.bindInviteCode(userId, dto);
+  }
+
+  /** 查找尚未绑定用户、且邮箱/手机号精确匹配的预建租客档案。 */
+  private async findPreCreatedTenant(identity: { email?: string; phone?: string }) {
+    const conditions: Array<{ email: string } | { phone: string }> = [];
+    if (identity.email) conditions.push({ email: identity.email });
+    if (identity.phone) conditions.push({ phone: identity.phone });
+    if (conditions.length === 0) return null;
+    return this.prisma.tenant.findFirst({
+      where: { userId: null, OR: conditions },
+    });
   }
 
   private loginProtection(): LoginProtection {

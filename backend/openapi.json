@@ -7913,6 +7913,10 @@
             "type": "string",
             "minLength": 6,
             "maxLength": 6
+          },
+          "inviteCode": {
+            "type": "string",
+            "description": "首次登录必须携带邀请码（DEC-03：禁止自动成为租客）。"
           }
         },
         "required": [

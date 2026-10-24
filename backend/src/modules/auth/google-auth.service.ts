@@ -81,7 +81,7 @@ export class GoogleAuthService {
         email: payload.email.toLowerCase(),
         name: payload.name || payload.email.split('@')[0],
         avatarUrl: payload.picture,
-        emailVerified: payload.email_verified ?? true,
+        emailVerified: payload.email_verified === true,
       };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

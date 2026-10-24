@@ -22,7 +22,11 @@ export const ERROR_CATALOG = {
   AUTH_TOKEN_INVALID: { status: HttpStatus.UNAUTHORIZED, description: 'Token 无效或已过期' },
   AUTH_INVITE_CODE_INVALID: { status: HttpStatus.BAD_REQUEST, description: '邀请码无效' },
   AUTH_INVITE_CODE_EXPIRED: { status: HttpStatus.BAD_REQUEST, description: '邀请码已过期' },
+  AUTH_INVITE_CODE_CONFLICT: { status: HttpStatus.CONFLICT, description: '邀请码已被使用，请重新获取' },
   AUTH_EMAIL_ALREADY_EXISTS: { status: HttpStatus.CONFLICT, description: '邮箱已被注册' },
+  AUTH_ACCOUNT_NOT_PROVISIONED: { status: HttpStatus.FORBIDDEN, description: '账号尚未开通，请联系管理员预建并邀请' },
+  AUTH_GOOGLE_EMAIL_UNVERIFIED: { status: HttpStatus.UNAUTHORIZED, description: 'Google 邮箱未验证，无法登录' },
+  AUTH_IDENTITY_ROLE_CONFLICT: { status: HttpStatus.CONFLICT, description: '邀请码角色与当前账号角色不匹配' },
 
   PERM_FORBIDDEN: { status: HttpStatus.FORBIDDEN, description: '无权限访问' },
   PERM_INSUFFICIENT_ROLE: { status: HttpStatus.FORBIDDEN, description: '权限不足' },

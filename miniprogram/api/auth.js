@@ -30,8 +30,8 @@ export const sendEmailCode = (data) => {
 }
 
 /**
- * 邮箱验证码登录 / 自动注册
- * @param {{ email: string, code: string }} data
+ * 邮箱验证码登录（首次登录必须携带邀请码，DEC-03 不再自动注册）
+ * @param {{ email: string, code: string, inviteCode?: string }} data
  * @returns {Promise<LoginResponse & { isNewUser: boolean }>}
  */
 export const loginWithEmailCode = (data) => {
