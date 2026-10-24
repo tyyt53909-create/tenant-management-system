@@ -1,0 +1,2 @@
+-- OPS-04 / T277：JobRun 支持 PARTIAL（子任务部分失败）。
+ALTER TYPE "JobRunStatus" ADD VALUE IF NOT EXISTS 'PARTIAL';

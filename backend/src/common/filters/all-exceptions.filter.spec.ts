@@ -2,7 +2,7 @@ import { BadRequestException, Controller, ForbiddenException, Get, INestApplicat
 import { Prisma } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AllExceptionsFilter, requestIdMiddleware } from './all-exceptions.filter.js';
 
 @Controller('probe')
@@ -135,5 +135,33 @@ describe('统一错误响应', () => {
     } finally {
       process.env.NODE_ENV = previous;
     }
+  });
+
+  it('5xx 触发告警，且 context 不含异常原文', async () => {
+    const alerts = { send: vi.fn().mockResolvedValue(true) };
+    const filter = new AllExceptionsFilter('production', alerts as never);
+    const response = {
+      headersSent: false,
+      setHeader: vi.fn(),
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    };
+    const request = { headers: {}, method: 'GET', path: '/api/probe', requestId: 'req-alert' };
+    const host = {
+      switchToHttp: () => ({ getResponse: () => response, getRequest: () => request }),
+    } as never;
+
+    filter.catch(new Error('SELECT secret FROM users'), host);
+    await Promise.resolve();
+
+    expect(response.status).toHaveBeenCalledWith(500);
+    expect(alerts.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'HTTP 5xx',
+        severity: 'error',
+        context: expect.objectContaining({ requestId: 'req-alert', status: 500 }),
+      }),
+    );
+    expect(JSON.stringify(alerts.send.mock.calls)).not.toContain('SELECT secret');
   });
 });

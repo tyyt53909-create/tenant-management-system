@@ -55,6 +55,25 @@ describe('JobRunner', () => {
     expect(runs.map((run) => String(run.status)).sort((a, b) => a.localeCompare(b))).toEqual(['SKIPPED', 'SUCCESS']);
   });
 
+  it('子任务有失败但任务跑完 → PARTIAL，并通知 observer', async () => {
+    const { prisma, runs } = recordingPrisma();
+    const seen: string[] = [];
+    const runner = new JobRunner(
+      prisma as never,
+      new MemoryJobLock(),
+      (_job, status) => seen.push(status),
+    );
+
+    const outcome = await runner.run('daily-jobs', 'MANUAL', async () => ({
+      contractsActivated: 1,
+      errors: ['逾期检查失败'],
+    }));
+
+    expect(outcome.status).toBe('PARTIAL');
+    expect(runs[0]).toMatchObject({ status: 'PARTIAL' });
+    expect(seen).toEqual(['PARTIAL']);
+  });
+
   it('任务失败时记录错误摘要', async () => {
     const { prisma, runs } = recordingPrisma();
     const runner = new JobRunner(prisma as never, new MemoryJobLock());
@@ -69,15 +88,24 @@ describe('JobRunner', () => {
 });
 
 describe('PrismaAdvisoryJobLock', () => {
-  function lockWith(locked: boolean) {
+  function lockWith(locked: boolean, ttlMs?: number) {
     const tx = { $queryRaw: vi.fn(async () => [{ locked }]) };
     const prisma = { $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)) };
-    return { lock: new PrismaAdvisoryJobLock(prisma as never), prisma };
+    return { lock: new PrismaAdvisoryJobLock(prisma as never, ttlMs), prisma };
   }
 
   it('拿到锁才执行任务', async () => {
     const { lock } = lockWith(true);
     await expect(lock.tryWithLock('daily-jobs', async () => 'done')).resolves.toBe('done');
+  });
+
+  it('锁事务超时使用传入的 TTL', async () => {
+    const { lock, prisma } = lockWith(true, 123_000);
+    await lock.tryWithLock('daily-jobs', async () => 'done');
+    expect(prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ timeout: 123_000 }),
+    );
   });
 
   it('没拿到锁时不执行任务', async () => {

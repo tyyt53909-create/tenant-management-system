@@ -792,6 +792,12 @@
   },
   {
     "method": "GET",
+    "path": "/api/metrics",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
     "path": "/api/notifications",
     "public": false,
     "roles": []

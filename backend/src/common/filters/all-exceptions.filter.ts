@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { ErrorCode, codeForMessage, type ErrorCodeName } from '../errors/error-codes.js';
+import type { AlertService } from '../alerts/alert.service.js';
 
 export interface ErrorBody {
   code: string;
@@ -31,7 +32,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
    * `nodeEnv` 由启动期配置传入（config 层解析 NODE_ENV），此处不读 process.env。
    * 默认值仅为单测直接 `new AllExceptionsFilter()` 时兜底。
    */
-  constructor(private readonly nodeEnv = 'development') {}
+  constructor(
+    private readonly nodeEnv = 'development',
+    private readonly alerts?: AlertService,
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
@@ -45,6 +49,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const mapped = toErrorResponse(exception, requestId, this.nodeEnv);
     if (mapped.status >= 500) {
       this.logger.error(summarizeException(exception, requestId));
+      void this.alerts?.send({
+        title: 'HTTP 5xx',
+        severity: 'error',
+        message: `请求失败：${mapped.status} ${request.method ?? ''} ${request.path ?? ''}`,
+        dedupeKey: `http-5xx:${request.method ?? ''}:${request.path ?? ''}:${mapped.status}`,
+        context: { requestId, status: mapped.status },
+      });
     }
     if (!response.headersSent) {
       response.status(mapped.status).json(mapped.body);

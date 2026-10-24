@@ -3,7 +3,10 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BillsService } from '../bills/bills.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
-import { JobRunner, PrismaAdvisoryJobLock, type JobTriggerName } from './job-runner.js';
+import { ConfigService } from '@nestjs/config';
+import { JobRunner, PrismaAdvisoryJobLock, type JobTriggerName, type JobStatus } from './job-runner.js';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
+import { AlertService } from '../../common/alerts/alert.service.js';
 import {
   SYSTEM_OPERATOR,
   TIMEZONE,
@@ -51,6 +54,9 @@ export class SchedulerService {
     private readonly notificationsService: NotificationsService,
     @Optional() dailyJobsService?: SchedulerDailyJobsService,
     @Optional() monthlyBillsService?: SchedulerMonthlyBillsService,
+    @Optional() private readonly metrics?: MetricsService,
+    @Optional() private readonly alerts?: AlertService,
+    @Optional() private readonly config?: ConfigService,
   ) {
     this.dailyJobsService =
       dailyJobsService ??
@@ -94,7 +100,32 @@ export class SchedulerService {
       'monthly-bill-generation': () => this.generateMonthlyBills(),
       'notification-cleanup': () => this.cleanupExpiredNotifications(),
     };
-    return new JobRunner(this.prisma, new PrismaAdvisoryJobLock(this.prisma)).run(name, trigger, jobs[name]);
+    const ttlSeconds = Number(this.config?.get<string>('SCHEDULER_LOCK_TTL_SECONDS') ?? 900);
+    const lockTtlMs = (Number.isFinite(ttlSeconds) && ttlSeconds > 0 ? ttlSeconds : 900) * 1000;
+    const observer = (jobName: string, status: JobStatus, detail?: unknown) => {
+      this.metrics?.schedulerRun(jobName, status);
+      if (status === 'FAILED' || status === 'PARTIAL') {
+        const count =
+          typeof detail === 'object' && detail !== null && Array.isArray((detail as { errors?: unknown[] }).errors)
+            ? (detail as { errors: unknown[] }).errors.length
+            : undefined;
+        void this.alerts?.send({
+          title: `定时任务${status === 'FAILED' ? '失败' : '部分失败'}`,
+          severity: status === 'FAILED' ? 'critical' : 'error',
+          message:
+            status === 'FAILED'
+              ? `${jobName} 执行失败`
+              : `${jobName} 有 ${count ?? '若干'} 个子任务失败`,
+          dedupeKey: `scheduler:${jobName}:${status}`,
+          context: { job: jobName, status },
+        });
+      }
+    };
+    return new JobRunner(
+      this.prisma,
+      new PrismaAdvisoryJobLock(this.prisma, lockTtlMs),
+      observer,
+    ).run(name, trigger, jobs[name]);
   }
 
   /** 删除超过 180 天的通知。 */
@@ -156,6 +187,7 @@ export class SchedulerService {
       summary.prepayNotificationsSent = await this.notifyLowBalancePrepay();
     });
 
+    this.metrics?.setOverdueBills(summary.billsOverdue);
     this.logger.log(`每日任务完成：${JSON.stringify(summary)}`);
     return summary;
   }
