@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `feature/T275-fin-10-metrics-export`
-> 集成基準: `origin/develop` @ `0230551`
+> 分支: `develop`
+> 集成基準: `origin/develop` @ `5b0bc3c`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -36,21 +36,20 @@
 
 | 狀態 | 數量 |
 |---|---|
-| 已驗證完成 | 23 |
+| 已驗證完成 | 25 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 2 |
+| 進行中 | 0 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- **T274 抄表与计价（FIN-08）**（active，plan FIN-08，`feature/T274-fin-08-meter-billing`）
-- **T275 指标、金额格式与导出合并（FIN-10）**（active，plan FIN-10，`feature/T275-fin-10-metrics-export`）
+- 無
 
 ### 阻擋發布
 - 無
@@ -82,7 +81,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 45 | 29 | 22 | 2 | 14 |
+| 未分類 | 45 | 31 | 24 | 0 | 14 |
 
 ---
 
