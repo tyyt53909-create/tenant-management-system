@@ -988,9 +988,10 @@ model JobRun {
 
 // 20. AuditLog（审计日志）
 model AuditLog {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  id     String  @id @default(cuid())
+  /// 匿名请求（如登录失败审计）可为空
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
   action     String
   entityType String

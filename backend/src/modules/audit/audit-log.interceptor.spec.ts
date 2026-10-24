@@ -48,8 +48,13 @@ describe('AuditLogInterceptor', () => {
     expect(audit.log).not.toHaveBeenCalled();
   });
 
-  it('skips anonymous writes and health/docs endpoints', () => {
+  it('records anonymous writes with null actor', () => {
     interceptor.intercept(makeContext('POST', '/api/rooms', null), next).subscribe();
+    expect(audit.log).toHaveBeenCalledTimes(1);
+    expect(audit.log.mock.calls[0][0].userId).toBeUndefined();
+  });
+
+  it('skips health/docs endpoints', () => {
     interceptor.intercept(makeContext('POST', '/health/live'), next).subscribe();
     interceptor.intercept(makeContext('POST', '/api/docs'), next).subscribe();
     expect(audit.log).not.toHaveBeenCalled();

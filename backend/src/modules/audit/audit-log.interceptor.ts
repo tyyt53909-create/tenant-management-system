@@ -53,7 +53,6 @@ export class AuditLogInterceptor implements NestInterceptor {
     const path = request.path ?? request.url ?? '';
     if (!WRITE_METHODS.has(method) || isExcludedPath(path)) return next.handle();
     const userId = request.user?.userId;
-    if (!userId) return next.handle();
 
     return next.handle().pipe(
       tap({

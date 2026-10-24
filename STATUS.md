@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `docs/T269-backfill`
-> 集成基準: `origin/develop` @ `025d98e`
+> 分支: `feature/T270-anon-audit`
+> 集成基準: `origin/develop` @ `af5e122`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -18,7 +18,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | exit 0 |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 112 files / 1099 tests |
+| 後端單元測試 | ✅ pass | 112 files / 1100 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | exit 0 |
 | 管理後台單元測試 | ✅ pass | 17 files / 79 tests |
@@ -103,13 +103,13 @@
 
 - 資料模型：**37** 張表
 - OpenAPI 路由：**154** 條
-- 後端程式碼：**20254** 行
+- 後端程式碼：**20257** 行
 - 管理後台程式碼：**28494** 行
 - 小程序程式碼：**6643** 行
 - 文件：**143** 份
 
 ### 測試
-- 後端單元：112 files / 1099 tests
+- 後端單元：112 files / 1100 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：17 files / 79 tests
 - 小程序單元：112 tests
