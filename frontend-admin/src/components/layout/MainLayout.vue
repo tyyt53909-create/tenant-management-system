@@ -64,6 +64,8 @@ import { House, User, OfficeBuilding, Document, Wallet, Tools, Brush, Bell, Tren
 import VoucherRecognitionModal from '@/components/common/VoucherRecognitionModal.vue';
 import { useUserStore } from '@/stores/user';
 import { useNotificationStore } from '@/stores/notification';
+import { createNotificationSocket } from '@/utils/notificationSocket';
+import type { Socket } from 'socket.io-client';
 import { usePreferencesStore } from '@/stores/preferences';
 import { useManagementStore } from '@/stores/management';
 import request from '@/utils/request';
@@ -207,13 +209,36 @@ function keyboard(event: KeyboardEvent) {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); searchVisible.value = !searchVisible.value; }
   if (event.key === 'Escape') closeNav();
 }
+let notificationSocket: Socket | null = null;
+let unreadPollTimer: ReturnType<typeof setInterval> | null = null;
+function startUnreadPolling() {
+  if (unreadPollTimer) return;
+  unreadPollTimer = setInterval(() => void notificationStore.fetchUnreadCount(), 30_000);
+}
+function stopUnreadPolling() {
+  if (unreadPollTimer) clearInterval(unreadPollTimer);
+  unreadPollTimer = null;
+}
 onMounted(() => {
   void notificationStore.fetchUnreadCount();
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    notificationSocket = createNotificationSocket(() => localStorage.getItem('access_token'));
+    notificationSocket.on('notification', () => void notificationStore.fetchUnreadCount());
+    notificationSocket.on('connect', stopUnreadPolling);
+    notificationSocket.on('connect_error', startUnreadPolling);
+    notificationSocket.on('disconnect', startUnreadPolling);
+  } else {
+    startUnreadPolling();
+  }
   void management.load();
   window.addEventListener('keydown', keyboard);
   window.addEventListener('paste', handleGlobalPaste);
 });
 onUnmounted(() => {
+  notificationSocket?.disconnect();
+  notificationSocket = null;
+  stopUnreadPolling();
   window.removeEventListener('keydown', keyboard);
   window.removeEventListener('paste', handleGlobalPaste);
   searchGeneration++;
