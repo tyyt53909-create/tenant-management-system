@@ -3,10 +3,9 @@
 > 分支: `develop`
 > 集成基準: `origin/develop` @ `392cf06`
 > 發布就緒: **NO-GO**
-> Gates: 11 pass / 1 fail / 2 not-run
+> Gates: 12 pass / 0 fail / 2 not-run
 
 ### NO-GO 原因
-  - 文檔檢查: fail
   - 安全掃描: not-run
   - 人工 UAT: not-run
 
@@ -26,7 +25,7 @@
 | 小程序單元測試 | ✅ pass | 112 tests |
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
-| 文檔檢查 | ❌ fail | ❌ 文档检查失败：共 1 项错误（修复后重跑 node scripts/check-docs.js） |
+| 文檔檢查 | ✅ pass | exit 0 |
 | 整合測試 | ✅ pass | 6 files / 17 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
