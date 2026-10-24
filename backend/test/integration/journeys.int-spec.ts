@@ -144,8 +144,60 @@ describe.skip('J4 收款并发与冲正（待 FIN-05 / T264）', () => {
   it.todo('并发收款不超收；同 Idempotency-Key 只记一次；作废产生冲正');
 });
 
-describe.skip('J6 续签（待 FIN-01 / T263）', () => {
-  it.todo('续签不 409；日期不重叠；旧合同 RENEWED、新合同次日 ACTIVE');
+describe('J6 续签（真实 DB）', () => {
+  it('旧合同 ACTIVE + 新合同 DRAFT 共存，激活后旧 RENEWED / 新 ACTIVE', async () => {
+    const base = await seedBase();
+    const tenancy = await setupTenancy(app, base);
+
+    const original = await http(app)
+      .get(`/contracts/${tenancy.contractId}`)
+      .set(auth(tenancy.adminToken));
+    expect(original.status).toBe(200);
+    const oldEnd = new Date(original.body.endDate);
+    const nextStart = new Date(oldEnd.getTime() + 86_400_000);
+    const nextEnd = new Date(nextStart);
+    nextEnd.setFullYear(nextEnd.getFullYear() + 1);
+    const iso = (date: Date) => date.toISOString().slice(0, 10);
+
+    // 重叠日期必须拒绝
+    const overlap = await http(app)
+      .post(`/contracts/${tenancy.contractId}/renew`)
+      .set(auth(tenancy.adminToken))
+      .send({ startDate: iso(oldEnd), endDate: iso(nextEnd) });
+    expect(overlap.status).toBe(400);
+
+    // 正常续签：旧合同仍 ACTIVE，新合同 DRAFT（不会再撞唯一索引）
+    const renewed = await http(app)
+      .post(`/contracts/${tenancy.contractId}/renew`)
+      .set(auth(tenancy.adminToken))
+      .send({ startDate: iso(nextStart), endDate: iso(nextEnd), rentAmount: 320000 });
+    expect(renewed.status, JSON.stringify(renewed.body)).toBe(201);
+    expect(renewed.body.status).toBe('DRAFT');
+    expect(renewed.body.renewedFromId).toBe(tenancy.contractId);
+
+    // 同一合同不得重复续签
+    const again = await http(app)
+      .post(`/contracts/${tenancy.contractId}/renew`)
+      .set(auth(tenancy.adminToken))
+      .send({ startDate: iso(nextStart), endDate: iso(nextEnd) });
+    expect(again.status).toBe(409);
+
+    // 激活续签合同：同一事务内旧合同 RENEWED、新合同 ACTIVE
+    const activate = await http(app)
+      .patch(`/contracts/${renewed.body.id}`)
+      .set(auth(tenancy.adminToken))
+      .send({ status: 'ACTIVE' });
+    expect(activate.status, JSON.stringify(activate.body)).toBe(200);
+    expect(activate.body.status).toBe('ACTIVE');
+
+    const oldAfter = await http(app)
+      .get(`/contracts/${tenancy.contractId}`)
+      .set(auth(tenancy.adminToken));
+    expect(oldAfter.body.status).toBe('RENEWED');
+
+    const room = await http(app).get(`/rooms/${tenancy.roomId}`).set(auth(tenancy.adminToken));
+    expect(room.body.status).toBe('OCCUPIED');
+  });
 });
 
 describe.skip('J7 退租→保洁→可租（待 FIN-07 / T273）', () => {

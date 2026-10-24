@@ -83,17 +83,33 @@ export class ContractsService {
     if (original.status === 'TERMINATED') {
       throw new BadRequestException('已终止的合同不能续签');
     }
+    if (original.status === 'DRAFT') {
+      throw new BadRequestException('草稿合同尚未生效，不能续签');
+    }
     if (original.status === 'RENEWED' || original.renewedTo) {
       throw new ConflictException('该合同已续签，请勿重复操作');
     }
 
+    const originalEnd = new Date(original.endDate);
     const startDate = dto.startDate
       ? new Date(dto.startDate)
-      : new Date(new Date(original.endDate).getTime() + 24 * 60 * 60 * 1000);
+      : new Date(originalEnd.getTime() + 24 * 60 * 60 * 1000);
     const endDate = new Date(dto.endDate);
 
     if (endDate <= startDate) {
       throw new BadRequestException('新合同到期日必须晚于起始日');
+    }
+    // 续签不得与原合同重叠：新合同必须从原合同到期日之后开始（日期为闭区间）
+    if (startDate <= originalEnd) {
+      throw new BadRequestException('续签合同的起始日必须晚于原合同到期日');
+    }
+
+    // 同一房源不允许存在其他未结束的 DRAFT（旧索引已改为只约束 ACTIVE，这里由应用层兜底）
+    const otherDraft = await this.findOtherOpenContract(this.prisma, original.roomId, original.id);
+    if (otherDraft) {
+      throw new ConflictException(
+        `该房源已有未结束的合同（${otherDraft.contractNumber}，状态 ${otherDraft.status}），请先处理后再续签`,
+      );
     }
 
     const contractNumber = `C${Date.now()}${randomHex(3)}`;
@@ -209,13 +225,35 @@ export class ContractsService {
       // 同房源唯一未结束合同（docs/04 §2.4）不能只在 create() 检查：续签会为同一房间
       // 新建一份 DRAFT（旧合同仍 ACTIVE），此时若把新 DRAFT 提前置为 ACTIVE，就会同房间
       // 两份 ACTIVE 合同 → 同月两笔租金账单（月账单幂等键是 contractId+period，不含 roomId）。
+      let renewedOldId: string | undefined;
       if (statusChanged && dto.status === 'ACTIVE') {
         const other = await this.findOtherOpenContract(tx, contract.roomId, id);
         if (other) {
-          throw new ConflictException(
-            `该房源已有未结束的合同（${other.contractNumber}，状态 ${other.status}），不能同时存在两份生效/草稿合同`,
-          );
+          // 续签激活：允许「旧合同 ACTIVE + 新合同 DRAFT」共存，但必须在同一事务内
+          // 把旧合同置为 RENEWED，再激活新合同，避免同房间两份 ACTIVE。
+          const isRenewalOfActive =
+            !!contract.renewedFromId &&
+            contract.renewedFromId === other.id &&
+            other.status === 'ACTIVE';
+          if (!isRenewalOfActive) {
+            throw new ConflictException(
+              `该房源已有未结束的合同（${other.contractNumber}，状态 ${other.status}），不能同时存在两份生效/草稿合同`,
+            );
+          }
+          const oldEnd = new Date(other.endDate);
+          const newStart = dto.startDate ? new Date(dto.startDate) : contract.startDate;
+          if (newStart <= oldEnd) {
+            throw new ConflictException('续签合同的起始日必须晚于原合同到期日');
+          }
+          renewedOldId = other.id;
         }
+      }
+
+      if (renewedOldId) {
+        await tx.contract.update({
+          where: { id: renewedOldId },
+          data: { status: 'RENEWED' },
+        });
       }
 
       const updated = await tx.contract.update({ where: { id }, data: updateData });
@@ -262,7 +300,7 @@ export class ContractsService {
         status: { in: ['DRAFT', 'ACTIVE'] },
         ...(excludeId ? { id: { not: excludeId } } : {}),
       },
-      select: { contractNumber: true, status: true },
+      select: { id: true, contractNumber: true, status: true, endDate: true },
     });
   }
 

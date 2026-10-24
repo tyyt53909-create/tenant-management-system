@@ -15,6 +15,7 @@ describe('ContractsService（租客隔离，T148）', () => {
     const prismaMock: any = {
       contract: {
         findUnique: vi.fn(),
+        findFirst: vi.fn().mockResolvedValue(null),
         findMany: vi.fn(),
         count: vi.fn(),
         create: vi.fn(),
@@ -166,6 +167,27 @@ describe('ContractsService（租客隔离，T148）', () => {
       await expect(service.renew('contract-old', { endDate: '2027-12-31' } as any)).rejects.toThrow(
         ConflictException,
       );
+    });
+
+    it('草稿合同不能续签 → 400', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ ...original, status: 'DRAFT' });
+
+      await expect(service.renew('contract-old', { endDate: '2027-12-31' } as any)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.contract.create).not.toHaveBeenCalled();
+    });
+
+    it('新起始日不晚于原到期日 → 400（日期不重叠）', async () => {
+      prisma.contract.findUnique.mockResolvedValue(original);
+
+      await expect(
+        service.renew('contract-old', {
+          startDate: '2026-12-31',
+          endDate: '2027-12-31',
+        } as any),
+      ).rejects.toThrow('续签合同的起始日必须晚于原合同到期日');
+      expect(prisma.contract.create).not.toHaveBeenCalled();
     });
 
     it('已终止合同 → 400', async () => {
