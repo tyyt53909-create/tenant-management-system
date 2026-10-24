@@ -77,6 +77,22 @@ describe('SchedulerService（定时任务）', () => {
       expect(result).toEqual({ activated: 1, expired: 0 });
     });
 
+    it('01:00 上海（UTC 前一日 17:00）按业务日选合同：当天起始的 DRAFT 不再晚一天激活', async () => {
+      // 2026-10-13T17:00Z = 2026-10-14 01:00（上海），业务日是 10-14。
+      // 合同 startDate 按 UTC 零点存储（10-14T00:00Z），用 now 比较会漏选。
+      vi.setSystemTime(new Date('2026-10-13T17:00:00.000Z'));
+      prisma.contract.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await service.autoTransitionContracts();
+
+      expect(prisma.contract.findMany).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: { status: 'DRAFT', startDate: { lte: new Date('2026-10-14T00:00:00.000Z') } },
+        }),
+      );
+    });
+
     it('续签 DRAFT 生效：先置旧合同 RENEWED，再激活新合同', async () => {
       prisma.contract.findMany
         .mockResolvedValueOnce([

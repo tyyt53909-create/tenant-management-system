@@ -35,8 +35,10 @@ export class SchedulerDailyJobsService {
     const today = startOfTodayUtc(now);
 
     // DRAFT → ACTIVE（生效日到达）
+    // 用业务日零点而不是 now：01:00 上海执行时 now 仍是前一 UTC 日 17:00，
+    // 当天起始日（UTC 零点）会晚约 24 小时才被激活（审查发现）。
     const draftContracts = await this.prisma.contract.findMany({
-      where: { status: 'DRAFT', startDate: { lte: now } },
+      where: { status: 'DRAFT', startDate: { lte: today } },
       select: { id: true, roomId: true, startDate: true, renewedFromId: true },
     });
 

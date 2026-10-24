@@ -9,6 +9,11 @@ import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { LateFeeUtil, LateFeeRule } from './utils/late-fee.util.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
+import { randomHex } from '../../common/utils/secure-random.js';
+import {
+  formatBusinessDate,
+  formatBusinessDateTime,
+} from '../../common/business-clock/business-clock.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { isUniqueConstraintError } from '../../common/utils/prisma-error.js';
 import { rentBillDedupKey } from '../../common/utils/duplicate-keys.js';
@@ -121,8 +126,8 @@ export class BillsService {
       throw new BadRequestException('合同不存在');
     }
 
-    // 生成账单编号
-    const billNumber = `B${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    // 生成账单编号：加密随机串，禁止 Math.random（AGENTS 14.4）
+    const billNumber = `B${Date.now()}${randomHex(3)}`;
     const dedupKey = dto.billType === 'RENT' ? rentBillDedupKey(dto.contractId, dto.period) : null;
 
     try {
@@ -365,6 +370,13 @@ export class BillsService {
   }
 
   /**
+   * 作废收款并生成冲正（FIN-05）
+   */
+  async voidPayment(billId: string, paymentId: string, operatorId: string, reason: string) {
+    return this.paymentService.voidPayment(billId, paymentId, operatorId, reason);
+  }
+
+  /**
    * 添加 / 刷新滞纳金（docs/04-状态机.md §3.4、docs/02-数据模型.md §2.9）
    */
   async addLateFee(billId: string, dto: CreateLateFeeDto, operatorId: string, referenceDate?: Date) {
@@ -429,9 +441,15 @@ export class BillsService {
           return summary.amount !== null ? centsToYuanString(summary.amount) : '0.00';
         },
       },
-      { header: '到期日期', formatter: (b) => (b.dueDate ? new Date(b.dueDate).toISOString().slice(0, 10) : '') },
+      {
+        header: '到期日期',
+        formatter: (b) => (b.dueDate ? formatBusinessDate(new Date(b.dueDate)) : ''),
+      },
       { header: '状态', formatter: (b) => BILL_STATUS_LABEL[b.status] || b.status },
-      { header: '创建时间', formatter: (b) => (b.createdAt ? new Date(b.createdAt).toLocaleString('zh-CN') : '') },
+      {
+        header: '创建时间',
+        formatter: (b) => (b.createdAt ? formatBusinessDateTime(new Date(b.createdAt)) : ''),
+      },
     ];
 
     return generateCsv(columns, bills);

@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsEnum, IsDateString, IsOptional, Min } from 'class-validator';
+import { IsString, IsInt, IsEnum, IsDateString, IsOptional, Min, MaxLength } from 'class-validator';
 
 export enum PaymentMethod {
   CASH = 'CASH',
@@ -25,6 +25,12 @@ export class CreatePaymentDto {
   @IsString()
   @IsOptional()
   transactionNumber?: string;
+
+  /** 幂等键：同键同账单同金额重放返回原收款（也可用 Idempotency-Key 头） */
+  @IsString()
+  @IsOptional()
+  @MaxLength(128, { message: '幂等键过长' })
+  idempotencyKey?: string;
 
   /** 收款时间（缺省为当前时间） */
   @IsDateString({}, { message: '收款时间格式不正确' })

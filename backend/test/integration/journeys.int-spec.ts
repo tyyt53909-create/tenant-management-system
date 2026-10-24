@@ -140,8 +140,95 @@ describe.skip('J3 逾期与催缴（待 FIN-04 / T272）', () => {
   it.todo('逾期 +1 天标记；滞纳金按日累计；−3/0/+1/+3/+7 各提醒一次');
 });
 
-describe.skip('J4 收款并发与冲正（待 FIN-05 / T264）', () => {
-  it.todo('并发收款不超收；同 Idempotency-Key 只记一次；作废产生冲正');
+describe('J4 收款并发与冲正（真实 DB）', () => {
+  it('并发不超收；幂等键只记一次；作废生成冲正并回退账单', async () => {
+    const base = await seedBase();
+    const tenancy = await setupTenancy(app, base);
+
+    const due = new Date();
+    due.setDate(due.getDate() + 7);
+    const billResponse = await http(app)
+      .post('/bills')
+      .set(auth(tenancy.adminToken))
+      .send({
+        contractId: tenancy.contractId,
+        billType: 'RENT',
+        period: '2099-01',
+        amount: 100000,
+        dueDate: due.toISOString().slice(0, 10),
+        snapshot: { source: 'integration' },
+      });
+    expect(billResponse.status, JSON.stringify(billResponse.body)).toBe(201);
+    const billId = billResponse.body.id as string;
+
+    // 并发两笔 60000：只允许一笔成功，账单不得超收
+    const [first, second] = await Promise.all([
+      http(app)
+        .post(`/bills/${billId}/payments`)
+        .set(auth(tenancy.adminToken))
+        .send({ amount: 60000, paymentMethod: 'CASH', transactionNumber: 'CONCURRENT-A' }),
+      http(app)
+        .post(`/bills/${billId}/payments`)
+        .set(auth(tenancy.adminToken))
+        .send({ amount: 60000, paymentMethod: 'CASH', transactionNumber: 'CONCURRENT-B' }),
+    ]);
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([201, 400]);
+
+    const afterConcurrent = await http(app)
+      .get(`/bills/${billId}`)
+      .set(auth(tenancy.adminToken));
+    expect(afterConcurrent.body.paidAmount).toBe(60000);
+
+    // Idempotency-Key：同键重放返回同一笔收款
+    const payIdem = () =>
+      http(app)
+        .post(`/bills/${billId}/payments`)
+        .set(auth(tenancy.adminToken))
+        .set('Idempotency-Key', 'itest-idem-1')
+        .send({ amount: 10000, paymentMethod: 'CASH' });
+    const idem1 = await payIdem();
+    const idem2 = await payIdem();
+    expect(idem1.status).toBe(201);
+    expect(idem2.status).toBe(201);
+    expect(idem2.body.payment.id).toBe(idem1.body.payment.id);
+    expect(idem1.body.payment.receiptNumber).toMatch(/^R\d{8}\d{6}$/);
+
+    const afterIdem = await http(app)
+      .get(`/bills/${billId}`)
+      .set(auth(tenancy.adminToken));
+    expect(afterIdem.body.paidAmount).toBe(70000);
+
+    // 作废第一笔 60000：生成 -60000 冲正，账单回退到 10000
+    const paymentId = (first.status === 201 ? first : second).body.payment.id as string;
+    const voided = await http(app)
+      .post(`/bills/${billId}/payments/${paymentId}/void`)
+      .set(auth(tenancy.adminToken))
+      .send({ reason: '集成测试作废' });
+    expect(voided.status, JSON.stringify(voided.body)).toBe(201);
+    expect(voided.body.reversal.amount).toBe(-60000);
+
+    const afterVoid = await http(app)
+      .get(`/bills/${billId}`)
+      .set(auth(tenancy.adminToken));
+    expect(afterVoid.body.paidAmount).toBe(10000);
+    expect(afterVoid.body.status).toBe('PARTIAL');
+
+    const payments = await http(app)
+      .get(`/bills/${billId}/payments`)
+      .set(auth(tenancy.adminToken));
+    const rows = payments.body as Array<{ id: string; status: string; amount: number }>;
+    expect(rows.some((row) => row.id === paymentId && row.status === 'VOIDED')).toBe(true);
+    expect(rows.some((row) => row.status === 'REVERSAL' && row.amount === -60000)).toBe(true);
+
+    // 重复作废幂等
+    const again = await http(app)
+      .post(`/bills/${billId}/payments/${paymentId}/void`)
+      .set(auth(tenancy.adminToken))
+      .send({ reason: '重复作废' });
+    expect(again.status).toBe(201);
+    expect(again.body.idempotent).toBe(true);
+  });
 });
 
 describe('J6 续签（真实 DB）', () => {

@@ -103,6 +103,13 @@ enum BillStatus {
   CANCELLED // 已取消
 }
 
+// 收款记录状态（FIN-05）
+enum PaymentStatus {
+  CONFIRMED // 已确认
+  VOIDED // 已作废（原记录保留）
+  REVERSAL // 冲正记录（金额为负）
+}
+
 // 付款方式
 enum PaymentMethod {
   CASH // 现金
@@ -563,6 +570,28 @@ model PaymentRecord {
   paymentMethod     PaymentMethod
   transactionNumber String?
 
+  status PaymentStatus @default(CONFIRMED)
+
+  /// 客户端幂等键（全局唯一）；同一键重放返回原收款
+  idempotencyKey String? @unique
+  /// 收据号：R{业务日}{6 位序号}，由数据库序列原子分配
+  receiptNumber  String? @unique
+
+  /// 本次收款分配到账单本金/滞纳金的金额（用于精确冲正）
+  billPortion    Int  @default(0)
+  lateFeePortion Int  @default(0)
+  /// [{ lateFeeId, amount }]，按冲正需要精确回滚
+  lateFeeAllocations Json?
+
+  voidedAt   DateTime?
+  voidedBy   String?
+  voidReason String?   @db.Text
+
+  /// 冲正记录指向原收款；一条收款最多一条冲正
+  reversalOfId String?         @unique
+  reversalOf   PaymentRecord?  @relation("PaymentReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal     PaymentRecord?  @relation("PaymentReversal")
+
   paidAt      DateTime @db.Timestamp
   confirmedBy String
   notes       String?  @db.Text
@@ -572,6 +601,7 @@ model PaymentRecord {
   @@unique([billId, transactionNumber])
   @@index([billId])
   @@index([paidAt])
+  @@index([status])
   @@map("payment_records")
 }
 

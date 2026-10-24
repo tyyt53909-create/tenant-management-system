@@ -55,6 +55,7 @@
 
 ## 3. 任务与交接
 
+- [T264-FIN-05-收款正确性.md](../tasks/T264-FIN-05-收款正确性.md)：FIN-05，行锁失败上抛、Idempotency-Key、收据序列号、作废冲正与滞纳金精确回滚。
 - [T263-FIN-01-合同状态机与续签修复.md](../tasks/T263-FIN-01-合同状态机与续签修复.md)：FIN-01，续签唯一约束改为 ACTIVE-only、日期不重叠、激活事务先 RENEWED、定时任务同步。
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08，CI 统一 Node 22、生产依赖审计与镜像扫描门禁、staging 编排/部署 workflow/冒烟脚本。
@@ -69,10 +70,12 @@
 - [T253-OPS-02-Node24与优雅关闭.md](../tasks/T253-OPS-02-Node24与优雅关闭.md)：OPS-02，生产镜像升级 Node 24 LTS、SIGTERM 优雅关闭与 25s 看门狗、Redis 停机 QUIT、容器只读根文件系统与最小权限。
 - [T252-OPS-01-生产可启动性.md](../tasks/T252-OPS-01-生产可启动性.md)：OPS-01，环境变量集中校验、Redis URL/密码与断线重连、`/health/live`、生产模板与一致性门禁。
 - [T250-M0生产化收口.md](../tasks/T250-M0生产化收口.md)：M0 治理收口（docs/19 路线图、T250–T314 编号、DEC 登记、任务书 schema、STATUS 真实化）；不改业务代码。
+- [T264-FIN-05-收款正确性.md](../tasks/T264-FIN-05-收款正确性.md)：FIN-05，行锁失败上抛、Idempotency-Key、收据序列号、作废冲正与滞纳金精确回滚。
 - [T263-FIN-01-合同状态机与续签修复.md](../tasks/T263-FIN-01-合同状态机与续签修复.md)：FIN-01，续签唯一约束改为 ACTIVE-only、日期不重叠、激活事务先 RENEWED、定时任务同步。
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-24-T264-收款正确性.md](./handoff/2026-10-24-T264-收款正确性.md)：T264，行锁失败上抛、Idempotency-Key、收据序列、作废冲正与滞纳金精确回滚。
 - [2026-10-24-T263-合同状态机与续签修复.md](./handoff/2026-10-24-T263-合同状态机与续签修复.md)：T263，续签唯一约束改为 ACTIVE-only、日期不重叠、激活事务先 RENEWED、定时任务同步。
 - [2026-10-24-T255-真实数据库测试骨架.md](./handoff/2026-10-24-T255-真实数据库测试骨架.md)：T255，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [2026-10-24-T251-CI闸门与staging.md](./handoff/2026-10-24-T251-CI闸门与staging.md)：T251，CI 统一 Node 22、生产依赖审计与镜像扫描、staging 编排/部署 workflow/冒烟脚本。

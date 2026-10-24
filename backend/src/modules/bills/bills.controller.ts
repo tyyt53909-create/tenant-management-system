@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res, Headers } from '@nestjs/common';
 import type { Response } from 'express';
 import { BillsService } from './bills.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
@@ -6,6 +6,7 @@ import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
 import { QueryBillsDto } from './dto/query-bills.dto.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
+import { VoidPaymentDto } from './dto/void-payment.dto.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -110,9 +111,32 @@ export class BillsController {
   @Post(':id/payments')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  addPayment(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string, @Body() dto: CreatePaymentDto) {
+  addPayment(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto: CreatePaymentDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
     const user = resolveAuthUser(userParam);
-    return this.billsService.addPayment(id, dto, user.userId);
+    const payload = {
+      ...dto,
+      idempotencyKey: dto.idempotencyKey ?? idempotencyKey ?? undefined,
+    };
+    return this.billsService.addPayment(id, payload, user.userId);
+  }
+
+  // 作废收款并生成冲正（管理者）
+  @Post(':id/payments/:paymentId/void')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  voidPayment(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+    @Body() dto: VoidPaymentDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.billsService.voidPayment(id, paymentId, user.userId, dto.reason);
   }
 
   // 账单收款流水（管理者）

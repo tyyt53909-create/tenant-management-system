@@ -66,6 +66,31 @@ export function formatBusinessDate(
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+/**
+ * 业务时区的日期时间 YYYY-MM-DD HH:mm:ss。
+ *
+ * 用于导出里的 `createdAt` 等真实时间戳：`toLocaleString()` 依赖进程 TZ，
+ * 容器（UTC）与本地（Asia/Shanghai）会导出差 8 小时的数据。
+ */
+export function formatBusinessDateTime(
+  date: Date = new Date(),
+  timeZone: string = DEFAULT_BUSINESS_TIMEZONE,
+): string {
+  const formatted = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const pick = (type: string): string =>
+    formatted.find((part) => part.type === type)?.value ?? '';
+  return `${pick('year')}-${pick('month')}-${pick('day')} ${pick('hour')}:${pick('minute')}:${pick('second')}`;
+}
+
 /** 业务月 YYYY-MM。 */
 export function businessMonthKey(
   date: Date = new Date(),

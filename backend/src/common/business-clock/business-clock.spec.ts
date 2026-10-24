@@ -7,6 +7,7 @@ import {
   endOfMonthUtc,
   endOfQuarterUtc,
   formatBusinessDate,
+  formatBusinessDateTime,
   getBusinessParts,
   isValidTimeZone,
   parseDateOnly,
@@ -25,6 +26,15 @@ describe('BusinessClock 纯函数', () => {
     expect(startOfBusinessDayUtc(SHANGHAI_NEW_YEAR, 'Asia/Shanghai').toISOString()).toBe(
       '2026-01-01T00:00:00.000Z',
     );
+  });
+
+  it('业务日期时间按业务时区格式化，与进程 TZ 无关', () => {
+    // 2026-10-01T17:30Z = 2026-10-02 01:30（上海）
+    expect(formatBusinessDateTime(SHANGHAI_NEW_YEAR, 'Asia/Shanghai')).toBe('2026-01-01 00:30:00');
+    expect(formatBusinessDateTime(SHANGHAI_NEW_YEAR, 'UTC')).toBe('2025-12-31 16:30:00');
+    expect(
+      formatBusinessDateTime(new Date('2026-10-01T17:30:00.000Z'), 'Asia/Shanghai'),
+    ).toBe('2026-10-02 01:30:00');
   });
 
   it('业务日/月键按业务时区计算', () => {

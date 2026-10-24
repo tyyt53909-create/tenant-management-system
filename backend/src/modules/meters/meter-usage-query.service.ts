@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Prisma, MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { formatBusinessDateTime } from '../../common/business-clock/business-clock.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
@@ -68,7 +69,7 @@ export class MeterUsageQueryService {
       { header: '本次读数', formatter: (r) => Number(r.currentReading).toFixed(2) },
       { header: '用量', formatter: (r) => Number(r.usage).toFixed(2) },
       { header: '单价(元)', formatter: (r) => centsToYuanString(r.meter?.unitPrice ?? 0) },
-      { header: '抄表时间', formatter: (r) => (r.readingTime ? new Date(r.readingTime).toLocaleString('zh-CN') : '') },
+      { header: '抄表时间', formatter: (r) => (r.readingTime ? formatBusinessDateTime(new Date(r.readingTime)) : '') },
       { header: '抄表人', key: 'readBy' },
       { header: '备注', key: 'notes' },
     ];

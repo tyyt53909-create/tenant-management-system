@@ -322,6 +322,8 @@ describe('CheckoutService', () => {
       expect(csv.startsWith('\uFEFF')).toBe(true);
       expect(csv).toContain('退租记录ID,房间号,租客姓名,租客电话,合同ID,退租日期,明细项数,实退总额(元),经办人,状态,创建时间,备注');
       expect(csv).toContain('chk-1,202,赵六,13600000004,contract-1,2026-10-12,2,1800.00,admin,已完成');
+      // 创建时间按业务时区（Asia/Shanghai）输出，不随进程 TZ 变化
+      expect(csv).toContain('2026-10-12 08:00:00');
     });
   });
 

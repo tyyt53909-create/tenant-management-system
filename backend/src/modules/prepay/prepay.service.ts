@@ -9,6 +9,7 @@ import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
+import { formatBusinessDateTime } from '../../common/business-clock/business-clock.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 
 @Injectable()
@@ -347,7 +348,7 @@ export class PrepayService {
       { header: '第三方交易号', formatter: (t) => ((t as Record<string, unknown>).transactionNumber as string) || t.relatedId || '' },
       { header: '说明', key: 'description' },
       { header: '经办人', key: 'operatorId' },
-      { header: '时间', formatter: (t) => (t.createdAt ? new Date(t.createdAt).toLocaleString('zh-CN') : '') },
+      { header: '时间', formatter: (t) => (t.createdAt ? formatBusinessDateTime(new Date(t.createdAt)) : '') },
     ];
 
     return generateCsv(columns, transactions);
