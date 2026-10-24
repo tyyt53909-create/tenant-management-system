@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { QueryAuditLogsDto } from './dto/query-audit-logs.dto.js';
 
 export interface AuditRecord {
-  userId: string;
+  userId?: string;
   action: string;
   entityType: string;
   entityId: string;
@@ -17,7 +17,10 @@ export class AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
 
   async log(record: AuditRecord) {
-    return this.prisma.auditLog.create({ data: { ...record, changes: record.changes as never } });
+    // AuditLog.userId is a required FK. Never invent an actor for anonymous requests.
+    const userId = record.userId;
+    if (!userId) return null;
+    return this.prisma.auditLog.create({ data: { ...record, userId, changes: record.changes as never } });
   }
 
   async findAll(query: QueryAuditLogsDto) {
