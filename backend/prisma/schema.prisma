@@ -200,6 +200,12 @@ enum UserRole {
   TENANT // 租客
 }
 
+// 外部身份提供方（SEC-04）。后续微信/手机号身份在此扩展，不再往 User 加列。
+enum IdentityProvider {
+  GOOGLE
+  EMAIL
+}
+
 // 邀请码状态
 enum InviteCodeStatus {
   UNUSED // 未使用
@@ -409,11 +415,14 @@ model User {
 
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
+  /// 邮箱/第三方邮箱已验证时间（SEC-04）；null 表示尚未验证
+  emailVerifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tenant              Tenant?
+  identities          UserIdentity[]
   auditLogs           AuditLog[]
   notifications       Notification[]
   deviceTokens        DeviceToken[]
@@ -427,6 +436,26 @@ model User {
   @@index([googleId])
   @@index([role, isActive])
   @@map("users")
+}
+
+// 5.1 UserIdentity（外部身份绑定，SEC-04）
+model UserIdentity {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider       IdentityProvider
+  /// GOOGLE 存 sub；EMAIL 存规范化后的邮箱
+  providerUserId String
+  email          String?
+  emailVerifiedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@map("user_identities")
 }
 
 // 6. Contract（合同）

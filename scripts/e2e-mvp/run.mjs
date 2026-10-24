@@ -148,14 +148,15 @@ async function main() {
   let tenantUserEmail, tenantPassword = 'Tenant@123';
   const tenant = await step('3 创建租客并注册账号', async () => {
     const phone = '139' + uid.padStart(8, '0').slice(0, 8);
+    // T260 / DEC-03：注册要求「预建租客 + 邀请码」，邮箱必须写在预建档案上才能精确匹配
+    tenantUserEmail = 'e2e-tenant-' + uid + '@example.com';
     const res = await api('POST', '/tenants', {
       token: adminToken,
-      body: { name: 'E2E租客' + uid, phone },
+      body: { name: 'E2E租客' + uid, phone, email: tenantUserEmail },
     });
     expectStatus(res, 201, '创建租客');
     assert(res.data.id, '缺少租客 id');
-
-    tenantUserEmail = 'e2e-tenant-' + uid + '@example.com';
+    const preTenantId = res.data.id;
 
     // 优先动态生成邀请码（T148 新增 POST /auth/invite-codes），保证脚本可重复运行；
     // 生成失败时回退到 INVITE_CODE 环境变量/默认值。
@@ -177,8 +178,8 @@ async function main() {
       return { detail: res.data.name + '（未注册登录账号，后续租客步骤将跳过）', value: res.data };
     }
 
-    // 关键：注册会新建一条 Tenant 记录（与管理员手工建的 tenant 不是同一条）。
-    // 租客侧接口（报修、账单）以服务端推导的 user.tenantId 为准，因此必须改用注册产生的租客档案。
+    // T260 / DEC-03：注册只绑定预建 Tenant，不再新建档案。
+    // 租客侧接口（报修、账单）以服务端推导的 user.tenantId 为准，这里应仍是管理员预建的同一个 id。
     const regLogin = await api('POST', '/auth/login', {
       body: { identifier: tenantUserEmail, password: tenantPassword },
     });
@@ -194,7 +195,7 @@ async function main() {
       tenantUserEmail = null;
       return { detail: res.data.name + '（未绑定租客档案）', value: res.data };
     }
-    // 后续步骤统一使用注册产生的租客档案
+    assert(bound.id === preTenantId, '注册后应绑定预建租客 ' + preTenantId + '，实际 ' + bound.id);
     res.data = bound;
     record('3b 租客账号注册并绑定档案', true, tenantUserEmail + ' -> tenant ' + bound.id);
     return { detail: bound.name + ' + 账号 ' + tenantUserEmail, value: bound };

@@ -59,6 +59,16 @@
             </view>
           </view>
 
+          <view class="input-group">
+            <text class="label">邀请码（首次登录必填）</text>
+            <input
+              class="input"
+              v-model="emailForm.inviteCode"
+              placeholder="管理员发放的 INVITE-… 邀请码"
+              placeholder-class="placeholder"
+            />
+          </view>
+
           <button class="btn-login" :loading="emailLoading" :disabled="emailLoading" @tap="handleEmailLogin">
             登录 / 免密进入
           </button>
@@ -116,7 +126,7 @@
 
         <!-- 贴心指引 -->
         <view class="tips">
-          <text class="tips-hint">✨ 首次登录自动创建租客账户；已有房源邀请码可于登录后在个人中心随时绑定关联。</text>
+          <text class="tips-hint">🔑 租客账号由管理员预建并发放邀请码；首次登录时请填写邀请码，未受邀邮箱无法开通。</text>
         </view>
       </view>
     </view>
@@ -139,7 +149,8 @@ export default {
       loginType: 'email', // 'email' | 'password'
       emailForm: {
         email: '',
-        code: ''
+        code: '',
+        inviteCode: ''
       },
       form: {
         account: '',
@@ -226,7 +237,8 @@ export default {
 
       this.emailLoading = true
       try {
-        const res = await loginWithEmailCode({ email, code })
+        const inviteCode = (this.emailForm.inviteCode || '').trim()
+        const res = await loginWithEmailCode({ email, code, ...(inviteCode ? { inviteCode } : {}) })
         uni.setStorageSync('access_token', res.accessToken)
         uni.setStorageSync('refresh_token', res.refreshToken)
         uni.setStorageSync('user_role', res.user.role)

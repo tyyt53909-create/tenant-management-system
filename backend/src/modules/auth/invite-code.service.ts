@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import type { Prisma, UserRole, InviteCodeStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { randomHex } from '../../common/utils/secure-random.js';
@@ -133,14 +134,22 @@ export class InviteCodeService {
   ): Promise<void> {
     const db = tx ?? this.prisma;
     if (db.inviteCode) {
-      await db.inviteCode.updateMany({
-        where: { code: code.trim(), status: 'UNUSED' },
+      const result = await db.inviteCode.updateMany({
+        where: {
+          code: code.trim(),
+          status: 'UNUSED',
+          expiresAt: { gt: new Date() },
+        },
         data: {
           status: 'USED',
           usedById,
           usedAt: new Date(),
         },
       });
+      // 并发核销时只有一个请求能把 UNUSED 改成 USED，其余必须整体回滚（T260）。
+      if (result.count === 0) {
+        throw apiError(ErrorCode.AUTH_INVITE_CODE_CONFLICT);
+      }
     }
   }
 

@@ -1754,6 +1754,8 @@ export interface components {
             /** Format: email */
             email: string;
             code: string;
+            /** @description 首次登录必须携带邀请码（DEC-03：禁止自动成为租客）。 */
+            inviteCode?: string;
         };
         BindInviteCodeDto: {
             inviteCode: string;

@@ -80,6 +80,11 @@ describe('AuthController', () => {
               create: vi.fn(),
               update: vi.fn(),
             },
+            userIdentity: {
+              create: vi.fn(),
+              upsert: vi.fn(),
+              findFirst: vi.fn(),
+            },
             tenant: {
               create: vi.fn(),
               findFirst: vi.fn(),
@@ -102,26 +107,31 @@ describe('AuthController', () => {
     prisma = module.get<PrismaService>(PrismaService);
   });
 
-  /** 桩事务：返回可断言的 tenant.create 与 user.update（注册路径共用） */
+  /** 桩事务：注册路径建 User + UserIdentity 并绑定预建 Tenant（DEC-03，不新建 Tenant） */
   function stubTransaction(userId: string) {
-    const tenantCreate = vi.fn().mockResolvedValue({});
-    // 注册成功后会在同事务内清空邀请码（一次性语义，docs/03 §4.1）
+    const tenantUpdate = vi.fn().mockResolvedValue({});
+    const identityCreate = vi.fn().mockResolvedValue({});
     const invitedByUpdate = vi.fn().mockResolvedValue({});
+    const userCreate = vi.fn().mockResolvedValue({
+      id: userId,
+      email: 'stub@example.com',
+      role: 'TENANT',
+      passwordHash: '$2b$10$stubhashstubhashstubhash',
+    });
     vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
       callback({
         user: {
-          create: vi.fn().mockResolvedValue({
-            id: userId,
-            email: 'stub@example.com',
-            role: 'TENANT',
-            passwordHash: '$2b$10$stubhashstubhashstubhash',
-          }),
+          create: userCreate,
           update: invitedByUpdate,
         },
-        tenant: { create: tenantCreate },
+        userIdentity: {
+          create: identityCreate,
+          upsert: vi.fn().mockResolvedValue({}),
+        },
+        tenant: { update: tenantUpdate, create: vi.fn().mockResolvedValue({}) },
       }),
     );
-    return { tenantCreate, invitedByUpdate };
+    return { tenantUpdate, identityCreate, invitedByUpdate, userCreate };
   }
 
   it('应该定义控制器', () => {
@@ -135,38 +145,76 @@ describe('AuthController', () => {
       inviteCode: 'INVITE-123',
     };
 
-    it('应该成功注册用户', async () => {
-      const mockUser = {
-        id: 'user-123',
-        email: dto.email,
-        role: 'TENANT',
-      };
+    beforeEach(() => {
+      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue({ id: 'tenant-pre' } as any);
+    });
 
-      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
-        valid: true,
-        invitedBy: 'admin-123',
-      });
-      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
-      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
-        return callback({
-          user: {
-            create: vi.fn().mockResolvedValue(mockUser),
-            update: vi.fn().mockResolvedValue({}),
-          },
-          tenant: {
-            create: vi.fn().mockResolvedValue({}),
-          },
-        });
+    function stubRegisterSuccess(userId = 'user-123', role = 'TENANT') {
+      const tx = stubTransaction(userId);
+      tx.userCreate.mockResolvedValue({
+        id: userId,
+        email: dto.email,
+        role,
+        passwordHash: '$2b$10$stubhashstubhashstubhash',
       });
       vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
+      return tx;
+    }
+
+    it('应该成功注册并绑定预建租客', async () => {
+      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+        valid: true,
+        invitedBy: 'admin-123',
+        role: 'TENANT',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+      const tx = stubRegisterSuccess();
 
       const result = await controller.register(dto);
 
       expect(result.accessToken).toBe('access-token');
       expect(result.user.id).toBe('user-123');
+      expect(tx.tenantUpdate).toHaveBeenCalledWith({
+        where: { id: 'tenant-pre' },
+        data: { userId: 'user-123' },
+      });
+      expect(tx.identityCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ provider: 'EMAIL', providerUserId: dto.email }),
+      });
+    });
+
+    it('邀请码 role 生效，不再硬编码 TENANT', async () => {
+      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+        valid: true,
+        invitedBy: 'admin-123',
+        role: 'CLEANER',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+      const tx = stubRegisterSuccess('user-cleaner', 'CLEANER');
+
+      const result = await controller.register({
+        ...dto,
+        email: 'cleaner@example.com',
+        inviteCode: 'INVITE-CLEANER',
+      });
+
+      expect(tx.userCreate.mock.calls[0][0].data.role).toBe('CLEANER');
+      expect(result.user.role).toBe('CLEANER');
+    });
+
+    it('没有匹配的预建租客档案时拒绝注册（403）', async () => {
+      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+        valid: true,
+        invitedBy: 'admin-123',
+        role: 'TENANT',
+      });
+      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue(null);
+
+      await expect(controller.register(dto)).rejects.toMatchObject({ status: 403 });
     });
 
     it('应该拒绝无效的邀请码', async () => {
@@ -196,10 +244,8 @@ describe('AuthController', () => {
         valid: true,
         invitedBy: 'admin-123',
       });
-      // 第一次调用（检查邮箱）返回 null
       vi.spyOn(prisma.user, 'findUnique')
         .mockResolvedValueOnce(null)
-        // 第二次调用（检查手机号）返回已存在用户
         .mockResolvedValueOnce({
           id: 'existing-user',
         } as any);
@@ -207,89 +253,29 @@ describe('AuthController', () => {
       await expect(controller.register(dtoWithPhone)).rejects.toThrow(ConflictException);
     });
 
-    it('连续注册两个不带 phone 的租客：都成功，占位手机号互不相同（BUG-1）', async () => {
+    it('注册成功后原子核销邀请码（一次性）', async () => {
       vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
         valid: true,
         invitedBy: 'admin-123',
+        role: 'TENANT',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
-      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      });
-
-      const { tenantCreate: firstTenantCreate } = stubTransaction('user-a');
-      const first = await controller.register({
-        email: 'a@example.com',
-        password: 'password123',
-        inviteCode: 'INVITE-1',
-      });
-
-      const { tenantCreate: secondTenantCreate } = stubTransaction('user-b');
-      const second = await controller.register({
-        email: 'b@example.com',
-        password: 'password123',
-        inviteCode: 'INVITE-1',
-      });
-
-      expect(first.user.id).toBe('user-a');
-      expect(second.user.id).toBe('user-b');
-
-      const firstPhone = firstTenantCreate.mock.calls[0][0].data.phone;
-      const secondPhone = secondTenantCreate.mock.calls[0][0].data.phone;
-      // 不能写空串（Tenant.phone 唯一约束），且两次注册必须得到不同的值
-      expect(firstPhone).toBe('pending-user-a');
-      expect(secondPhone).toBe('pending-user-b');
-      expect(firstPhone).not.toBe(secondPhone);
-      expect(firstPhone).not.toBe('');
-    });
-
-    it('注册成功后立即清空邀请码（一次性，docs/03 §4.1）', async () => {
-      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
-        valid: true,
-        invitedBy: 'admin-123',
-      });
-      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
-      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      });
-
-      stubTransaction('user-invite');
+      stubRegisterSuccess('user-invite');
       const consumeSpy = vi.spyOn(inviteCodeService, 'consumeInviteCode').mockResolvedValue(undefined as any);
+
       await controller.register({ ...dto, inviteCode: 'INVITE-ONCE' });
 
       expect(consumeSpy).toHaveBeenCalledWith('INVITE-ONCE', 'user-invite', expect.anything());
     });
 
-    it('提供 phone 时按用户输入写入租客档案', async () => {
+    it('注册响应不得泄露 passwordHash', async () => {
       vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
         valid: true,
         invitedBy: 'admin-123',
+        role: 'TENANT',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
-      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      });
-
-      const { tenantCreate } = stubTransaction('user-c');
-      await controller.register({ ...dto, phone: '13800138000' });
-
-      expect(tenantCreate.mock.calls[0][0].data.phone).toBe('13800138000');
-    });
-
-    it('注册响应不得泄露 passwordHash（BUG-1 顺带确认）', async () => {
-      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
-        valid: true,
-        invitedBy: 'admin-123',
-      });
-      vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
-      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      });
-      stubTransaction('user-d'); // 仅需桩事务存在
+      stubRegisterSuccess('user-d');
 
       const result = await controller.register(dto);
       const serialized = JSON.stringify(result);
@@ -330,6 +316,7 @@ describe('AuthController', () => {
         code === 'INVITE-new' ? { valid: true, invitedBy: 'admin-1' } : { valid: false },
       );
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue({ id: 'tenant-pre' } as any);
       vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
@@ -620,6 +607,34 @@ describe('AuthController', () => {
   });
 
   describe('googleAuth & google/client-id', () => {
+    const googlePayload = {
+      googleId: 'google-sub-12345',
+      email: 'tenant_existing@gmail.com',
+      name: 'Existing Tenant',
+      avatarUrl: 'https://avatar.com/photo.jpg',
+      emailVerified: true,
+    };
+
+    function stubGoogleTransaction(user: Record<string, unknown>) {
+      const identityUpsert = vi.fn().mockResolvedValue({});
+      const identityCreate = vi.fn().mockResolvedValue({});
+      const userUpdate = vi.fn().mockResolvedValue(user);
+      const tenantUpdate = vi.fn().mockResolvedValue({});
+      const userCreate = vi.fn().mockResolvedValue(user);
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
+        callback({
+          user: { create: userCreate, update: userUpdate },
+          userIdentity: { create: identityCreate, upsert: identityUpsert },
+          tenant: { update: tenantUpdate, create: vi.fn().mockResolvedValue({}) },
+        }),
+      );
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'google-jwt-access',
+        refreshToken: 'google-jwt-refresh',
+      });
+      return { identityUpsert, identityCreate, userUpdate, tenantUpdate, userCreate };
+    }
+
     it('应该能正常获取 Google Client ID', () => {
       expect(controller.getGoogleClientId()).toEqual({
         clientId: 'test-google-client-id',
@@ -627,165 +642,155 @@ describe('AuthController', () => {
       });
     });
 
-    it('已有用户使用 Google 登录：匹配邮箱并自动关联 googleId', async () => {
+    it('已有用户使用 Google 登录：补建身份并更新登录信息', async () => {
       const mockUser = {
         id: 'user-google-1',
-        email: 'tenant_existing@gmail.com',
+        email: googlePayload.email,
         phone: '13800000000',
         role: 'TENANT',
         googleId: null,
         avatarUrl: null,
         isActive: true,
+        emailVerifiedAt: null,
       };
 
-      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
-        googleId: 'google-sub-12345',
-        email: 'tenant_existing@gmail.com',
-        name: 'Existing Tenant',
-        avatarUrl: 'https://avatar.com/photo.jpg',
-        emailVerified: true,
-      });
-
+      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue(googlePayload);
       vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
-      vi.spyOn(prisma.user, 'update').mockResolvedValue({
+      const tx = stubGoogleTransaction({
         ...mockUser,
-        googleId: 'google-sub-12345',
-        avatarUrl: 'https://avatar.com/photo.jpg',
-      } as any);
-
-      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-        accessToken: 'google-jwt-access',
-        refreshToken: 'google-jwt-refresh',
+        googleId: googlePayload.googleId,
+        avatarUrl: googlePayload.avatarUrl,
       });
 
       const res = await controller.googleAuth({ idToken: 'valid-google-id-token' });
 
       expect(res.accessToken).toBe('google-jwt-access');
-      expect(res.user.email).toBe('tenant_existing@gmail.com');
-      expect(prisma.user.update).toHaveBeenCalled();
+      expect(res.user.email).toBe(googlePayload.email);
       expect(res.isNewUser).toBe(false);
+      expect(tx.identityUpsert).toHaveBeenCalled();
+      expect(tx.userUpdate).toHaveBeenCalled();
     });
 
     it('禁用账号使用 Google 登录应该抛出 ForbiddenException', async () => {
-      const mockUser = {
+      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue(googlePayload);
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({
         id: 'user-google-banned',
-        email: 'banned@gmail.com',
+        email: googlePayload.email,
         role: 'TENANT',
         isActive: false,
-      };
-
-      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
-        googleId: 'google-sub-banned',
-        email: 'banned@gmail.com',
-        emailVerified: true,
-      });
-
-      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+      } as any);
 
       await expect(controller.googleAuth({ idToken: 'banned-token' })).rejects.toThrow(
         ForbiddenException,
       );
     });
 
-    it('新用户首次 Google 登录未提供邀请码亦可零门槛自动注册并登录', async () => {
+    it('新用户未带邀请码时拒绝登录（403），不创建任何档案', async () => {
       vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
-        googleId: 'google-sub-new',
+        ...googlePayload,
         email: 'newuser@gmail.com',
-        name: 'New Tenant',
-        avatarUrl: 'https://avatar.com/new.jpg',
-        emailVerified: true,
       });
-
       vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+      const txSpy = vi.spyOn(prisma, '$transaction');
 
-      const mockCreatedUser = {
-        id: 'user-new-created',
-        email: 'newuser@gmail.com',
-        phone: null,
-        role: 'TENANT',
-        avatarUrl: 'https://avatar.com/new.jpg',
-        isActive: true,
-      };
-
-      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
-        return callback({
-          user: {
-            create: vi.fn().mockResolvedValue(mockCreatedUser),
-            update: vi.fn().mockResolvedValue({}),
-          },
-          tenant: {
-            findFirst: vi.fn().mockResolvedValue(null),
-            create: vi.fn().mockResolvedValue({}),
-          },
-        });
+      await expect(controller.googleAuth({ idToken: 'new-user-token' })).rejects.toMatchObject({
+        status: 403,
       });
-
-      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-        accessToken: 'new-jwt-access',
-        refreshToken: 'new-jwt-refresh',
-      });
-
-      const res = await controller.googleAuth({ idToken: 'new-user-token' });
-
-      expect(res.accessToken).toBe('new-jwt-access');
-      expect(res.isNewUser).toBe(true);
-      expect(res.user.email).toBe('newuser@gmail.com');
+      expect(txSpy).not.toHaveBeenCalled();
     });
 
-    it('新用户首次 Google 登录携带有效邀请码成功注册并关联', async () => {
+    it('新用户有邀请码但没有预建租客时拒绝（403）', async () => {
       vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
-        googleId: 'google-sub-new',
+        ...googlePayload,
         email: 'newuser@gmail.com',
-        name: 'New Tenant',
-        avatarUrl: 'https://avatar.com/new.jpg',
-        emailVerified: true,
       });
-
       vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
       vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
         valid: true,
         invitedBy: 'admin-id',
+        role: 'TENANT',
       });
+      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue(null);
 
+      await expect(
+        controller.googleAuth({ idToken: 'new-user-token', inviteCode: 'INVITE-VALID-123' }),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it('新用户携带有效邀请码且存在预建租客时成功注册并绑定', async () => {
       const mockCreatedUser = {
         id: 'user-new-created',
         email: 'newuser@gmail.com',
         phone: null,
         role: 'TENANT',
-        avatarUrl: 'https://avatar.com/new.jpg',
+        avatarUrl: googlePayload.avatarUrl,
         isActive: true,
       };
 
-      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
-        return callback({
-          user: {
-            create: vi.fn().mockResolvedValue(mockCreatedUser),
-            update: vi.fn().mockResolvedValue({}),
-          },
-          tenant: {
-            findFirst: vi.fn().mockResolvedValue(null),
-            create: vi.fn().mockResolvedValue({}),
-          },
-        });
+      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
+        ...googlePayload,
+        email: 'newuser@gmail.com',
       });
-
-      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-        accessToken: 'new-jwt-access',
-        refreshToken: 'new-jwt-refresh',
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+      vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+        valid: true,
+        invitedBy: 'admin-id',
+        role: 'TENANT',
       });
+      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue({ id: 'tenant-pre' } as any);
+      const consumeSpy = vi
+        .spyOn(inviteCodeService, 'consumeInviteCode')
+        .mockResolvedValue(undefined as any);
+      const tx = stubGoogleTransaction(mockCreatedUser);
 
       const res = await controller.googleAuth({
         idToken: 'new-user-token',
         inviteCode: 'INVITE-VALID-123',
       });
 
-      expect(res.accessToken).toBe('new-jwt-access');
+      expect(res.accessToken).toBe('google-jwt-access');
       expect(res.isNewUser).toBe(true);
       expect(res.user.email).toBe('newuser@gmail.com');
+      expect(tx.identityCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ provider: 'GOOGLE', providerUserId: googlePayload.googleId }),
+      });
+      expect(tx.tenantUpdate).toHaveBeenCalledWith({
+        where: { id: 'tenant-pre' },
+        data: { userId: 'user-new-created' },
+      });
+      expect(consumeSpy).toHaveBeenCalledWith(
+        'INVITE-VALID-123',
+        'user-new-created',
+        expect.anything(),
+      );
     });
   });
 
   describe('Email OTP & Delayed Binding (T170)', () => {
+    function stubOtpTransaction(user: Record<string, unknown>, hasTenant = true) {
+      const identityUpsert = vi.fn().mockResolvedValue({});
+      const identityCreate = vi.fn().mockResolvedValue({});
+      const userUpdate = vi.fn().mockResolvedValue(user);
+      const tenantUpdate = vi.fn().mockResolvedValue({});
+      const userCreate = vi.fn().mockResolvedValue(user);
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
+        callback({
+          user: { create: userCreate, update: userUpdate },
+          userIdentity: { create: identityCreate, upsert: identityUpsert },
+          tenant: {
+            update: tenantUpdate,
+            create: vi.fn().mockResolvedValue({}),
+            findFirst: vi.fn().mockResolvedValue(hasTenant ? { id: 'tenant-1' } : null),
+          },
+        }),
+      );
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'otp-access-token',
+        refreshToken: 'otp-refresh-token',
+      });
+      return { identityUpsert, identityCreate, userUpdate, tenantUpdate, userCreate };
+    }
+
     describe('sendEmailCode', () => {
       it('发送邮箱验证码成功应返回冷却时间', async () => {
         vi.spyOn(emailOtpService, 'sendCode').mockResolvedValue({ cooldown: 60 });
@@ -819,7 +824,7 @@ describe('AuthController', () => {
         ).rejects.toThrow(ForbiddenException);
       });
 
-      it('已有正常用户验证码登录成功', async () => {
+      it('已有正常用户验证码登录成功并刷新 EMAIL 身份', async () => {
         vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
         const mockUser = {
           id: 'user-existing',
@@ -828,13 +833,10 @@ describe('AuthController', () => {
           role: 'TENANT',
           isActive: true,
           avatarUrl: null,
+          emailVerifiedAt: null,
         };
         vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
-        vi.spyOn(prisma.user, 'update').mockResolvedValue(mockUser as any);
-        vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-          accessToken: 'otp-access-token',
-          refreshToken: 'otp-refresh-token',
-        });
+        const tx = stubOtpTransaction(mockUser);
 
         const res = await controller.loginWithEmailCode({
           email: 'exist@example.com',
@@ -844,16 +846,30 @@ describe('AuthController', () => {
         expect(res.accessToken).toBe('otp-access-token');
         expect(res.isNewUser).toBe(false);
         expect(res.user.email).toBe('exist@example.com');
-        expect(prisma.user.update).toHaveBeenCalledWith({
-          where: { id: 'user-existing' },
-          data: { lastLoginAt: expect.any(Date) },
+        expect(tx.identityUpsert).toHaveBeenCalledWith({
+          where: {
+            provider_providerUserId: {
+              provider: 'EMAIL',
+              providerUserId: 'exist@example.com',
+            },
+          },
+          create: expect.objectContaining({ provider: 'EMAIL' }),
+          update: expect.objectContaining({ emailVerifiedAt: expect.any(Date) }),
         });
       });
 
-      it('新用户验证码登录应自动创建账户与租客记录', async () => {
+      it('新用户未带邀请码时拒绝登录（403），不自动建号', async () => {
         vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
         vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+        const txSpy = vi.spyOn(prisma, '$transaction');
 
+        await expect(
+          controller.loginWithEmailCode({ email: 'newotp@example.com', code: '123456' }),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(txSpy).not.toHaveBeenCalled();
+      });
+
+      it('新用户带邀请码且存在预建租客时成功注册并绑定', async () => {
         const mockNewUser = {
           id: 'user-otp-new',
           email: 'newotp@example.com',
@@ -862,32 +878,33 @@ describe('AuthController', () => {
           isActive: true,
           avatarUrl: null,
         };
-
-        vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
-          return callback({
-            user: {
-              create: vi.fn().mockResolvedValue(mockNewUser),
-            },
-            tenant: {
-              findFirst: vi.fn().mockResolvedValue(null),
-              create: vi.fn().mockResolvedValue({}),
-            },
-          });
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
+        vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+        vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
+          valid: true,
+          invitedBy: 'admin-id',
+          role: 'TENANT',
         });
-
-        vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
-          accessToken: 'new-otp-access',
-          refreshToken: 'new-otp-refresh',
-        });
+        vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue({ id: 'tenant-pre' } as any);
+        const consumeSpy = vi
+          .spyOn(inviteCodeService, 'consumeInviteCode')
+          .mockResolvedValue(undefined as any);
+        const tx = stubOtpTransaction(mockNewUser);
 
         const res = await controller.loginWithEmailCode({
           email: 'newotp@example.com',
           code: '123456',
+          inviteCode: 'INVITE-OTP',
         });
 
-        expect(res.accessToken).toBe('new-otp-access');
+        expect(res.accessToken).toBe('otp-access-token');
         expect(res.isNewUser).toBe(true);
         expect(res.user.email).toBe('newotp@example.com');
+        expect(tx.tenantUpdate).toHaveBeenCalledWith({
+          where: { id: 'tenant-pre' },
+          data: { userId: 'user-otp-new' },
+        });
+        expect(consumeSpy).toHaveBeenCalledWith('INVITE-OTP', 'user-otp-new', expect.anything());
       });
     });
 
@@ -900,21 +917,30 @@ describe('AuthController', () => {
         ).rejects.toThrow(BadRequestException);
       });
 
-      it('邀请码有效应在事务中核销码并更新 user.invitedBy', async () => {
+      it('邀请码有效应在事务中核销码并更新角色与邀请人', async () => {
         vi.spyOn(inviteCodeService, 'validateInviteCode').mockResolvedValue({
           valid: true,
           invitedBy: 'admin-inviter',
+          role: 'CLEANER',
         });
-        const consumeSpy = vi.spyOn(inviteCodeService, 'consumeInviteCode').mockResolvedValue(undefined as any);
+        vi.spyOn(prisma.user, 'findUnique').mockResolvedValue({
+          id: 'tenant-user-1',
+          email: 'tenant@example.com',
+          phone: '13800138000',
+          role: 'TENANT',
+          tenant: { id: 'tenant-1' },
+        } as any);
+        const consumeSpy = vi
+          .spyOn(inviteCodeService, 'consumeInviteCode')
+          .mockResolvedValue(undefined as any);
 
         const userUpdate = vi.fn().mockResolvedValue({});
-        vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) => {
-          return callback({
-            user: {
-              update: userUpdate,
-            },
-          });
-        });
+        vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
+          callback({
+            user: { update: userUpdate },
+            tenant: { update: vi.fn().mockResolvedValue({}) },
+          }),
+        );
 
         const res = await controller.bindInviteCode(
           { user: { userId: 'tenant-user-1' } },
@@ -923,10 +949,9 @@ describe('AuthController', () => {
 
         expect(res.success).toBe(true);
         expect(consumeSpy).toHaveBeenCalledWith('GOODCODE', 'tenant-user-1', expect.anything());
-        expect(userUpdate).toHaveBeenCalledTimes(1);
         expect(userUpdate).toHaveBeenCalledWith({
           where: { id: 'tenant-user-1' },
-          data: { invitedBy: 'admin-inviter' },
+          data: { invitedBy: 'admin-inviter', role: 'CLEANER' },
         });
       });
     });

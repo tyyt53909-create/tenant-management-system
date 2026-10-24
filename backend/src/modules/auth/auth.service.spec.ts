@@ -30,7 +30,16 @@ interface PrismaMock {
     update: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
   };
-  tenant: { create: ReturnType<typeof vi.fn>; findUnique: ReturnType<typeof vi.fn> };
+  userIdentity: {
+    create: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
+  };
+  tenant: {
+    create: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
   $transaction: ReturnType<typeof vi.fn>;
 }
 
@@ -42,7 +51,13 @@ function createPrismaMock(): PrismaMock {
       update: vi.fn().mockResolvedValue({}),
       create: vi.fn(),
     },
-    tenant: { create: vi.fn(), findUnique: vi.fn() },
+    userIdentity: { create: vi.fn().mockResolvedValue({}), upsert: vi.fn().mockResolvedValue({}) },
+    tenant: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn().mockResolvedValue({}),
+    },
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(async (callback: (tx: PrismaMock) => unknown) =>
@@ -236,13 +251,22 @@ describe('AuthService 登录防护', () => {
   });
 });
 
-describe('AuthService 注册密码哈希', () => {
-  it('新注册使用 BCRYPT_ROUNDS 配置的 cost', async () => {
+describe('AuthService 注册策略（DEC-03）', () => {
+  it('新注册使用 BCRYPT_ROUNDS 配置的 cost，并绑定预建租客', async () => {
     const { service, prisma, invite } = await createService({ BCRYPT_ROUNDS: '12' });
-    invite.validateInviteCode.mockResolvedValue({ valid: true, invitedBy: 'admin-1' });
+    invite.validateInviteCode.mockResolvedValue({
+      valid: true,
+      invitedBy: 'admin-1',
+      role: 'TENANT',
+    });
 
     prisma.user.findUnique.mockResolvedValue(null);
-    prisma.user.create.mockResolvedValue({ id: 'user-new', email: 'new@example.com', role: 'TENANT' });
+    prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
+    prisma.user.create.mockResolvedValue({
+      id: 'user-new',
+      email: 'new@example.com',
+      role: 'TENANT',
+    });
 
     await service.register({
       email: 'new@example.com',
@@ -251,8 +275,63 @@ describe('AuthService 注册密码哈希', () => {
     });
 
     const created = prisma.user.create.mock.calls[0]?.[0] as {
-      data: { passwordHash: string };
+      data: { passwordHash: string; role: string };
     };
     expect(bcrypt.getRounds(created.data.passwordHash)).toBe(12);
+    expect(created.data.role).toBe('TENANT');
+    expect(prisma.tenant.update).toHaveBeenCalledWith({
+      where: { id: 'tenant-pre' },
+      data: { userId: 'user-new' },
+    });
+    expect(prisma.tenant.create).not.toHaveBeenCalled();
+    expect(prisma.userIdentity.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ provider: 'EMAIL', providerUserId: 'new@example.com' }),
+    });
+  });
+
+  it('邀请码 role 生效', async () => {
+    const { service, prisma, invite } = await createService({ BCRYPT_ROUNDS: '10' });
+    invite.validateInviteCode.mockResolvedValue({
+      valid: true,
+      invitedBy: 'admin-1',
+      role: 'CLEANER',
+    });
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
+    prisma.user.create.mockResolvedValue({
+      id: 'user-cleaner',
+      email: 'cleaner@example.com',
+      role: 'CLEANER',
+    });
+
+    const result = await service.register({
+      email: 'cleaner@example.com',
+      password: CORRECT_PASSWORD,
+      inviteCode: 'INVITE-CLEANER',
+    });
+
+    expect(prisma.user.create.mock.calls[0][0].data.role).toBe('CLEANER');
+    expect(result.user.role).toBe('CLEANER');
+  });
+
+  it('没有预建租客档案时拒绝注册（403），不创建任何人', async () => {
+    const { service, prisma, invite } = await createService();
+    invite.validateInviteCode.mockResolvedValue({
+      valid: true,
+      invitedBy: 'admin-1',
+      role: 'TENANT',
+    });
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.tenant.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.register({
+        email: 'new@example.com',
+        password: CORRECT_PASSWORD,
+        inviteCode: 'INVITE-1',
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(prisma.tenant.create).not.toHaveBeenCalled();
   });
 });
