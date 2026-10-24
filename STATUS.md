@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `develop`
-> 集成基準: `origin/develop` @ `b250110`
+> 集成基準: `origin/develop` @ `c20c1c7`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | 186 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 126 files / 1178 tests |
+| 後端單元測試 | ✅ pass | 126 files / 1179 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 18 files / 84 tests |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 10 files / 27 tests |
+| 整合測試 | ✅ pass | 11 files / 29 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -36,21 +36,20 @@
 
 | 狀態 | 數量 |
 |---|---|
-| 已驗證完成 | 30 |
+| 已驗證完成 | 32 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 2 |
+| 進行中 | 0 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- **T279 无状态化与多实例验证（OPS-06）**（active，plan OPS-06，`feature/T279-ops-06-stateless`）
-- **T280 备份、PITR 与恢复演练（OPS-07）**（active，plan OPS-07，`feature/T280-ops-07-backup`）
+- 無
 
 ### 阻擋發布
 - 無
@@ -82,7 +81,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 52 | 36 | 29 | 2 | 14 |
+| 未分類 | 52 | 38 | 31 | 0 | 14 |
 
 ---
 
@@ -109,7 +108,7 @@
 - 文件：**158** 份
 
 ### 測試
-- 後端單元：126 files / 1178 tests
+- 後端單元：126 files / 1179 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：18 files / 84 tests
 - 小程序單元：112 tests
