@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T262
 plan_ref: FIN-09
 stage: M1
@@ -8,8 +8,8 @@ priority: P0
 model_tier: 强
 branch: feature/T262-fin-09
 start_time: 2026-10-24
-complete_time:
-merge_commit:
+complete_time: 2026-10-24
+merge_commit: 349e5ce
 blocked_by:
 depends_on:
 acceptance_evidence: tasks/evidence/T262.md
@@ -102,7 +102,9 @@ DEC-01 已拍板目标市场为 `Asia/Shanghai`。本任务把业务日期收敛
 - 基线：`2ac3ef6`（含 T261 回填）
 - 模型：DeepSeek V4.1 Flash
 - 开始日期：2026-10-24
-- 状态：in_progress
+- 完成日期：2026-10-24
+- 合并：PR #72，merge commit `349e5ce`
+- 状态：completed
 
 ## 风险
 
