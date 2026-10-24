@@ -92,6 +92,11 @@ const COMMANDS = {
     command: 'npm run test:e2e',
     parse: parseVitest,
   },
+  integration: {
+    cwd: 'backend',
+    command: 'npm run test:int',
+    parse: parseVitest,
+  },
   'frontend-lint': {
     cwd: 'frontend-admin',
     command: 'npm run lint',

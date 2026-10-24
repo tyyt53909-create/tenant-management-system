@@ -29,7 +29,8 @@
     "openapi:generate": "node scripts/export-openapi.mjs",
     "openapi:check": "node scripts/export-openapi.mjs --check",
     "simulate:meters": "tsx scripts/simulate-meters.ts",
-    "simulate:mqtt": "tsx scripts/mqtt-meter-simulator.ts"
+    "simulate:mqtt": "tsx scripts/mqtt-meter-simulator.ts",
+    "test:int": "vitest run --config ./vitest.config.int.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
