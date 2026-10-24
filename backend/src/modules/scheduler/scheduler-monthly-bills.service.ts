@@ -26,21 +26,35 @@ export class SchedulerMonthlyBillsService {
 
   async generateMonthlyBills(now: Date = new Date()): Promise<MonthlyBillSummary> {
     const { year, month } = getBusinessDateParts(now);
-    const period = `${year}-${String(month).padStart(2, '0')}`;
-    const monthStart = new Date(Date.UTC(year, month - 1, 1));
+    const currentMonthStart = new Date(Date.UTC(year, month - 1, 1));
+    const currentPeriod = `${year}-${String(month).padStart(2, '0')}`;
 
-    const summary: MonthlyBillSummary = { period, generated: 0, skipped: 0, notified: 0, errors: [] };
+    const summary: MonthlyBillSummary = { period: currentPeriod, generated: 0, skipped: 0, notified: 0, errors: [] };
 
     const contracts = await this.prisma.contract.findMany({
       where: {
         status: 'ACTIVE',
-        paymentCycle: 'MONTHLY',
-        endDate: { gte: monthStart },
+        endDate: { gte: currentMonthStart },
       },
       include: { tenant: { select: { userId: true } } },
     });
 
     for (const contract of contracts) {
+        const cycleMonths = ({ MONTHLY: 1, QUARTERLY: 3, SEMI_ANNUAL: 6, ANNUAL: 12 } as Record<string, number>)[contract.paymentCycle];
+        // 付款周期按自然年锚定；只在周期起始月生成账单。
+        if (!cycleMonths || (month - 1) % cycleMonths !== 0) continue;
+        const periodStart = new Date(Date.UTC(year, month - 1, 1));
+        const periodEnd = new Date(Date.UTC(year, month - 1 + cycleMonths, 0));
+        const period = `${year}-${String(month).padStart(2, '0')}`;
+        const cycleDays = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86_400_000) + 1;
+        const contractStart = new Date(contract.startDate);
+        const proratedDays = contractStart > periodStart
+          ? Math.max(0, Math.min(cycleDays, Math.floor((periodEnd.getTime() - contractStart.getTime()) / 86_400_000) + 1))
+          : cycleDays;
+        if (!proratedDays) continue;
+        const amount = proratedDays === cycleDays
+          ? contract.rentAmount
+          : Math.round((contract.rentAmount * proratedDays) / cycleDays);
         // 逐个合同隔离：任何一个失败都不应中止其余合同的出账（T208）。
         // 原先整个迴圈共用一个 try/catch，第 N 个合同出错就再也发不出后面所有账单。
         try {
@@ -60,10 +74,14 @@ export class SchedulerMonthlyBillsService {
             contractId: contract.id,
             billType: BillType.RENT,
             period,
-            amount: contract.rentAmount,
+            amount,
             dueDate: dueDate.toISOString(),
             snapshot: {
               rentAmount: contract.rentAmount,
+              cycle: contract.paymentCycle,
+              periodStart: periodStart.toISOString().slice(0, 10),
+              periodEnd: periodEnd.toISOString().slice(0, 10),
+              proratedDays,
               paymentDay: contract.paymentDay,
               contractNumber: contract.contractNumber,
             },
@@ -78,7 +96,7 @@ export class SchedulerMonthlyBillsService {
             const delivered = await this.notify(
               contract.tenant.userId,
               '收租提醒',
-              `您有新的租金账单（${period}），金额 ¥${formatAmount(contract.rentAmount)}，请于 ${formatDate(dueDate)} 前缴纳`,
+              `您有新的租金账单（${period}），金额 ¥${formatAmount(amount)}，请于 ${formatDate(dueDate)} 前缴纳`,
               'NORMAL',
               { billId: bill.id },
               `RENT_BILL:${contract.tenant.userId}:${period}`,
