@@ -13,6 +13,10 @@ import { BusinessClock } from '../../common/business-clock/business-clock.servic
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
 import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
+import {
+  applyDepositCollection,
+  reverseDepositCollection,
+} from '../deposits/deposit-ledger.util.js';
 
 interface RawClient {
   $queryRaw?: (query: Prisma.Sql) => Promise<unknown>;
@@ -171,6 +175,13 @@ export class BillPaymentService {
         data: { paidAmount: newPaidAmount, status: newStatus },
       });
 
+      // FIN-03：押金账单收款同步记入押金台账
+      await applyDepositCollection(tx, {
+        bill: updatedBill,
+        amount: billPortion,
+        operatorId,
+      });
+
       return { payment, bill: updatedBill, lateFees: settledFees, idempotent: false };
     });
   }
@@ -261,6 +272,13 @@ export class BillPaymentService {
       const updatedBill = await tx.bill.update({
         where: { id: billId },
         data: { paidAmount: newPaid, status: newStatus },
+      });
+
+      // FIN-03：押金收款作废时冲减台账
+      await reverseDepositCollection(tx, {
+        bill: updatedBill,
+        amount: payment.billPortion,
+        operatorId,
       });
 
       return { payment: voided, bill: updatedBill, reversal, idempotent: false };

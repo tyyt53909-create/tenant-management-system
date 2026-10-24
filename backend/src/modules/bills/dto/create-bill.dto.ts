@@ -3,6 +3,7 @@ import { IsString, IsNotEmpty, IsInt, IsEnum, IsDateString, IsOptional, Min } fr
 export enum BillType {
   RENT = 'RENT',
   UTILITY = 'UTILITY',
+  DEPOSIT = 'DEPOSIT',
   OTHER = 'OTHER',
 }
 export class CreateBillDto {

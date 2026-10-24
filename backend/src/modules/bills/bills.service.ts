@@ -128,7 +128,12 @@ export class BillsService {
 
     // 生成账单编号：加密随机串，禁止 Math.random（AGENTS 14.4）
     const billNumber = `B${Date.now()}${randomHex(3)}`;
-    const dedupKey = dto.billType === 'RENT' ? rentBillDedupKey(dto.contractId, dto.period) : null;
+    const dedupKey =
+      dto.billType === 'RENT'
+        ? rentBillDedupKey(dto.contractId, dto.period)
+        : dto.billType === 'DEPOSIT'
+          ? `DEPOSIT:${dto.contractId}`
+          : null;
 
     try {
       const bill = await this.prisma.bill.create({
