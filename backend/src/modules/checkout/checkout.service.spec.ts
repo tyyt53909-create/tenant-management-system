@@ -223,6 +223,138 @@ describe('CheckoutService', () => {
   });
 
   describe('update', () => {
+    function pendingRecord(overrides: Record<string, unknown> = {}) {
+      return {
+        id: recordId,
+        contractId: 'contract-1',
+        roomId: 'room-1',
+        totalRefund: 250000,
+        processedBy: 'admin-1',
+        status: 'PENDING',
+        items: [
+          { itemType: 'DEPOSIT_DEDUCTION', amount: 50000 },
+          { itemType: 'DEPOSIT_REFUND', amount: 300000 },
+        ],
+        contract: { id: 'contract-1', status: 'ACTIVE', roomId: 'room-1' },
+        room: { id: 'room-1', status: 'OCCUPIED' },
+        ...overrides,
+      };
+    }
+
+    it('非法状态流转 → 409，且不写库', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue(pendingRecord({ status: 'CANCELLED' }));
+
+      await expect(service.update(recordId, { status: 'COMPLETED' } as any)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.checkoutRecord.update).not.toHaveBeenCalled();
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+    });
+
+    it('终态后修改明细 → 409', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue(pendingRecord({ status: 'COMPLETED' }));
+
+      await expect(
+        service.update(recordId, { notes: '事后改备注' } as any),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.checkoutRecord.update).not.toHaveBeenCalled();
+    });
+
+    it('结算等式不成立 → 400，合同与房间不变', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue(
+        pendingRecord({ totalRefund: 1, items: [{ itemType: 'RENT_REFUND', amount: 100 }] }),
+      );
+
+      await expect(service.update(recordId, { status: 'COMPLETED' } as any)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+      expect(prisma.room.update).not.toHaveBeenCalled();
+    });
+
+    it('押金扣除大于应退 → 400，不把现金退还钳成 0', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue(
+        pendingRecord({
+          totalRefund: 0,
+          items: [
+            { itemType: 'DEPOSIT_REFUND', amount: 100000 },
+            { itemType: 'DEPOSIT_DEDUCTION', amount: 300000 },
+            { itemType: 'RENT_REFUND', amount: 200000 },
+          ],
+        }),
+      );
+      prisma.depositLedger.findUnique.mockResolvedValue({ id: 'ledger-1', balance: 300000 });
+
+      await expect(service.update(recordId, { status: 'COMPLETED' } as any)).rejects.toThrow(
+        /不能大于应退押金/,
+      );
+      expect(prisma.depositTransaction.create).not.toHaveBeenCalled();
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+    });
+
+    it('无押金台账且押金项非 0 → 400', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue(pendingRecord());
+      prisma.depositLedger.findUnique.mockResolvedValue(null);
+
+      await expect(service.update(recordId, { status: 'COMPLETED' } as any)).rejects.toThrow(
+        /没有押金台账/,
+      );
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+    });
+
+    it('完成时结清押金：扣除 + 现金退还 = 余额，并终止合同', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue(pendingRecord());
+      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId, status: 'COMPLETED' });
+      prisma.depositLedger.findUnique.mockResolvedValue({ id: 'ledger-1', balance: 300000 });
+      prisma.depositLedger.update.mockResolvedValue({ id: 'ledger-1', balance: 0, status: 'REFUNDED' });
+      prisma.contract.update.mockResolvedValue({});
+      prisma.room.findUnique.mockResolvedValue({ status: 'OCCUPIED' });
+      prisma.room.update.mockResolvedValue({});
+
+      await service.update(recordId, { status: 'COMPLETED' } as any);
+
+      expect(prisma.depositTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ type: 'DEDUCT', amount: -50000, balanceAfter: 250000 }),
+      });
+      expect(prisma.depositTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ type: 'REFUND', amount: -250000, balanceAfter: 0 }),
+      });
+      expect(prisma.depositLedger.update).toHaveBeenCalledWith({
+        where: { id: 'ledger-1' },
+        data: { balance: 0, status: 'REFUNDED' },
+      });
+      expect(prisma.contract.update).toHaveBeenCalled();
+    });
+
+    it('重复 COMPLETED 幂等返回，不二次扣减', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue(pendingRecord({ status: 'COMPLETED' }));
+
+      await service.update(recordId, { status: 'COMPLETED' } as any);
+
+      expect(prisma.checkoutRecord.update).not.toHaveBeenCalled();
+      expect(prisma.depositTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('完成前对退租单执行悲观行锁 FOR UPDATE', async () => {
+      prisma.$queryRaw = vi.fn().mockResolvedValue([{ id: recordId }]);
+      prisma.checkoutRecord.findUnique.mockResolvedValue(
+        pendingRecord({ totalRefund: 0, items: [{ itemType: 'RENT_REFUND', amount: 0 }] }),
+      );
+      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId, status: 'COMPLETED' });
+      prisma.contract.update.mockResolvedValue({});
+      prisma.room.findUnique.mockResolvedValue({ status: 'OCCUPIED' });
+      prisma.room.update.mockResolvedValue({});
+
+      await service.update(recordId, { status: 'COMPLETED' } as any);
+
+      expect(prisma.$queryRaw).toHaveBeenCalledWith(
+        expect.objectContaining({ strings: expect.arrayContaining([expect.stringContaining('checkout_records')]) }),
+      );
+      expect(prisma.$queryRaw).toHaveBeenCalledWith(
+        expect.objectContaining({ strings: expect.arrayContaining([expect.stringContaining('FOR UPDATE')]) }),
+      );
+    });
+
     it('状态置为 COMPLETED → 写入 processedAt 并终止合同/释放房间', async () => {
       prisma.checkoutRecord.findUnique.mockResolvedValue({
         id: recordId,

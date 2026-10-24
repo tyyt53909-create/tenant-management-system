@@ -143,4 +143,108 @@ describe('退租结算', () => {
       .set(auth(tenancy.adminToken));
     expect(after.body.status).toBe('PENDING');
   });
+
+  it('押金扣除大于应退 → 400，台账余额不变', async () => {
+    const base = await seedBase();
+    const tenancy = await setupTenancy(app, base);
+    await prepareDeposit(tenancy.adminToken, tenancy.contractId, 300000);
+
+    const created = await http(app)
+      .post('/checkout')
+      .set(auth(tenancy.adminToken))
+      .send({
+        contractId: tenancy.contractId,
+        roomId: tenancy.roomId,
+        checkoutDate: new Date().toISOString().slice(0, 10),
+        totalRefund: 0,
+        processedBy: 'integration-admin',
+        items: [
+          { itemType: 'DEPOSIT_REFUND', description: '押金退还', amount: 100000 },
+          { itemType: 'DEPOSIT_DEDUCTION', description: '超额扣除', amount: 300000 },
+          { itemType: 'RENT_REFUND', description: '租金退还', amount: 200000 },
+        ],
+      });
+    expect(created.status).toBe(201);
+
+    const completed = await http(app)
+      .patch(`/checkout/${created.body.id}`)
+      .set(auth(tenancy.adminToken))
+      .send({ status: 'COMPLETED' });
+    expect(completed.status).toBe(400);
+
+    const ledger = await http(app)
+      .get(`/deposits/${tenancy.contractId}`)
+      .set(auth(tenancy.adminToken));
+    expect(ledger.body.balance).toBe(300000);
+    expect(ledger.body.status).not.toBe('REFUNDED');
+  });
+
+  it('无押金台账且押金项非 0 → 400，合同仍为 ACTIVE', async () => {
+    const base = await seedBase();
+    const tenancy = await setupTenancy(app, base);
+
+    const created = await http(app)
+      .post('/checkout')
+      .set(auth(tenancy.adminToken))
+      .send({
+        contractId: tenancy.contractId,
+        roomId: tenancy.roomId,
+        checkoutDate: new Date().toISOString().slice(0, 10),
+        totalRefund: 0,
+        processedBy: 'integration-admin',
+        items: [
+          { itemType: 'DEPOSIT_DEDUCTION', description: '墙面损坏', amount: 50000 },
+          { itemType: 'DEPOSIT_REFUND', description: '押金退还', amount: 50000 },
+        ],
+      });
+    expect(created.status).toBe(201);
+
+    const completed = await http(app)
+      .patch(`/checkout/${created.body.id}`)
+      .set(auth(tenancy.adminToken))
+      .send({ status: 'COMPLETED' });
+    expect(completed.status).toBe(400);
+
+    const contract = await http(app)
+      .get(`/contracts/${tenancy.contractId}`)
+      .set(auth(tenancy.adminToken));
+    expect(contract.body.status).toBe('ACTIVE');
+  });
+
+  it('并发重复完成只结清一次押金', async () => {
+    const base = await seedBase();
+    const tenancy = await setupTenancy(app, base);
+    await prepareDeposit(tenancy.adminToken, tenancy.contractId, 300000);
+
+    const created = await http(app)
+      .post('/checkout')
+      .set(auth(tenancy.adminToken))
+      .send({
+        contractId: tenancy.contractId,
+        roomId: tenancy.roomId,
+        checkoutDate: new Date().toISOString().slice(0, 10),
+        totalRefund: 250000,
+        processedBy: 'integration-admin',
+        items: [
+          { itemType: 'DEPOSIT_DEDUCTION', description: '墙面损坏', amount: 50000 },
+          { itemType: 'DEPOSIT_REFUND', description: '押金退还', amount: 300000 },
+        ],
+      });
+    expect(created.status).toBe(201);
+
+    const [first, second] = await Promise.all([
+      http(app).patch(`/checkout/${created.body.id}`).set(auth(tenancy.adminToken)).send({ status: 'COMPLETED' }),
+      http(app).patch(`/checkout/${created.body.id}`).set(auth(tenancy.adminToken)).send({ status: 'COMPLETED' }),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 200]);
+
+    const ledger = await http(app)
+      .get(`/deposits/${tenancy.contractId}`)
+      .set(auth(tenancy.adminToken));
+    expect(ledger.body.balance).toBe(0);
+    const deducts = (ledger.body.transactions as Array<{ type: string }>).filter((row) => row.type === 'DEDUCT');
+    const refunds = (ledger.body.transactions as Array<{ type: string }>).filter((row) => row.type === 'REFUND');
+    expect(deducts).toHaveLength(1);
+    expect(refunds).toHaveLength(1);
+  });
 });

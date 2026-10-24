@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyDepositCollection, reverseDepositCollection } from './deposit-ledger.util.js';
+import {
+  DepositSettlementError,
+  applyDepositCollection,
+  reverseDepositCollection,
+  settleDepositOnCheckout,
+} from './deposit-ledger.util.js';
 
 function txMock() {
   const tx = {
@@ -95,5 +100,74 @@ describe('押金台账写入', () => {
     expect(tx.depositTransaction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ type: 'REVERSAL', amount: -50000 }),
     });
+  });
+});
+
+describe('退租押金结清', () => {
+  it('无台账且金额为 0 → 跳过', async () => {
+    const tx = txMock();
+    tx.depositLedger.findUnique.mockResolvedValue(null);
+
+    const result = await settleDepositOnCheckout(tx as never, {
+      contractId: 'c1',
+      deductions: 0,
+      refundAmount: 0,
+      operatorId: 'op',
+      checkoutId: 'chk-1',
+    });
+
+    expect(result).toBeNull();
+    expect(tx.depositLedger.update).not.toHaveBeenCalled();
+  });
+
+  it('无台账且押金项非 0 → 拒绝', async () => {
+    const tx = txMock();
+    tx.depositLedger.findUnique.mockResolvedValue(null);
+
+    await expect(
+      settleDepositOnCheckout(tx as never, {
+        contractId: 'c1',
+        deductions: 100,
+        refundAmount: 0,
+        operatorId: 'op',
+        checkoutId: 'chk-1',
+      }),
+    ).rejects.toBeInstanceOf(DepositSettlementError);
+  });
+
+  it('余额不一致 → 拒绝且不写流水', async () => {
+    const tx = txMock();
+    tx.depositLedger.findUnique.mockResolvedValue({ id: 'l1', balance: 300000 });
+
+    await expect(
+      settleDepositOnCheckout(tx as never, {
+        contractId: 'c1',
+        deductions: 50000,
+        refundAmount: 100000,
+        operatorId: 'op',
+        checkoutId: 'chk-1',
+      }),
+    ).rejects.toBeInstanceOf(DepositSettlementError);
+    expect(tx.depositTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('有 $queryRaw 时先锁台账行', async () => {
+    const tx = txMock() as ReturnType<typeof txMock> & { $queryRaw: ReturnType<typeof vi.fn> };
+    tx.$queryRaw = vi.fn().mockResolvedValue([{ id: 'l1' }]);
+    tx.depositLedger.findUnique.mockResolvedValue({ id: 'l1', balance: 0 });
+
+    await settleDepositOnCheckout(tx as never, {
+      contractId: 'c1',
+      deductions: 0,
+      refundAmount: 0,
+      operatorId: 'op',
+      checkoutId: 'chk-1',
+    });
+
+    expect(tx.$queryRaw).toHaveBeenCalledWith(
+      expect.objectContaining({
+        strings: expect.arrayContaining([expect.stringContaining('deposit_ledgers')]),
+      }),
+    );
   });
 });

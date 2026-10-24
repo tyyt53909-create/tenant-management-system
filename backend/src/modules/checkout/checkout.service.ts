@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import type { Prisma, CheckoutItemType } from '@prisma/client';
+import { Prisma, type CheckoutItemType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
@@ -13,7 +13,14 @@ import {
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { isDeductionItemType, isRefundItemType } from './checkout-item-types.js';
 import { roomUpdateForContractTransition } from '../contracts/contract-transitions.js';
-import { settleDepositOnCheckout } from '../deposits/deposit-ledger.util.js';
+import { DepositSettlementError, settleDepositOnCheckout } from '../deposits/deposit-ledger.util.js';
+
+/** 悲觀行鎖。測試替身沒有 $queryRaw 時跳過；生產 Prisma 一定有。 */
+async function lockCheckout(tx: Prisma.TransactionClient, id: string): Promise<void> {
+  const raw = tx as Prisma.TransactionClient & { $queryRaw?: (query: Prisma.Sql) => Promise<unknown> };
+  if (typeof raw.$queryRaw !== 'function') return;
+  await raw.$queryRaw(Prisma.sql`SELECT id FROM checkout_records WHERE id = ${id} FOR UPDATE`);
+}
 
 const CHECKOUT_STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿',
@@ -156,6 +163,7 @@ export class CheckoutService {
 
   async update(id: string, dto: UpdateCheckoutDto) {
     return this.prisma.$transaction(async (tx) => {
+      await lockCheckout(tx, id);
       const record = await tx.checkoutRecord.findUnique({
         where: { id },
         include: {
@@ -166,8 +174,15 @@ export class CheckoutService {
       });
       if (!record) throw new NotFoundException('退租记录不存在');
 
-      // 完成是终态；重复完成幂等返回，避免重复结算押金
-      if (record.status === 'COMPLETED' && dto.status === 'COMPLETED') return record;
+      // 终态不可再改明细或金额。重复提交同一终态则幂等返回，避免二次结算。
+      if (record.status === 'COMPLETED' || record.status === 'CANCELLED') {
+        if (dto.status === record.status) return record;
+        throw new ConflictException(
+          dto.status && dto.status !== record.status
+            ? `退租单状态不允许从 ${record.status} 变更为 ${dto.status}`
+            : `退租单已${record.status === 'COMPLETED' ? '完成' : '取消'}，不能再修改`,
+        );
+      }
 
       if (dto.status && dto.status !== record.status) {
         const allowed: Record<string, readonly string[]> = {
@@ -239,21 +254,30 @@ export class CheckoutService {
         const depositDeduction = items
           .filter((item) => item.itemType === 'DEPOSIT_DEDUCTION')
           .reduce((sum, item) => sum + item.amount, 0);
-        // 押金退款项是「应退押金总额」，实际现金退还 = 应退 - 押金扣除
+        // 押金退款项是「应退押金总额」，现金退还 = 应退 - 押金扣除。
+        // 扣除大于应退时不得钳成 0，否则台账检查会退化成「扣除 = 余额」。
         const depositRefundGross = items
           .filter((item) => item.itemType === 'DEPOSIT_REFUND')
           .reduce((sum, item) => sum + item.amount, 0);
-        const depositRefund = Math.max(0, depositRefundGross - depositDeduction);
+        const depositCashRefund = depositRefundGross - depositDeduction;
+        if (depositCashRefund < 0) {
+          throw new BadRequestException(
+            `押金扣除 ${depositDeduction} 不能大于应退押金 ${depositRefundGross}`,
+          );
+        }
         try {
           await settleDepositOnCheckout(tx, {
             contractId: record.contractId,
             deductions: depositDeduction,
-            refundAmount: depositRefund,
+            refundAmount: depositCashRefund,
             operatorId: dto.processedBy ?? record.processedBy,
             checkoutId: id,
           });
         } catch (error) {
-          throw new BadRequestException((error as Error).message);
+          if (error instanceof DepositSettlementError) {
+            throw new BadRequestException(error.message);
+          }
+          throw error;
         }
 
         // 合同终止 + 房间退出占用（与合同状态机共用规则）
