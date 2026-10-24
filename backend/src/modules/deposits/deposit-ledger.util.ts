@@ -1,4 +1,4 @@
-import type { Prisma, Bill } from '@prisma/client';
+import { Prisma, type Bill } from '@prisma/client';
 
 /**
  * 押金台账写入（FIN-03 / T267）。
@@ -6,6 +6,21 @@ import type { Prisma, Bill } from '@prisma/client';
  */
 
 type Tx = Prisma.TransactionClient;
+
+/** 押金結算業務錯誤；呼叫端轉成 400。鎖或資料庫錯誤不得包進這個類型。 */
+export class DepositSettlementError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DepositSettlementError';
+  }
+}
+
+/** 悲觀行鎖。測試替身沒有 $queryRaw 時跳過；生產 Prisma 一定有。 */
+async function lockRows(tx: Tx, query: Prisma.Sql): Promise<void> {
+  const raw = tx as Tx & { $queryRaw?: (sql: Prisma.Sql) => Promise<unknown> };
+  if (typeof raw.$queryRaw !== 'function') return;
+  await raw.$queryRaw(query);
+}
 
 function statusFor(balance: number, amount: number): 'HELD' | 'PARTIAL' {
   return balance >= amount ? 'HELD' : 'PARTIAL';
@@ -110,17 +125,23 @@ export async function settleDepositOnCheckout(
 ): Promise<{ id: string; deductions: number; refundAmount: number } | null> {
   const { contractId, deductions, refundAmount, operatorId, checkoutId } = params;
 
+  await lockRows(
+    tx,
+    Prisma.sql`SELECT id FROM deposit_ledgers WHERE "contractId" = ${contractId} FOR UPDATE`,
+  );
   const ledger = await tx.depositLedger.findUnique({ where: { contractId } });
   if (!ledger) {
-    // 历史合同可能没有押金台账；此时不阻断退租，押金项由人工核对。
+    if (deductions !== 0 || refundAmount !== 0) {
+      throw new DepositSettlementError('没有押金台账时，押金扣除与应退必须为 0');
+    }
     return null;
   }
   if (deductions < 0 || refundAmount < 0) {
-    throw new Error('押金扣减/退还金额不能为负');
+    throw new DepositSettlementError('押金扣减/退还金额不能为负');
   }
 
   if (ledger.balance !== deductions + refundAmount) {
-    throw new Error(
+    throw new DepositSettlementError(
       `押金台账余额 ${ledger.balance} 分与结算明细（扣减 ${deductions} + 退还 ${refundAmount}）不一致`,
     );
   }
