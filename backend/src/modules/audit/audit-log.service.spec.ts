@@ -34,7 +34,14 @@ describe('AuditLogService', () => {
       ip: '127.0.0.1',
       userAgent: 'test',
     });
-    expect(result.id).toBe('a-1');
+    expect(result?.id).toBe('a-1');
+  });
+
+  it('无 userId 时跳过，避免伪造审计归属', async () => {
+    await expect(service.log({
+      action: 'POST /api/rooms', entityType: 'rooms', entityId: '-', changes: {}, ip: '127.0.0.1', userAgent: 'test',
+    })).resolves.toBeNull();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('findAll 应支持 entity 过滤与分页', async () => {
