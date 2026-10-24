@@ -7,7 +7,7 @@ applies_to:
   - docker-compose.staging.yml
   - scripts/smoke.mjs
 last_verified: 2026-10-24
-verified_commit: 2ac3ef6
+verified_commit: 68c0fac
 supersedes: null
 superseded_by: null
 version: 1.0

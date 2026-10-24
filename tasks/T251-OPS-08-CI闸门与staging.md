@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T251
 plan_ref: OPS-08
 stage: M0
@@ -8,8 +8,8 @@ priority: P0
 model_tier: 强
 branch: feature/T251-ops-08
 start_time: 2026-10-24
-complete_time:
-merge_commit:
+complete_time: 2026-10-24
+merge_commit: 68c0fac
 blocked_by:
 depends_on:
 acceptance_evidence: tasks/evidence/T251.md
@@ -93,7 +93,9 @@ handoff: docs/handoff/2026-10-24-T251-CI闸门与staging.md
 - 基线：`c825d74`（含 T262 回填）
 - 模型：DeepSeek V4.1 Flash
 - 开始日期：2026-10-24
-- 状态：in_progress
+- 完成日期：2026-10-24
+- 合并：PR #74，merge commit `68c0fac`
+- 状态：completed
 
 ## 风险
 
