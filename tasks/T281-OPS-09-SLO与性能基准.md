@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T281
 plan_ref: OPS-09
 stage: M2
@@ -8,8 +8,8 @@ priority: P1
 model_tier: 普通
 branch: feature/T281-ops-09-slo
 start_time: 2026-10-25
-complete_time:
-merge_commit:
+complete_time: 2026-10-25
+merge_commit: f2887fb
 blocked_by:
 depends_on: T255, T277
 acceptance_evidence: tasks/evidence/T281.md
