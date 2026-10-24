@@ -55,6 +55,7 @@
 
 ## 3. 任务与交接
 
+- [T273-FIN-07-退租结算一致性.md](../tasks/T273-FIN-07-退租结算一致性.md)：FIN-07，结算等式、单一事务、押金台账结清、合同终止与房间释放。
 - [T269-SEC-05-账号生命周期与员工管理.md](../tasks/T269-SEC-05-账号生命周期与员工管理.md)：SEC-05，员工 CRUD/角色/停用保护、自助改密、OTP 找回密码。
 - [T270-SEC-06-审计重做.md](../tasks/T270-SEC-06-审计重做.md)：SEC-06，审计递归脱敏、before/after/diff、写操作过滤；匿名持久化待 nullable userId。
 - [T268-COM-01-通知中心Email与模板.md](../tasks/T268-COM-01-通知中心Email与模板.md)：COM-01（M1），SMTP Email 渠道、模板 registry、渠道隔离；Outbox/偏好待 OPS-05。
@@ -86,6 +87,7 @@
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-24-T273-退租结算一致性.md](./handoff/2026-10-24-T273-退租结算一致性.md)：T273，退租结算单一事务与押金结清。
 - [2026-10-24-T269-账号生命周期与员工管理.md](./handoff/2026-10-24-T269-账号生命周期与员工管理.md)：T269，员工生命周期与密码管理。
 - [2026-10-24-T270-审计重做.md](./handoff/2026-10-24-T270-审计重做.md)：T270，审计脱敏与结构化变更。
 - [2026-10-24-T268-通知中心Email与模板.md](./handoff/2026-10-24-T268-通知中心Email与模板.md)：T268，Email transport、模板、渠道隔离。

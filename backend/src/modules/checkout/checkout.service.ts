@@ -12,6 +12,8 @@ import {
 } from '../../common/business-clock/business-clock.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { isDeductionItemType, isRefundItemType } from './checkout-item-types.js';
+import { roomUpdateForContractTransition } from '../contracts/contract-transitions.js';
+import { settleDepositOnCheckout } from '../deposits/deposit-ledger.util.js';
 
 const CHECKOUT_STATUS_LABEL: Record<string, string> = {
   DRAFT: '草稿',
@@ -153,27 +155,46 @@ export class CheckoutService {
   }
 
   async update(id: string, dto: UpdateCheckoutDto) {
-    const record = await this.prisma.checkoutRecord.findUnique({ where: { id } });
-    if (!record) throw new NotFoundException('退租记录不存在');
-
-    const updateData: Prisma.CheckoutRecordUpdateInput = {};
-    if (dto.status) {
-      updateData.status = dto.status;
-      if (dto.status === 'COMPLETED') updateData.processedAt = new Date();
-    }
-    if (dto.totalRefund !== undefined) updateData.totalRefund = dto.totalRefund;
-    if (dto.notes) updateData.notes = dto.notes;
-    if (dto.checkoutDate) updateData.checkoutDate = new Date(dto.checkoutDate);
-    if (dto.processedBy) updateData.processedBy = dto.processedBy;
-
-    // 结算明细采用「提供即全量替换」语义，并与主记录同事务，
-    // 避免出现「主记录已改但明细还是旧的」不一致状态（T152 反馈的后端缺口）。
     return this.prisma.$transaction(async (tx) => {
+      const record = await tx.checkoutRecord.findUnique({
+        where: { id },
+        include: {
+          items: true,
+          contract: { select: { id: true, status: true, roomId: true } },
+          room: { select: { id: true, status: true } },
+        },
+      });
+      if (!record) throw new NotFoundException('退租记录不存在');
+
+      // 完成是终态；重复完成幂等返回，避免重复结算押金
+      if (record.status === 'COMPLETED' && dto.status === 'COMPLETED') return record;
+
+      if (dto.status && dto.status !== record.status) {
+        const allowed: Record<string, readonly string[]> = {
+          DRAFT: ['PENDING', 'COMPLETED', 'CANCELLED'],
+          PENDING: ['DRAFT', 'COMPLETED', 'CANCELLED'],
+          COMPLETED: [],
+          CANCELLED: [],
+        };
+        if (!allowed[record.status]?.includes(dto.status)) {
+          throw new ConflictException(`退租单状态不允许从 ${record.status} 变更为 ${dto.status}`);
+        }
+      }
+
+      const updateData: Prisma.CheckoutRecordUpdateInput = {};
+      if (dto.status) {
+        updateData.status = dto.status;
+        if (dto.status === 'COMPLETED') updateData.processedAt = new Date();
+      }
+      if (dto.totalRefund !== undefined) updateData.totalRefund = dto.totalRefund;
+      if (dto.notes) updateData.notes = dto.notes;
+      if (dto.checkoutDate) updateData.checkoutDate = new Date(dto.checkoutDate);
+      if (dto.processedBy) updateData.processedBy = dto.processedBy;
+
       const updated = await tx.checkoutRecord.update({ where: { id }, data: updateData });
 
       if (dto.items !== undefined) {
         await tx.checkoutItem.deleteMany({ where: { checkoutId: id } });
-
         if (dto.items.length > 0) {
           await tx.checkoutItem.createMany({
             data: dto.items.map((item) => ({
@@ -186,6 +207,73 @@ export class CheckoutService {
               adjustReason: item.adjustReason,
             })),
           });
+        }
+      }
+
+      const items = dto.items ?? record.items;
+      const totalRefund = dto.totalRefund ?? record.totalRefund;
+
+      if (dto.status === 'COMPLETED') {
+        if (items.length === 0) {
+          throw new BadRequestException('完成退租前必须提供结算明细');
+        }
+
+        // 结算等式：退款项 - 扣款项 === 实退净额。
+        // 仅含扣款项的旧数据（历史 UI 允许只填扣款）不做等式校验，避免阻断存量流程。
+        const hasRefundItems = items.some((item) => isRefundItemType(item.itemType));
+        if (hasRefundItems) {
+          const refundTotal = items
+            .filter((item) => isRefundItemType(item.itemType))
+            .reduce((sum, item) => sum + item.amount, 0);
+          const deductionTotal = items
+            .filter((item) => isDeductionItemType(item.itemType))
+            .reduce((sum, item) => sum + item.amount, 0);
+          if (refundTotal - deductionTotal !== totalRefund) {
+            throw new BadRequestException(
+              `结算等式不成立：退款 ${refundTotal} - 扣款 ${deductionTotal} ≠ 实退 ${totalRefund}`,
+            );
+          }
+        }
+
+        // 押金台账一次性结清：扣除 + 退还 = 台账余额
+        const depositDeduction = items
+          .filter((item) => item.itemType === 'DEPOSIT_DEDUCTION')
+          .reduce((sum, item) => sum + item.amount, 0);
+        // 押金退款项是「应退押金总额」，实际现金退还 = 应退 - 押金扣除
+        const depositRefundGross = items
+          .filter((item) => item.itemType === 'DEPOSIT_REFUND')
+          .reduce((sum, item) => sum + item.amount, 0);
+        const depositRefund = Math.max(0, depositRefundGross - depositDeduction);
+        try {
+          await settleDepositOnCheckout(tx, {
+            contractId: record.contractId,
+            deductions: depositDeduction,
+            refundAmount: depositRefund,
+            operatorId: dto.processedBy ?? record.processedBy,
+            checkoutId: id,
+          });
+        } catch (error) {
+          throw new BadRequestException((error as Error).message);
+        }
+
+        // 合同终止 + 房间退出占用（与合同状态机共用规则）
+        if (record.contract.status === 'ACTIVE') {
+          await tx.contract.update({
+            where: { id: record.contractId },
+            data: { status: 'TERMINATED' },
+          });
+          const room = await tx.room.findUnique({
+            where: { id: record.roomId },
+            select: { status: true },
+          });
+          if (room) {
+            const roomUpdate = roomUpdateForContractTransition(room, 'ACTIVE', 'TERMINATED');
+            if (roomUpdate) {
+              await tx.room.update({ where: { id: record.roomId }, data: roomUpdate });
+            }
+          }
+        } else if (record.contract.status !== 'TERMINATED') {
+          throw new ConflictException(`合同当前状态为 ${record.contract.status}，不能完成退租`);
         }
       }
 

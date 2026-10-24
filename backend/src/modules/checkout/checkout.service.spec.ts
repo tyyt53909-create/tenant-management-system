@@ -21,8 +21,10 @@ describe('CheckoutService', () => {
         delete: vi.fn(),
       },
       checkoutItem: { createMany: vi.fn(), deleteMany: vi.fn() },
-      contract: { findUnique: vi.fn() },
-      room: { findUnique: vi.fn() },
+      contract: { findUnique: vi.fn(), update: vi.fn() },
+      room: { findUnique: vi.fn(), update: vi.fn() },
+      depositLedger: { findUnique: vi.fn().mockResolvedValue(null), update: vi.fn() },
+      depositTransaction: { create: vi.fn() },
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
@@ -221,15 +223,36 @@ describe('CheckoutService', () => {
   });
 
   describe('update', () => {
-    it('状态置为 COMPLETED → 写入 processedAt', async () => {
-      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId });
+    it('状态置为 COMPLETED → 写入 processedAt 并终止合同/释放房间', async () => {
+      prisma.checkoutRecord.findUnique.mockResolvedValue({
+        id: recordId,
+        contractId: 'contract-1',
+        roomId: 'room-1',
+        totalRefund: 0,
+        processedBy: 'admin-1',
+        status: 'PENDING',
+        items: [{ itemType: 'RENT_REFUND', amount: 0 }],
+        contract: { id: 'contract-1', status: 'ACTIVE', roomId: 'room-1' },
+        room: { id: 'room-1', status: 'OCCUPIED' },
+      });
       prisma.checkoutRecord.update.mockResolvedValue({ id: recordId, status: 'COMPLETED' });
+      prisma.contract.update.mockResolvedValue({});
+      prisma.room.findUnique.mockResolvedValue({ status: 'OCCUPIED' });
+      prisma.room.update.mockResolvedValue({});
 
       await service.update(recordId, { status: 'COMPLETED' } as any);
 
       expect(prisma.checkoutRecord.update).toHaveBeenCalledWith({
         where: { id: recordId },
         data: expect.objectContaining({ status: 'COMPLETED', processedAt: expect.any(Date) }),
+      });
+      expect(prisma.contract.update).toHaveBeenCalledWith({
+        where: { id: 'contract-1' },
+        data: { status: 'TERMINATED' },
+      });
+      expect(prisma.room.update).toHaveBeenCalledWith({
+        where: { id: 'room-1' },
+        data: expect.objectContaining({ status: 'VACANT', cleanStatus: 'PENDING_CLEAN' }),
       });
     });
 
