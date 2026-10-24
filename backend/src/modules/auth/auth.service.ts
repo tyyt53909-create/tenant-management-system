@@ -1,4 +1,16 @@
-import { Injectable, BadRequestException, ConflictException, UnauthorizedException, ForbiddenException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  UnauthorizedException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Optional,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { randomBytes } from 'node:crypto';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto.js';
@@ -14,11 +26,19 @@ import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/em
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
 import { FederatedAuthService } from './federated-auth.service.js';
 import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
+import { resolveLoginProtection, type LoginProtection } from '../../config/password.config.js';
+import {
+  LOGIN_ATTEMPT_STORE,
+  MemoryLoginAttemptStore,
+  type LoginAttemptStore,
+} from './login-attempt.store.js';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
   private readonly federatedAuthService: FederatedAuthService;
+  private readonly loginAttemptStore: LoginAttemptStore;
+  private dummyPasswordHash: string | null = null;
 
   constructor(
     private readonly inviteCodeService: InviteCodeService,
@@ -27,8 +47,11 @@ export class AuthService {
     private readonly googleAuthService: GoogleAuthService,
     private readonly emailOtpService: EmailOtpService,
     private readonly tenantCapabilityService: TenantCapabilityService,
+    private readonly configService: ConfigService,
+    @Optional() @Inject(LOGIN_ATTEMPT_STORE) loginAttemptStore?: LoginAttemptStore,
     @Optional() federatedAuthService?: FederatedAuthService,
   ) {
+    this.loginAttemptStore = loginAttemptStore ?? new MemoryLoginAttemptStore();
     this.federatedAuthService =
       federatedAuthService ??
       new FederatedAuthService(
@@ -65,8 +88,8 @@ export class AuthService {
       }
     }
 
-    // 4. 密码加密
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    // 4. 密码加密（cost 可配置，默认 12；旧 cost 10 哈希仍可验证）
+    const passwordHash = await bcrypt.hash(dto.password, this.loginProtection().bcryptRounds);
 
     // 5. 创建用户和租客（事务）
     const user = await this.prisma.$transaction(async (tx) => {
@@ -124,12 +147,20 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<LoginResponseDto> {
-    // 1. 查询用户（邮箱或手机号）
+    const identifier = dto.identifier.trim();
+    const protection = this.loginProtection();
+
+    // 1. 锁定检查先于数据库查询：锁定期间不触库，也不泄露账号是否存在
+    if ((await this.loginAttemptStore.getFailures(identifier)) >= protection.maxFailedAttempts) {
+      throw this.loginLockedException();
+    }
+
+    // 2. 查询用户（邮箱或手机号）
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { email: dto.identifier },
-          { phone: dto.identifier },
+          { email: identifier.toLowerCase() },
+          { phone: identifier },
         ],
       },
       select: {
@@ -142,32 +173,34 @@ export class AuthService {
       },
     });
 
-    // 2. 验证用户是否存在
-    if (!user) {
-      throw new UnauthorizedException('邮箱/手机号或密码错误');
+    // 3. 未知账号也执行一次 dummy 比对，避免响应耗时泄露账号是否存在
+    if (!user || !user.passwordHash) {
+      await this.compareAgainstDummy(dto.password, protection.bcryptRounds);
+      await this.registerLoginFailure(identifier, protection);
+      throw this.invalidCredentialsException();
     }
 
-    // 3. 验证用户是否激活
+    // 4. 验证密码（先验密码再判断禁用，避免未持有密码者枚举账号状态）
+    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!isPasswordValid) {
+      await this.registerLoginFailure(identifier, protection);
+      throw this.invalidCredentialsException();
+    }
+
     if (!user.isActive) {
       throw new ForbiddenException('账号已被禁用');
     }
 
-    // 4. 验证密码
-    if (!user.passwordHash) {
-      throw new UnauthorizedException('该账号未设置密码，请使用 Google 第三方登录');
-    }
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('邮箱/手机号或密码错误');
-    }
+    // 5. 登录成功清零失败计数
+    await this.loginAttemptStore.clear(identifier);
 
-    // 5. 更新最后登录时间
+    // 6. 更新最后登录时间
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
 
-    // 6. 生成 JWT Token
+    // 7. 生成 JWT Token
     const tokens = await this.jwtService.generateTokens({
       sub: user.id,
       role: user.role,
@@ -367,5 +400,43 @@ export class AuthService {
 
   async bindInviteCode(userId: string, dto: BindInviteCodeDto) {
     return this.federatedAuthService.bindInviteCode(userId, dto);
+  }
+
+  private loginProtection(): LoginProtection {
+    return resolveLoginProtection({
+      LOGIN_MAX_FAILED_ATTEMPTS: this.configService.get<string>('LOGIN_MAX_FAILED_ATTEMPTS'),
+      LOGIN_LOCK_MS: this.configService.get<string>('LOGIN_LOCK_MS'),
+      BCRYPT_ROUNDS: this.configService.get<string>('BCRYPT_ROUNDS'),
+    });
+  }
+
+  /** 记录一次失败；达到阈值时本次直接返回 429。 */
+  private async registerLoginFailure(
+    identifier: string,
+    protection: LoginProtection,
+  ): Promise<void> {
+    const failures = await this.loginAttemptStore.registerFailure(identifier, protection.lockMs);
+    if (failures >= protection.maxFailedAttempts) {
+      throw this.loginLockedException();
+    }
+  }
+
+  /**
+   * 未知账号/无密码账号的等时比对。
+   * dummy 哈希在首次使用时按当前 cost 生成并缓存，避免硬编码哈希或每次请求都重新计算。
+   */
+  private async compareAgainstDummy(password: string, rounds: number): Promise<void> {
+    if (!this.dummyPasswordHash) {
+      this.dummyPasswordHash = await bcrypt.hash(randomBytes(16).toString('hex'), rounds);
+    }
+    await bcrypt.compare(password, this.dummyPasswordHash);
+  }
+
+  private invalidCredentialsException(): UnauthorizedException {
+    return new UnauthorizedException('邮箱/手机号或密码错误');
+  }
+
+  private loginLockedException(): HttpException {
+    return new HttpException('登录尝试次数过多，请稍后再试', HttpStatus.TOO_MANY_REQUESTS);
   }
 }

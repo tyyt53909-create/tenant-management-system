@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Prisma, UserRole, InviteCodeStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { randomHex } from '../../common/utils/secure-random.js';
 import { QueryInviteCodesDto } from './dto/query-invite-codes.dto.js';
 
 export interface ValidatedInviteCode {
@@ -24,7 +25,7 @@ export class InviteCodeService {
     notes?: string,
     role: UserRole = 'TENANT',
   ): Promise<string> {
-    const inviteCode = `INVITE-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const inviteCode = `INVITE-${Date.now()}-${randomHex(3)}`;
     const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
     await this.prisma.inviteCode.create({
@@ -58,7 +59,7 @@ export class InviteCodeService {
 
     const now = Date.now();
     for (let i = 0; i < safeCount; i++) {
-      const code = `INVITE-${now}-${i + 1}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const code = `INVITE-${now}-${i + 1}-${randomHex(3)}`;
       codes.push(code);
       data.push({
         code,

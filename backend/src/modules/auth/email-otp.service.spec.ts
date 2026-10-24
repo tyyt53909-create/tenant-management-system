@@ -2,10 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { Logger, BadRequestException } from '@nestjs/common';
 import { EmailOtpService } from './email-otp.service.js';
-import type { OtpStore } from './otp-store.js';
+import { OTP_MAX_FAILED_ATTEMPTS, type OtpStore } from './otp-store.js';
 
 function storeOf(service: EmailOtpService): OtpStore {
   return (service as unknown as { otpStore: OtpStore }).otpStore;
+}
+
+function pinCode(service: EmailOtpService, code: string): void {
+  vi.spyOn(service as unknown as { generateCode: () => string }, 'generateCode').mockReturnValue(code);
 }
 
 describe('EmailOtpService', () => {
@@ -26,30 +30,69 @@ describe('EmailOtpService', () => {
     expect(res.cooldown).toBe(60);
   });
 
+  it('存储记录不含明文验证码，只保存哈希与盐', async () => {
+    pinCode(service, '889900');
+    await service.sendCode('tenant@example.com');
+
+    const record = await storeOf(service).get('tenant@example.com');
+    expect(record).toBeDefined();
+    expect(record).not.toHaveProperty('code');
+    expect(record?.codeHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(record?.salt).toMatch(/^[0-9a-f]{32}$/);
+    expect(JSON.stringify(record)).not.toContain('889900');
+  });
+
+  it('同一验证码两次发送使用不同盐，摘要不同', async () => {
+    pinCode(service, '889900');
+    await service.sendCode('tenant@example.com');
+    const first = await storeOf(service).get('tenant@example.com');
+
+    // 绕过 60 秒冷却，模拟重发
+    if (first) {
+      await storeOf(service).set('tenant@example.com', { ...first, lastSentAt: Date.now() - 61_000 });
+    }
+    await service.sendCode('tenant@example.com');
+    const second = await storeOf(service).get('tenant@example.com');
+
+    expect(second?.salt).not.toBe(first?.salt);
+    expect(second?.codeHash).not.toBe(first?.codeHash);
+  });
+
   it('在 60 秒冷却期内重复请求应抛出 BadRequestException', async () => {
     await service.sendCode('tenant@example.com');
     await expect(service.sendCode('tenant@example.com')).rejects.toThrow(BadRequestException);
   });
 
   it('验证码正确能够通过校验并单次失效', async () => {
-    await storeOf(service).set('tenant@example.com', {
-      code: '889900',
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      lastSentAt: Date.now(),
-      failedAttempts: 0,
-    });
+    pinCode(service, '889900');
+    await service.sendCode('tenant@example.com');
 
     expect(await service.verifyCode('tenant@example.com', '000000')).toBe(false);
     expect(await service.verifyCode('tenant@example.com', '889900')).toBe(true);
     expect(await service.verifyCode('tenant@example.com', '889900')).toBe(false);
   });
 
-  it('过期验证码应返回 false', async () => {
-    await storeOf(service).set('tenant@example.com', {
+  it('升级前的明文记录（无 codeHash/salt）被拒绝并删除', async () => {
+    const email = 'tenant@example.com';
+    await storeOf(service).set(email, {
       code: '889900',
+      expiresAt: Date.now() + 60_000,
+      lastSentAt: Date.now(),
+      failedAttempts: 0,
+    } as never);
+
+    expect(await service.verifyCode(email, '889900')).toBe(false);
+    expect(await storeOf(service).get(email)).toBeUndefined();
+  });
+
+  it('过期验证码应返回 false', async () => {
+    pinCode(service, '889900');
+    await service.sendCode('tenant@example.com');
+    const record = await storeOf(service).get('tenant@example.com');
+    await storeOf(service).set('tenant@example.com', {
+      ...record!,
       expiresAt: Date.now() - 1000,
       lastSentAt: Date.now() - 2000,
-      failedAttempts: 0,
     });
 
     expect(await service.verifyCode('tenant@example.com', '889900')).toBe(false);
@@ -94,14 +137,10 @@ describe('EmailOtpService', () => {
 
   it('连续 5 次错误后验证码作废，第 6 次即使输入正确码也失败', async () => {
     const email = 'tenant@example.com';
-    await storeOf(service).set(email, {
-      code: '889900',
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      lastSentAt: Date.now(),
-      failedAttempts: 0,
-    });
+    pinCode(service, '889900');
+    await service.sendCode(email);
 
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt < OTP_MAX_FAILED_ATTEMPTS; attempt += 1) {
       expect(await service.verifyCode(email, '000000')).toBe(false);
     }
 
@@ -109,14 +148,25 @@ describe('EmailOtpService', () => {
     expect(await storeOf(service).get(email)).toBeUndefined();
   });
 
+  it('并发错误输入不会丢计数，达到上限后正确码也失败', async () => {
+    const email = 'tenant@example.com';
+    pinCode(service, '889900');
+    await service.sendCode(email);
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => service.verifyCode(email, '000000')),
+    );
+
+    expect(results.every((result) => result === false)).toBe(true);
+    // 并发达到阈值后记录与计数器一起作废，后续正确码也不能再用
+    expect(await storeOf(service).get(email)).toBeUndefined();
+    expect(await service.verifyCode(email, '889900')).toBe(false);
+  });
+
   it('未达 5 次错误时，正确验证码仍然可以通过', async () => {
     const email = 'tenant@example.com';
-    await storeOf(service).set(email, {
-      code: '889900',
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      lastSentAt: Date.now(),
-      failedAttempts: 0,
-    });
+    pinCode(service, '889900');
+    await service.sendCode(email);
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
       expect(await service.verifyCode(email, '000000')).toBe(false);
@@ -127,16 +177,15 @@ describe('EmailOtpService', () => {
 
   it('验证码作废后必须重新发送，新验证码可以通过', async () => {
     const email = 'tenant@example.com';
-    await storeOf(service).set(email, {
-      code: '889900',
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      lastSentAt: Date.now() - 61_000,
-      failedAttempts: 4,
-    });
-    expect(await service.verifyCode(email, '000000')).toBe(false);
+    pinCode(service, '889900');
+    await service.sendCode(email);
+
+    for (let attempt = 0; attempt < OTP_MAX_FAILED_ATTEMPTS; attempt += 1) {
+      expect(await service.verifyCode(email, '000000')).toBe(false);
+    }
     expect(await service.verifyCode(email, '889900')).toBe(false);
 
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    pinCode(service, '550000');
     await service.sendCode(email);
 
     expect(await service.verifyCode(email, '550000')).toBe(true);
@@ -172,8 +221,8 @@ describe('EmailOtpService', () => {
 
     it('发信失败时日志搜不到本次验证码，且该验证码不能再使用', async () => {
       const entries = captureLogs();
-      vi.spyOn(Math, 'random').mockReturnValue(0.5);
       const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'production' }));
+      pinCode(isolated, '550000');
       (isolated as unknown as { transporter: { sendMail: () => Promise<never> } }).transporter = {
         sendMail: () => Promise.reject(new Error('smtp down body 550000')),
       };

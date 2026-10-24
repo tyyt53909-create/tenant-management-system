@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `docs/T258-backfill`
-> 集成基準: `origin/develop` @ `7b923f9`
+> 分支: `feature/T259-sec-03`
+> 集成基準: `origin/develop` @ `584797a`
 > 發布就緒: **NO-GO**
 > Gates: 11 pass / 0 fail / 3 not-run
 
@@ -18,7 +18,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | exit 0 |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 97 files / 960 tests |
+| 後端單元測試 | ✅ pass | 104 files / 1004 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | exit 0 |
 | 管理後台單元測試 | ✅ pass | 17 files / 79 tests |
@@ -43,14 +43,14 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 0 |
+| 進行中 | 1 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 7 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- 無
+- **T259 OTP 与登录防护（SEC-03）**（active，plan SEC-03，`feature/T259-sec-03`）
 
 ### 阻擋發布
 - 無
@@ -82,12 +82,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 29 | 14 | 7 | 1 | 14 |
+| 未分類 | 30 | 14 | 7 | 2 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T259 OTP 与登录防护](docs/handoff/2026-10-24-T259-OTP与登录防护.md)
 - [交接记录：T258 JWT 与会话强化](docs/handoff/2026-10-23-T258-JWT与会话强化.md)
 - [交接记录：T257 全域 deny-by-default 授权](docs/handoff/2026-10-23-T257-deny-by-default.md)
 - [交接记录：T256 错误码目录](docs/handoff/2026-10-23-T256-错误码目录.md)
@@ -95,7 +96,6 @@
 - [交接记录：T253 Node 24 LTS、优雅关闭与镜像加固](docs/handoff/2026-10-23-T253-Node24与优雅关闭.md)
 - [交接记录：T252 生产可启动性与配置验证](docs/handoff/2026-10-23-T252-生产可启动性.md)
 - [交接记录：T250 M0 生产化收口](docs/handoff/2026-10-23-T250-M0生产化收口.md)
-- [交接记录：T230 房源照片上传](docs/handoff/2026-10-21-T230-房源照片上传.md)
 
 ---
 
@@ -103,13 +103,13 @@
 
 - 資料模型：**34** 張表
 - OpenAPI 路由：**141** 條
-- 後端程式碼：**18105** 行
+- 後端程式碼：**18495** 行
 - 管理後台程式碼：**27734** 行
 - 小程序程式碼：**6631** 行
-- 文件：**128** 份
+- 文件：**129** 份
 
 ### 測試
-- 後端單元：97 files / 960 tests
+- 後端單元：104 files / 1004 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：17 files / 79 tests
 - 小程序單元：112 tests
