@@ -113,6 +113,10 @@ jobs:
       - name: 运行 e2e-mvp 验收脚本
         run: node scripts/e2e-mvp/run.mjs
 
+      - name: 真实 PostgreSQL 集成测试（QLT-01）
+        working-directory: backend
+        run: npm run test:int
+
       - name: 停止后端服务
         if: always()
         run: kill $(cat /tmp/backend-e2e.pid) 2>/dev/null || true

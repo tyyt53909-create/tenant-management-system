@@ -511,6 +511,9 @@ npm test
 # 运行端到端测试（vitest + supertest）
 npm run test:e2e
 
+# 真实 PostgreSQL 集成测试（QLT-01，会清空 DATABASE_URL 指向的库）
+npm run test:int
+
 # 生成覆盖率报告（@vitest/coverage-v8）
 npm run test:cov
 
