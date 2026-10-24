@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `develop`
-> 集成基準: `origin/develop` @ `2ce72e9`
+> 集成基準: `origin/develop` @ `a6bb2d5`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -15,7 +15,7 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | 182 warnings / 0 errors |
+| 後端 lint | ✅ pass | 186 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
 | 後端單元測試 | ✅ pass | 118 files / 1149 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 6 files / 21 tests |
+| 整合測試 | ✅ pass | 7 files / 21 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -36,20 +36,20 @@
 
 | 狀態 | 數量 |
 |---|---|
-| 已驗證完成 | 26 |
+| 已驗證完成 | 27 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 1 |
+| 進行中 | 0 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- **T271 个资、登记与密钥轮换（SEC-08）**（active，plan SEC-08，`feature/T271-sec-08-privacy`）
+- 無
 
 ### 阻擋發布
 - 無
@@ -81,7 +81,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 47 | 32 | 25 | 1 | 14 |
+| 未分類 | 47 | 33 | 26 | 0 | 14 |
 
 ---
 
