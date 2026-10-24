@@ -49,11 +49,23 @@ describe('NotificationDispatcher', () => {
   it('紧急通知会把邮件渠道也叫上', async () => {
     const sent: string[] = [];
     const dispatcher = new NotificationDispatcher([
-      new EmailChannel(async (item) => { sent.push(item.email || ''); }),
+      new EmailChannel(async (email) => { sent.push(email.to); }),
     ]);
 
     await dispatcher.dispatch({ ...message, priority: 'URGENT' });
 
     expect(sent).toEqual(['tenant@example.com']);
+  });
+
+  it('continues dispatching after a channel failure', async () => {
+    const succeeding = new RecordingChannel();
+    const dispatcher = new NotificationDispatcher([
+      { name: 'failing', send: async () => { throw new Error('smtp down'); } },
+      succeeding,
+    ]);
+
+    await dispatcher.dispatch({ ...message, channels: ['failing', 'audit'] });
+
+    expect(succeeding.sent).toHaveLength(1);
   });
 });
