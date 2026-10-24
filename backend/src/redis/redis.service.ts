@@ -27,14 +27,27 @@ export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   client: RedisCommandClient | null = null;
   ready = false;
-  private started = false;
+  private connecting: Promise<void> | null = null;
 
   constructor(private readonly configService: ConfigService) {}
 
+  /**
+   * 并发调用必须等同一个连接，不能「看到 started 就立即返回」。
+   * 之前 AuthModule 的 REFRESH_STORE 与 Throttler 同时调用 connect 时，
+   * 第二个调用会在 Redis 尚未 ready 时拿到 false，从而静默退化为内存会话（OPS-06 / T279）。
+   */
   async connect(): Promise<void> {
-    if (this.started) return;
-    this.started = true;
+    if (this.ready) return;
+    if (this.connecting) return this.connecting;
+    this.connecting = this.doConnect();
+    try {
+      await this.connecting;
+    } finally {
+      this.connecting = null;
+    }
+  }
 
+  private async doConnect(): Promise<void> {
     const connection = resolveRedisConnection((key) => this.read(key));
     const target = describeRedisConnection(connection);
     const redis = new Redis({
