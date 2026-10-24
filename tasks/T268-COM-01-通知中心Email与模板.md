@@ -1,12 +1,14 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T268
 plan_ref: COM-01
 stage: M1
 blocked_by:
 acceptance_evidence: tasks/evidence/T268.md
 branch: feature/T268-com-01
+complete_time: 2026-10-24
+merge_commit: 52b19b0
 handoff: docs/handoff/2026-10-24-T268-通知中心Email与模板.md
 ---
 
