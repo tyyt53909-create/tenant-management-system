@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `docs/T273-backfill`
-> 集成基準: `origin/develop` @ `8ac92a0`
+> 分支: `feature/T274-fin-08-meter-billing`
+> 集成基準: `origin/develop` @ `0230551`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -15,18 +15,18 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | exit 0 |
+| 後端 lint | ✅ pass | 182 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 112 files / 1100 tests |
+| 後端單元測試 | ✅ pass | 114 files / 1114 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
-| 管理後台 lint | ✅ pass | exit 0 |
+| 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 17 files / 79 tests |
 | 管理後台 build | ✅ pass | exit 0 |
 | 小程序單元測試 | ✅ pass | 112 tests |
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 4 files / 10 tests |
+| 整合測試 | ✅ pass | 5 files / 13 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -42,14 +42,14 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 0 |
+| 進行中 | 1 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- 無
+- **T274 抄表与计价（FIN-08）**（active，plan FIN-08，`feature/T274-fin-08-meter-billing`）
 
 ### 阻擋發布
 - 無
@@ -81,12 +81,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 43 | 29 | 22 | 0 | 14 |
+| 未分類 | 44 | 29 | 22 | 1 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T274 抄表与计价（FIN-08）](docs/handoff/2026-10-24-T274-抄表与计价.md)
 - [交接记录：T273 退租结算一致性](docs/handoff/2026-10-24-T273-退租结算一致性.md)
 - [交接记录：T270-审计重做](docs/handoff/2026-10-24-T270-审计重做.md)
 - [交接记录：T269-账号生命周期与员工管理](docs/handoff/2026-10-24-T269-账号生命周期与员工管理.md)
@@ -94,21 +95,20 @@
 - [交接记录：T267 押金账单与押金台账](docs/handoff/2026-10-24-T267-押金账单与台账.md)
 - [交接记录：T266-FIN-02 租金计费引擎](docs/handoff/2026-10-24-T266-租金计费引擎.md)
 - [交接记录：T265 财务资料禁止硬删除](docs/handoff/2026-10-24-T265-财务禁止硬删除.md)
-- [交接记录：T264 收款正确性](docs/handoff/2026-10-24-T264-收款正确性.md)
 
 ---
 
 ## 統計
 
 - 資料模型：**37** 張表
-- OpenAPI 路由：**154** 條
-- 後端程式碼：**20417** 行
-- 管理後台程式碼：**28494** 行
+- OpenAPI 路由：**156** 條
+- 後端程式碼：**21032** 行
+- 管理後台程式碼：**28606** 行
 - 小程序程式碼：**6643** 行
-- 文件：**144** 份
+- 文件：**145** 份
 
 ### 測試
-- 後端單元：112 files / 1100 tests
+- 後端單元：114 files / 1114 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：17 files / 79 tests
 - 小程序單元：112 tests
