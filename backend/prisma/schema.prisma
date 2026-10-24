@@ -91,6 +91,7 @@ enum AttachmentType {
 enum BillType {
   RENT // 租金账单
   UTILITY // 水电费账单（预付账户不足时补缴）
+  DEPOSIT // 押金账单
   OTHER // 其他费用
 }
 
@@ -501,6 +502,7 @@ model Contract {
   attachments             ContractAttachment[]
   checkoutRecords         CheckoutRecord[]
   utilityAllocations      PublicUtilityAllocation[]
+  depositLedger           DepositLedger?
 
   @@index([buildingId, status])
   @@index([tenantId, status])
@@ -558,6 +560,68 @@ model Bill {
   @@index([contractId, status])
   @@index([status, dueDate])
   @@map("bills")
+}
+
+// 8.1 DepositLedger / DepositTransaction（押金台账，FIN-03 / T267）
+enum DepositStatus {
+  HELD // 在管
+  REFUNDED // 已退还
+  PARTIAL // 部分扣除
+}
+
+enum DepositTransactionType {
+  COLLECT // 收取押金
+  REFUND // 退还
+  DEDUCT // 扣除
+  TRANSFER // 转移至新合同
+  REVERSAL // 收款冲正
+}
+
+model DepositLedger {
+  id         String @id @default(cuid())
+  contractId String @unique
+  contract   Contract @relation(fields: [contractId], references: [id])
+
+  tenantId String
+  roomId   String
+
+  /// 应缴押金（分）
+  amount  Int
+  /// 当前在管余额（分）
+  balance Int @default(0)
+  status  DepositStatus @default(HELD)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions DepositTransaction[]
+
+  @@index([tenantId])
+  @@index([roomId])
+  @@map("deposit_ledgers")
+}
+
+model DepositTransaction {
+  id       String @id @default(cuid())
+  ledgerId String
+  ledger   DepositLedger @relation(fields: [ledgerId], references: [id], onDelete: Cascade)
+
+  type   DepositTransactionType
+  /// 正数入账，负数出账
+  amount Int
+  /// 记账后余额（分）
+  balanceAfter Int
+
+  relatedType String?
+  relatedId   String?
+
+  operatorId String
+  notes      String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([ledgerId, createdAt])
+  @@map("deposit_transactions")
 }
 
 // 9. PaymentRecord（收款记录）
