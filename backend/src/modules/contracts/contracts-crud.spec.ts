@@ -37,6 +37,8 @@ describe('ContractsService CRUD（T157）', () => {
       building: { findUnique: vi.fn() },
       room: { findUnique: vi.fn(), update: vi.fn() },
       tenant: { findUnique: vi.fn() },
+      bill: { count: vi.fn().mockResolvedValue(0) },
+      checkoutRecord: { count: vi.fn().mockResolvedValue(0) },
     };
     // update() 现在把状态流转与房间随动放进事务里
     prismaMock.$transaction = vi.fn(async (callback: any) => callback(prismaMock));
@@ -199,14 +201,25 @@ describe('ContractsService CRUD（T157）', () => {
   });
 
   describe('remove', () => {
-    it('存在 → 删除并返回提示', async () => {
+    it('无财务关联 → 删除并返回提示', async () => {
       prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'DRAFT', roomId: 'room-1' });
+      prisma.bill.count.mockResolvedValue(0);
+      prisma.checkoutRecord.count.mockResolvedValue(0);
       prisma.contract.delete.mockResolvedValue({ id: 'c-1' });
 
       const res = await service.remove('c-1');
 
       expect(prisma.contract.delete).toHaveBeenCalledWith({ where: { id: 'c-1' } });
       expect(res).toEqual({ message: '合同已删除' });
+    });
+
+    it('已有账单或退租记录 → 409，不删除', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'ACTIVE', roomId: 'room-1' });
+      prisma.bill.count.mockResolvedValue(1);
+      prisma.checkoutRecord.count.mockResolvedValue(0);
+
+      await expect(service.remove('c-1')).rejects.toThrow(ConflictException);
+      expect(prisma.contract.delete).not.toHaveBeenCalled();
     });
 
     it('不存在 → 404 且不删除', async () => {

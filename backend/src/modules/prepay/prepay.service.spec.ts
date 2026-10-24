@@ -328,11 +328,20 @@ describe('PrepayService', () => {
       await expect(service.update(accountId, {} as any)).rejects.toThrow(NotFoundException);
     });
 
-    it('remove：删除账户', async () => {
-      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId });
+    it('remove：无流水且余额为 0 → 删除', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId, balanceCache: 0 });
+      prisma.prepayTransaction.count.mockResolvedValue(0);
       prisma.prepayAccount.delete.mockResolvedValue({ id: accountId });
 
       await expect(service.remove(accountId)).resolves.toEqual({ message: '预付账户已删除' });
+    });
+
+    it('remove：有流水或余额 → 409，不删除', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId, balanceCache: 100 });
+      prisma.prepayTransaction.count.mockResolvedValue(2);
+
+      await expect(service.remove(accountId)).rejects.toThrow(ConflictException);
+      expect(prisma.prepayAccount.delete).not.toHaveBeenCalled();
     });
 
     it('remove：不存在 → 404', async () => {

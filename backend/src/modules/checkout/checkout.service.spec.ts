@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CheckoutService } from './checkout.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -285,11 +285,11 @@ describe('CheckoutService', () => {
   });
 
   describe('remove', () => {
-    it('存在 → 删除', async () => {
+    it('财务凭证禁止硬删除 → 409', async () => {
       prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId });
-      prisma.checkoutRecord.delete.mockResolvedValue({ id: recordId });
 
-      await expect(service.remove(recordId)).resolves.toEqual({ message: '退租记录已删除' });
+      await expect(service.remove(recordId)).rejects.toThrow(ConflictException);
+      expect(prisma.checkoutRecord.delete).not.toHaveBeenCalled();
     });
 
     it('不存在 → 404', async () => {

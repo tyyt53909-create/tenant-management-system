@@ -279,6 +279,15 @@ export class ContractsService {
       throw new NotFoundException('合同不存在');
     }
 
+    // FIN-06 / T265：已有账单/收款/退租等财务关联的合同不得硬删除。
+    const [bills, checkouts] = await Promise.all([
+      this.prisma.bill.count({ where: { contractId: id } }),
+      this.prisma.checkoutRecord.count({ where: { contractId: id } }),
+    ]);
+    if (bills > 0 || checkouts > 0) {
+      throw new ConflictException('合同已有账单或退租记录，不能删除；请保留合同并作废相关单据');
+    }
+
     await this.prisma.contract.delete({ where: { id } });
     return { message: '合同已删除' };
   }

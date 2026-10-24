@@ -31,6 +31,14 @@ class ProbeController {
     });
   }
 
+  @Get('foreign')
+  foreign() {
+    throw new Prisma.PrismaClientKnownRequestError('Foreign key constraint failed', {
+      code: 'P2003',
+      clientVersion: '5.22.0',
+    });
+  }
+
   @Get('missing')
   missing() {
     throw new Prisma.PrismaClientKnownRequestError('Record to update not found.', {

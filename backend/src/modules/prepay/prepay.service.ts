@@ -96,6 +96,13 @@ export class PrepayService {
   async remove(id: string) {
     const account = await this.prisma.prepayAccount.findUnique({ where: { id } });
     if (!account) throw new NotFoundException('预付账户不存在');
+
+    // FIN-06 / T265：有流水或余额的预付账户属于财务资料，禁止硬删除。
+    const transactions = await this.prisma.prepayTransaction.count({ where: { accountId: id } });
+    if (transactions > 0 || account.balanceCache !== 0) {
+      throw new ConflictException('预付账户存在流水或余额，不能删除；请先结转余额并保留流水');
+    }
+
     await this.prisma.prepayAccount.delete({ where: { id } });
     return { message: '预付账户已删除' };
   }
