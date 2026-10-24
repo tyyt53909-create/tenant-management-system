@@ -60,12 +60,12 @@ describe('EmailChannel', () => {
 
   it('parses SMTP settings and rejects invalid port/partial authentication', () => {
     expect(parseSmtpConfiguration({ SMTP_HOST: 'mail.example.com', SMTP_FROM: 'noreply@example.com' } as NodeJS.ProcessEnv))
-      .toMatchObject({ host: 'mail.example.com', port: 587, secure: false, from: 'noreply@example.com' });
+      .toMatchObject({ host: 'mail.example.com', port: 465, secure: true, from: 'noreply@example.com' });
     expect(parseSmtpConfiguration({ SMTP_HOST: 'mail.example.com', SMTP_FROM: 'noreply@example.com', SMTP_PORT: '465' } as NodeJS.ProcessEnv))
       .toMatchObject({ port: 465, secure: true });
     expect(() => parseSmtpConfiguration({ SMTP_HOST: 'mail.example.com', SMTP_FROM: 'noreply@example.com', SMTP_PORT: 'bad' } as NodeJS.ProcessEnv))
       .toThrow('SMTP_PORT');
     expect(() => parseSmtpConfiguration({ SMTP_HOST: 'mail.example.com', SMTP_FROM: 'noreply@example.com', SMTP_USER: 'user' } as NodeJS.ProcessEnv))
-      .toThrow('SMTP_USER and SMTP_PASSWORD');
+      .toThrow('SMTP_USER and SMTP_PASS');
   });
 });

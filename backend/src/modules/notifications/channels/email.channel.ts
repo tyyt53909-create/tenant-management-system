@@ -22,16 +22,16 @@ export interface SmtpConfiguration {
 
 export function parseSmtpConfiguration(env: NodeJS.ProcessEnv = process.env): SmtpConfiguration | undefined {
   const host = env.SMTP_HOST?.trim();
-  const from = env.SMTP_FROM?.trim();
-  if (!host || !from) return undefined;
+  if (!host) return undefined;
+  const from = env.SMTP_FROM?.trim() || '"栖居生活" <no-reply@qiju.com>';
 
-  const port = Number(env.SMTP_PORT ?? 587);
+  const port = Number(env.SMTP_PORT ?? 465);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('SMTP_PORT must be an integer between 1 and 65535');
   }
   const user = env.SMTP_USER?.trim();
-  const pass = env.SMTP_PASSWORD;
-  if ((user && !pass) || (!user && pass)) throw new Error('SMTP_USER and SMTP_PASSWORD must be configured together');
+  const pass = env.SMTP_PASS;
+  if ((user && !pass) || (!user && pass)) throw new Error('SMTP_USER and SMTP_PASS must be configured together');
 
   return {
     host,
