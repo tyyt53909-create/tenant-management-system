@@ -44,6 +44,7 @@
 | [22-可观测性与告警.md](./22-可观测性与告警.md) | 可观测性与告警 | 事实来源类 | active | strong | backend/src/common/{metrics,alerts}/\*\*、backend/src/modules/scheduler/\*\* | 2026-10-25 | T277：Prometheus 指标、/metrics 访问控制、告警 webhook、JobRun PARTIAL、锁 TTL |
 | [23-后台任务与队列.md](./23-后台任务与队列.md) | 后台任务与队列 | 事实来源类 | active | strong | backend/src/modules/jobs/\*\*、backend/src/worker.ts、backend/src/modules/scheduler/\*\* | 2026-10-25 | T278：BullMQ 生产者/Worker、死信运维接口、重试与优雅关闭、生产 compose worker |
 | [24-多实例运行约束.md](./24-多实例运行约束.md) | 多实例运行约束 | 事实来源类 | active | strong | backend/src/redis/\*\*、backend/src/config/env.validation.ts、backend/test/integration/multi-instance.int-spec.ts | 2026-10-25 | T279：共享状态清单、MULTI_INSTANCE 启动约束、Redis 并发连接语义、跨实例会话验证 |
+| [25-备份与恢复.md](./25-备份与恢复.md) | 备份、PITR 与恢复演练 | 事实来源类 | active | strong | scripts/backup-db.sh、scripts/restore-db.sh、scripts/restore-rehearsal.sh、scripts/backup-core.mjs | 2026-10-25 | T280：每日逻辑备份、checksum、保留策略、恢复与月度演练、托管 PITR |
 
 ---
 
@@ -59,6 +60,7 @@
 
 ## 3. 任务与交接
 
+- [T280-OPS-07-备份与恢复.md](../tasks/T280-OPS-07-备份与恢复.md)：OPS-07，逻辑备份/校验/保留、恢复脚本与演练手册。
 - [T279-OPS-06-多实例无状态.md](../tasks/T279-OPS-06-多实例无状态.md)：OPS-06，Redis 并发连接修复、MULTI_INSTANCE 约束、跨实例会话验证。
 - [T278-OPS-05-后台任务队列.md](../tasks/T278-OPS-05-后台任务队列.md)：OPS-05，BullMQ 队列/Worker、死信接口、重试与优雅关闭。
 - [T277-OPS-04-可观测性与告警.md](../tasks/T277-OPS-04-可观测性与告警.md)：OPS-04，Prometheus 指标、告警 webhook、JobRun PARTIAL、锁 TTL。
@@ -99,6 +101,7 @@
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-25-T280-备份与恢复.md](./handoff/2026-10-25-T280-备份与恢复.md)：T280，备份/恢复/演练脚本与文档。
 - [2026-10-25-T279-多实例无状态.md](./handoff/2026-10-25-T279-多实例无状态.md)：T279，Redis 并发连接、多实例存储约束与会话验证。
 - [2026-10-25-T278-后台任务队列.md](./handoff/2026-10-25-T278-后台任务队列.md)：T278，BullMQ 队列与 Worker、死信运维接口。
 - [2026-10-25-T277-可观测性与告警.md](./handoff/2026-10-25-T277-可观测性与告警.md)：T277，指标/告警/JobRun PARTIAL。

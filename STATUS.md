@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `develop`
-> 集成基準: `origin/develop` @ `cdaef5b`
+> 集成基準: `origin/develop` @ `b250110`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | 186 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 126 files / 1179 tests |
+| 後端單元測試 | ✅ pass | 126 files / 1178 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 18 files / 84 tests |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 11 files / 29 tests |
+| 整合測試 | ✅ pass | 10 files / 27 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -42,7 +42,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 1 |
+| 進行中 | 2 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -50,6 +50,7 @@
 
 ### 進行中
 - **T279 无状态化与多实例验证（OPS-06）**（active，plan OPS-06，`feature/T279-ops-06-stateless`）
+- **T280 备份、PITR 与恢复演练（OPS-07）**（active，plan OPS-07，`feature/T280-ops-07-backup`）
 
 ### 阻擋發布
 - 無
@@ -81,12 +82,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 51 | 36 | 29 | 1 | 14 |
+| 未分類 | 52 | 36 | 29 | 2 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T280 备份、PITR 与恢复演练（OPS-07）](docs/handoff/2026-10-25-T280-备份与恢复.md)
 - [交接记录：T279 无状态化与多实例验证（OPS-06）](docs/handoff/2026-10-25-T279-多实例无状态.md)
 - [交接记录：T278 后台任务队列（OPS-05）](docs/handoff/2026-10-25-T278-后台任务队列.md)
 - [交接记录：T277 可观测性与告警（OPS-04）](docs/handoff/2026-10-25-T277-可观测性与告警.md)
@@ -94,7 +96,6 @@
 - [交接记录：T276 设置中心（FIN-11）](docs/handoff/2026-10-24-T276-设置中心.md)
 - [交接记录：T275 指标、金额格式与导出合并（FIN-10）](docs/handoff/2026-10-24-T275-指标金额与导出合并.md)
 - [交接记录：T274 抄表与计价（FIN-08）](docs/handoff/2026-10-24-T274-抄表与计价.md)
-- [交接记录：T273 退租结算一致性](docs/handoff/2026-10-24-T273-退租结算一致性.md)
 
 ---
 
@@ -105,10 +106,10 @@
 - 後端程式碼：**22872** 行
 - 管理後台程式碼：**29691** 行
 - 小程序程式碼：**6643** 行
-- 文件：**156** 份
+- 文件：**158** 份
 
 ### 測試
-- 後端單元：126 files / 1179 tests
+- 後端單元：126 files / 1178 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：18 files / 84 tests
 - 小程序單元：112 tests
