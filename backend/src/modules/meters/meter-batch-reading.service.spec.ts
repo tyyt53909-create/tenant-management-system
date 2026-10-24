@@ -14,6 +14,7 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     const prismaMock: any = {
       meter: { findUnique: vi.fn(), findMany: vi.fn() },
       meterReading: {
+        findUnique: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
         count: vi.fn(),
@@ -21,9 +22,11 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
         update: vi.fn(),
       },
       prepayAccount: { findMany: vi.fn() },
+      meterPriceHistory: { findMany: vi.fn() },
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.meterPriceHistory.findMany.mockResolvedValue([]);
     const billingMock: any = { applyReadingDeduction: vi.fn() };
     const providers: any[] = [
       MeterBatchReadingService,
@@ -337,7 +340,7 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     expect(result.results[0]).toMatchObject({ success: true, deducted: 500, shortfall: 0 });
     expect(prisma.meterReading.update).toHaveBeenCalledWith({
       where: { id: 'r-s' },
-      data: { notes: '抄表 [msgId:settle-1] [SETTLED]' },
+      data: expect.objectContaining({ notes: '抄表 [msgId:settle-1] [SETTLED]' }),
     });
   });
 
@@ -363,7 +366,7 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     expect(result.results[0]).toMatchObject({ success: true, deducted: 300, shortfall: 200 });
     expect(prisma.meterReading.update).toHaveBeenCalledWith({
       where: { id: 'r-s2' },
-      data: { notes: '[SETTLED]' },
+      data: expect.objectContaining({ notes: '[SETTLED]' }),
     });
   });
 

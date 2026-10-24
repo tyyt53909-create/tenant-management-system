@@ -24,15 +24,18 @@ describe('MeterReadingService (T196 coverage)', () => {
     const prismaMock: any = {
       meter: { findUnique: vi.fn() },
       meterReading: {
+        findUnique: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
         count: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
       },
+      meterPriceHistory: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.meterPriceHistory.findMany.mockResolvedValue([]);
     const billingMock: any = { applyReadingDeduction: vi.fn() };
     return { prismaMock, billingMock };
   }
@@ -201,7 +204,7 @@ describe('MeterReadingService (T196 coverage)', () => {
     );
     expect(prisma.meterReading.update).toHaveBeenCalledWith({
       where: { id: 'r-4' },
-      data: { notes: '备注A [SETTLED]' },
+      data: expect.objectContaining({ notes: '备注A [SETTLED]' }),
     });
     expect(result.reading.notes).toBe('备注A [SETTLED]');
   });

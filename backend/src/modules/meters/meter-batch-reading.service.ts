@@ -3,17 +3,22 @@ import type { Prisma, ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
+import { MeterPriceService } from './meter-price.service.js';
+import { buildReadingDedupKey } from './meter-dedup.util.js';
 import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterBatchReadingService {
   private readonly billingService: MeterBillingService;
+  private readonly priceService: MeterPriceService;
 
   constructor(
     private readonly prisma: PrismaService,
     @Optional() billingService?: MeterBillingService,
+    @Optional() priceService?: MeterPriceService,
   ) {
     this.billingService = billingService ?? new MeterBillingService(prisma);
+    this.priceService = priceService ?? new MeterPriceService(prisma);
   }
 
   /**
@@ -174,8 +179,31 @@ export class MeterBatchReadingService {
 
         const readingTime = item.readingTime ? new Date(item.readingTime) : new Date();
         const source = item.source || 'MANUAL';
+        const dedupKey = buildReadingDedupKey({
+          messageId: item.messageId,
+          readingTime,
+          currentReading: item.currentReading,
+          source,
+        });
 
-        // 幂等去重 1: messageId
+        // 幂等去重 0: 数据库去重键（T274）
+        const existingDedupReading = await tx.meterReading.findUnique({
+          where: { meterId_dedupKey: { meterId: item.meterId, dedupKey } },
+        });
+        if (existingDedupReading) {
+          results.push({
+            meterId: item.meterId,
+            meterNumber: meter.meterNumber,
+            roomNumber: meter.room?.roomNumber,
+            success: true,
+            currentReading: Number(existingDedupReading.currentReading),
+            previousReading: Number(existingDedupReading.previousReading),
+            usage: Number(existingDedupReading.usage),
+          });
+          continue;
+        }
+
+        // 幂等去重 1: messageId（兼容迁移前的历史记录）
         if (item.messageId) {
           const msgTag = `[msgId:${item.messageId}]`;
           const existingMsgReading = await tx.meterReading.findFirst({
@@ -219,6 +247,11 @@ export class MeterBatchReadingService {
               readingTime,
               readBy: operatorId,
               notes,
+              dedupKey,
+              settledAt: readingTime,
+              settledUsage: 0,
+              settledUnitPrice: meter.unitPrice,
+              settledAmount: 0,
             },
           });
 
@@ -312,6 +345,7 @@ export class MeterBatchReadingService {
               readingTime,
               readBy: operatorId,
               notes,
+              dedupKey,
             },
           });
 
@@ -356,6 +390,7 @@ export class MeterBatchReadingService {
               // 同 meter-reading：结算基准要排除模拟读数（T209）
               source: NOT_SIMULATED,
               OR: [
+                { settledAt: { not: null } },
                 { notes: { contains: '[SETTLED]' } },
                 { notes: { contains: '[INITIAL]' } },
               ],
@@ -381,17 +416,32 @@ export class MeterBatchReadingService {
             readingTime,
             readBy: operatorId,
             notes: notes || null,
+            dedupKey,
           },
         });
 
         let deduction: { applied?: boolean; amount?: number; deducted?: number; shortfall?: number; reason?: string } = { applied: false, amount: 0, deducted: 0, shortfall: 0 };
         if (shouldAutoSettle) {
-          deduction = await this.billingService.applyReadingDeduction(tx, meter, reading, billableUsage, operatorId);
+          const unitPrice = await this.priceService.resolveUnitPrice(meter, readingTime, tx);
+          deduction = await this.billingService.applyReadingDeduction(
+            tx,
+            meter,
+            reading,
+            billableUsage,
+            operatorId,
+            unitPrice,
+          );
           if (deduction.applied || billableUsage === 0) {
             const settledNotes = reading.notes ? `${reading.notes} [SETTLED]` : '[SETTLED]';
             await tx.meterReading.update({
               where: { id: reading.id },
-              data: { notes: settledNotes },
+              data: {
+                notes: settledNotes,
+                settledAt: new Date(),
+                settledUsage: billableUsage,
+                settledUnitPrice: unitPrice,
+                settledAmount: (deduction.deducted ?? 0) + (deduction.shortfall ?? 0),
+              },
             });
             reading.notes = settledNotes;
           }

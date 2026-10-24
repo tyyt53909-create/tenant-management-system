@@ -12,6 +12,7 @@ import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { QueryReconciliationDto } from './dto/query-reconciliation.dto.js';
 import { MeterReconciliationService } from './meter-reconciliation.service.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
+import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
 import { RunSimulationDto } from './dto/run-simulation.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -62,8 +63,9 @@ export class MetersController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  create(@Body() createMeterDto: CreateMeterDto) {
-    return this.metersService.create(createMeterDto);
+  create(@CurrentUser() userParam: CurrentUserParam, @Body() createMeterDto: CreateMeterDto) {
+    const user = resolveAuthUser(userParam);
+    return this.metersService.create(createMeterDto, user.userId);
   }
 
   // 批量抄表底表（仅 ADMIN）
@@ -168,6 +170,27 @@ export class MetersController {
     return this.metersService.getUnsettledUsage(id, settleUntil);
   }
 
+  // 价格历史（表级调价 + 类型默认价，T274）
+  @Get(':id/price-history')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  priceHistory(@Param('id') id: string) {
+    return this.metersService.priceHistory(id);
+  }
+
+  // 调价：写价格历史并更新当前价（T274）
+  @Post(':id/price')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  setPrice(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto: SetMeterPriceDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.metersService.setPrice(id, dto, user.userId);
+  }
+
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -178,8 +201,13 @@ export class MetersController {
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  update(@Param('id') id: string, @Body() updateMeterDto: UpdateMeterDto) {
-    return this.metersService.update(id, updateMeterDto);
+  update(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() updateMeterDto: UpdateMeterDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.metersService.update(id, updateMeterDto, user.userId);
   }
 
   @Delete(':id')

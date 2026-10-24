@@ -4,17 +4,22 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
+import { MeterPriceService } from './meter-price.service.js';
+import { buildReadingDedupKey, isSettledReading, isUniqueViolation } from './meter-dedup.util.js';
 import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterReadingService {
   private readonly billingService: MeterBillingService;
+  private readonly priceService: MeterPriceService;
 
   constructor(
     private readonly prisma: PrismaService,
     @Optional() billingService?: MeterBillingService,
+    @Optional() priceService?: MeterPriceService,
   ) {
     this.billingService = billingService ?? new MeterBillingService(prisma);
+    this.priceService = priceService ?? new MeterPriceService(prisma);
   }
 
   /**
@@ -33,8 +38,16 @@ export class MeterReadingService {
     const source = dto.source || 'MANUAL';
     // 手工录入默认结算。设备上报和模拟器读数默认只采集。
     const shouldAutoSettle = settlesByDefault(source, dto.autoSettle);
+    // 业务去重键：messageId 优先，否则时间+读数+来源摘要（T274）
+    const dedupKey = buildReadingDedupKey({
+      messageId: dto.messageId,
+      readingTime,
+      currentReading: dto.currentReading,
+      source,
+    });
 
-    return this.prisma.$transaction(async (tx) => {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
       const meter = await tx.meter.findUnique({ where: { id: meterId } });
 
       if (!meter) {
@@ -45,7 +58,18 @@ export class MeterReadingService {
         throw new BadRequestException('水电表已停用，不能登记读数');
       }
 
-      // 1. 消息幂等去重：相同 messageId 重复上传
+      // 0. 数据库去重键命中：并发/重投直接返回已有记录（T274）
+      const existingDedupReading = await tx.meterReading.findUnique({
+        where: { meterId_dedupKey: { meterId, dedupKey } },
+      });
+      if (existingDedupReading) {
+        return {
+          reading: existingDedupReading,
+          deduction: { applied: false, reason: '重复读数（去重键已存在），已忽略并返回已有记录' },
+        };
+      }
+
+      // 1. 消息幂等去重：相同 messageId 重复上传（兼容迁移前的历史记录）
       if (dto.messageId) {
         const msgTag = `[msgId:${dto.messageId}]`;
         const existingMsgReading = await tx.meterReading.findFirst({
@@ -88,6 +112,12 @@ export class MeterReadingService {
             readingTime,
             readBy: operatorId,
             notes,
+            dedupKey,
+            // 初始底数即结算基准，结构字段一并落库，避免后续把底数当未结算用量（T274）
+            settledAt: readingTime,
+            settledUsage: 0,
+            settledUnitPrice: meter.unitPrice,
+            settledAmount: 0,
           },
         });
         return {
@@ -169,6 +199,7 @@ export class MeterReadingService {
             readingTime,
             readBy: operatorId,
             notes,
+            dedupKey,
           },
         });
 
@@ -199,6 +230,7 @@ export class MeterReadingService {
             // 结算基准必须排除模拟读数，否则仿真器的 [INITIAL]/[SETTLED] 会成为真实扣费起点（T209）
             source: NOT_SIMULATED,
             OR: [
+              { settledAt: { not: null } },
               { notes: { contains: '[SETTLED]' } },
               { notes: { contains: '[INITIAL]' } },
             ],
@@ -221,18 +253,36 @@ export class MeterReadingService {
           readingTime,
           readBy: operatorId,
           notes: notes || null,
+          dedupKey,
         },
       });
 
       let deduction: Record<string, unknown> = { applied: false, reason: '已采集读数，未开启自动扣费（等待周期结算）' };
       if (shouldAutoSettle) {
-        deduction = await this.billingService.applyReadingDeduction(tx, meter, reading, billableUsage, operatorId);
-        // 统一入账基准：仅当扣费或生成账单成功时，才正式盖印 [SETTLED]
+        // 按读数业务日期取生效单价（T274）；缺历史时回落到表上当前价
+        const unitPrice = await this.priceService.resolveUnitPrice(meter, readingTime, tx);
+        deduction = await this.billingService.applyReadingDeduction(
+          tx,
+          meter,
+          reading,
+          billableUsage,
+          operatorId,
+          unitPrice,
+        );
+        // 统一入账基准：仅当扣费或生成账单成功时，才正式盖印结算字段
         if (deduction.applied || billableUsage === 0) {
           const settledNotes = reading.notes ? `${reading.notes} [SETTLED]` : '[SETTLED]';
+          const deducted = Number(deduction.deducted ?? 0);
+          const shortfall = Number(deduction.shortfall ?? 0);
           await tx.meterReading.update({
             where: { id: reading.id },
-            data: { notes: settledNotes },
+            data: {
+              notes: settledNotes,
+              settledAt: new Date(),
+              settledUsage: billableUsage,
+              settledUnitPrice: unitPrice,
+              settledAmount: deducted + shortfall,
+            },
           });
           reading.notes = settledNotes;
         }
@@ -240,6 +290,19 @@ export class MeterReadingService {
 
       return { reading, deduction };
     });
+    } catch (error) {
+      // 并发重投：两个请求同时通过前置检查时由唯一约束兜底，返回先落库的那条
+      if (isUniqueViolation(error, 'dedupKey')) {
+        const existing = await this.prisma.meterReading.findFirst({ where: { meterId, dedupKey } });
+        if (existing) {
+          return {
+            reading: existing,
+            deduction: { applied: false, reason: '重复读数（去重键已存在），已忽略并返回已有记录' },
+          };
+        }
+      }
+      throw error;
+    }
   }
 
   /**

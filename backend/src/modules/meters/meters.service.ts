@@ -8,10 +8,12 @@ import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
+import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
 import { ManualMeterAdapter } from './adapters/manual-meter.adapter.js';
 import { METER_TYPE_LABEL } from './meter-types.constants.js';
 import { MeterService } from './meter.service.js';
+import { MeterPriceService } from './meter-price.service.js';
 import { MeterReadingService } from './meter-reading.service.js';
 import { MeterBatchReadingService } from './meter-batch-reading.service.js';
 import { MeterBillingService } from './meter-billing.service.js';
@@ -22,6 +24,7 @@ export { METER_TYPE_LABEL };
 @Injectable()
 export class MetersService {
   private readonly meterService: MeterService;
+  private readonly priceService: MeterPriceService;
   private readonly readingService: MeterReadingService;
   private readonly batchReadingService: MeterBatchReadingService;
   private readonly billingService: MeterBillingService;
@@ -35,13 +38,16 @@ export class MetersService {
     @Optional() billingService?: MeterBillingService,
     @Optional() usageQueryService?: MeterUsageQueryService,
     @Optional() @Inject(METER_ADAPTER) meterAdapter?: MeterAdapter,
+    @Optional() priceService?: MeterPriceService,
   ) {
     const adapter = meterAdapter ?? new ManualMeterAdapter(prisma);
-    this.meterService = meterService ?? new MeterService(prisma, adapter);
-    this.billingService = billingService ?? new MeterBillingService(prisma);
-    this.readingService = readingService ?? new MeterReadingService(prisma, this.billingService);
-    this.batchReadingService = batchReadingService ?? new MeterBatchReadingService(prisma, this.billingService);
-    this.usageQueryService = usageQueryService ?? new MeterUsageQueryService(prisma);
+    this.priceService = priceService ?? new MeterPriceService(prisma);
+    this.meterService = meterService ?? new MeterService(prisma, adapter, this.priceService);
+    this.billingService = billingService ?? new MeterBillingService(prisma, undefined, this.priceService);
+    this.readingService = readingService ?? new MeterReadingService(prisma, this.billingService, this.priceService);
+    this.batchReadingService =
+      batchReadingService ?? new MeterBatchReadingService(prisma, this.billingService, this.priceService);
+    this.usageQueryService = usageQueryService ?? new MeterUsageQueryService(prisma, undefined, this.priceService);
   }
 
   /** 按当前适配器取最新读数 */
@@ -49,8 +55,8 @@ export class MetersService {
     return this.meterService.fetchReading(meterId);
   }
 
-  async create(dto: CreateMeterDto) {
-    return this.meterService.create(dto);
+  async create(dto: CreateMeterDto, operatorId = 'SYSTEM') {
+    return this.meterService.create(dto, operatorId);
   }
 
   async findAll(query: QueryMetersDto) {
@@ -61,8 +67,18 @@ export class MetersService {
     return this.meterService.findOne(id);
   }
 
-  async update(id: string, dto: UpdateMeterDto) {
-    return this.meterService.update(id, dto);
+  async update(id: string, dto: UpdateMeterDto, operatorId = 'SYSTEM') {
+    return this.meterService.update(id, dto, operatorId);
+  }
+
+  /** 调价：写价格历史 + 更新当前价（T274） */
+  async setPrice(id: string, dto: SetMeterPriceDto, operatorId: string) {
+    return this.meterService.setPrice(id, dto, operatorId);
+  }
+
+  /** 价格历史（表级调价 + 类型默认价） */
+  async priceHistory(id: string) {
+    return this.meterService.priceHistory(id);
   }
 
   async remove(id: string) {

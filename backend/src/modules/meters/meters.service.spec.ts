@@ -32,6 +32,7 @@ describe('MetersService', () => {
         delete: vi.fn(),
       },
       meterReading: {
+        findUnique: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
         count: vi.fn(),
@@ -47,9 +48,16 @@ describe('MetersService', () => {
       },
       prepayTransaction: { create: vi.fn() },
       bill: { create: vi.fn() },
+      meterPriceHistory: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+      $queryRaw: vi.fn(),
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.meterPriceHistory.findMany.mockResolvedValue([]);
+    prismaMock.meterPriceHistory.findFirst.mockResolvedValue(null);
+    prismaMock.meterPriceHistory.create.mockImplementation(async ({ data }: any) => ({ id: 'price-1', ...data }));
+    prismaMock.meterReading.findMany.mockResolvedValue([]);
+    prismaMock.$queryRaw.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [MetersService, { provide: PrismaService, useValue: prismaMock }],
@@ -737,7 +745,7 @@ describe('MetersService', () => {
 
     it('已结算读数无新增用量：settled=false, usage=0', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
-      const latestReading = { id: 'rd-latest', currentReading: 200, readingTime: new Date() };
+      const latestReading = { id: 'rd-latest', currentReading: 200, readingTime: new Date(), settledAt: new Date() };
       prisma.meterReading.findFirst
         .mockResolvedValueOnce(latestReading)
         .mockResolvedValueOnce(latestReading);
@@ -751,7 +759,7 @@ describe('MetersService', () => {
     it('结算周期内累计用量并完成扣费，打标 [SETTLED]', async () => {
       prisma.meter.findUnique.mockResolvedValue(baseMeter);
       const latestReading = { id: 'rd-latest', currentReading: 250, readingTime: new Date(), notes: '日常采集' };
-      const lastSettledReading = { id: 'rd-base', currentReading: 150, readingTime: new Date('2026-10-01') };
+      const lastSettledReading = { id: 'rd-base', currentReading: 150, readingTime: new Date('2026-10-01'), settledAt: new Date('2026-10-01') };
 
       prisma.meterReading.findFirst
         .mockResolvedValueOnce(latestReading)
@@ -771,7 +779,7 @@ describe('MetersService', () => {
       expect(result.amount).toBe(10000); // 100 * 100
       expect(prisma.meterReading.update).toHaveBeenCalledWith({
         where: { id: 'rd-latest' },
-        data: { notes: expect.stringContaining('[SETTLED]') },
+        data: expect.objectContaining({ notes: expect.stringContaining('[SETTLED]') }),
       });
       expect((result as any).deduction.applied).toBe(true);
       expect((result as any).deduction.deducted).toBe(10000);
@@ -787,7 +795,7 @@ describe('MetersService', () => {
         },
       });
       const latestReading = { id: 'rd-latest', currentReading: 320, readingTime: new Date('2026-10-15T10:00:00Z') };
-      const lastSettled = { id: 'rd-settled', currentReading: 200, readingTime: new Date('2026-10-01T00:00:00Z') };
+      const lastSettled = { id: 'rd-settled', currentReading: 200, readingTime: new Date('2026-10-01T00:00:00Z'), settledAt: new Date('2026-10-01T00:00:00Z') };
 
       prisma.meterReading.findFirst
         .mockResolvedValueOnce(latestReading)

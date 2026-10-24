@@ -2764,6 +2764,988 @@
         "security": []
       }
     },
+    "/api/meters/reconciliation": {
+      "get": {
+        "operationId": "MetersController_reconcile",
+        "parameters": [
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "description": "账期 YYYY-MM；不传时默认上个月",
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "meterType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ELECTRICITY",
+                "WATER",
+                "GAS"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "水电对账（T218）：读数 / 扣费 / 账单三方交叉核对，只读。\n只有管理员可用；租客只在自己的账单里看到扣费结果。",
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/simulator/run": {
+      "post": {
+        "operationId": "MetersController_runSimulation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSimulationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters": {
+      "post": {
+        "operationId": "MetersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMeterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "MetersController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "meterType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ELECTRICITY",
+                "WATER",
+                "GAS"
+              ]
+            }
+          },
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roomId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/batch-sheet": {
+      "get": {
+        "operationId": "MetersController_getBatchSheet",
+        "parameters": [
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "meterType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ELECTRICITY",
+                "WATER",
+                "GAS"
+              ]
+            }
+          },
+          {
+            "name": "floor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/batch-readings": {
+      "post": {
+        "operationId": "MetersController_createBatchReadings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchMeterReadingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/settle-batch": {
+      "post": {
+        "operationId": "MetersController_settleBatch",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/readings/export": {
+      "get": {
+        "operationId": "MetersController_exportReadings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/usage-overview": {
+      "get": {
+        "operationId": "MetersController_getUsageOverview",
+        "parameters": [
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "month",
+            "required": false,
+            "in": "query",
+            "description": "目标月份，格式为 YYYY-MM\n若未指定则默认为当前月份",
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/{id}/readings": {
+      "post": {
+        "operationId": "MetersController_createReading",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMeterReadingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "MetersController_findReadings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/{id}/settle": {
+      "post": {
+        "operationId": "MetersController_settleMeter",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettleMeterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/{id}/unsettled-usage": {
+      "get": {
+        "operationId": "MetersController_getUnsettledUsage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "settleUntil",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/{id}/price-history": {
+      "get": {
+        "operationId": "MetersController_priceHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/{id}/price": {
+      "post": {
+        "operationId": "MetersController_setPrice",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMeterPriceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/meters/{id}": {
+      "get": {
+        "operationId": "MetersController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "MetersController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "MetersController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meters"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/imports/{entity}/template": {
       "get": {
         "operationId": "ImportsController_template",
@@ -5846,883 +6828,6 @@
         ]
       }
     },
-    "/api/meters/reconciliation": {
-      "get": {
-        "operationId": "MetersController_reconcile",
-        "parameters": [
-          {
-            "name": "period",
-            "required": false,
-            "in": "query",
-            "description": "账期 YYYY-MM；不传时默认上个月",
-            "schema": {
-              "pattern": "^\\d{4}-\\d{2}$",
-              "type": "string"
-            }
-          },
-          {
-            "name": "buildingId",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "maxLength": 40,
-              "type": "string"
-            }
-          },
-          {
-            "name": "meterType",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "ELECTRICITY",
-                "WATER",
-                "GAS"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "summary": "水电对账（T218）：读数 / 扣费 / 账单三方交叉核对，只读。\n只有管理员可用；租客只在自己的账单里看到扣费结果。",
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/simulator/run": {
-      "post": {
-        "operationId": "MetersController_runSimulation",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunSimulationDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters": {
-      "post": {
-        "operationId": "MetersController_create",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateMeterDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "201": {
-            "description": ""
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      },
-      "get": {
-        "operationId": "MetersController_findAll",
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "type": "number"
-            }
-          },
-          {
-            "name": "meterType",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "ELECTRICITY",
-                "WATER",
-                "GAS"
-              ]
-            }
-          },
-          {
-            "name": "buildingId",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "roomId",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/batch-sheet": {
-      "get": {
-        "operationId": "MetersController_getBatchSheet",
-        "parameters": [
-          {
-            "name": "buildingId",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "meterType",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "ELECTRICITY",
-                "WATER",
-                "GAS"
-              ]
-            }
-          },
-          {
-            "name": "floor",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/batch-readings": {
-      "post": {
-        "operationId": "MetersController_createBatchReadings",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BatchMeterReadingsDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "201": {
-            "description": ""
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/settle-batch": {
-      "post": {
-        "operationId": "MetersController_settleBatch",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "201": {
-            "description": ""
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/readings/export": {
-      "get": {
-        "operationId": "MetersController_exportReadings",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/usage-overview": {
-      "get": {
-        "operationId": "MetersController_getUsageOverview",
-        "parameters": [
-          {
-            "name": "buildingId",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "month",
-            "required": false,
-            "in": "query",
-            "description": "目标月份，格式为 YYYY-MM\n若未指定则默认为当前月份",
-            "schema": {
-              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/{id}/readings": {
-      "post": {
-        "operationId": "MetersController_createReading",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateMeterReadingDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "201": {
-            "description": ""
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      },
-      "get": {
-        "operationId": "MetersController_findReadings",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/{id}/settle": {
-      "post": {
-        "operationId": "MetersController_settleMeter",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SettleMeterDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/{id}/unsettled-usage": {
-      "get": {
-        "operationId": "MetersController_getUnsettledUsage",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "settleUntil",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/meters/{id}": {
-      "get": {
-        "operationId": "MetersController_findOne",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      },
-      "patch": {
-        "operationId": "MetersController_update",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateMeterDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      },
-      "delete": {
-        "operationId": "MetersController_remove",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Meters"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
     "/api/prepay-accounts": {
       "post": {
         "operationId": "PrepayController_create",
@@ -9109,6 +9214,239 @@
           "period"
         ]
       },
+      "RunSimulationDto": {
+        "type": "object",
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "description": "模拟场景：24小时日曲线、30天月度时间穿梭、异常重放与防御自检",
+            "enum": [
+              "DAILY_HOURLY",
+              "TIME_TRAVEL_MONTH",
+              "ANOMALY_TEST"
+            ]
+          },
+          "meterId": {
+            "type": "string",
+            "description": "指定目标表计 ID（可选，缺省则按楼栋或自动选取激活表计）"
+          },
+          "buildingId": {
+            "type": "string",
+            "description": "指定楼栋 ID（可选）"
+          },
+          "days": {
+            "type": "number",
+            "description": "模拟天数（针对 TIME_TRAVEL_MONTH，默认 30 天，1~90）",
+            "minimum": 1,
+            "maximum": 90
+          },
+          "autoSettle": {
+            "type": "boolean",
+            "description": "是否自动结算扣费（默认 false，仅上报未结算用量留存，待后续周期结算）"
+          },
+          "faultTypes": {
+            "description": "异常测试类型列表（针对 ANOMALY_TEST，可选）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "variance": {
+            "type": "number",
+            "description": "随机波动因子（0~1，默认 0.15）",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "CreateMeterDto": {
+        "type": "object",
+        "properties": {
+          "buildingId": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "publicAreaId": {
+            "type": "string"
+          },
+          "meterType": {
+            "type": "string",
+            "enum": [
+              "ELECTRICITY",
+              "WATER",
+              "GAS"
+            ]
+          },
+          "meterNumber": {
+            "type": "string"
+          },
+          "unitPrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "priceEffectiveDate": {
+            "type": "string"
+          },
+          "initialReading": {
+            "type": "number",
+            "description": "设备绑定初始底数（非必填，填入时不计费并作为后续起步底数）",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "buildingId",
+          "meterType",
+          "meterNumber",
+          "unitPrice",
+          "priceEffectiveDate"
+        ]
+      },
+      "SingleMeterReadingItemDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string"
+          },
+          "currentReading": {
+            "type": "number",
+            "minimum": 0
+          },
+          "readingTime": {
+            "type": "string",
+            "description": "读数时间（缺省为当前时间）"
+          },
+          "source": {
+            "type": "string",
+            "description": "采集来源：手工录入 MANUAL 或 智能设备上报 DEVICE",
+            "enum": [
+              "MANUAL",
+              "DEVICE"
+            ]
+          },
+          "isInitial": {
+            "type": "boolean",
+            "description": "是否作为初始底数登记（不计费）"
+          },
+          "autoSettle": {
+            "type": "boolean",
+            "description": "是否在录入时自动扣费结算"
+          },
+          "messageId": {
+            "type": "string",
+            "description": "设备消息幂等键"
+          },
+          "allowRollover": {
+            "type": "boolean",
+            "description": "允许表计回零/换表"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "meterId",
+          "currentReading"
+        ]
+      },
+      "BatchMeterReadingsDto": {
+        "type": "object",
+        "properties": {
+          "readings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SingleMeterReadingItemDto"
+            }
+          }
+        },
+        "required": [
+          "readings"
+        ]
+      },
+      "CreateMeterReadingDto": {
+        "type": "object",
+        "properties": {
+          "currentReading": {
+            "type": "number",
+            "minimum": 0
+          },
+          "readingTime": {
+            "type": "string",
+            "description": "读数时间（缺省为当前时间）"
+          },
+          "source": {
+            "type": "string",
+            "description": "采集来源：手工录入 MANUAL 或 智能设备上报 DEVICE",
+            "enum": [
+              "MANUAL",
+              "DEVICE"
+            ]
+          },
+          "isInitial": {
+            "type": "boolean",
+            "description": "是否作为初始底数登记（不计费，作为后续起步值）"
+          },
+          "autoSettle": {
+            "type": "boolean",
+            "description": "是否在录入时自动结算扣费；为 false 时仅采集记录，后续统一周期结算"
+          },
+          "messageId": {
+            "type": "string",
+            "description": "设备消息幂等唯一键（用于设备重试与防重）"
+          },
+          "allowRollover": {
+            "type": "boolean",
+            "description": "允许表计回零翻转/换表"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentReading"
+        ]
+      },
+      "SettleMeterDto": {
+        "type": "object",
+        "properties": {
+          "settleUntil": {
+            "type": "string",
+            "description": "结算截止时间（默认当前时间）"
+          },
+          "notes": {
+            "type": "string",
+            "description": "结算备注"
+          }
+        }
+      },
+      "SetMeterPriceDto": {
+        "type": "object",
+        "properties": {
+          "unitPrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "effectiveDate": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unitPrice",
+          "effectiveDate"
+        ]
+      },
+      "UpdateMeterDto": {
+        "type": "object",
+        "properties": {
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
       "CreateTagDto": {
         "type": "object",
         "properties": {
@@ -9589,223 +9927,6 @@
           },
           "resolution": {
             "type": "string"
-          }
-        }
-      },
-      "RunSimulationDto": {
-        "type": "object",
-        "properties": {
-          "scenario": {
-            "type": "string",
-            "description": "模拟场景：24小时日曲线、30天月度时间穿梭、异常重放与防御自检",
-            "enum": [
-              "DAILY_HOURLY",
-              "TIME_TRAVEL_MONTH",
-              "ANOMALY_TEST"
-            ]
-          },
-          "meterId": {
-            "type": "string",
-            "description": "指定目标表计 ID（可选，缺省则按楼栋或自动选取激活表计）"
-          },
-          "buildingId": {
-            "type": "string",
-            "description": "指定楼栋 ID（可选）"
-          },
-          "days": {
-            "type": "number",
-            "description": "模拟天数（针对 TIME_TRAVEL_MONTH，默认 30 天，1~90）",
-            "minimum": 1,
-            "maximum": 90
-          },
-          "autoSettle": {
-            "type": "boolean",
-            "description": "是否自动结算扣费（默认 false，仅上报未结算用量留存，待后续周期结算）"
-          },
-          "faultTypes": {
-            "description": "异常测试类型列表（针对 ANOMALY_TEST，可选）",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "variance": {
-            "type": "number",
-            "description": "随机波动因子（0~1，默认 0.15）",
-            "minimum": 0,
-            "maximum": 1
-          }
-        },
-        "required": [
-          "scenario"
-        ]
-      },
-      "CreateMeterDto": {
-        "type": "object",
-        "properties": {
-          "buildingId": {
-            "type": "string"
-          },
-          "roomId": {
-            "type": "string"
-          },
-          "publicAreaId": {
-            "type": "string"
-          },
-          "meterType": {
-            "type": "string",
-            "enum": [
-              "ELECTRICITY",
-              "WATER",
-              "GAS"
-            ]
-          },
-          "meterNumber": {
-            "type": "string"
-          },
-          "unitPrice": {
-            "type": "number",
-            "minimum": 0
-          },
-          "priceEffectiveDate": {
-            "type": "string"
-          },
-          "initialReading": {
-            "type": "number",
-            "description": "设备绑定初始底数（非必填，填入时不计费并作为后续起步底数）",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "buildingId",
-          "meterType",
-          "meterNumber",
-          "unitPrice",
-          "priceEffectiveDate"
-        ]
-      },
-      "SingleMeterReadingItemDto": {
-        "type": "object",
-        "properties": {
-          "meterId": {
-            "type": "string"
-          },
-          "currentReading": {
-            "type": "number",
-            "minimum": 0
-          },
-          "readingTime": {
-            "type": "string",
-            "description": "读数时间（缺省为当前时间）"
-          },
-          "source": {
-            "type": "string",
-            "description": "采集来源：手工录入 MANUAL 或 智能设备上报 DEVICE",
-            "enum": [
-              "MANUAL",
-              "DEVICE"
-            ]
-          },
-          "isInitial": {
-            "type": "boolean",
-            "description": "是否作为初始底数登记（不计费）"
-          },
-          "autoSettle": {
-            "type": "boolean",
-            "description": "是否在录入时自动扣费结算"
-          },
-          "messageId": {
-            "type": "string",
-            "description": "设备消息幂等键"
-          },
-          "allowRollover": {
-            "type": "boolean",
-            "description": "允许表计回零/换表"
-          },
-          "notes": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "meterId",
-          "currentReading"
-        ]
-      },
-      "BatchMeterReadingsDto": {
-        "type": "object",
-        "properties": {
-          "readings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SingleMeterReadingItemDto"
-            }
-          }
-        },
-        "required": [
-          "readings"
-        ]
-      },
-      "CreateMeterReadingDto": {
-        "type": "object",
-        "properties": {
-          "currentReading": {
-            "type": "number",
-            "minimum": 0
-          },
-          "readingTime": {
-            "type": "string",
-            "description": "读数时间（缺省为当前时间）"
-          },
-          "source": {
-            "type": "string",
-            "description": "采集来源：手工录入 MANUAL 或 智能设备上报 DEVICE",
-            "enum": [
-              "MANUAL",
-              "DEVICE"
-            ]
-          },
-          "isInitial": {
-            "type": "boolean",
-            "description": "是否作为初始底数登记（不计费，作为后续起步值）"
-          },
-          "autoSettle": {
-            "type": "boolean",
-            "description": "是否在录入时自动结算扣费；为 false 时仅采集记录，后续统一周期结算"
-          },
-          "messageId": {
-            "type": "string",
-            "description": "设备消息幂等唯一键（用于设备重试与防重）"
-          },
-          "allowRollover": {
-            "type": "boolean",
-            "description": "允许表计回零翻转/换表"
-          },
-          "notes": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "currentReading"
-        ]
-      },
-      "SettleMeterDto": {
-        "type": "object",
-        "properties": {
-          "settleUntil": {
-            "type": "string",
-            "description": "结算截止时间（默认当前时间）"
-          },
-          "notes": {
-            "type": "string",
-            "description": "结算备注"
-          }
-        }
-      },
-      "UpdateMeterDto": {
-        "type": "object",
-        "properties": {
-          "isActive": {
-            "type": "boolean"
           }
         }
       },

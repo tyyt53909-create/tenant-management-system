@@ -671,6 +671,22 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/api/meters/:id/price",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/meters/:id/price-history",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/api/meters/:id/readings",
     "public": false,

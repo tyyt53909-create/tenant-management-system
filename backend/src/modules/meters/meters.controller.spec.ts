@@ -33,6 +33,8 @@ describe('MetersController', () => {
             settleMeter: vi.fn(),
             getUnsettledUsage: vi.fn(),
             settleBatch: vi.fn(),
+            setPrice: vi.fn(),
+            priceHistory: vi.fn(),
           },
         },
         {
@@ -53,14 +55,14 @@ describe('MetersController', () => {
     simulatorService = module.get<MetersSimulatorService>(MetersSimulatorService);
   });
 
-  it('create：透传 DTO', async () => {
+  it('create：透传 DTO 与操作人', async () => {
     const dto = { roomId: 'room-1', type: 'ELECTRICITY' } as any;
     vi.spyOn(service, 'create').mockResolvedValue({ id: 'meter-1' } as any);
 
-    const result = await controller.create(dto);
+    const result = await controller.create({ user: { userId: 'admin-1' } }, dto);
 
     expect(result.id).toBe('meter-1');
-    expect(service.create).toHaveBeenCalledWith(dto);
+    expect(service.create).toHaveBeenCalledWith(dto, 'admin-1');
   });
 
   it('findAll：透传查询条件（仅管理者，T148）', async () => {
@@ -97,13 +99,30 @@ describe('MetersController', () => {
     expect(service.findOne).toHaveBeenCalledWith('meter-1');
   });
 
-  it('update：透传 id 与 DTO', async () => {
+  it('update：透传 id、DTO 与操作人', async () => {
     const dto = { meterNumber: 'M-002' } as any;
     vi.spyOn(service, 'update').mockResolvedValue({ id: 'meter-1' } as any);
 
-    await controller.update('meter-1', dto);
+    await controller.update({ user: { userId: 'admin-1' } }, 'meter-1', dto);
 
-    expect(service.update).toHaveBeenCalledWith('meter-1', dto);
+    expect(service.update).toHaveBeenCalledWith('meter-1', dto, 'admin-1');
+  });
+
+  it('setPrice：透传表 id、调价 DTO 与操作人', async () => {
+    const dto = { unitPrice: 120, effectiveDate: '2026-11-01' };
+    vi.spyOn(service, 'setPrice').mockResolvedValue({ meter: { id: 'meter-1' } } as any);
+
+    await controller.setPrice({ user: { userId: 'admin-1' } }, 'meter-1', dto as any);
+
+    expect(service.setPrice).toHaveBeenCalledWith('meter-1', dto, 'admin-1');
+  });
+
+  it('priceHistory：透传表 id', async () => {
+    vi.spyOn(service, 'priceHistory').mockResolvedValue({ items: [] } as any);
+
+    await controller.priceHistory('meter-1');
+
+    expect(service.priceHistory).toHaveBeenCalledWith('meter-1');
   });
 
   it('remove：删除水电表', async () => {

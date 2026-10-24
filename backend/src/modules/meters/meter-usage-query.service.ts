@@ -8,6 +8,7 @@ import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
 import { METER_TYPE_LABEL, NOT_SIMULATED } from './meter-types.constants.js';
+import { MeterPriceService, type MeterPriceBook } from './meter-price.service.js';
 
 export interface ExportMeterReadingsQuery {
   meterId?: string;
@@ -20,12 +21,15 @@ export interface ExportMeterReadingsQuery {
 @Injectable()
 export class MeterUsageQueryService {
   private readonly clock: BusinessClock;
+  private readonly priceService: MeterPriceService;
 
   constructor(
     private readonly prisma: PrismaService,
     @Optional() clock?: BusinessClock,
+    @Optional() priceService?: MeterPriceService,
   ) {
     this.clock = clock ?? new BusinessClock(new ConfigService());
+    this.priceService = priceService ?? new MeterPriceService(prisma, this.clock);
   }
 
   async exportReadings(query: ExportMeterReadingsQuery) {
@@ -59,6 +63,12 @@ export class MeterUsageQueryService {
     });
 
     type ReadingItem = (typeof readings)[number];
+    // 按读数业务日期取生效单价（T274），导出的单价列与结算口径一致
+    const meters = [...new Map(readings.map((reading) => [reading.meter.id, reading.meter])).values()];
+    const book = await this.priceService.loadPriceBook(meters);
+    const unitPriceOf = (reading: ReadingItem) =>
+      book.priceFor(reading.meter, new Date(reading.readingTime));
+
     const columns: CsvColumn<ReadingItem>[] = [
       { header: '记录ID', key: 'id' },
       { header: '表号', formatter: (r) => r.meter?.meterNumber || '' },
@@ -68,7 +78,7 @@ export class MeterUsageQueryService {
       { header: '上次读数', formatter: (r) => Number(r.previousReading).toFixed(2) },
       { header: '本次读数', formatter: (r) => Number(r.currentReading).toFixed(2) },
       { header: '用量', formatter: (r) => Number(r.usage).toFixed(2) },
-      { header: '单价(元)', formatter: (r) => centsToYuanString(r.meter?.unitPrice ?? 0) },
+      { header: '单价(元)', formatter: (r) => centsToYuanString(unitPriceOf(r)) },
       { header: '抄表时间', formatter: (r) => (r.readingTime ? formatBusinessDateTime(new Date(r.readingTime)) : '') },
       { header: '抄表人', key: 'readBy' },
       { header: '备注', key: 'notes' },
@@ -110,6 +120,7 @@ export class MeterUsageQueryService {
 
     const activeMeterIds = activeMeters.map((m) => m.id);
     const meterMap = new Map(activeMeters.map((m) => [m.id, m]));
+    const priceBook = await this.priceService.loadPriceBook(activeMeters);
 
     const currentReadings =
       activeMeterIds.length > 0
@@ -161,11 +172,11 @@ export class MeterUsageQueryService {
       if (meter.meterType === 'WATER') {
         waterUsage += usageVal;
         waterCount += 1;
-        waterCost += Math.round(usageVal * meter.unitPrice);
+        waterCost += Math.round(usageVal * priceBook.priceFor(meter, r.readingTime));
       } else if (meter.meterType === 'ELECTRICITY') {
         electricityUsage += usageVal;
         electricityCount += 1;
-        electricityCost += Math.round(usageVal * meter.unitPrice);
+        electricityCost += Math.round(usageVal * priceBook.priceFor(meter, r.readingTime));
       }
     }
 
@@ -233,10 +244,10 @@ export class MeterUsageQueryService {
         const u = Number(tr.usage) || 0;
         if (meter.meterType === 'ELECTRICITY') {
           entry.electricity = Math.round((entry.electricity + u) * 100) / 100;
-          entry.electricityCost += Math.round(u * meter.unitPrice);
+          entry.electricityCost += Math.round(u * priceBook.priceFor(meter, new Date(tr.readingTime)));
         } else if (meter.meterType === 'WATER') {
           entry.water = Math.round((entry.water + u) * 100) / 100;
-          entry.waterCost += Math.round(u * meter.unitPrice);
+          entry.waterCost += Math.round(u * priceBook.priceFor(meter, new Date(tr.readingTime)));
         }
       }
     }
