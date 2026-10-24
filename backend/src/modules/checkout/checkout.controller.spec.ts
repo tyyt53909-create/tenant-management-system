@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CheckoutController } from './checkout.controller.js';
 import { CheckoutService } from './checkout.service.js';
+import { ConflictException } from '@nestjs/common';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('CheckoutController', () => {
@@ -99,12 +100,12 @@ describe('CheckoutController', () => {
     expect(service.update).toHaveBeenCalledWith('checkout-1', { status: 'COMPLETED' });
   });
 
-  it('remove：删除退租记录', async () => {
-    vi.spyOn(service, 'remove').mockResolvedValue({ message: '退租记录已删除' });
+  it('remove：财务凭证禁止硬删除（透传 409）', async () => {
+    vi.spyOn(service, 'remove').mockRejectedValue(
+      new ConflictException('退租结算单是财务凭证，只能取消（PATCH status=CANCELLED），不能删除'),
+    );
 
-    const result = await controller.remove('checkout-1');
-
-    expect(result.message).toBe('退租记录已删除');
+    await expect(controller.remove('checkout-1')).rejects.toThrow(ConflictException);
     expect(service.remove).toHaveBeenCalledWith('checkout-1');
   });
 

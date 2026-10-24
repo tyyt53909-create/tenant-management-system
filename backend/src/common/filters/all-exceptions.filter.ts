@@ -85,6 +85,16 @@ export function toErrorResponse(
         },
       };
     }
+    if (exception.code === 'P2003') {
+      return {
+        status: HttpStatus.CONFLICT,
+        body: {
+          code: ErrorCode.COMMON_CONFLICT,
+          message: '存在关联数据，不能删除或修改',
+          requestId,
+        },
+      };
+    }
     if (exception.code === 'P2025') {
       return {
         status: HttpStatus.NOT_FOUND,

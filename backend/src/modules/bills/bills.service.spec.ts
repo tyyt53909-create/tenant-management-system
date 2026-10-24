@@ -787,11 +787,11 @@ describe('BillsService', () => {
       await expect(service.update(billId, {} as any)).rejects.toThrow(NotFoundException);
     });
 
-    it('remove：删除账单', async () => {
+    it('remove：财务凭证禁止硬删除 → 409', async () => {
       prisma.bill.findUnique.mockResolvedValue({ id: billId });
-      prisma.bill.delete.mockResolvedValue({ id: billId });
 
-      await expect(service.remove(billId)).resolves.toEqual({ message: '账单已删除' });
+      await expect(service.remove(billId)).rejects.toThrow(ConflictException);
+      expect(prisma.bill.delete).not.toHaveBeenCalled();
     });
 
     it('remove：不存在 → 404', async () => {
