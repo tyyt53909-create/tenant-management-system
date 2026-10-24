@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { ContractsService } from './contracts.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('ContractsService（租客隔离，T148）', () => {
@@ -23,7 +24,18 @@ describe('ContractsService（租客隔离，T148）', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ContractsService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        ContractsService,
+        { provide: PrismaService, useValue: prismaMock },
+        {
+          provide: SettingsService,
+          useValue: {
+            getValue: vi.fn().mockImplementation(async (key: string) =>
+              key === 'billing.defaultLateFeeRule' ? {} : 10000,
+            ),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<ContractsService>(ContractsService);

@@ -1,6 +1,10 @@
 <template>
   <div class="settings-page">
     <el-tabs v-model="activeTab" class="settings-tabs">
+      <el-tab-pane label="业务设置" name="business">
+        <BusinessSettings />
+      </el-tab-pane>
+
       <el-tab-pane label="邀请码管理" name="invite-codes">
         <InviteCodes />
       </el-tab-pane>
@@ -71,11 +75,12 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { usePreferencesStore } from '@/stores/preferences';
+import BusinessSettings from './BusinessSettings.vue';
 import InviteCodes from './InviteCodes.vue';
 import DataImport from './DataImport.vue';
 import Tags from './Tags.vue';
 
-const activeTab = ref('invite-codes');
+const activeTab = ref('business');
 const preferences = usePreferencesStore();
 </script>
 

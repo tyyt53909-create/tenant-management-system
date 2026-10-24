@@ -37,6 +37,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
 import { PublicModule } from './modules/public/public.module.js';
 import { StatisticsModule } from './modules/statistics/statistics.module.js';
+import { SettingsModule } from './modules/settings/settings.module.js';
 import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-capabilities.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { FloorPlansModule } from './modules/floor-plans/floor-plans.module.js';
@@ -92,6 +93,8 @@ import { StaffModule } from './modules/staff/staff.module.js';
     PublicModule,
     // 统计：时间维度（月/季/年/自定义）× 空间维度（整楼/楼层），仅 ADMIN
     StatisticsModule,
+    // 业务设置中心（FIN-11 / T276）：ADMIN 读写 + 审计
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [

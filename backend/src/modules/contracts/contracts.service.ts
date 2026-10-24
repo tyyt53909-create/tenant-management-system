@@ -7,6 +7,7 @@ import {
 import type { Prisma, PaymentCycle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateContractDto } from './dto/create-contract.dto.js';
+import { SettingsService } from '../settings/settings.service.js';
 import { UpdateContractDto } from './dto/update-contract.dto.js';
 import { QueryContractsDto } from './dto/query-contracts.dto.js';
 import { RenewContractDto } from './dto/renew-contract.dto.js';
@@ -19,9 +20,18 @@ import {
 
 @Injectable()
 export class ContractsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
 
   async create(dto: CreateContractDto) {
+    // 显式传入非空规则优先；空对象/未传则用设置中心的默认规则（T276）
+    const lateFeeRule =
+      dto.lateFeeRule && Object.keys(dto.lateFeeRule).length > 0
+        ? dto.lateFeeRule
+        : await this.settings.getValue<Record<string, unknown>>('billing.defaultLateFeeRule');
+
     // 验证关联数据存在
     const [building, room, tenant] = await Promise.all([
       this.prisma.building.findUnique({ where: { id: dto.buildingId } }),
@@ -61,7 +71,7 @@ export class ContractsService {
         paymentDay: dto.paymentDay,
         startDate: new Date(dto.startDate),
         endDate: new Date(dto.endDate),
-        lateFeeRule: (dto.lateFeeRule || {}) as Prisma.InputJsonValue,
+        lateFeeRule: lateFeeRule as Prisma.InputJsonValue,
       },
     });
   }
