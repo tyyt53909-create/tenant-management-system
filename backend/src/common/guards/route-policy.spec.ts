@@ -61,6 +61,8 @@ const PUBLIC_ROUTE_ALLOWLIST = new Set([
   'POST /api/auth/send-email-code',
   'POST /api/auth/login-email-code',
   'GET /api/auth/google/client-id',
+  'POST /api/auth/password/forgot',
+  'POST /api/auth/password/reset',
 ]);
 
 function decoratorName(decorator: ts.Decorator): string | undefined {

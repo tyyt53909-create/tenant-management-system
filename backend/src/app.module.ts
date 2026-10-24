@@ -40,6 +40,7 @@ import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-c
 import { HealthModule } from './modules/health/health.module.js';
 import { FloorPlansModule } from './modules/floor-plans/floor-plans.module.js';
 import { SpaceModule } from './modules/space/space.module.js';
+import { StaffModule } from './modules/staff/staff.module.js';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { SpaceModule } from './modules/space/space.module.js';
     HealthModule,
     TenantCapabilitiesModule,
     AuthModule,
+    StaffModule,
     RoomsModule,
     TenantsModule,
     PublicUtilitiesModule,
