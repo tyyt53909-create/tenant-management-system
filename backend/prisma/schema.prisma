@@ -758,14 +758,35 @@ model MaintenancePhoto {
 // - uploadedBy 存 User.id，tenantId 存 Tenant.id；二者均为**软引用**（不建外键），
 //   以免用户/租客删除流程被文件记录阻塞
 // - 历史文件（本表引入前上传的）无记录，按「仅管理员可取」处理
+enum FilePurpose {
+  ROOM_PHOTO
+  CONTRACT
+  MAINTENANCE
+  AVATAR
+  RECEIPT
+  OTHER
+}
+
+enum FileVisibility {
+  PRIVATE
+  PUBLIC
+}
+
 model FileAsset {
   id String @id @default(cuid())
 
-  key      String  @unique
-  url      String
-  fileName String?
-  fileSize Int     @default(0)
-  mimeType String?
+  key          String  @unique
+  url          String
+  fileName     String?
+  fileSize     Int     @default(0)
+  mimeType     String?
+  thumbnailKey String?
+
+  purpose    FilePurpose    @default(OTHER)
+  visibility FileVisibility @default(PRIVATE)
+  /// 业务归属，例如 ROOM / CONTRACT / MAINTENANCE；与 ownerId 一起使用
+  ownerType String?
+  ownerId   String?
 
   uploadedBy String?
   tenantId   String?
@@ -774,6 +795,8 @@ model FileAsset {
 
   @@index([uploadedBy])
   @@index([tenantId])
+  @@index([visibility])
+  @@index([ownerType, ownerId])
   @@map("file_assets")
 }
 

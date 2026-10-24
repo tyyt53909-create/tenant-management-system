@@ -934,6 +934,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/files/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PublicFilesController_getFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bills": {
         parameters: {
             query?: never;
@@ -4712,7 +4728,10 @@ export interface operations {
     };
     FilesController_upload: {
         parameters: {
-            query?: never;
+            query?: {
+                purpose?: "MAINTENANCE" | "ROOM_PHOTO" | "CONTRACT" | "AVATAR" | "RECEIPT" | "OTHER";
+                visibility?: "PRIVATE" | "PUBLIC";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4752,6 +4771,39 @@ export interface operations {
             query?: {
                 expiresIn?: unknown;
             };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    PublicFilesController_getFile: {
+        parameters: {
+            query?: never;
             header?: never;
             path: {
                 key: string;

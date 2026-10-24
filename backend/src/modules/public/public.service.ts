@@ -57,7 +57,10 @@ export class PublicService {
       this.prisma.room.count({ where }),
     ]);
 
-    return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+    return {
+      data: data.map((room) => this.withPublicPhotoUrls(room)),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   /** 房源详情；仅可出租房源可见，其余一律 404（不暴露存在性） */
@@ -68,7 +71,25 @@ export class PublicService {
     });
 
     if (!room) throw new NotFoundException('房源不存在或暂不可租');
-    return room;
+    return this.withPublicPhotoUrls(room);
+  }
+
+  /** 历史数据存的是 `/api/files/`，公开页统一改写到免鉴权的 `/api/public/files/`（T261）。 */
+  private withPublicPhotoUrls<
+    T extends { photos: Array<{ fileUrl: string; thumbnail: string | null }> },
+  >(room: T): T {
+    return {
+      ...room,
+      photos: room.photos.map((photo) => ({
+        ...photo,
+        fileUrl: this.toPublicUrl(photo.fileUrl),
+        thumbnail: photo.thumbnail ? this.toPublicUrl(photo.thumbnail) : null,
+      })),
+    };
+  }
+
+  private toPublicUrl(url: string): string {
+    return url.replace(/^\/api\/files\//, '/api/public/files/');
   }
 
   /** 可租楼栋列表（仅返回有可租房源的楼栋名称与地址） */

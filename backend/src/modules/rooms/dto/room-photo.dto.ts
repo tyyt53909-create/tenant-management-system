@@ -13,9 +13,9 @@ export const MAX_ROOM_PHOTOS = 20;
 
 /**
  * 房源照片只接受文件上传接口返回的站内地址，避免把任意外链写进公开看房页。
- * 上传结果形如 `/api/files/1712345678901-<uuid>.jpg`。
+ * 私有上传结果为 `/api/files/<key>`；公开上传（T261）为 `/api/public/files/<key>`。
  */
-export const ROOM_PHOTO_URL_PATTERN = /^\/api\/files\/[A-Za-z0-9._-]+$/;
+export const ROOM_PHOTO_URL_PATTERN = /^\/api\/(?:public\/)?files\/[A-Za-z0-9._-]+$/;
 
 export class RoomPhotoDto {
   @IsString()

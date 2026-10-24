@@ -61,6 +61,10 @@ describe('RoomsService', () => {
             user: {
               findMany: vi.fn(),
             },
+            fileAsset: {
+              findMany: vi.fn(),
+              updateMany: vi.fn(),
+            },
             $transaction: vi.fn(),
           },
         },
@@ -81,6 +85,8 @@ describe('RoomsService', () => {
 
     // 事务测试：回调直接复用同一组 mock，专注断言业务写入顺序。
     (prisma.$transaction as any).mockImplementation(async (callback: any) => callback(prisma));
+    vi.mocked(prisma.fileAsset.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.fileAsset.updateMany).mockResolvedValue({ count: 0 });
   });
 
   describe('create', () => {
@@ -99,6 +105,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.building, 'findUnique').mockResolvedValue(mockBuilding as any);
       vi.spyOn(prisma.room, 'findFirst').mockResolvedValue(null);
       vi.spyOn(prisma.room, 'create').mockResolvedValue(mockRoom as any);
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue(mockRoom as any);
 
       const result = await service.create(dto);
 
@@ -110,7 +117,6 @@ describe('RoomsService', () => {
           status: 'VACANT',
           cleanStatus: 'CLEAN',
         }),
-        include: expect.anything(),
       });
     });
 
@@ -128,9 +134,24 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.building, 'findUnique').mockResolvedValue(mockBuilding as any);
       vi.spyOn(prisma.room, 'findFirst').mockResolvedValue(null);
       vi.spyOn(prisma.room, 'create').mockResolvedValue(mockRoom as any);
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue(mockRoom as any);
+      vi.mocked(prisma.fileAsset.findMany).mockResolvedValue([
+        { key: 'cover.jpg' },
+        { key: 'cover.thumb.jpg' },
+        { key: 'second.png' },
+      ] as any);
 
       await service.create(dtoWithPhotos as any);
 
+      expect(prisma.fileAsset.updateMany).toHaveBeenCalledWith({
+        where: { key: { in: ['cover.jpg', 'cover.thumb.jpg', 'second.png'] } },
+        data: {
+          purpose: 'ROOM_PHOTO',
+          visibility: 'PUBLIC',
+          ownerType: 'ROOM',
+          ownerId: 'room-123',
+        },
+      });
       expect(prisma.room.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -389,6 +410,10 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 });
       vi.spyOn(prisma.roomPhoto, 'deleteMany').mockResolvedValue({ count: 1 });
       vi.spyOn(prisma.roomPhoto, 'createMany').mockResolvedValue({ count: 2 });
+      vi.mocked(prisma.fileAsset.findMany).mockResolvedValue([
+        { key: 'new-cover.jpg' },
+        { key: 'new-second.jpg' },
+      ] as any);
 
       const result = await service.update('room-123', {
         description: '新描述',
@@ -674,9 +699,10 @@ describe('RoomsService', () => {
         .mockResolvedValueOnce({ ...cleaningRoom, cleanStatus: 'CLEAN', version: 4 } as any);
       vi.spyOn(prisma.room, 'update').mockResolvedValue({} as any);
       vi.spyOn(prisma.roomPhoto, 'create').mockResolvedValue({ id: 'photo-1' } as any);
+      vi.mocked(prisma.fileAsset.findMany).mockResolvedValue([{ key: 'clean.jpg' }] as any);
 
       const result = await service.markClean('room-c1', {
-        photo: { fileUrl: 'https://oss.example.com/clean.jpg', fileSize: 12345 },
+        photo: { fileUrl: '/api/files/clean.jpg', fileSize: 12345 },
       });
 
       expect(prisma.room.update).toHaveBeenCalledWith({
@@ -686,7 +712,7 @@ describe('RoomsService', () => {
       expect(prisma.roomPhoto.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           roomId: 'room-c1',
-          fileUrl: 'https://oss.example.com/clean.jpg',
+          fileUrl: '/api/files/clean.jpg',
           fileSize: 12345,
         }),
       });

@@ -50,6 +50,7 @@ const PUBLIC_ROUTE_ALLOWLIST = new Set([
   'GET /api/health/ready',
   'GET /api/public/buildings',
   'GET /api/public/buildings/:id/space',
+  'GET /api/public/files/:key',
   'GET /api/public/rooms',
   'GET /api/public/rooms/:id',
   'POST /api/auth/register',

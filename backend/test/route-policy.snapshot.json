@@ -881,6 +881,12 @@
   },
   {
     "method": "GET",
+    "path": "/api/public/files/:key",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
     "path": "/api/public/rooms",
     "public": true,
     "roles": []

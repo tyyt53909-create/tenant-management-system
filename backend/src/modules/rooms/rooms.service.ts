@@ -57,26 +57,80 @@ export class RoomsService {
       throw new ConflictException('该楼栋下该楼层的房号已存在');
     }
 
-    // 3. 创建房源（照片随房源同事务嵌套写入，避免出现半套记录）
+    // 3. 创建房源（照片随房源同事务写入，并把文件资产绑定为公开房源照片）
     const photos = this.buildRoomPhotoRows(dto.photos ?? []);
-    return this.prisma.room.create({
-      data: {
-        roomNumber: dto.roomNumber,
-        buildingId: dto.buildingId,
-        floor: dto.floor,
-        roomType: dto.roomType,
-        area: dto.area,
-        facilities: dto.facilities as Prisma.InputJsonValue,
-        description: dto.description,
-        status: 'VACANT', // 默认空闲
-        cleanStatus: 'CLEAN', // 默认已清洁
-        ...(photos.length > 0 ? { photos: { create: photos } } : {}),
-      },
-      include: {
-        photos: {
-          select: { id: true, fileUrl: true, thumbnail: true, fileSize: true, sortOrder: true },
-          orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.room.create({
+        data: {
+          roomNumber: dto.roomNumber,
+          buildingId: dto.buildingId,
+          floor: dto.floor,
+          roomType: dto.roomType,
+          area: dto.area,
+          facilities: dto.facilities as Prisma.InputJsonValue,
+          description: dto.description,
+          status: 'VACANT', // 默认空闲
+          cleanStatus: 'CLEAN', // 默认已清洁
+          ...(photos.length > 0 ? { photos: { create: photos } } : {}),
         },
+      });
+
+      await this.bindPhotoAssets(tx, dto.photos ?? [], created.id);
+
+      return tx.room.findUniqueOrThrow({
+        where: { id: created.id },
+        include: {
+          photos: {
+            select: { id: true, fileUrl: true, thumbnail: true, fileSize: true, sortOrder: true },
+            orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+          },
+        },
+      });
+    });
+  }
+
+  /** 从站内 URL 提取对象键；非上传地址直接拒绝。 */
+  private photoKey(url: string): string {
+    const match = /^\/api\/(?:public\/)?files\/([A-Za-z0-9._-]+)$/.exec(url);
+    if (!match) {
+      throw new BadRequestException('照片地址必须来自文件上传接口');
+    }
+    return match[1];
+  }
+
+  /** 校验照片资产存在，并绑定为 ROOM_PHOTO / PUBLIC / owner=ROOM。 */
+  private async bindPhotoAssets(
+    db: Prisma.TransactionClient | PrismaService,
+    photos: RoomPhotoDto[],
+    roomId: string,
+  ): Promise<void> {
+    const keys = [
+      ...new Set(
+        photos.flatMap((photo) => [
+          this.photoKey(photo.fileUrl),
+          ...(photo.thumbnail ? [this.photoKey(photo.thumbnail)] : []),
+        ]),
+      ),
+    ];
+    if (keys.length === 0) return;
+
+    const assets = await db.fileAsset.findMany({
+      where: { key: { in: keys } },
+      select: { key: true },
+    });
+    const found = new Set(assets.map((asset) => asset.key));
+    const missing = keys.filter((key) => !found.has(key));
+    if (missing.length > 0) {
+      throw new BadRequestException(`照片未通过文件上传接口登记：${missing[0]}`);
+    }
+
+    await db.fileAsset.updateMany({
+      where: { key: { in: keys } },
+      data: {
+        purpose: 'ROOM_PHOTO',
+        visibility: 'PUBLIC',
+        ownerType: 'ROOM',
+        ownerId: roomId,
       },
     });
   }
@@ -290,6 +344,7 @@ export class RoomsService {
           await tx.roomPhoto.createMany({
             data: photoRows.map((photo) => ({ ...photo, roomId: id })),
           });
+          await this.bindPhotoAssets(tx, photos, id);
         }
 
         return tx.room.findUniqueOrThrow({
@@ -463,6 +518,7 @@ export class RoomsService {
 
     let photo = null;
     if (dto.photo) {
+      await this.bindPhotoAssets(this.prisma, [dto.photo], id);
       photo = await this.prisma.roomPhoto.create({
         data: {
           roomId: id,
