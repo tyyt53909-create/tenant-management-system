@@ -109,14 +109,14 @@ export async function settleDepositOnCheckout(
   },
 ): Promise<{ id: string; deductions: number; refundAmount: number } | null> {
   const { contractId, deductions, refundAmount, operatorId, checkoutId } = params;
-  if (deductions < 0 || refundAmount < 0) {
-    throw new Error('押金扣减/退还金额不能为负');
-  }
 
   const ledger = await tx.depositLedger.findUnique({ where: { contractId } });
   if (!ledger) {
     // 历史合同可能没有押金台账；此时不阻断退租，押金项由人工核对。
     return null;
+  }
+  if (deductions < 0 || refundAmount < 0) {
+    throw new Error('押金扣减/退还金额不能为负');
   }
 
   if (ledger.balance !== deductions + refundAmount) {

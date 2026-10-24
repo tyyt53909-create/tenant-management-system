@@ -243,7 +243,7 @@ export class CheckoutService {
         const depositRefundGross = items
           .filter((item) => item.itemType === 'DEPOSIT_REFUND')
           .reduce((sum, item) => sum + item.amount, 0);
-        const depositRefund = depositRefundGross - depositDeduction;
+        const depositRefund = Math.max(0, depositRefundGross - depositDeduction);
         try {
           await settleDepositOnCheckout(tx, {
             contractId: record.contractId,
