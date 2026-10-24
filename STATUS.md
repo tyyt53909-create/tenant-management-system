@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `docs/T255-backfill`
-> 集成基準: `origin/develop` @ `88027c6`
+> 分支: `feature/T263-fin-01`
+> 集成基準: `origin/develop` @ `713f475`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | exit 0 |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 107 files / 1036 tests |
+| 後端單元測試 | ✅ pass | 107 files / 1039 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | exit 0 |
 | 管理後台單元測試 | ✅ pass | 17 files / 79 tests |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 1 files / 2 tests |
+| 整合測試 | ✅ pass | 1 files / 3 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -42,14 +42,14 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 0 |
+| 進行中 | 1 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- 無
+- **T263 合同状态机与续签修复（FIN-01）**（active，plan FIN-01，`feature/T263-fin-01`）
 
 ### 阻擋發布
 - 無
@@ -81,12 +81,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 34 | 20 | 13 | 0 | 14 |
+| 未分類 | 35 | 20 | 13 | 1 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T263 合同状态机与续签修复](docs/handoff/2026-10-24-T263-合同状态机与续签修复.md)
 - [交接记录：T262 BusinessClock 与业务日期](docs/handoff/2026-10-24-T262-BusinessClock与业务日期.md)
 - [交接记录：T261 文件与附件模型](docs/handoff/2026-10-24-T261-文件与附件模型.md)
 - [交接记录：T260 身份绑定与注册策略](docs/handoff/2026-10-24-T260-身份绑定与注册策略.md)
@@ -94,7 +95,6 @@
 - [交接记录：T255 真实数据库测试骨架与 J1–J7](docs/handoff/2026-10-24-T255-真实数据库测试骨架.md)
 - [交接记录：T251 CI 闸门、供应链安全与 staging](docs/handoff/2026-10-24-T251-CI闸门与staging.md)
 - [交接记录：T258 JWT 与会话强化](docs/handoff/2026-10-23-T258-JWT与会话强化.md)
-- [交接记录：T257 全域 deny-by-default 授权](docs/handoff/2026-10-23-T257-deny-by-default.md)
 
 ---
 
@@ -102,13 +102,13 @@
 
 - 資料模型：**35** 張表
 - OpenAPI 路由：**142** 條
-- 後端程式碼：**19131** 行
+- 後端程式碼：**19198** 行
 - 管理後台程式碼：**27788** 行
 - 小程序程式碼：**6643** 行
-- 文件：**135** 份
+- 文件：**136** 份
 
 ### 測試
-- 後端單元：107 files / 1036 tests
+- 後端單元：107 files / 1039 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：17 files / 79 tests
 - 小程序單元：112 tests

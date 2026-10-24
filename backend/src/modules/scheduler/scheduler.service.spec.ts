@@ -19,8 +19,14 @@ describe('SchedulerService（定时任务）', () => {
     vi.setSystemTime(FIXED_NOW);
 
     prisma = {
-      contract: { findMany: vi.fn(), update: vi.fn() },
+      contract: {
+        findMany: vi.fn(),
+        findFirst: vi.fn().mockResolvedValue(null),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+      },
       room: { findUnique: vi.fn(), update: vi.fn() },
+      $transaction: vi.fn(),
       bill: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
       maintenanceRequest: { updateMany: vi.fn() },
       prepayAccount: {
@@ -42,6 +48,7 @@ describe('SchedulerService（定时任务）', () => {
       ],
     }).compile();
 
+    prisma.$transaction.mockImplementation(async (callback: any) => callback(prisma));
     service = module.get<SchedulerService>(SchedulerService);
   });
 
@@ -68,6 +75,37 @@ describe('SchedulerService（定时任务）', () => {
         data: { status: 'OCCUPIED', version: { increment: 1 } },
       });
       expect(result).toEqual({ activated: 1, expired: 0 });
+    });
+
+    it('续签 DRAFT 生效：先置旧合同 RENEWED，再激活新合同', async () => {
+      prisma.contract.findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'c-new',
+            roomId: 'r-1',
+            startDate: new Date('2026-12-01T00:00:00.000Z'),
+            renewedFromId: 'c-old',
+          },
+        ])
+        .mockResolvedValueOnce([]);
+      prisma.contract.findUnique.mockResolvedValue({
+        id: 'c-old',
+        status: 'ACTIVE',
+        endDate: new Date('2026-11-30T00:00:00.000Z'),
+      });
+      prisma.room.findUnique.mockResolvedValue({ id: 'r-1', status: 'OCCUPIED' });
+
+      const result = await service.autoTransitionContracts();
+
+      expect(result.activated).toBe(1);
+      expect(prisma.contract.update).toHaveBeenCalledWith({
+        where: { id: 'c-old' },
+        data: { status: 'RENEWED' },
+      });
+      expect(prisma.contract.update).toHaveBeenCalledWith({
+        where: { id: 'c-new' },
+        data: { status: 'ACTIVE' },
+      });
     });
 
     it('房间非 RESERVED 时不随动（保护人工房态）', async () => {

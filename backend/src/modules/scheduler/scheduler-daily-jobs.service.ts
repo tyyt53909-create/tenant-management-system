@@ -37,29 +37,58 @@ export class SchedulerDailyJobsService {
     // DRAFT → ACTIVE（生效日到达）
     const draftContracts = await this.prisma.contract.findMany({
       where: { status: 'DRAFT', startDate: { lte: now } },
-      select: { id: true, roomId: true },
+      select: { id: true, roomId: true, startDate: true, renewedFromId: true },
     });
 
     let activated = 0;
     for (const contract of draftContracts) {
-      await this.prisma.contract.update({
-        where: { id: contract.id },
-        data: { status: 'ACTIVE' },
-      });
-      activated++;
-
-      // 房间随动：预留 → 已入住。规则与 API 共用（contract-transitions.ts），
-      // 只在其房态前置条件满足时随动，避免两处各写一份而漂移（T207）。
-      const room = await this.prisma.room.findUnique({
-        where: { id: contract.roomId },
-        select: { status: true },
-      });
-      if (room) {
-        const roomUpdate = roomUpdateForContractTransition(room, 'DRAFT', 'ACTIVE');
-        if (roomUpdate) {
-          await this.prisma.room.update({ where: { id: contract.roomId }, data: roomUpdate });
+      // 续签激活：旧合同 ACTIVE + 新合同 DRAFT 共存时，必须先在同一事务内
+      // 把旧合同置为 RENEWED，再激活新合同；否则会撞“每房间一份 ACTIVE”的部分唯一索引。
+      const didActivate = await this.prisma.$transaction(async (tx) => {
+        if (contract.renewedFromId) {
+          const original = await tx.contract.findUnique({
+            where: { id: contract.renewedFromId },
+            select: { id: true, status: true, endDate: true },
+          });
+          if (original?.status === 'ACTIVE') {
+            if (contract.startDate <= original.endDate) {
+              // 日期重叠属于数据错误，留给人工处理，不静默产生两份 ACTIVE
+              return false;
+            }
+            await tx.contract.update({
+              where: { id: original.id },
+              data: { status: 'RENEWED' },
+            });
+          }
         }
-      }
+
+        const otherActive = await tx.contract.findFirst({
+          where: { roomId: contract.roomId, status: 'ACTIVE', id: { not: contract.id } },
+          select: { id: true },
+        });
+        if (otherActive) return false;
+
+        await tx.contract.update({
+          where: { id: contract.id },
+          data: { status: 'ACTIVE' },
+        });
+
+        // 房间随动：预留 → 已入住。规则与 API 共用（contract-transitions.ts），
+        // 只在其房态前置条件满足时随动，避免两处各写一份而漂移（T207）。
+        const room = await tx.room.findUnique({
+          where: { id: contract.roomId },
+          select: { status: true },
+        });
+        if (room) {
+          const roomUpdate = roomUpdateForContractTransition(room, 'DRAFT', 'ACTIVE');
+          if (roomUpdate) {
+            await tx.room.update({ where: { id: contract.roomId }, data: roomUpdate });
+          }
+        }
+        return true;
+      });
+
+      if (didActivate) activated++;
     }
 
     // ACTIVE → EXPIRED（到期日已过）+ 到期提醒
