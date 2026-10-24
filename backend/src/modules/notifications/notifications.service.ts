@@ -4,6 +4,7 @@ import { CreateNotificationDto } from './dto/create-notification.dto.js';
 import { QueryNotificationsDto } from './dto/query-notifications.dto.js';
 import { NotificationDispatcher } from './channels/notification-dispatcher.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
+import { NotificationsGateway } from './notifications.gateway.js';
 
 @Injectable()
 export class NotificationsService {
@@ -12,6 +13,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() dispatcher?: NotificationDispatcher,
+    @Optional() private readonly gateway?: NotificationsGateway,
   ) {
     this.dispatcher = dispatcher ?? NotificationDispatcher.createDefault(prisma);
   }
@@ -20,7 +22,7 @@ export class NotificationsService {
     const user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
     if (!user) throw new NotFoundException('接收用户不存在');
 
-    return this.dispatcher.dispatch({
+    const notification = await this.dispatcher.dispatch({
       userId: dto.userId,
       email: user.email,
       title: dto.title,
@@ -30,6 +32,11 @@ export class NotificationsService {
       expiredAt: dto.expiredAt ? new Date(dto.expiredAt) : undefined,
       dedupKey: dto.dedupKey,
     });
+    // 站内通知落库后实时推送；WS 未连接时客户端轮询未读数兜底
+    if (notification && typeof notification === 'object' && 'id' in notification) {
+      this.gateway?.emitNotification(dto.userId, notification);
+    }
+    return notification;
   }
 
   async findAll(userId: string, query: QueryNotificationsDto) {
