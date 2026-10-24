@@ -1,8 +1,15 @@
-import { Injectable, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { FilePurpose, FileVisibility } from '@prisma/client';
 import sharp from 'sharp';
 import { createThumbnail, detectImageMime, type ImageMime } from './image-bytes.js';
 import {
@@ -13,6 +20,15 @@ import {
 } from './storage.adapter.js';
 
 const ALLOWED_MIME = new Set<ImageMime>(['image/jpeg', 'image/png', 'image/webp']);
+const PURPOSES = new Set<FilePurpose>([
+  'ROOM_PHOTO',
+  'CONTRACT',
+  'MAINTENANCE',
+  'AVATAR',
+  'RECEIPT',
+  'OTHER',
+]);
+const VISIBILITIES = new Set<FileVisibility>(['PRIVATE', 'PUBLIC']);
 const MAX_SIZE = 10 * 1024 * 1024;
 const EXTENSION: Record<ImageMime, string> = {
   'image/jpeg': '.jpg',
@@ -25,6 +41,11 @@ export interface UploadedFileInput {
   mimetype?: string;
   size?: number;
   originalname?: string;
+}
+
+export interface FileSaveOptions {
+  purpose?: string;
+  visibility?: string;
 }
 
 @Injectable()
@@ -44,8 +65,15 @@ export class FilesService {
    * 存储驱动由 STORAGE_DRIVER 决定，业务调用不区分本地和 S3。
    * 同时写出一张去掉 EXIF 的缩略图。
    */
-  async save(file: UploadedFileInput, actor?: { userId?: string; role?: string; tenantId?: string }) {
+  async save(
+    file: UploadedFileInput,
+    actor?: { userId?: string; role?: string; tenantId?: string },
+    options: FileSaveOptions = {},
+  ) {
     if (!file) throw new BadRequestException('未收到文件');
+
+    const purpose = this.resolvePurpose(options.purpose);
+    const visibility = this.resolveVisibility(options.visibility, actor?.role);
     if (!file.mimetype || !ALLOWED_MIME.has(file.mimetype as ImageMime)) {
       throw new BadRequestException('仅支持 JPG/PNG/WebP');
     }
@@ -74,14 +102,21 @@ export class FilesService {
       thumbnailKey = undefined;
     }
 
-    const url = `/api/files/${key}`;
-    const thumbnail = thumbnailKey ? `/api/files/${thumbnailKey}` : undefined;
-    await this.remember({
+    const url = visibility === 'PUBLIC' ? `/api/public/files/${key}` : `/api/files/${key}`;
+    const thumbnail = thumbnailKey
+      ? visibility === 'PUBLIC'
+        ? `/api/public/files/${thumbnailKey}`
+        : `/api/files/${thumbnailKey}`
+      : undefined;
+    const asset = await this.remember({
       key,
       url,
       fileName: file.originalname ?? null,
       fileSize: file.size ?? body.length,
       mimeType: detected,
+      thumbnailKey: thumbnailKey ?? null,
+      purpose,
+      visibility,
       uploadedBy: actor?.userId ?? null,
       tenantId: actor?.tenantId ?? null,
     });
@@ -92,32 +127,56 @@ export class FilesService {
         fileName: null,
         fileSize: 0,
         mimeType: 'image/jpeg',
+        thumbnailKey: null,
+        purpose,
+        visibility,
         uploadedBy: actor?.userId ?? null,
         tenantId: actor?.tenantId ?? null,
       });
     }
 
     return {
+      id: asset?.id ?? null,
       key,
       url,
       fileName: file.originalname,
       fileSize: file.size,
       mimeType: detected,
       thumbnail,
+      purpose,
+      visibility,
     };
   }
 
-  async assertCanRead(key: string, actor?: { userId?: string; role?: string }) {
+  async assertCanRead(
+    key: string,
+    actor?: { userId?: string; role?: string; tenantId?: string },
+  ) {
     if (actor?.role === 'ADMIN') return;
 
     const asset = await this.prisma.fileAsset.findUnique({
       where: { key },
-      select: { uploadedBy: true },
+      select: { uploadedBy: true, tenantId: true },
     });
 
-    if (!asset || !actor?.userId || asset.uploadedBy !== actor.userId) {
+    const sameTenant =
+      !!asset?.tenantId && !!actor?.tenantId && asset.tenantId === actor.tenantId;
+    if (!asset || (!sameTenant && (!actor?.userId || asset.uploadedBy !== actor.userId))) {
       throw new NotFoundException('文件不存在');
     }
+  }
+
+  /** 匿名公开读取：只有 visibility=PUBLIC 的对象可读，其余一律 404。 */
+  async readPublic(key: string): Promise<Buffer> {
+    this.assertSafeKey(key);
+    const asset = await this.prisma.fileAsset.findUnique({
+      where: { key },
+      select: { visibility: true },
+    });
+    if (!asset || asset.visibility !== 'PUBLIC') {
+      throw new NotFoundException('文件不存在');
+    }
+    return this.read(key);
   }
 
   filePath(key: string) {
@@ -179,12 +238,40 @@ export class FilesService {
     mimeType: string;
     uploadedBy: string | null;
     tenantId: string | null;
-  }) {
+    thumbnailKey: string | null;
+    purpose: FilePurpose;
+    visibility: FileVisibility;
+  }): Promise<{ id: string } | null> {
     try {
-      await this.prisma.fileAsset.create({ data });
+      return await this.prisma.fileAsset.create({
+        data,
+        select: { id: true },
+      });
     } catch {
       this.logger.error(`文件归属登记失败，该文件将仅管理员可下载: ${data.key}`);
+      return null;
     }
+  }
+
+  private resolvePurpose(raw: string | undefined): FilePurpose {
+    if (raw === undefined || raw.trim() === '') return 'OTHER';
+    const value = raw.trim().toUpperCase() as FilePurpose;
+    if (!PURPOSES.has(value)) {
+      throw new BadRequestException('不支持的文件用途');
+    }
+    return value;
+  }
+
+  private resolveVisibility(raw: string | undefined, role: string | undefined): FileVisibility {
+    if (raw === undefined || raw.trim() === '') return 'PRIVATE';
+    const value = raw.trim().toUpperCase() as FileVisibility;
+    if (!VISIBILITIES.has(value)) {
+      throw new BadRequestException('不支持的文件可见性');
+    }
+    if (value === 'PUBLIC' && role !== 'ADMIN') {
+      throw new ForbiddenException('只有管理员可以上传公开文件');
+    }
+    return value;
   }
 
   private storageEnv(): StorageEnv {

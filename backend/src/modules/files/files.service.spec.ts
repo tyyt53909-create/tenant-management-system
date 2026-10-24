@@ -100,7 +100,14 @@ describe('FilesService', () => {
 
     expect(res.url).toBe('/api/files/' + res.key);
     expect(prisma.fileAsset.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ key: res.key, uploadedBy: 'u-1', tenantId: 't-1' }),
+      data: expect.objectContaining({
+        key: res.key,
+        uploadedBy: 'u-1',
+        tenantId: 't-1',
+        purpose: 'OTHER',
+        visibility: 'PRIVATE',
+      }),
+      select: { id: true },
     });
   });
 
@@ -111,7 +118,59 @@ describe('FilesService', () => {
 
     expect(prisma.fileAsset.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ uploadedBy: 'admin-1', tenantId: null }),
+      select: { id: true },
     });
+  });
+
+  it('管理员上传公开房源照片：返回公开地址并记录 PUBLIC', async () => {
+    prisma.fileAsset.create.mockResolvedValue({ id: 'asset-1' });
+
+    const res = await service.save(
+      pngFile() as any,
+      { userId: 'admin-1', role: 'ADMIN' },
+      { purpose: 'ROOM_PHOTO', visibility: 'PUBLIC' },
+    );
+
+    expect(res.visibility).toBe('PUBLIC');
+    expect(res.purpose).toBe('ROOM_PHOTO');
+    expect(res.id).toBe('asset-1');
+    expect(res.url).toBe('/api/public/files/' + res.key);
+    expect(prisma.fileAsset.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ visibility: 'PUBLIC', purpose: 'ROOM_PHOTO' }),
+      select: { id: true },
+    });
+  });
+
+  it('非管理员上传公开文件被拒绝', async () => {
+    await expect(
+      service.save(
+        pngFile() as any,
+        { userId: 'u-1', role: 'TENANT' },
+        { visibility: 'PUBLIC' },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(prisma.fileAsset.create).not.toHaveBeenCalled();
+  });
+
+  it('公开读取只返回 visibility=PUBLIC 的对象', async () => {
+    prisma.fileAsset.create.mockResolvedValue({ id: 'asset-1' });
+    const pub = await service.save(
+      pngFile('public.png') as any,
+      { userId: 'admin-1', role: 'ADMIN' },
+      { purpose: 'ROOM_PHOTO', visibility: 'PUBLIC' },
+    );
+    const priv = await service.save(pngFile('private.png') as any, {
+      userId: 'u-1',
+      role: 'TENANT',
+      tenantId: 't-1',
+    });
+
+    prisma.fileAsset.findUnique.mockResolvedValueOnce({ visibility: 'PRIVATE' });
+    await expect(service.readPublic(priv.key)).rejects.toMatchObject({ status: 404 });
+
+    prisma.fileAsset.findUnique.mockResolvedValueOnce({ visibility: 'PUBLIC' });
+    const body = await service.readPublic(pub.key);
+    expect(body.length).toBeGreaterThan(0);
   });
 
   it('归属登记失败不阻断上传（文件已落盘）', async () => {
