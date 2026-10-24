@@ -52,6 +52,12 @@ export function checkEnvironment(env: Record<string, unknown>): EnvCheck {
     if (productionLike) errors.push(message);
     else warnings.push(message);
   }
+  // docs/12 要求 ≥32 字节随机串；过短的密钥可被暴力/字典攻击，生产/预发直接拒绝启动。
+  if (jwtSecret && Buffer.byteLength(jwtSecret, 'utf8') < 32) {
+    const message = '环境变量 JWT_SECRET 长度不足 32 字节（docs/12 要求 ≥32 字节随机串）';
+    if (productionLike) errors.push(message);
+    else warnings.push(message);
+  }
 
   const encryptionKey = read(env, 'ENCRYPTION_KEY');
   if (!encryptionKey && read(env, 'FIELD_ENCRYPTION_KEY')) {

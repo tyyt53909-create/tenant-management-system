@@ -32,6 +32,24 @@ describe('validateEnvironment', () => {
     ).toThrow(/JWT_SECRET/);
   });
 
+  it('生产模式拒绝短于 32 字节的 JWT_SECRET（T258）', () => {
+    expect(() => validateEnvironment(productionEnv({ JWT_SECRET: 'short-secret' }))).toThrow(
+      /JWT_SECRET.*32/,
+    );
+    expect(() => validateEnvironment(productionEnv({ JWT_SECRET: 'a'.repeat(31) }))).toThrow(
+      /JWT_SECRET/,
+    );
+  });
+
+  it('开发模式短 JWT_SECRET 只警告，不阻止启动', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const config = { NODE_ENV: 'development', DATABASE_URL: 'postgres://local', JWT_SECRET: 'short' };
+
+    expect(validateEnvironment(config)).toBe(config);
+    expect(warn.mock.calls.map((call) => call.join(' ')).join('\n')).toMatch(/JWT_SECRET.*32/);
+    warn.mockRestore();
+  });
+
   it('生产模式缺少 ENCRYPTION_KEY 时抛错（证件号加解密依赖它，不能等到运行时才炸）', () => {
     expect(() => validateEnvironment(productionEnv({ ENCRYPTION_KEY: '' }))).toThrow(/ENCRYPTION_KEY/);
     expect(() => validateEnvironment(productionEnv({ ENCRYPTION_KEY: undefined }))).toThrow(/ENCRYPTION_KEY/);

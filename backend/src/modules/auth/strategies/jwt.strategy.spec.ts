@@ -10,6 +10,9 @@ import { PrismaService } from '../../prisma/prisma.service.js';
  * 背景：jt strategy 原先在查不到 Tenant 时仍返回 tenantId=undefined，
  * 下游 `where: { tenantId: undefined }` 被 Prisma 当作「不过滤」，
  * 实测可越权读取全库 49 张账单 / 35 份合同 / 任意预付账户。
+ *
+ * T258：用户与租客档案改为一次关系查询（`tenant: { select: { id } }`），
+ * 不再单独调用 `tenant.findUnique`。
  */
 describe('JwtStrategy 租客档案强制校验（T158 安全回归）', () => {
   let strategy: JwtStrategy;
@@ -23,7 +26,13 @@ describe('JwtStrategy 租客档案强制校验（T158 安全回归）', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         JwtStrategy,
-        { provide: ConfigService, useValue: { get: vi.fn().mockReturnValue('test-secret') } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: vi.fn().mockReturnValue('test-secret'),
+            getOrThrow: vi.fn().mockReturnValue('test-secret'),
+          },
+        },
         { provide: PrismaService, useValue: prismaMock },
       ],
     }).compile();
@@ -32,26 +41,41 @@ describe('JwtStrategy 租客档案强制校验（T158 安全回归）', () => {
     prisma = prismaMock;
   });
 
-  it('TENANT 有档案 → 返回 tenantId', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'u-1', role: 'TENANT', isActive: true });
-    prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
+  it('TENANT 有档案 → 返回 tenantId，且不额外查 tenant 表', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u-1',
+      role: 'TENANT',
+      isActive: true,
+      tenant: { id: 'tenant-1' },
+    });
 
     const res = await strategy.validate({ sub: 'u-1', role: 'TENANT' } as any);
 
     expect(res.tenantId).toBe('tenant-1');
+    expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
   });
 
   it('TENANT 无档案 → 401（不得放行 tenantId=undefined）', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'u-1', role: 'TENANT', isActive: true });
-    prisma.tenant.findUnique.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u-1',
+      role: 'TENANT',
+      isActive: true,
+      tenant: null,
+    });
 
     await expect(strategy.validate({ sub: 'u-1', role: 'TENANT' } as any)).rejects.toThrow(
       UnauthorizedException,
     );
+    expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
   });
 
-  it('ADMIN 不查租客档案，且 tenantId 为 undefined', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 'u-2', role: 'ADMIN', isActive: true });
+  it('ADMIN 不解析租客档案，且 tenantId 为 undefined', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u-2',
+      role: 'ADMIN',
+      isActive: true,
+      tenant: null,
+    });
 
     const res = await strategy.validate({ sub: 'u-2', role: 'ADMIN' } as any);
 
@@ -65,21 +89,37 @@ describe('JwtStrategy 租客档案强制校验（T158 安全回归）', () => {
       UnauthorizedException,
     );
 
-    prisma.user.findUnique.mockResolvedValue({ id: 'u-3', role: 'TENANT', isActive: false });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u-3',
+      role: 'TENANT',
+      isActive: false,
+      tenant: null,
+    });
     await expect(strategy.validate({ sub: 'u-3', role: 'TENANT' } as any)).rejects.toThrow(
       UnauthorizedException,
     );
   });
-  it('管理员降权后，旧 ADMIN token 不再获得管理员权限',async()=>{
-    prisma.user.findUnique.mockResolvedValue({id:'u-1',role:'TENANT',isActive:true});
-    prisma.tenant.findUnique.mockResolvedValue({id:'tenant-1'});
-    const actor=await strategy.validate({sub:'u-1',role:'ADMIN'} as any);
-    expect(actor.role).toBe('TENANT');expect(actor.tenantId).toBe('tenant-1');
+  it('管理员降权后，旧 ADMIN token 不再获得管理员权限', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u-1',
+      role: 'TENANT',
+      isActive: true,
+      tenant: { id: 'tenant-1' },
+    });
+    const actor = await strategy.validate({ sub: 'u-1', role: 'ADMIN' } as any);
+    expect(actor.role).toBe('TENANT');
+    expect(actor.tenantId).toBe('tenant-1');
   });
-  it('角色改为 CLEANER 后不沿用 token 中的租客角色',async()=>{
-    prisma.user.findUnique.mockResolvedValue({id:'u-1',role:'CLEANER',isActive:true});
-    const actor=await strategy.validate({sub:'u-1',role:'TENANT'} as any);
-    expect(actor.role).toBe('CLEANER');expect(prisma.tenant.findUnique).not.toHaveBeenCalled();
+  it('角色改为 CLEANER 后不沿用 token 中的租客角色', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u-1',
+      role: 'CLEANER',
+      isActive: true,
+      tenant: null,
+    });
+    const actor = await strategy.validate({ sub: 'u-1', role: 'TENANT' } as any);
+    expect(actor.role).toBe('CLEANER');
+    expect(actor.tenantId).toBeUndefined();
   });
   it('禁止使用 Refresh Token 访问受保护接口（防混用绕过过期时间）', async () => {
     await expect(

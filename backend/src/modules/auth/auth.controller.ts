@@ -16,10 +16,12 @@ import { AuthThrottle, OtpEmailThrottle } from '../../common/decorators/throttle
 import { AuthService } from './auth.service.js';
 import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 import {
+  DEFAULT_REFRESH_TOKEN_MAX_AGE_MS,
   setRefreshTokenCookie,
   clearRefreshTokenCookie,
   extractRefreshToken,
 } from './auth-cookie.util.js';
+import { durationMsOr } from '../../common/utils/duration.js';
 
 @Controller('auth')
 export class AuthController {
@@ -33,6 +35,14 @@ export class AuthController {
     return this.configService.get<string>('NODE_ENV') === 'production';
   }
 
+  /** Cookie 生命周期与 JWT_REFRESH_EXPIRY 对齐，避免 Cookie 与 Token 过期时间错位（T258）。 */
+  private get refreshCookieMaxAgeMs(): number {
+    return durationMsOr(
+      this.configService.get<string>('jwt.refreshTokenExpiry'),
+      DEFAULT_REFRESH_TOKEN_MAX_AGE_MS,
+    );
+  }
+
   @Post('register')
   @Public()
   @AuthThrottle()
@@ -42,7 +52,7 @@ export class AuthController {
   ): Promise<RegisterResponseDto> {
     const result = await this.authService.register(dto);
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
     return result;
   }
@@ -56,7 +66,7 @@ export class AuthController {
   ): Promise<LoginResponseDto> {
     const result = await this.authService.login(dto);
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
     return result;
   }
@@ -107,7 +117,7 @@ export class AuthController {
     }
     const result = await this.authService.refresh({ refreshToken: token });
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
     return result;
   }
@@ -171,7 +181,7 @@ export class AuthController {
   ): Promise<GoogleAuthResponseDto> {
     const result = await this.authService.googleAuth(dto);
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
     return result;
   }
@@ -198,7 +208,7 @@ export class AuthController {
   ) {
     const result = await this.authService.loginWithEmailCode(dto);
     if (res && result?.refreshToken) {
-      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies);
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
     return result;
   }
