@@ -15,6 +15,7 @@ import databaseConfig from './config/database.config.js';
 import { validateEnvironment } from './config/env.validation.js';
 import jwtConfig from './config/jwt.config.js';
 import { PrismaModule } from './modules/prisma/prisma.module.js';
+import { BusinessClockModule } from './common/business-clock/business-clock.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { RoomsModule } from './modules/rooms/rooms.module.js';
 import { TenantsModule } from './modules/tenants/tenants.module.js';
@@ -60,6 +61,7 @@ import { SpaceModule } from './modules/space/space.module.js';
       },
     }),
     PrismaModule,
+    BusinessClockModule,
     HealthModule,
     TenantCapabilitiesModule,
     AuthModule,

@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DashboardService } from './dashboard.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ConfigService } from '@nestjs/config';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('DashboardService', () => {
   let service: DashboardService;
@@ -10,6 +12,7 @@ describe('DashboardService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DashboardService,
+        { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({})) },
         {
           provide: PrismaService,
           useValue: {
@@ -107,9 +110,9 @@ describe('DashboardService', () => {
       expect(result[1]).toEqual({ month: '2026-06', revenue: 30000 });
       expect(result[5]).toEqual({ month: '2026-10', revenue: 150000 });
 
-      // 查询起点应为范围首月（2026-05-01，按本地时区构造避免测试环境时区差异）
+      // 查询起点应为范围首月（业务日 UTC 零点）
       const findManyArgs = vi.mocked(prisma.paymentRecord.findMany).mock.calls[0][0] as any;
-      expect(findManyArgs.where.paidAt.gte).toEqual(new Date(2026, 4, 1));
+      expect(findManyArgs.where.paidAt.gte).toEqual(new Date(Date.UTC(2026, 4, 1)));
     });
 
     it('超出范围的收款月份不应计入（防御式处理）', async () => {

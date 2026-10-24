@@ -4,6 +4,7 @@ import { MetersController } from './meters.controller.js';
 import { MetersService } from './meters.service.js';
 import { MetersSimulatorService } from './meters-simulator.service.js';
 import { MeterReconciliationService } from './meter-reconciliation.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('MetersController', () => {
   let controller: MetersController;
@@ -14,6 +15,7 @@ describe('MetersController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MetersController],
       providers: [
+        { provide: BusinessClock, useValue: { formatDate: () => '2026-10-24' } },
         {
           provide: MetersService,
           useValue: {

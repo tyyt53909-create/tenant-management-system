@@ -45,6 +45,7 @@ import { SpaceController } from '../src/modules/space/space.controller.js';
 import { SpaceService } from '../src/modules/space/space.service.js';
 import { FloorPlansController } from '../src/modules/floor-plans/floor-plans.controller.js';
 import { FloorPlansService } from '../src/modules/floor-plans/floor-plans.service.js';
+import { BusinessClock } from '../src/common/business-clock/business-clock.service.js';
 
 /**
  * 越权回归测试（T148）
@@ -163,6 +164,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       providers: [
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'test' }) },
+        { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })) },
         { provide: TenantsService, useValue: tenantsService },
         { provide: PublicUtilitiesService, useValue: publicUtilitiesService },
         { provide: ImportsService, useValue: importsService },
@@ -586,6 +588,7 @@ describe('房源接口角色隔离（T148，真实 RoomsService）', () => {
         RoomsService,
         { provide: PrismaService, useValue: prisma },
         { provide: NotificationsService, useValue: { create: vi.fn() } },
+        { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })) },
       ],
     })
       .overrideGuard(JwtAuthGuard)

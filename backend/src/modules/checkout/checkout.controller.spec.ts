@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CheckoutController } from './checkout.controller.js';
 import { CheckoutService } from './checkout.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('CheckoutController', () => {
   let controller: CheckoutController;
@@ -10,6 +11,7 @@ describe('CheckoutController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CheckoutController],
       providers: [
+        { provide: BusinessClock, useValue: { formatDate: () => '2026-10-24' } },
         {
           provide: CheckoutService,
           useValue: {

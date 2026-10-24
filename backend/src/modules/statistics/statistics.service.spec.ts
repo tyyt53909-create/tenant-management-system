@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StatisticsService } from './statistics.service.js';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('StatisticsService（统计 P1 / T155）', () => {
   let service: StatisticsService;
@@ -16,7 +18,11 @@ describe('StatisticsService（统计 P1 / T155）', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [StatisticsService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        StatisticsService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({})) },
+      ],
     }).compile();
 
     service = module.get<StatisticsService>(StatisticsService);
@@ -26,26 +32,26 @@ describe('StatisticsService（统计 P1 / T155）', () => {
   describe('resolveRange 时间维度', () => {
     it('默认当月：从月初到月末', () => {
       const { start, end } = service.resolveRange({ period: 'MONTH' } as any);
-      expect(start.getDate()).toBe(1);
-      expect(start.getHours()).toBe(0);
-      // 月末：下月 0 日
-      expect(end.getMonth()).toBe(start.getMonth());
-      expect(end.getDate()).toBe(new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate());
+      expect(start.getUTCDate()).toBe(1);
+      expect(start.getUTCHours()).toBe(0);
+      expect(end.getUTCMonth()).toBe(start.getUTCMonth());
+      expect(end.getUTCHours()).toBe(23);
+      expect(end.getUTCMinutes()).toBe(59);
     });
 
     it('本季：从季度首月 1 号到末月最后一天', () => {
       const { start, end } = service.resolveRange({ period: 'QUARTER' } as any);
-      expect([0, 3, 6, 9]).toContain(start.getMonth());
-      expect(start.getDate()).toBe(1);
-      expect(end.getMonth()).toBe(start.getMonth() + 2);
+      expect([0, 3, 6, 9]).toContain(start.getUTCMonth());
+      expect(start.getUTCDate()).toBe(1);
+      expect(end.getUTCMonth()).toBe(start.getUTCMonth() + 2);
     });
 
     it('本年：1 月 1 日到 12 月 31 日', () => {
       const { start, end } = service.resolveRange({ period: 'YEAR' } as any);
-      expect(start.getMonth()).toBe(0);
-      expect(start.getDate()).toBe(1);
-      expect(end.getMonth()).toBe(11);
-      expect(end.getDate()).toBe(31);
+      expect(start.getUTCMonth()).toBe(0);
+      expect(start.getUTCDate()).toBe(1);
+      expect(end.getUTCMonth()).toBe(11);
+      expect(end.getUTCDate()).toBe(31);
     });
 
     it('自定义区间：end 取当天 23:59:59.999（闭区间）', () => {
@@ -56,12 +62,12 @@ describe('StatisticsService（统计 P1 / T155）', () => {
       } as any);
       expect(start.toISOString().slice(0, 10)).toBe('2026-01-01');
       expect(end.toISOString().slice(0, 10)).toBe('2026-03-15');
-      expect(end.getHours()).toBe(23);
+      expect(end.getUTCHours()).toBe(23);
     });
 
     it('自定义缺参数时回退当月（不抛错）', () => {
       const { start } = service.resolveRange({ period: 'CUSTOM' } as any);
-      expect(start.getDate()).toBe(1);
+      expect(start.getUTCDate()).toBe(1);
     });
   });
 

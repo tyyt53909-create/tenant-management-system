@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { QueryStatisticsDto } from './dto/query-statistics.dto.js';
 
 export interface PeriodRange {
@@ -21,46 +22,42 @@ export interface PeriodRange {
  */
 @Injectable()
 export class StatisticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly clock: BusinessClock,
+  ) {}
 
   /** 依 period（+自定义区间）解析出 [start, end) */
   resolveRange(query: QueryStatisticsDto): PeriodRange {
-    const now = new Date();
+    const today = this.clock.todayUtc();
 
     if (query.period === 'CUSTOM') {
       if (!query.startDate || !query.endDate) {
         // 缺参数时回退为当月，避免 500
-        return this.monthRange(now);
+        return this.monthRange(today);
       }
-      const start = new Date(query.startDate);
-      const end = new Date(query.endDate);
-      // end 取当天 23:59:59.999，使自定义区间为闭区间
-      end.setHours(23, 59, 59, 999);
-      return { start, end };
+      const start = this.clock.parseDateOnly(query.startDate);
+      const endDay = this.clock.parseDateOnly(query.endDate);
+      if (!start || !endDay) {
+        return this.monthRange(today);
+      }
+      // 自定义区间按业务日闭区间：[start 00:00, end 23:59:59.999]
+      return { start, end: new Date(this.clock.addDays(endDay, 1).getTime() - 1) };
     }
 
     if (query.period === 'QUARTER') {
-      const q = Math.floor(now.getMonth() / 3);
-      const start = new Date(now.getFullYear(), q * 3, 1);
-      const end = new Date(now.getFullYear(), q * 3 + 3, 0, 23, 59, 59, 999);
-      return { start, end };
+      return { start: this.clock.startOfQuarter(today), end: this.clock.endOfQuarter(today) };
     }
 
     if (query.period === 'YEAR') {
-      return {
-        start: new Date(now.getFullYear(), 0, 1),
-        end: new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999),
-      };
+      return { start: this.clock.startOfYear(today), end: this.clock.endOfYear(today) };
     }
 
-    return this.monthRange(now);
+    return this.monthRange(today);
   }
 
-  private monthRange(now: Date): PeriodRange {
-    return {
-      start: new Date(now.getFullYear(), now.getMonth(), 1),
-      end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
-    };
+  private monthRange(day: Date): PeriodRange {
+    return { start: this.clock.startOfMonth(day), end: this.clock.endOfMonth(day) };
   }
 
   /** 统计总览 + 按空间维度分组 */
@@ -103,7 +100,7 @@ export class StatisticsService {
     // 原实现只查 status='ACTIVE'（当下的状态），把它用在历史区间报表上会串台：
     // 查 1 月报表却返回今天的占用数。现在改用合同有效期覆盖该时刻：
     // 区间末端若在未来（本月/本季报表），以「当前时刻」为准，避免出现前瞻性的空档。
-    const asOf = range.end.getTime() > Date.now() ? new Date() : range.end;
+    const asOf = range.end.getTime() > this.clock.now().getTime() ? this.clock.now() : range.end;
     const occupiedIds = new Set(
       (
         await this.prisma.contract.findMany({

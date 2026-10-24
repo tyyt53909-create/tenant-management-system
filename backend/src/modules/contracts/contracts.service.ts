@@ -11,6 +11,7 @@ import { UpdateContractDto } from './dto/update-contract.dto.js';
 import { QueryContractsDto } from './dto/query-contracts.dto.js';
 import { RenewContractDto } from './dto/renew-contract.dto.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
+import { randomHex } from '../../common/utils/secure-random.js';
 import {
   isContractTransitionAllowed,
   roomUpdateForContractTransition,
@@ -46,7 +47,7 @@ export class ContractsService {
     }
 
     // 生成合同编号
-    const contractNumber = `C${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const contractNumber = `C${Date.now()}${randomHex(3)}`;
 
     return this.prisma.contract.create({
       data: {
@@ -95,7 +96,7 @@ export class ContractsService {
       throw new BadRequestException('新合同到期日必须晚于起始日');
     }
 
-    const contractNumber = `C${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const contractNumber = `C${Date.now()}${randomHex(3)}`;
 
     return this.prisma.contract.create({
       data: {

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { BillsService } from './bills.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
 import { QueryBillsDto } from './dto/query-bills.dto.js';
@@ -16,7 +17,10 @@ import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../commo
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
 export class BillsController {
-  constructor(private readonly billsService: BillsService) {}
+  constructor(
+    private readonly billsService: BillsService,
+    private readonly clock: BusinessClock,
+  ) {}
 
   @Post()
   @UseGuards(RolesGuard)
@@ -31,7 +35,7 @@ export class BillsController {
   @Roles('ADMIN')
   async exportBills(@Query() query: QueryBillsDto, @Res({ passthrough: true }) res: Response) {
     const csv = await this.billsService.exportBills(query);
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const dateStr = this.clock.formatDate().replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="bills-export-${dateStr}.csv"`);
     return csv;

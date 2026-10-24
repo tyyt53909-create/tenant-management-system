@@ -1,3 +1,4 @@
+import { parseDateOnly } from '../../common/business-clock/business-clock.js';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -351,7 +352,5 @@ function isAmountAtLeastZero(value: string | undefined): boolean {
 /** YYYY-MM-DD → Date（UTC 零点，与 Prisma @db.Date 一致） */
 function parseDate(value: string | undefined): Date | null {
   if (!value) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return null;
-  const date = new Date(`${value.trim()}T00:00:00.000Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return parseDateOnly(value);
 }

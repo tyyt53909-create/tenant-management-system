@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { CheckoutService } from './checkout.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
 import { QueryCheckoutsDto } from './dto/query-checkouts.dto.js';
@@ -14,7 +15,10 @@ import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../commo
 @Controller('checkout')
 @UseGuards(JwtAuthGuard)
 export class CheckoutController {
-  constructor(private readonly checkoutService: CheckoutService) {}
+  constructor(
+    private readonly checkoutService: CheckoutService,
+    private readonly clock: BusinessClock,
+  ) {}
 
   @Post()
   @UseGuards(RolesGuard)
@@ -29,7 +33,7 @@ export class CheckoutController {
   @Roles('ADMIN')
   async exportCheckouts(@Query() query: QueryCheckoutsDto, @Res({ passthrough: true }) res: Response) {
     const csv = await this.checkoutService.exportCheckouts(query);
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const dateStr = this.clock.formatDate().replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="checkout-export-${dateStr}.csv"`);
     return csv;
