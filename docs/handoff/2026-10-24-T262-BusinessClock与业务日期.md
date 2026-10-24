@@ -10,7 +10,7 @@ applies_to:
   - backend/src/modules/checkout/**
   - backend/src/modules/prepay/**
 last_verified: 2026-10-24
-verified_commit: 2ac3ef6
+verified_commit: 349e5ce
 supersedes: null
 superseded_by: null
 version: 1.0
@@ -23,7 +23,7 @@ version: 1.0
 任务: T262-FIN-09-BusinessClock与业务日期
 对话ID: session-t262
 模型: DeepSeek V4.1 Flash
-状态: in_progress（实现与本地验证完成，待 PR / 合并）
+状态: completed（PR #72 已合并，merge commit `349e5ce`；分支按约定保留）
 ---
 
 ## 完成内容
@@ -63,16 +63,16 @@ version: 1.0
 
 ## 下一步
 
-- 创建 PR 到 `develop`，CI 绿后等待人工授权合并。
-- 合并后回填 `merge_commit`、任务书/handoff 置 completed，并重新生成 STATUS。
-- 下一个 M1 任务：T263（FIN-01 合同状态机与续签修复，依赖 QLT-01/SEC-09）。
+- ✅ 已创建 PR #72 并合并（merge commit `349e5ce`）。
+- ✅ 已回填 `merge_commit`、任务书/handoff 置 completed，并重新生成 STATUS。
+- 下一个无阻塞 M1 任务：T251（OPS-08 CI 闸门与 staging）→ T255（QLT-01 真实数据库测试骨架）；T263 依赖 QLT-01。
 
 ## 附加信息
 
 ### 提交记录
 - 分支：`feature/T262-fin-09`
 - 基线：`2ac3ef6`（`origin/develop`，含 T261 回填）
-- PR：待创建
+- PR：#72（已合并，merge commit `349e5ce`）
 
 ### 资源
 - 任务书：`tasks/T262-FIN-09-BusinessClock与业务日期.md`
