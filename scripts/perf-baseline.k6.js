@@ -14,8 +14,10 @@ import { check, sleep } from 'k6';
  * 3. 批量抄表底册: GET /api/meters/batch-sheet
  * 4. 认证登录: POST /api/auth/login
  *
+ * SLO 目标与结果判定见 scripts/slo.mjs / docs/26-SLO与性能基准.md（P95 300ms、错误率 0.1%）。
+ *
  * 运行方式：
- *   k6 run scripts/perf-baseline.k6.js
+ *   k6 run --summary-export /tmp/k6-summary.json scripts/perf-baseline.k6.js
  *   API_BASE=http://127.0.0.1:3100/api k6 run scripts/perf-baseline.k6.js
  */
 
