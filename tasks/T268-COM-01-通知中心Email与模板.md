@@ -2,7 +2,8 @@
 status: active
 execution_status: active
 task_id: T268
-plan_ref: M1
+plan_ref: COM-01
+stage: M1
 blocked_by:
 acceptance_evidence: tasks/evidence/T268.md
 branch: feature/T268-com-01
