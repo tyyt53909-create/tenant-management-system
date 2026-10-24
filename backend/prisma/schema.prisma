@@ -764,6 +764,7 @@ model Meter {
   updatedAt DateTime @updatedAt
 
   readings           MeterReading[]
+  priceHistory       MeterPriceHistory[]
   publicUtilityBills PublicUtilityBill[]
 
   @@unique([meterNumber])
@@ -789,8 +790,21 @@ model MeterReading {
 
   notes String? @db.Text
 
+  /// 业务去重键：messageId 或 readingTime+读数+来源摘要；同一块表内唯一
+  dedupKey String?
+
+  /// 结算落账时间；为空表示尚未结算（兼容历史 [SETTLED] 备注）
+  settledAt        DateTime?
+  /// 本次结算覆盖的累计用量
+  settledUsage     Decimal? @db.Decimal(10, 2)
+  /// 结算时实际采用的生效单价（分）
+  settledUnitPrice Int?
+  /// 本次结算产生的扣费 + 补缴账单总额（分）
+  settledAmount    Int?
+
   createdAt DateTime @default(now())
 
+  @@unique([meterId, dedupKey])
   @@index([meterId, readingTime])
   @@map("meter_readings")
 }
@@ -1077,8 +1091,13 @@ model RoomPhoto {
 
 // 24. MeterPriceHistory（单价历史）
 model MeterPriceHistory {
-  id            String    @id @default(cuid())
-  meterType     MeterType
+  id String @id @default(cuid())
+
+  /// 为空表示该表类型的默认价；有值表示单块表的调价记录
+  meterId   String?
+  meter     Meter?    @relation(fields: [meterId], references: [id], onDelete: Cascade)
+  meterType MeterType
+
   unitPrice     Int
   effectiveDate DateTime  @db.Date
 
@@ -1086,6 +1105,7 @@ model MeterPriceHistory {
   createdAt DateTime @default(now())
 
   @@index([meterType, effectiveDate])
+  @@index([meterId, effectiveDate])
   @@map("meter_price_history")
 }
 

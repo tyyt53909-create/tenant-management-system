@@ -14,14 +14,19 @@ describe('MeterBillingService', () => {
   beforeEach(async () => {
     const mock: any = {
       meter: { findUnique: vi.fn(), findMany: vi.fn() },
-      meterReading: { findFirst: vi.fn(), update: vi.fn() },
+      meterReading: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
       contract: { findFirst: vi.fn() },
       prepayAccount: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), updateMany: vi.fn() },
       prepayTransaction: { create: vi.fn() },
       bill: { create: vi.fn() },
+      meterPriceHistory: { findMany: vi.fn() },
+      $queryRaw: vi.fn(),
       $transaction: vi.fn(),
     };
     mock.$transaction.mockImplementation(async (callback: any) => callback(mock));
+    mock.meterPriceHistory.findMany.mockResolvedValue([]);
+    mock.meterReading.findMany.mockResolvedValue([]);
+    mock.$queryRaw.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
       providers: [MeterBillingService, { provide: PrismaService, useValue: mock }],
     }).compile();
@@ -67,7 +72,7 @@ describe('MeterBillingService', () => {
 
     prisma.meter.findUnique.mockResolvedValue({ ...meter, room: { roomNumber: '101', contracts: [] } });
     prisma.meterReading.findFirst.mockResolvedValueOnce({ ...reading, currentReading: 20 });
-    prisma.meterReading.findFirst.mockResolvedValueOnce({ ...reading, currentReading: 20 });
+    prisma.meterReading.findFirst.mockResolvedValueOnce({ ...reading, currentReading: 20, settledAt: new Date() });
     expect(await service.getUnsettledUsage(meter.id)).toMatchObject({ hasReadings: true, unsettledUsage: 0 });
 
     prisma.meterReading.findFirst.mockReset();
@@ -94,7 +99,7 @@ describe('MeterBillingService', () => {
     await expect(service.settleMeter('m', {}, 'op')).rejects.toBeInstanceOf(BadRequestException);
 
     prisma.meterReading.findFirst.mockResolvedValueOnce({ ...reading, id: 'latest', currentReading: 5 });
-    prisma.meterReading.findFirst.mockResolvedValueOnce({ ...reading, id: 'latest', currentReading: 5 });
+    prisma.meterReading.findFirst.mockResolvedValueOnce({ ...reading, id: 'latest', currentReading: 5, settledAt: new Date() });
     expect(await service.settleMeter('m', {}, 'op')).toMatchObject({ settled: false });
 
     prisma.meterReading.findFirst.mockReset();
@@ -112,7 +117,7 @@ describe('MeterBillingService', () => {
 
     prisma.meterReading.findFirst.mockReset();
     prisma.meterReading.findFirst.mockResolvedValueOnce({ ...reading, id: 'latest', currentReading: 8, notes: 'n' });
-    prisma.meterReading.findFirst.mockResolvedValueOnce({ id: 'base', currentReading: 2 });
+    prisma.meterReading.findFirst.mockResolvedValueOnce({ id: 'base', currentReading: 2, settledAt: new Date() });
     prisma.contract.findFirst.mockResolvedValue({ id: 'c', tenantId: 't' });
     prisma.prepayAccount.findUnique.mockResolvedValue({ id: 'a', balanceCache: 100 });
     prisma.prepayAccount.updateMany.mockResolvedValue({ count: 1 });
@@ -175,7 +180,7 @@ describe('MeterBillingService', () => {
     expect(result).toMatchObject({ settled: true, usage: 0 });
     expect(prisma.meterReading.update).toHaveBeenCalledWith({
       where: { id: 'latest' },
-      data: { notes: '[SETTLED]' },
+      data: expect.objectContaining({ notes: '[SETTLED]' }),
     });
   });
 
@@ -197,7 +202,7 @@ describe('MeterBillingService', () => {
     expect(result).toMatchObject({ settled: true, usage: 10 });
     expect(prisma.meterReading.update).toHaveBeenCalledWith({
       where: { id: 'latest' },
-      data: { notes: '[SETTLED]' },
+      data: expect.objectContaining({ notes: '[SETTLED]' }),
     });
   });
 
@@ -254,7 +259,27 @@ describe('MeterBillingService', () => {
     expect(result).toMatchObject({ settled: true, usage: 10 });
     expect(prisma.meterReading.update).toHaveBeenCalledWith({
       where: { id: 'latest' },
-      data: { notes: '[SETTLED] 备注:月结备注' },
+      data: expect.objectContaining({ notes: '[SETTLED] 备注:月结备注' }),
+    });
+  });
+
+  it('T274：显式传入生效单价时，扣费、差额账单与快照都用该价而非当前价', async () => {
+    prisma.contract.findFirst.mockResolvedValue({ id: 'c', tenantId: 't' });
+    prisma.prepayAccount.findUnique.mockResolvedValue({ id: 'a', balanceCache: 100 });
+    prisma.prepayAccount.updateMany.mockResolvedValue({ count: 1 });
+    prisma.prepayAccount.findUniqueOrThrow.mockResolvedValue({ balanceCache: 0 });
+    prisma.prepayTransaction.create.mockResolvedValue({ id: 'p' });
+    prisma.bill.create.mockResolvedValue({ id: 'b' });
+
+    // 当前价 10 分，但按历史生效价 30 分结算 4 单位 = 120 分
+    const result = await service.applyReadingDeduction(prisma, meter, reading, 4, 'op', 30);
+
+    expect(result).toMatchObject({ applied: true, amount: 120, deducted: 100, shortfall: 20 });
+    expect(prisma.bill.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        amount: 20,
+        snapshot: expect.objectContaining({ unitPrice: 30, totalAmount: 120, shortfall: 20 }),
+      }),
     });
   });
 });

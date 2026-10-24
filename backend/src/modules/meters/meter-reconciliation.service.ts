@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type { MeterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NOT_SIMULATED } from './meter-types.constants.js';
+import { MeterPriceService } from './meter-price.service.js';
 
 export interface ReconcileQuery {
   buildingId?: string;
@@ -48,7 +49,14 @@ export interface ReconciliationRow {
  */
 @Injectable()
 export class MeterReconciliationService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly priceService: MeterPriceService;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() priceService?: MeterPriceService,
+  ) {
+    this.priceService = priceService ?? new MeterPriceService(prisma);
+  }
 
   async reconcile(query: ReconcileQuery) {
     const { start, end } = monthRange(query.period);
@@ -73,10 +81,11 @@ export class MeterReconciliationService {
     }
 
     const meterIds = meters.map((meter) => meter.id);
+    const priceBook = await this.priceService.loadPriceBook(meters);
     const readings = await this.prisma.meterReading.findMany({
       where: { meterId: { in: meterIds }, readingTime: { gte: start, lt: end }, source: { not: NOT_SIMULATED } },
       orderBy: [{ meterId: 'asc' }, { readingTime: 'asc' }],
-      select: { id: true, meterId: true, currentReading: true, usage: true },
+      select: { id: true, meterId: true, currentReading: true, usage: true, readingTime: true },
     });
 
     const readingsByMeter = groupBy(readings, (reading) => reading.meterId);
@@ -99,7 +108,12 @@ export class MeterReconciliationService {
 
       const chargedAmount = Math.abs(deductions.reduce((sum, item) => sum + item.amount, 0));
       const billAmount = await this.sumUtilityBillsForReadings(readingIds);
-      const readingAmount = Math.round(readingUsage * meter.unitPrice);
+      // 应收按「期末读数业务日」的生效单价计（T274），与结算口径一致
+      const pricingAt = meterReadings.length
+        ? meterReadings[meterReadings.length - 1].readingTime
+        : end;
+      const unitPrice = priceBook.priceFor(meter, pricingAt);
+      const readingAmount = Math.round(readingUsage * unitPrice);
       const difference = chargedAmount + billAmount - readingAmount;
 
       const issues: string[] = [];
@@ -113,7 +127,7 @@ export class MeterReconciliationService {
         meterId: meter.id,
         meterNumber: meter.meterNumber,
         meterType: meter.meterType,
-        unitPrice: meter.unitPrice,
+        unitPrice,
         roomNumber: meter.room?.roomNumber ?? null,
         publicAreaName: meter.publicArea?.name ?? null,
         openingReading: opening,

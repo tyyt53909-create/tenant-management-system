@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
 import { ManualMeterAdapter, SimulatorMeterAdapter } from './adapters/manual-meter.adapter.js';
 import { MeterService } from './meter.service.js';
+import { MeterPriceService } from './meter-price.service.js';
 import { MeterReadingService } from './meter-reading.service.js';
 import { MeterBatchReadingService } from './meter-batch-reading.service.js';
 import { MeterBillingService } from './meter-billing.service.js';
@@ -19,6 +20,7 @@ import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.
   imports: [PrismaModule],
   controllers: [MetersController],
   providers: [
+    MeterPriceService,
     MeterBillingService,
     MeterReadingService,
     MeterBatchReadingService,
@@ -27,8 +29,9 @@ import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.
     MeterAnomalySimulationRunner,
     {
       provide: MeterService,
-      inject: [PrismaService, METER_ADAPTER],
-      useFactory: (prisma: PrismaService, adapter: MeterAdapter) => new MeterService(prisma, adapter),
+      inject: [PrismaService, METER_ADAPTER, MeterPriceService],
+      useFactory: (prisma: PrismaService, adapter: MeterAdapter, priceService: MeterPriceService) =>
+        new MeterService(prisma, adapter, priceService),
     },
     MetersService,
     MetersSimulatorService,
@@ -46,6 +49,7 @@ import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.
     MetersSimulatorService,
     MeterAnomalySimulationRunner,
     MeterService,
+    MeterPriceService,
     MeterReadingService,
     MeterBatchReadingService,
     MeterBillingService,

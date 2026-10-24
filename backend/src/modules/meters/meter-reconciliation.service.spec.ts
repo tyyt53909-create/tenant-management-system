@@ -11,6 +11,7 @@ describe('MeterReconciliationService', () => {
     prisma = {
       meter: { findMany: vi.fn() },
       meterReading: { findMany: vi.fn() },
+      meterPriceHistory: { findMany: vi.fn().mockResolvedValue([]) },
       prepayTransaction: { findMany: vi.fn().mockResolvedValue([]) },
       $queryRaw: vi.fn().mockResolvedValue([{ total: 0n }]),
     };

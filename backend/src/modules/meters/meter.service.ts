@@ -1,21 +1,29 @@
 import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Prisma, MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
+import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
 import { ManualMeterAdapter } from './adapters/manual-meter.adapter.js';
+import { MeterPriceService } from './meter-price.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 @Injectable()
 export class MeterService {
   private readonly meterAdapter: MeterAdapter;
+  private readonly priceService: MeterPriceService;
 
   constructor(
     private readonly prisma: PrismaService,
     @Optional() @Inject(METER_ADAPTER) meterAdapter?: MeterAdapter,
+    @Optional() priceService?: MeterPriceService,
   ) {
     this.meterAdapter = meterAdapter ?? new ManualMeterAdapter(prisma);
+    this.priceService =
+      priceService ?? new MeterPriceService(prisma, new BusinessClock(new ConfigService()));
   }
 
   /** 按当前适配器取最新读数。结算仍直接查库，因为要和事务锁放在一起。 */
@@ -23,7 +31,7 @@ export class MeterService {
     return this.meterAdapter.fetchReading(meterId);
   }
 
-  async create(dto: CreateMeterDto) {
+  async create(dto: CreateMeterDto, operatorId = 'SYSTEM') {
     // 验证楼栋存在
     const building = await this.prisma.building.findUnique({ where: { id: dto.buildingId } });
     if (!building) throw new BadRequestException('楼栋不存在');
@@ -33,6 +41,7 @@ export class MeterService {
     if (existing) throw new ConflictException('表号已存在');
 
     return this.prisma.$transaction(async (tx) => {
+      const effectiveDate = this.priceService.toDateOnly(dto.priceEffectiveDate);
       const meter = await tx.meter.create({
         data: {
           buildingId: dto.buildingId,
@@ -41,8 +50,17 @@ export class MeterService {
           meterType: dto.meterType as MeterType,
           meterNumber: dto.meterNumber,
           unitPrice: dto.unitPrice,
-          priceEffectiveDate: new Date(dto.priceEffectiveDate),
+          priceEffectiveDate: effectiveDate,
         },
+      });
+
+      // 初始价进入历史表：后续调价不影响本次生效日之前的历史读数（T274）
+      await this.priceService.recordPriceChange(tx, {
+        meterId: meter.id,
+        meterType: meter.meterType,
+        unitPrice: meter.unitPrice,
+        effectiveDate,
+        createdBy: operatorId,
       });
 
       // 设备绑定登记初始底数（不计费，作为后续起步值）
@@ -54,9 +72,14 @@ export class MeterService {
             previousReading: dto.initialReading,
             usage: 0,
             source: 'MANUAL',
-            readingTime: new Date(dto.priceEffectiveDate || Date.now()),
+            readingTime: effectiveDate,
             readBy: 'SYSTEM',
             notes: '[INITIAL] 设备绑定登记初始底数',
+            dedupKey: `initial:${meter.id}:${effectiveDate.toISOString()}`,
+            settledAt: effectiveDate,
+            settledUsage: 0,
+            settledUnitPrice: meter.unitPrice,
+            settledAmount: 0,
           },
         });
       }
@@ -105,16 +128,65 @@ export class MeterService {
     return meter;
   }
 
-  async update(id: string, dto: UpdateMeterDto) {
+  async update(id: string, dto: UpdateMeterDto, operatorId = 'SYSTEM') {
     const meter = await this.prisma.meter.findUnique({ where: { id } });
     if (!meter) throw new NotFoundException('水电表不存在');
 
+    const priceChanged = dto.unitPrice !== undefined || dto.priceEffectiveDate !== undefined;
+    const effectiveDate = priceChanged
+      ? this.priceService.toDateOnly(dto.priceEffectiveDate ?? new Date())
+      : null;
+
     const updateData: Prisma.MeterUpdateInput = {};
     if (dto.unitPrice !== undefined) updateData.unitPrice = dto.unitPrice;
-    if (dto.priceEffectiveDate) updateData.priceEffectiveDate = new Date(dto.priceEffectiveDate);
+    if (effectiveDate) updateData.priceEffectiveDate = effectiveDate;
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
 
-    return this.prisma.meter.update({ where: { id }, data: updateData });
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.meter.update({ where: { id }, data: updateData });
+      if (priceChanged) {
+        await this.priceService.recordPriceChange(tx, {
+          meterId: id,
+          meterType: updated.meterType,
+          unitPrice: updated.unitPrice,
+          effectiveDate: effectiveDate ?? updated.priceEffectiveDate,
+          createdBy: operatorId,
+        });
+      }
+      return updated;
+    });
+  }
+
+  /**
+   * 调价（T274）：写历史 + 更新当前价，历史读数仍按各自生效日计价。
+   * 与 `PATCH /meters/:id` 携带 unitPrice 等价，但语义更明确，前端应使用本接口。
+   */
+  async setPrice(id: string, dto: SetMeterPriceDto, operatorId: string) {
+    const meter = await this.prisma.meter.findUnique({ where: { id } });
+    if (!meter) throw new NotFoundException('水电表不存在');
+
+    const effectiveDate = this.priceService.toDateOnly(dto.effectiveDate);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.meter.update({
+        where: { id },
+        data: { unitPrice: dto.unitPrice, priceEffectiveDate: effectiveDate },
+      });
+      const price = await this.priceService.recordPriceChange(tx, {
+        meterId: id,
+        meterType: updated.meterType,
+        unitPrice: dto.unitPrice,
+        effectiveDate,
+        createdBy: operatorId,
+      });
+      return { meter: updated, price };
+    });
+  }
+
+  async priceHistory(id: string) {
+    const history = await this.priceService.history(id);
+    if (!history) throw new NotFoundException('水电表不存在');
+    return history;
   }
 
   async remove(id: string) {

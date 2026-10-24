@@ -1,7 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { MeterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { MeterPriceService } from '../meters/meter-price.service.js';
 import { isUniqueConstraintError } from '../../common/utils/prisma-error.js';
 import { allocateByArea, type AllocationBase } from './allocation.js';
 import { CreatePublicUtilityBillDto } from './dto/create-public-utility-bill.dto.js';
@@ -32,10 +33,15 @@ const BILL_INCLUDE = {
  */
 @Injectable()
 export class PublicUtilitiesService {
+  private readonly priceService: MeterPriceService;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
-  ) {}
+    @Optional() priceService?: MeterPriceService,
+  ) {
+    this.priceService = priceService ?? new MeterPriceService(prisma);
+  }
 
   async findAll(query: QueryPublicUtilityBillDto) {
     const buildingId = await this.resolveBuildingId(query.buildingId);
@@ -203,7 +209,7 @@ export class PublicUtilitiesService {
     if (dto.meterId) {
       const meter = await this.prisma.meter.findFirst({
         where: { id: dto.meterId, buildingId, meterType: dto.meterType as MeterType },
-        select: { id: true, unitPrice: true },
+        select: { id: true, meterType: true, unitPrice: true },
       });
       if (!meter) throw new BadRequestException('公共表不存在或与楼栋/表类型不匹配');
 
@@ -220,7 +226,9 @@ export class PublicUtilitiesService {
       const closing = Number(readings[readings.length - 1].currentReading);
       const usage = Math.round((closing - opening) * 100) / 100;
       if (usage < 0) throw new BadRequestException('本月末读数小于月初读数，请检查抄表记录');
-      const unitPrice = dto.unitPrice ?? meter.unitPrice;
+      // 未显式传价时按账期末日的生效单价解析（T274）
+      const unitPrice =
+        dto.unitPrice ?? (await this.priceService.resolveUnitPrice(meter, end));
       return {
         totalAmount: Math.round(usage * unitPrice),
         usage,
