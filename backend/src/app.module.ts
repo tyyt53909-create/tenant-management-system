@@ -38,6 +38,8 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
 import { PublicModule } from './modules/public/public.module.js';
 import { StatisticsModule } from './modules/statistics/statistics.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
+import { MetricsModule } from './common/metrics/metrics.module.js';
+import { AlertModule } from './common/alerts/alert.module.js';
 import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-capabilities.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { FloorPlansModule } from './modules/floor-plans/floor-plans.module.js';
@@ -64,6 +66,9 @@ import { StaffModule } from './modules/staff/staff.module.js';
       },
     }),
     PrismaModule,
+    // 可观测性与告警（OPS-04 / T277）
+    MetricsModule,
+    AlertModule,
     BusinessClockModule,
     HealthModule,
     TenantCapabilitiesModule,

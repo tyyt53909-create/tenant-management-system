@@ -33,6 +33,49 @@
         "security": []
       }
     },
+    "/api/metrics": {
+      "get": {
+        "operationId": "MetricsController_scrape",
+        "parameters": [
+          {
+            "name": "token",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Metrics"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "HealthController_live",

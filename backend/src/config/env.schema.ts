@@ -168,6 +168,27 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
   },
   { key: 'FIELD_ENCRYPTION_KEY', description: '旧版加密密钥别名，仅兼容旧部署', secret: true },
   {
+    key: 'METRICS_TOKEN',
+    description: 'Prometheus /api/metrics 抓取令牌；未设置时仅非生产环境暴露',
+    secret: true,
+  },
+  {
+    key: 'ALERT_WEBHOOK_URL',
+    description: '告警 webhook 地址（JSON POST）；未设置时只写日志',
+    secret: true,
+  },
+  { key: 'ALERT_WEBHOOK_TOKEN', description: '告警 webhook Bearer token（可选）', secret: true },
+  {
+    key: 'ALERT_MIN_INTERVAL_MS',
+    description: '同一告警的最小发送间隔（毫秒，默认 60000）',
+    validate: (value) => (/^\d+$/.test(value) && Number(value) >= 1000 ? null : '必须是 ≥1000 的整数'),
+  },
+  {
+    key: 'SCHEDULER_LOCK_TTL_SECONDS',
+    description: '定时任务咨询锁事务超时（秒，默认 900）',
+    validate: (value) => (/^\d+$/.test(value) && Number(value) >= 60 ? null : '必须是 ≥60 的整数'),
+  },
+  {
     key: 'REDIS_URL',
     description: 'Redis 连接串（优先于 HOST/PORT/密码），支持 redis:// 与 rediss://',
     secret: true,

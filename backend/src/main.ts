@@ -10,6 +10,7 @@ import {
 import { AllExceptionsFilter, requestIdMiddleware } from './common/filters/all-exceptions.filter.js';
 import { createHttpLogger } from './logging/http-logger.js';
 import { mountOpenApi } from './openapi/openapi.document.js';
+import { AlertService } from './common/alerts/alert.service.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -33,7 +34,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
   app.use(createHttpLogger(config.logLevel));
   app.use(requestIdMiddleware);
-  app.useGlobalFilters(new AllExceptionsFilter(config.nodeEnv));
+  app.useGlobalFilters(new AllExceptionsFilter(config.nodeEnv, app.get(AlertService)));
 
   if (config.trustProxy !== false) {
     app.getHttpAdapter().getInstance().set('trust proxy', config.trustProxy);

@@ -231,6 +231,7 @@ enum NotificationPriority {
 enum JobRunStatus {
   RUNNING
   SUCCESS
+  PARTIAL // 子任务有失败但仍跑完（OPS-04 / T277）
   FAILED
   SKIPPED
 }
