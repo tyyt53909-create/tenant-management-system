@@ -32,6 +32,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
+            type=raw,value=${{ github.sha }}
 
       - name: 登录 GHCR
         uses: docker/login-action@v3
@@ -69,6 +70,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
+            type=raw,value=${{ github.sha }}
 
       - name: 登录 GHCR
         uses: docker/login-action@v3
@@ -88,3 +90,32 @@ jobs:
             VITE_API_BASE_URL=/api
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  scan:
+    name: 镜像漏洞扫描（${{ matrix.image }}）
+    needs: [backend, web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [backend, web]
+    steps:
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trivy 扫描（HIGH/CRITICAL 阻断）
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}-${{ matrix.image }}:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'HIGH,CRITICAL'
+          vuln-type: 'os,library'
