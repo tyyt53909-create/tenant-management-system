@@ -65,6 +65,8 @@ export class HealthService {
   }
 
   private async checkDisk(): Promise<CheckState> {
+    // 多实例使用对象存储时，本地 uploads 不是业务依赖，不应拖垮 readiness
+    if (this.configService.get<string>('STORAGE_DRIVER') === 's3') return 'ok';
     const configured = this.configService.get<string>('UPLOAD_DIR');
     const dir = typeof configured === 'string' && configured.trim() ? configured.trim() : join(process.cwd(), 'uploads');
     try {

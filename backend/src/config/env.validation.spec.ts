@@ -63,6 +63,26 @@ describe('validateEnvironment', () => {
     warn.mockRestore();
   });
 
+  it('生产 MULTI_INSTANCE=true 但本地存储时拒绝启动', () => {
+    expect(() =>
+      validateEnvironment(productionEnv({ MULTI_INSTANCE: 'true', STORAGE_DRIVER: 'local' })),
+    ).toThrow(/MULTI_INSTANCE/);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(
+      validateEnvironment(
+        productionEnv({
+          MULTI_INSTANCE: 'true',
+          STORAGE_DRIVER: 's3',
+          OSS_BUCKET: 'bucket',
+          OSS_ACCESS_KEY_ID: 'id',
+          OSS_ACCESS_KEY_SECRET: 'secret',
+        }),
+      ),
+    ).toBeTruthy();
+    warn.mockRestore();
+  });
+
   it('非生产模式缺少 ENCRYPTION_KEY 只警告', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const config = { NODE_ENV: 'development', DATABASE_URL: 'postgres://local', JWT_SECRET: 'b'.repeat(32) };

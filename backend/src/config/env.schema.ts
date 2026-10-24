@@ -168,6 +168,12 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
   },
   { key: 'FIELD_ENCRYPTION_KEY', description: '旧版加密密钥别名，仅兼容旧部署', secret: true },
   {
+    key: 'MULTI_INSTANCE',
+    description: '是否多实例部署（true 时要求共享存储，禁止本地 uploads）',
+    validate: (value) => (['true', 'false'].includes(value.toLowerCase()) ? null : '只能是 true 或 false'),
+  },
+  { key: 'INSTANCE_ID', description: '实例标识（仅用于日志/排查，可选）' },
+  {
     key: 'QUEUE_ENABLED',
     description: '是否启用 BullMQ 后台任务队列（true/false，默认 false）',
     validate: (value) => (['true', 'false'].includes(value.toLowerCase()) ? null : '只能是 true 或 false'),

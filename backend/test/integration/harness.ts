@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 
@@ -83,6 +84,7 @@ export async function createApp(): Promise<INestApplication> {
   }).compile();
 
   const app = moduleRef.createNestApplication();
+  app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
   );
