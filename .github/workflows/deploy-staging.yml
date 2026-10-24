@@ -1,0 +1,113 @@
+name: Deploy Staging
+
+# OPS-08 / T251：手动部署到 staging，部署后自动冒烟；不触碰生产。
+# 需要的 Repository secrets：
+#   STAGING_HOST / STAGING_USER / STAGING_SSH_KEY / STAGING_KNOWN_HOSTS / STAGING_DIR / STAGING_URL
+# 详见 docs/20-staging与发布闸门.md。
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '不可变镜像标签（commit SHA 或 vX.Y.Z）'
+        required: true
+        type: string
+      rollback:
+        description: '回滚到该标签（仅执行 compose up，不重新拉取构建）'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy & smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 校验输入与 secrets
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+          STAGING_DIR: ${{ secrets.STAGING_DIR }}
+          STAGING_URL: ${{ secrets.STAGING_URL }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+            echo "image_tag 只允许字母、数字、点、下划线、连字符" >&2
+            exit 1
+          fi
+          missing=""
+          for name in STAGING_HOST STAGING_USER STAGING_SSH_KEY STAGING_KNOWN_HOSTS STAGING_DIR STAGING_URL; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "缺少 staging secrets:$missing" >&2
+            echo "请先按 docs/20-staging与发布闸门.md 配置，再重新运行。" >&2
+            exit 1
+          fi
+
+      - name: 通过 SSH 部署
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+          STAGING_DIR: ${{ secrets.STAGING_DIR }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$STAGING_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$STAGING_USER@$STAGING_HOST" \
+            "set -euo pipefail
+             cd '$STAGING_DIR'
+             test -f .env.staging || { echo '缺少 .env.staging' >&2; exit 1; }
+             TAG='$IMAGE_TAG' docker compose -f docker-compose.staging.yml --env-file .env.staging pull
+             TAG='$IMAGE_TAG' docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --remove-orphans
+             TAG='$IMAGE_TAG' docker compose -f docker-compose.staging.yml --env-file .env.staging ps"
+
+      - name: 等待并就绪冒烟
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          STAGING_URL: ${{ secrets.STAGING_URL }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if BASE_URL="$STAGING_URL" node scripts/smoke.mjs; then
+              echo "staging 冒烟通过（attempt $attempt）"
+              exit 0
+            fi
+            echo "等待就绪…（attempt $attempt/20）"
+            sleep 6
+          done
+          echo "staging 冒烟失败。回滚命令：" >&2
+          echo "  gh workflow run deploy-staging.yml -f image_tag=<上一个可用标签> -f rollback=true" >&2
+          exit 1
+
+      - name: 部署摘要
+        if: always()
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          STAGING_URL: ${{ secrets.STAGING_URL }}
+          RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "### Staging 部署"
+            echo ""
+            echo "- 标签：\`$IMAGE_TAG\`"
+            echo "- 地址：$STAGING_URL"
+            echo "- 结果：**$RESULT**"
+            echo "- 回滚：重新运行本 workflow，填写上一个可用标签"
+          } >> "$GITHUB_STEP_SUMMARY"

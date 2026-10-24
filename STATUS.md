@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `docs/T262-backfill`
-> 集成基準: `origin/develop` @ `349e5ce`
+> 分支: `feature/T251-ops-08`
+> 集成基準: `origin/develop` @ `18616c3`
 > 發布就緒: **NO-GO**
 > Gates: 11 pass / 0 fail / 3 not-run
 
@@ -43,14 +43,14 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 0 |
+| 進行中 | 1 |
 | 文件 active（不計入進行中） | 12 |
-| 草稿 | 7 |
+| 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- 無
+- **T251 CI 闸门、供应链安全与 staging（OPS-08）**（active，plan OPS-08，`feature/T251-ops-08`）
 
 ### 阻擋發布
 - 無
@@ -92,10 +92,10 @@
 - [交接记录：T261 文件与附件模型](docs/handoff/2026-10-24-T261-文件与附件模型.md)
 - [交接记录：T260 身份绑定与注册策略](docs/handoff/2026-10-24-T260-身份绑定与注册策略.md)
 - [交接记录：T259 OTP 与登录防护](docs/handoff/2026-10-24-T259-OTP与登录防护.md)
+- [交接记录：T251 CI 闸门、供应链安全与 staging](docs/handoff/2026-10-24-T251-CI闸门与staging.md)
 - [交接记录：T258 JWT 与会话强化](docs/handoff/2026-10-23-T258-JWT与会话强化.md)
 - [交接记录：T257 全域 deny-by-default 授权](docs/handoff/2026-10-23-T257-deny-by-default.md)
 - [交接记录：T256 错误码目录](docs/handoff/2026-10-23-T256-错误码目录.md)
-- [交接记录：T254 Nginx 边界——上传上限、TLS、安全头与限流](docs/handoff/2026-10-23-T254-Nginx边界加固.md)
 
 ---
 
@@ -106,7 +106,7 @@
 - 後端程式碼：**19131** 行
 - 管理後台程式碼：**27788** 行
 - 小程序程式碼：**6643** 行
-- 文件：**132** 份
+- 文件：**134** 份
 
 ### 測試
 - 後端單元：107 files / 1036 tests

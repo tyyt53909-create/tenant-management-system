@@ -1,0 +1,139 @@
+# OPS-08 / T251：staging / 预发编排（拉取不可变镜像，不在主机上构建）
+# 用法（详见 docs/20-staging与发布闸门.md）：
+#   cp .env.staging.example .env.staging   # 填 staging 专用密钥，禁止复用生产
+#   BACKEND_IMAGE=ghcr.io/<owner>/<repo>-backend WEB_IMAGE=ghcr.io/<owner>/<repo>-web TAG=<sha> \
+#     docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
+# 回滚：把 TAG 改成上一个不可变标签后重新 up -d。
+
+name: tenant-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-tenant_staging}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?staging 必须设置 DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-tenant_staging}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tenant_staging} -d ${DB_NAME:-tenant_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'if [ -n "$$REDIS_PASSWORD" ]; then redis-cli -a "$$REDIS_PASSWORD" ping; else redis-cli ping; fi',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+
+  migrate:
+    image: ${BACKEND_IMAGE:?staging 必须指定 BACKEND_IMAGE}:${TAG:?staging 必须指定不可变 TAG}
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-tenant_staging}:${DB_PASSWORD:?staging 必须设置 DB_PASSWORD}@postgres:5432/${DB_NAME:-tenant_staging}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  backend:
+    image: ${BACKEND_IMAGE:?staging 必须指定 BACKEND_IMAGE}:${TAG:?staging 必须指定不可变 TAG}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: staging
+      PORT: 3000
+      DATABASE_URL: postgresql://${DB_USER:-tenant_staging}:${DB_PASSWORD:?staging 必须设置 DB_PASSWORD}@postgres:5432/${DB_NAME:-tenant_staging}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?staging 必须设置 JWT_SECRET（≥32 字节）}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?staging 必须设置 ENCRYPTION_KEY（32 字节）}
+      CORS_ORIGINS: ${CORS_ORIGINS:?staging 必须设置 CORS_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Asia/Shanghai}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      UPLOAD_DIR: /app/uploads
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_AUTH_MOCK: "false"
+      OTP_DEV_BYPASS: "false"
+      FEATURE_METER_SIMULATOR: "false"
+      DEFAULT_BUILDING_ID: ${DEFAULT_BUILDING_ID:-building-001}
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - internal
+
+  web:
+    image: ${WEB_IMAGE:?staging 必须指定 WEB_IMAGE}:${TAG:?staging 必须指定不可变 TAG}
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+
+networks:
+  internal:
+    driver: bridge

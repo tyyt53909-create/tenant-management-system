@@ -74,7 +74,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       
       - name: 安装依赖
         working-directory: backend
@@ -90,6 +90,12 @@ jobs:
           # 生成报告（可选）
           npm audit --json > audit-report.json || true
       
+      - name: 生产依赖审计（HIGH/CRITICAL 阻断）
+        working-directory: backend
+        run: |
+          # OPS-08 / T251：生产依赖不得有 high/critical；开发依赖仅记录。
+          npm audit --omit=dev --audit-level=high
+
       - name: 上传审计报告
         if: always()
         uses: actions/upload-artifact@v4

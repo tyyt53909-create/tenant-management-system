@@ -39,6 +39,7 @@
 | [15-管理后台设计系统.md](./15-管理后台设计系统.md) | 管理后台设计系统 | 事实来源类 | active | medium | frontend-admin/src/styles/\*\*、frontend-admin/src/style.css、frontend-admin/src/components/common/ResourcePanel.vue、frontend-admin/src/views/\*\* | 2026-10-18 | 令牌唯一来源、WCAG AA 对比度表、11px 字级地板、页面骨架与顶栏断点 |
 | [16-房源模型接口契约.md](./16-房源模型接口契约.md) | 房源模型接口契约 | 事实来源类 | active | strong | backend/src/modules/space/\*\*、backend/src/modules/floor-plans/\*\*、frontend-admin/src/types/space.ts、frontend-admin/src/components/space/\*\* | 2026-10-21 | SpaceModel v1、座標系、FloorPlan/RoomShape、角色投影與 fixture；T221～T227 共享契約 |
 | [19-生产化路线图.md](./19-生产化路线图.md) | 生产化路线图（第二轮） | 过程类 | active | strong | tasks/\*\*、docs/09-待确认清单.md、AGENTS.md、scripts/task-check.mjs、scripts/status-core.mjs、.github/workflows/status-check.yml | 2026-10-23 | M0–M5 里程碑、65 个计划任务与 T250–T314 映射、DEC-01~09、任务书 schema、ISS 摘要 |
+| [20-staging与发布闸门.md](./20-staging与发布闸门.md) | staging 与发布闸门 | 事实来源类 | active | strong | .github/workflows/deploy-staging.yml、.github/workflows/release.yml、docker-compose.staging.yml、scripts/smoke.mjs | 2026-10-24 | staging 拓扑、secrets、部署/回滚、冒烟与 Go/No-Go |
 
 ---
 
@@ -54,6 +55,7 @@
 
 ## 3. 任务与交接
 
+- [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08，CI 统一 Node 22、生产依赖审计与镜像扫描门禁、staging 编排/部署 workflow/冒烟脚本。
 - [T262-FIN-09-BusinessClock与业务日期.md](../tasks/T262-FIN-09-BusinessClock与业务日期.md)：FIN-09，统一 BusinessClock（Asia/Shanghai）、UTC 业务日口径、TZ 矩阵验证与收据/统计/水电日期收敛。
 - [T261-SEC-07-文件与附件模型.md](../tasks/T261-SEC-07-文件与附件模型.md)：SEC-07，FileAsset 用途/可见性/归属、公开文件路由、房源照片资产绑定与历史 URL 改写。
 - [T260-SEC-04-身份绑定与注册策略.md](../tasks/T260-SEC-04-身份绑定与注册策略.md)：SEC-04，新增 UserIdentity 外部身份表、禁止首登自动建租客、邀请码角色生效与原子核销、Google 邮箱强验证、预建档案绑定。
@@ -67,6 +69,7 @@
 - [T250-M0生产化收口.md](../tasks/T250-M0生产化收口.md)：M0 治理收口（docs/19 路线图、T250–T314 编号、DEC 登记、任务书 schema、STATUS 真实化）；不改业务代码。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-24-T251-CI闸门与staging.md](./handoff/2026-10-24-T251-CI闸门与staging.md)：T251，CI 统一 Node 22、生产依赖审计与镜像扫描、staging 编排/部署 workflow/冒烟脚本。
 - [2026-10-24-T262-BusinessClock与业务日期.md](./handoff/2026-10-24-T262-BusinessClock与业务日期.md)：T262，统一 BusinessClock、UTC 业务日、TZ 矩阵与账单/统计/收据日期收敛。
 - [2026-10-24-T261-文件与附件模型.md](./handoff/2026-10-24-T261-文件与附件模型.md)：T261，FileAsset 用途/可见性/归属、公开文件路由、房源照片资产绑定与历史 URL 改写。
 - [2026-10-24-T260-身份绑定与注册策略.md](./handoff/2026-10-24-T260-身份绑定与注册策略.md)：T260，UserIdentity 表、首登需预建租客 + 邀请码、Google 邮箱强验证、邀请码角色生效与原子核销。
