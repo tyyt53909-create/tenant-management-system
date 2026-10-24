@@ -54,6 +54,7 @@ import type { FormInstance } from 'element-plus';
 import EntitySelect from '@/components/common/EntitySelect.vue';
 import { createMeter, updateMeter } from '@/api/meters';
 import type { Meter } from '@/types';
+import { centsToYuan } from '@/utils/money';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -114,7 +115,7 @@ watch(
         meterType: meter.meterType,
         meterNumber: meter.meterNumber,
         initialReading: undefined,
-        unitPrice: meter.unitPrice / 100,
+        unitPrice: centsToYuan(meter.unitPrice),
         priceEffectiveDate: meter.priceEffectiveDate.split('T')[0],
         isActive: meter.isActive,
       });

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { QueryStatisticsDto } from './dto/query-statistics.dto.js';
+import { collectionRate, occupancyRate, sumAmounts } from '../../common/metrics/finance-metrics.js';
 
 export interface PeriodRange {
   start: Date;
@@ -115,13 +116,22 @@ export class StatisticsService {
       ).map((c) => c.roomId),
     );
 
-    const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
-    const rentPaid = sum(payments.filter((p) => p.bill.billType === 'RENT').map((p) => p.amount));
-    const utilityPaid = sum(
-      payments.filter((p) => p.bill.billType === 'UTILITY').map((p) => p.amount),
+    const rentPaid = sumAmounts(
+      payments.filter((p) => p.bill.billType === 'RENT'),
+      (p) => p.amount,
     );
-    const rentBilled = sum(bills.filter((b) => b.billType === 'RENT').map((b) => b.amount));
-    const utilityBilled = sum(bills.filter((b) => b.billType === 'UTILITY').map((b) => b.amount));
+    const utilityPaid = sumAmounts(
+      payments.filter((p) => p.bill.billType === 'UTILITY'),
+      (p) => p.amount,
+    );
+    const rentBilled = sumAmounts(
+      bills.filter((b) => b.billType === 'RENT'),
+      (b) => b.amount,
+    );
+    const utilityBilled = sumAmounts(
+      bills.filter((b) => b.billType === 'UTILITY'),
+      (b) => b.amount,
+    );
     const overdueCount = bills.filter((b) => b.status === 'OVERDUE').length;
 
     const total = rooms.length;
@@ -136,15 +146,12 @@ export class StatisticsService {
       utilityPaid,
       totalBilled: rentBilled + utilityBilled,
       totalPaid: rentPaid + utilityPaid,
-      collectionRate:
-        rentBilled + utilityBilled > 0
-          ? Number((((rentPaid + utilityPaid) / (rentBilled + utilityBilled)) * 100).toFixed(1))
-          : null,
+      collectionRate: collectionRate(rentBilled + utilityBilled, rentPaid + utilityPaid),
       overdueCount,
       maintenanceCount: maintenance,
       roomTotal: total,
       roomOccupied: occupied,
-      occupancyRate: total > 0 ? Number(((occupied / total) * 100).toFixed(1)) : 0,
+      occupancyRate: occupancyRate(occupied, total),
     };
 
     // 空间维度：整楼（单组）或按楼层分组
@@ -157,10 +164,7 @@ export class StatisticsService {
           floor,
           roomTotal: floorRooms.length,
           roomOccupied: floorOccupied,
-          occupancyRate:
-            floorRooms.length > 0
-              ? Number(((floorOccupied / floorRooms.length) * 100).toFixed(1))
-              : 0,
+          occupancyRate: occupancyRate(floorOccupied, floorRooms.length),
         };
       });
       return { summary, dimension: 'FLOOR', byFloor };

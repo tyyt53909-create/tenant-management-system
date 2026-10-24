@@ -8,7 +8,7 @@
     <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
       <el-descriptions-item label="表号">{{ meter?.meterNumber }}</el-descriptions-item>
       <el-descriptions-item label="单价">
-        ¥{{ ((meter?.unitPrice || 0) / 100).toFixed(2) }}/{{ unitMap[meter?.meterType || ''] || '' }}
+        {{ formatMoney(meter?.unitPrice || 0) }}/{{ unitMap[meter?.meterType || ''] || '' }}
       </el-descriptions-item>
     </el-descriptions>
 
@@ -60,6 +60,7 @@ import { ElMessage } from 'element-plus';
 import type { FormInstance } from 'element-plus';
 import { createMeterReading } from '@/api/meters';
 import type { Meter } from '@/types';
+import { formatMoney } from '@/utils/money';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -132,10 +133,10 @@ const handleSubmit = async () => {
         readingResultText.value = `登记成功（用量 ${usage}）；扣费提示：${deduction.reason}`;
         readingResultType.value = 'warning';
       } else if (deduction.shortfall > 0) {
-        readingResultText.value = `用量 ${usage}；已扣费 ¥${(deduction.deducted / 100).toFixed(2)}；余额不足，已生成补缴账单 ¥${(deduction.shortfall / 100).toFixed(2)}`;
+        readingResultText.value = `用量 ${usage}；已扣费 ${formatMoney(deduction.deducted)}；余额不足，已生成补缴账单 ${formatMoney(deduction.shortfall)}`;
         readingResultType.value = 'warning';
       } else {
-        readingResultText.value = `用量 ${usage}；已从预付账户扣费 ¥${(deduction.deducted / 100).toFixed(2)}`;
+        readingResultText.value = `用量 ${usage}；已从预付账户扣费 ${formatMoney(deduction.deducted)}`;
         readingResultType.value = 'success';
       }
       ElMessage.success('读数登记成功');

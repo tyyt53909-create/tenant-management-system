@@ -4,6 +4,9 @@
  * e.g. 10050 分 (= 100.5 元) -> 壹佰元零伍角整
  * e.g. 10005 分 (= 100.05 元) -> 壹佰元零伍分
  */
+import { centsToYuanString } from './money.util.js';
+
+export { centsToYuanString };
 export function centsToChineseRMB(cents: number): string {
   if (!cents || isNaN(cents) || cents === 0) {
     return '零元整';
@@ -70,9 +73,4 @@ export function centsToChineseRMB(cents: number): string {
   }
 
   return (isNegative ? '负' : '') + result;
-}
-
-export function centsToYuanString(cents: number | null | undefined): string {
-  if (cents === null || cents === undefined || isNaN(cents)) return '0.00';
-  return (cents / 100).toFixed(2);
 }

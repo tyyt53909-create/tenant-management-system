@@ -77,9 +77,9 @@
           <el-button type="danger" plain size="small" @click="addDeductionItem">+ 添加押金扣除项</el-button>
           <span class="items-editor__tip">
             <template v-if="formData.items.length">
-              退还合计 ¥{{ formatMoney(formRefundTotal) }}，扣除合计
-              <b class="amount-deduction">¥{{ formatMoney(formDeductionTotal) }}</b>，净额
-              ¥{{ formatMoney(formRefundTotal - formDeductionTotal) }}
+              退还合计 {{ formatMoney(formRefundTotal) }}，扣除合计
+              <b class="amount-deduction">{{ formatMoney(formDeductionTotal) }}</b>，净额
+              {{ formatMoney(formRefundTotal - formDeductionTotal) }}
             </template>
             <template v-else>未录入结算明细时，无法体现押金扣除依据；每条明细均需填写类别、金额、说明</template>
           </span>
@@ -188,6 +188,7 @@ import type {
   CheckoutPayload,
   CheckoutRecord,
 } from '@/types';
+import { centsToYuan, formatMoney } from '@/utils/money';
 
 interface ItemTypeMeta {
   label: string;
@@ -278,9 +279,6 @@ const itemRules = {
   description: [{ required: true, message: '请填写说明', trigger: 'blur' }],
 };
 
-const formatMoney = (cents?: number | null) =>
-  ((typeof cents === 'number' && !Number.isNaN(cents) ? cents : 0) / 100).toFixed(2);
-
 const yuanToCents = (yuan?: number) =>
   typeof yuan === 'number' && !Number.isNaN(yuan) ? Math.round(yuan * 100) : 0;
 
@@ -306,7 +304,7 @@ const itemRowClass = ({ row }: { row: CheckoutItemForm }) =>
 
 const toFormItem = (item: CheckoutItem): CheckoutItemForm => ({
   itemType: item.itemType,
-  amount: typeof item.amount === 'number' ? item.amount / 100 : undefined,
+  amount: typeof item.amount === 'number' ? centsToYuan(item.amount) : undefined,
   description: item.description || '',
 });
 
@@ -341,7 +339,7 @@ watch(
         contractId: record.contractId,
         roomId: record.roomId,
         checkoutDate: record.checkoutDate.split('T')[0],
-        totalRefund: record.totalRefund / 100,
+        totalRefund: centsToYuan(record.totalRefund),
         processedBy: record.processedBy,
         status: record.status,
         notes: record.notes || '',

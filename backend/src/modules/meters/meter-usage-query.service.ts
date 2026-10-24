@@ -267,60 +267,36 @@ export class MeterUsageQueryService {
     const totalActiveMeters = activeMeters.length;
     const completedMeters = readMeterIds.size;
     const pendingMeters = Math.max(0, totalActiveMeters - completedMeters);
+    // 没有任何抄表数据时返回真实零值 + hasData=false，不再用写死的演示数字（T275）
+    const hasData = currentReadings.length > 0 || prevReadings.length > 0 || trendReadings.length > 0;
 
-    const hasData = currentReadings.length > 0 || prevReadings.length > 0;
-    const isDemo = !hasData;
-
-    const resultWaterUsage = isDemo ? 32.6 : Math.round(waterUsage * 10) / 10;
-    const resultWaterMom = isDemo ? 7.9 : calcMom(waterUsage, prevWaterUsage);
-    const resultWaterCount = isDemo ? 18 : waterCount;
-
-    const resultElecUsage = isDemo ? 827 : Math.round(electricityUsage * 10) / 10;
-    const resultElecMom = isDemo ? 7.7 : calcMom(electricityUsage, prevElectricityUsage);
-    const resultElecCount = isDemo ? 22 : electricityCount;
-
-    const resultWaterCost = isDemo ? 13692 : waterCost;
-    const resultElecCost = isDemo ? 74430 : electricityCost;
-    const resultTotalCost = resultWaterCost + resultElecCost;
-
-    const resultCompletedMeters = isDemo ? 28 : completedMeters;
-    const resultTotalMeters = isDemo ? 36 : totalActiveMeters;
-    const resultPendingMeters = isDemo ? 8 : pendingMeters;
-
-    const demoTrend = [
-      { month: trendMonths[0].key, label: trendMonths[0].label, electricityUsage: 640, waterUsage: 26.2, electricityCost: 57600, waterCost: 10480 },
-      { month: trendMonths[1].key, label: trendMonths[1].label, electricityUsage: 710, waterUsage: 28.5, electricityCost: 63900, waterCost: 11400 },
-      { month: trendMonths[2].key, label: trendMonths[2].label, electricityUsage: 890, waterUsage: 35.1, electricityCost: 80100, waterCost: 14040 },
-      { month: trendMonths[3].key, label: trendMonths[3].label, electricityUsage: 930, waterUsage: 38.0, electricityCost: 83700, waterCost: 15200 },
-      { month: trendMonths[4].key, label: trendMonths[4].label, electricityUsage: 768, waterUsage: 30.2, electricityCost: 69120, waterCost: 12080 },
-      { month: trendMonths[5].key, label: trendMonths[5].label, electricityUsage: 827, waterUsage: 32.6, electricityCost: 74430, waterCost: 13692 },
-    ];
+    const totalCost = waterCost + electricityCost;
 
     return {
       month: targetMonth,
-      isDemo,
+      hasData,
       water: {
-        usage: resultWaterUsage,
-        momRate: resultWaterMom,
-        count: resultWaterCount,
+        usage: Math.round(waterUsage * 10) / 10,
+        momRate: calcMom(waterUsage, prevWaterUsage),
+        count: waterCount,
       },
       electricity: {
-        usage: resultElecUsage,
-        momRate: resultElecMom,
-        count: resultElecCount,
+        usage: Math.round(electricityUsage * 10) / 10,
+        momRate: calcMom(electricityUsage, prevElectricityUsage),
+        count: electricityCount,
       },
       cost: {
-        total: resultTotalCost,
-        waterCost: resultWaterCost,
-        electricityCost: resultElecCost,
+        total: totalCost,
+        waterCost,
+        electricityCost,
       },
       completion: {
-        completedMeters: resultCompletedMeters,
-        totalMeters: resultTotalMeters,
-        pendingMeters: resultPendingMeters,
-        status: resultPendingMeters > 0 ? 'FOLLOW_UP' : 'DONE',
+        completedMeters,
+        totalMeters: totalActiveMeters,
+        pendingMeters,
+        status: pendingMeters > 0 ? 'FOLLOW_UP' : 'DONE',
       },
-      trend: isDemo ? demoTrend : trend,
+      trend,
     };
   }
 }

@@ -165,7 +165,8 @@ export const submitBatchReadings = (
 
 export interface UtilitiesOverviewData {
   month: string;
-  isDemo: boolean;
+  /** 当前月份是否有任何抄表数据；false 时页面显示空态而不是演示数字 */
+  hasData: boolean;
   water: {
     usage: number;
     momRate: number;

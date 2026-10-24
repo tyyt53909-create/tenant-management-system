@@ -12,19 +12,8 @@
  * 因此统一用 `sortable sort-by="<字段名>"`，不写 sort-method。
  */
 
-/** 分 → 「¥1,234.56」（带千分位，金额较大时更易读） */
-export const formatMoney = (cents: unknown): string => {
-  const n = Number(cents) || 0;
-  return (
-    '¥' +
-    (n / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  );
-};
-
-/** 分 → 「1234.56」（不带符号，用于表单项） */
-export const centsToYuan = (cents: unknown): number => {
-  return Number(((Number(cents) || 0) / 100).toFixed(2));
-};
+// 金额格式化统一由 utils/money.ts 提供（FIN-10 / T275）；此处保留再导出兼容旧调用方
+export { formatMoney, formatMoneyPlain, formatSignedMoney, centsToYuan, yuanToCents } from './money';
 
 /** 取日期部分：ISO 串 → 「2026-10-23」；空值 → 「—」 */
 export const formatDateOnly = (value: unknown): string => {

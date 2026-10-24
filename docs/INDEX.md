@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-23
-> 文档总数: 127 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 文档总数: 128 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
 > 状态标注: active 70、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
 > 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 138 份（含本索引与归档）
-> 任务书: 104 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 任务书: 105 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -40,6 +40,7 @@
 | [16-房源模型接口契约.md](./16-房源模型接口契约.md) | 房源模型接口契约 | 事实来源类 | active | strong | backend/src/modules/space/\*\*、backend/src/modules/floor-plans/\*\*、frontend-admin/src/types/space.ts、frontend-admin/src/components/space/\*\* | 2026-10-21 | SpaceModel v1、座標系、FloorPlan/RoomShape、角色投影與 fixture；T221～T227 共享契約 |
 | [19-生产化路线图.md](./19-生产化路线图.md) | 生产化路线图（第二轮） | 过程类 | active | strong | tasks/\*\*、docs/09-待确认清单.md、AGENTS.md、scripts/task-check.mjs、scripts/status-core.mjs、.github/workflows/status-check.yml | 2026-10-23 | M0–M5 里程碑、65 个计划任务与 T250–T314 映射、DEC-01~09、任务书 schema、ISS 摘要 |
 | [20-staging与发布闸门.md](./20-staging与发布闸门.md) | staging 与发布闸门 | 事实来源类 | active | strong | .github/workflows/deploy-staging.yml、.github/workflows/release.yml、docker-compose.staging.yml、scripts/smoke.mjs | 2026-10-24 | staging 拓扑、secrets、部署/回滚、冒烟与 Go/No-Go |
+| [21-指标口径与金额格式.md](./21-指标口径与金额格式.md) | 指标口径与金额格式 | 事实来源类 | active | strong | backend/src/common/metrics/\*\*、backend/src/common/utils/{money,csv}.util.ts、frontend-admin/src/utils/{money,csv}.ts | 2026-10-24 | T275：出账/收款/未收/收缴率/出租率/趋势口径，金额与 CSV 导出单一管道 |
 
 ---
 
@@ -55,6 +56,7 @@
 
 ## 3. 任务与交接
 
+- [T275-FIN-10-指标金额与导出合并.md](../tasks/T275-FIN-10-指标金额与导出合并.md)：FIN-10，指标口径单一来源、金额格式化、CSV 导出合并、移除演示指标。
 - [T274-FIN-08-抄表与计价.md](../tasks/T274-FIN-08-抄表与计价.md)：FIN-08，生效单价历史、读数去重键、结算行锁与结构化结算字段。
 - [T273-FIN-07-退租结算一致性.md](../tasks/T273-FIN-07-退租结算一致性.md)：FIN-07，结算等式、单一事务、押金台账结清、合同终止与房间释放。
 - [T269-SEC-05-账号生命周期与员工管理.md](../tasks/T269-SEC-05-账号生命周期与员工管理.md)：SEC-05，员工 CRUD/角色/停用保护、自助改密、OTP 找回密码。
@@ -88,6 +90,7 @@
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-24-T275-指标金额与导出合并.md](./handoff/2026-10-24-T275-指标金额与导出合并.md)：T275，指标口径与金额/导出合并、水电概览空态。
 - [2026-10-24-T274-抄表与计价.md](./handoff/2026-10-24-T274-抄表与计价.md)：T274，生效单价与价格历史、读数去重、并发结算幂等。
 - [2026-10-24-T273-退租结算一致性.md](./handoff/2026-10-24-T273-退租结算一致性.md)：T273，退租结算单一事务与押金结清。
 - [2026-10-24-T269-账号生命周期与员工管理.md](./handoff/2026-10-24-T269-账号生命周期与员工管理.md)：T269，员工生命周期与密码管理。

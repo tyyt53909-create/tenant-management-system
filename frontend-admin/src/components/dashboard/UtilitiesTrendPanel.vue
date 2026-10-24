@@ -39,6 +39,7 @@ import { ref, computed } from 'vue';
 import EChart from '@/components/common/EChart.vue';
 import type { UtilitiesOverviewData } from '@/api/meters';
 import type { EChartsOption } from 'echarts';
+import { formatMoneyPlain } from '@/utils/money';
 
 const props = defineProps<{
   overview: UtilitiesOverviewData | null;
@@ -114,7 +115,7 @@ const chartOption = computed<EChartsOption>(() => {
         if (!params || !params[0]) return '';
         const p = params[0];
         const item = trend[p.dataIndex];
-        const costStr = item ? (isElec ? (item.electricityCost / 100).toFixed(2) : (item.waterCost / 100).toFixed(2)) : '0.00';
+        const costStr = item ? formatMoneyPlain(isElec ? item.electricityCost : item.waterCost) : '0.00';
         return `
           <div style="font-size:12px;padding:2px;">
             <div style="font-weight:600;margin-bottom:4px;color:#2c2a29;">${p.name} · 用量</div>

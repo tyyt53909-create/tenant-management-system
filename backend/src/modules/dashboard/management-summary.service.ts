@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { METRIC_CALIBERS, collectionRate, remainingAmount } from '../../common/metrics/finance-metrics.js';
 
 function counts<T extends { _count: { _all: number } }>(rows:T[], field:keyof T) {
   return Object.fromEntries(rows.map(row=>[String(row[field]),row._count._all]));
@@ -58,10 +59,12 @@ export class ManagementSummaryService {
     return {
       generatedAt:now.toISOString(),
       ownerId:userId,
+      /** 全量快照口径；与统计页的区间报表不是同一个数，页面不要混用（T275）。 */
+      caliber:{scope:'ALL_TIME',billed:METRIC_CALIBERS.billed,paid:METRIC_CALIBERS.paid,remaining:METRIC_CALIBERS.remaining,collectionRate:METRIC_CALIBERS.collectionRate},
       rooms:{total:sumCounts(rooms),occupied:rooms.OCCUPIED ?? 0,vacant:rooms.VACANT ?? 0,maintenance:rooms.MAINTENANCE ?? 0,reserved:rooms.RESERVED ?? 0},
       tenants:{total:tenants,enabled:enabledTenants,residents:residentTenants,drafts:draftTenants,unlinked:unlinkedTenants},
       contracts:{total:sumCounts(contracts),active:contracts.ACTIVE ?? 0,expiring,draft:contracts.DRAFT ?? 0,expired:contracts.EXPIRED ?? 0},
-      bills:{total:billTotals._count._all,billed,paid,remaining:Math.max(0,billed-paid),overdue},
+      bills:{total:billTotals._count._all,billed,paid,remaining:remainingAmount(billed,paid),collectionRate:collectionRate(billed,paid),overdue},
       maintenance:{submitted:maintenance.SUBMITTED ?? 0,following:(maintenance.ACKNOWLEDGED ?? 0)+(maintenance.ASSIGNED ?? 0)+(maintenance.IN_PROGRESS ?? 0),confirm:maintenance.PENDING_CONFIRM ?? 0,completed:maintenance.COMPLETED ?? 0,urgent:urgentRepairs},
       cleaning:{pending:cleaning.PENDING_CLEAN ?? 0,progress:cleaning.CLEANING ?? 0,ready:cleaning.CLEAN ?? 0,total:sumCounts(cleaning)},
       prepay:{total:prepayTotals._count._all,balance:prepayTotals._sum.balanceCache ?? 0,low:lowBalances,negative:negativeBalances,zero:zeroBalances},

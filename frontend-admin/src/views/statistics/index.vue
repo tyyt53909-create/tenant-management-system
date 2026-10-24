@@ -107,6 +107,7 @@ import {
   type StatisticsDimension,
 } from '@/api/statistics';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import { formatMoneyPlain } from '@/utils/money';
 
 const loading = ref(false);
 const data = ref<StatisticsOverview | null>(null);
@@ -123,7 +124,7 @@ const query = reactive<{
 });
 
 /** 分 → 元（保留两位） */
-const money = (cents?: number) => ((cents ?? 0) / 100).toFixed(2);
+const money = (cents?: number) => formatMoneyPlain(cents ?? 0);
 
 /** 统计区间文案（ResourcePanel 的副标题） */
 const rangeText = computed(() =>

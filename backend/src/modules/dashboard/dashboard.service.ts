@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { bucketMonthlyRevenue } from '../../common/metrics/finance-metrics.js';
 
 export interface DashboardStats {
   totalRooms: number;
@@ -88,10 +89,10 @@ export class DashboardService {
     const safeMonths = Math.min(Math.max(Math.trunc(Number(months)) || 6, 1), 24);
     const currentMonth = this.clock.startOfMonth(this.clock.todayUtc());
 
-    const buckets = new Map<string, number>();
+    const monthKeys: string[] = [];
     for (let i = 0; i < safeMonths; i++) {
       const monthDate = this.clock.addMonths(currentMonth, -(safeMonths - 1) + i);
-      buckets.set(this.clock.monthKey(monthDate), 0);
+      monthKeys.push(this.clock.monthKey(monthDate));
     }
 
     const rangeStart = this.clock.addMonths(currentMonth, -(safeMonths - 1));
@@ -101,15 +102,7 @@ export class DashboardService {
       select: { amount: true, paidAt: true },
     });
 
-    for (const payment of payments) {
-      const monthKey = this.clock.monthKey(new Date(payment.paidAt));
-      const current = buckets.get(monthKey);
-      if (current !== undefined) {
-        buckets.set(monthKey, current + payment.amount);
-      }
-    }
-
-    return Array.from(buckets, ([month, revenue]) => ({ month, revenue }));
+    return bucketMonthlyRevenue(monthKeys, payments, (date) => this.clock.monthKey(date));
   }
 
   /**

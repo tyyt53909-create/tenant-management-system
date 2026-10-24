@@ -1,11 +1,12 @@
 import { formatDateOnly,formatDateTime } from './table';
+import { centsToYuan } from './money';
 import { stateLabel } from './resource';
 import { PAYMENT_CYCLES,ROOM_TYPES } from './propertyDetail';
 import type { ResourceRecord } from './resource';
 import type { CsvColumn } from './csv';
 export type ExportResource='rooms'|'tenants'|'contracts'|'bills'|'maintenance'|'prepay'|'meters'|'checkout'|'notifications'|'cleaning';
 const column=(label:string,value:(row:ResourceRecord)=>unknown):CsvColumn<ResourceRecord>=>({label,value});
-const amount=(value:unknown)=>value==null?null:Number(value)/100;
+const amount=(value:unknown)=>value==null?null:centsToYuan(value);
 export function csvColumns(kind:ExportResource):CsvColumn<ResourceRecord>[] {
   const columns:Record<ExportResource,CsvColumn<ResourceRecord>[]>={
     rooms:[column('房间号',r=>r.roomNumber),column('楼栋',r=>r.building?.name),column('楼层',r=>r.floor),column('房型',r=>ROOM_TYPES[r.roomType]),column('面积(m²)',r=>r.area),column('房态',r=>stateLabel(r.status)),column('清洁状态',r=>stateLabel(r.cleanStatus))],
