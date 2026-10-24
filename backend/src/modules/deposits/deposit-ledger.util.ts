@@ -92,3 +92,77 @@ export async function reverseDepositCollection(
 
   return { id: updated.id, balance: updated.balance };
 }
+
+/**
+ * 退租结算时一次性结清押金（FIN-07 / T273）。
+ * - deductions + refundAmount 必须等于台账余额，保证结算等式；
+ * - 同一事务内写 DEDUCT / REFUND 流水并把余额归零。
+ */
+export async function settleDepositOnCheckout(
+  tx: Tx,
+  params: {
+    contractId: string;
+    deductions: number;
+    refundAmount: number;
+    operatorId: string;
+    checkoutId: string;
+  },
+): Promise<{ id: string; deductions: number; refundAmount: number } | null> {
+  const { contractId, deductions, refundAmount, operatorId, checkoutId } = params;
+  if (deductions < 0 || refundAmount < 0) {
+    throw new Error('押金扣减/退还金额不能为负');
+  }
+
+  const ledger = await tx.depositLedger.findUnique({ where: { contractId } });
+  if (!ledger) {
+    if (deductions > 0 || refundAmount > 0) {
+      throw new Error('合同没有押金台账，不能结算押金');
+    }
+    return null;
+  }
+
+  if (ledger.balance !== deductions + refundAmount) {
+    throw new Error(
+      `押金台账余额 ${ledger.balance} 分与结算明细（扣减 ${deductions} + 退还 ${refundAmount}）不一致`,
+    );
+  }
+
+  let balance = ledger.balance;
+  if (deductions > 0) {
+    balance -= deductions;
+    await tx.depositTransaction.create({
+      data: {
+        ledgerId: ledger.id,
+        type: 'DEDUCT',
+        amount: -deductions,
+        balanceAfter: balance,
+        relatedType: 'CHECKOUT',
+        relatedId: checkoutId,
+        operatorId,
+        notes: '退租结算扣减押金',
+      },
+    });
+  }
+  if (refundAmount > 0) {
+    balance -= refundAmount;
+    await tx.depositTransaction.create({
+      data: {
+        ledgerId: ledger.id,
+        type: 'REFUND',
+        amount: -refundAmount,
+        balanceAfter: balance,
+        relatedType: 'CHECKOUT',
+        relatedId: checkoutId,
+        operatorId,
+        notes: '退租结算退还押金',
+      },
+    });
+  }
+
+  await tx.depositLedger.update({
+    where: { id: ledger.id },
+    data: { balance, status: 'REFUNDED' },
+  });
+
+  return { id: ledger.id, deductions, refundAmount };
+}
