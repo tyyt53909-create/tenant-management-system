@@ -1,6 +1,6 @@
 # 项目状态跟踪
 
-> 分支: `feature/T270-sec-06`
+> 分支: `feature/T268-com-01`
 > 集成基準: `origin/develop` @ `47d8fc0`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
@@ -8,7 +8,6 @@
 ### NO-GO 原因
   - 安全掃描: not-run
   - 人工 UAT: not-run
-  - T270: blocked
 
 ---
 
@@ -18,7 +17,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | exit 0 |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 110 files / 1084 tests |
+| 後端單元測試 | ✅ pass | 110 files / 1083 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | exit 0 |
 | 管理後台單元測試 | ✅ pass | 17 files / 79 tests |
@@ -43,17 +42,17 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 0 |
+| 進行中 | 1 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
-| 阻塞 | 1 |
+| 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- 無
+- **T268 COM-01 通知中心 Email 与模板（M1 部分）**（active，plan M1，`feature/T268-com-01`）
 
 ### 阻擋發布
-- **T270 SEC-06 审计重做**：進行中，但等待 needs-human
+- 無
 
 ### 資料品質警告
 - **T144 保洁小程序**：文件 status=active，但缺 execution_status/start_time；不計入進行中
@@ -88,7 +87,7 @@
 
 ## 近期交接
 
-- [交接记录：T270-审计重做](docs/handoff/2026-10-24-T270-审计重做.md)
+- [交接记录：T268-通知中心 Email 与模板](docs/handoff/2026-10-24-T268-通知中心Email与模板.md)
 - [交接记录：T267 押金账单与押金台账](docs/handoff/2026-10-24-T267-押金账单与台账.md)
 - [交接记录：T266-FIN-02 租金计费引擎](docs/handoff/2026-10-24-T266-租金计费引擎.md)
 - [交接记录：T265 财务资料禁止硬删除](docs/handoff/2026-10-24-T265-财务禁止硬删除.md)
@@ -103,13 +102,13 @@
 
 - 資料模型：**37** 張表
 - OpenAPI 路由：**147** 條
-- 後端程式碼：**19930** 行
+- 後端程式碼：**19993** 行
 - 管理後台程式碼：**28087** 行
 - 小程序程式碼：**6643** 行
 - 文件：**141** 份
 
 ### 測試
-- 後端單元：110 files / 1084 tests
+- 後端單元：110 files / 1083 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：17 files / 79 tests
 - 小程序單元：112 tests
