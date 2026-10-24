@@ -1244,5 +1244,21 @@
     "roles": [
       "ADMIN"
     ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tenants/:id/registration",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PUT",
+    "path": "/api/tenants/:id/registration",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
   }
 ]

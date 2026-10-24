@@ -614,6 +614,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tenants/{id}/registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TenantsController_getRegistration"];
+        put: operations["TenantsController_upsertRegistration"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tenants/{id}": {
         parameters: {
             query?: never;
@@ -2143,6 +2159,20 @@ export interface components {
              *     未传表示不改动，传 [] 表示清空。
              */
             tagIds?: string[];
+            notes?: string;
+            /**
+             * @description 证件类型与号码必须成对出现；号码加密后存 TenantRegistration（SEC-08 / T271）。
+             * @enum {string}
+             */
+            idType?: "OTHER" | "ID_CARD" | "PASSPORT";
+            idNumber?: string;
+        };
+        UpsertTenantRegistrationDto: {
+            /** @enum {string} */
+            idType: "OTHER" | "ID_CARD" | "PASSPORT";
+            idNumber?: string;
+            /** @enum {string} */
+            status?: "REGISTERED" | "PENDING" | "NOT_REGISTERED" | "REJECTED";
             notes?: string;
         };
         UpdateTenantDto: {
@@ -4027,13 +4057,22 @@ export interface operations {
             };
         };
         responses: {
-            201: {
+            /** @description 成功 */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description 错误 */
             default: {
@@ -4056,6 +4095,76 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    TenantsController_getRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    TenantsController_upsertRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertTenantRegistrationDto"];
+            };
+        };
         responses: {
             /** @description 成功 */
             200: {
@@ -4160,12 +4269,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description 成功 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description 错误 */

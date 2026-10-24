@@ -1,11 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { IdType, Prisma, RegistrationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { CryptoService } from '../../common/crypto/crypto.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
 import { QueryTenantsDto } from './dto/query-tenants.dto.js';
+import { UpsertTenantRegistrationDto } from './dto/upsert-tenant-registration.dto.js';
+import { assertRegistrationTransition } from './tenant-registration.js';
 
 /**
  * 租客对外字段白名单（T148 脱敏）
@@ -69,23 +71,49 @@ export class TenantsService {
       }
     }
 
-    // 3. 校验标签字典 ID（T215）
+    // 3. 证件类型与号码必须成对；hash 查重（SEC-08 / T271）
+    this.assertIdPair(dto.idType, dto.idNumber);
+    const encryptedIdNumber = dto.idNumber ? this.crypto.encrypt(dto.idNumber) : null;
+    const idNumberHash = dto.idNumber ? this.crypto.hashIdNumber(dto.idNumber) : null;
+    if (idNumberHash) await this.assertIdNumberAvailable(idNumberHash);
+
+    // 4. 校验标签字典 ID（T215）
     const tagIds = await this.assertTagIdsExist(dto.tagIds);
 
-    // 4. 创建租客
-    const created = await this.prisma.tenant.create({
-      data: {
-        name: dto.name,
-        phone: dto.phone,
-        email: dto.email,
-        emergencyContact: dto.emergencyContact,
-        emergencyPhone: dto.emergencyPhone,
-        notes: dto.notes,
-        ...(tagIds.length ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } } : {}),
-      },
-      include: { tags: TENANT_TAG_INCLUDE },
+    // 5. 创建租客与登记（同一事务）
+    const created = await this.prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.create({
+        data: {
+          name: dto.name,
+          phone: dto.phone,
+          email: dto.email,
+          emergencyContact: dto.emergencyContact,
+          emergencyPhone: dto.emergencyPhone,
+          notes: dto.notes,
+          ...(tagIds.length ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } } : {}),
+        },
+        include: { tags: TENANT_TAG_INCLUDE },
+      });
+
+      if (encryptedIdNumber && idNumberHash && dto.idType) {
+        await tx.tenantRegistration.create({
+          data: {
+            tenantId: tenant.id,
+            idType: dto.idType,
+            idNumber: encryptedIdNumber,
+            idNumberHash,
+            status: 'NOT_REGISTERED',
+          },
+        });
+      }
+
+      return tenant;
     });
-    return this.flattenTags(created);
+
+    return {
+      ...this.flattenTags(created),
+      idNumberMasked: encryptedIdNumber ? this.crypto.maskStored(encryptedIdNumber) : null,
+    };
   }
 
   async findAll(query: QueryTenantsDto) {
@@ -211,7 +239,11 @@ export class TenantsService {
     return tenant;
   }
 
-  async update(id: string, dto: UpdateTenantDto) {
+  async update(
+    id: string,
+    dto: UpdateTenantDto,
+    actor?: { userId: string; ip: string; userAgent: string },
+  ) {
     // 1. 检查租客是否存在
     const tenant = await this.prisma.tenant.findUnique({
       where: { id },
@@ -219,6 +251,16 @@ export class TenantsService {
 
     if (!tenant) {
       throw new NotFoundException('租客不存在');
+    }
+
+    const registration = await this.prisma.tenantRegistration.findUnique({ where: { tenantId: id } });
+    this.assertIdPair(dto.idType, dto.idNumber, registration?.idType);
+    let encryptedIdNumber: string | null = null;
+    let idNumberHash: string | null = null;
+    if (dto.idNumber) {
+      idNumberHash = this.crypto.hashIdNumber(dto.idNumber);
+      await this.assertIdNumberAvailable(idNumberHash, id);
+      encryptedIdNumber = this.crypto.encrypt(dto.idNumber);
     }
 
     // 2. 检查手机号唯一性（如果修改）
@@ -244,18 +286,157 @@ export class TenantsService {
     }
 
     // 4. 更新租客；tagIds 未传表示不改动，传 [] 表示清空（T215）
-    const { tagIds, ...rest } = dto;
+    // idType/idNumber 属于登记表，不能透传给 tenant.update（SEC-08 / T271）
+    const { tagIds, idType: _idType, idNumber: _idNumber, ...rest } = dto;
     const data: Prisma.TenantUpdateInput = { ...rest };
     if (tagIds !== undefined) {
       const validTagIds = await this.assertTagIdsExist(tagIds);
       data.tags = { deleteMany: {}, create: validTagIds.map((tagId) => ({ tagId })) };
     }
-    const updated = await this.prisma.tenant.update({
-      where: { id },
-      data,
-      include: { tags: TENANT_TAG_INCLUDE },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.tenant.update({
+        where: { id },
+        data,
+        include: { tags: TENANT_TAG_INCLUDE },
+      });
+
+      if (encryptedIdNumber && idNumberHash) {
+        const idType = (dto.idType ?? registration?.idType) as IdType;
+        await tx.tenantRegistration.upsert({
+          where: { tenantId: id },
+          create: {
+            tenantId: id,
+            idType,
+            idNumber: encryptedIdNumber,
+            idNumberHash,
+            status: 'NOT_REGISTERED',
+          },
+          update: { idType, idNumber: encryptedIdNumber, idNumberHash },
+        });
+      } else if (dto.idType && registration) {
+        await tx.tenantRegistration.update({ where: { tenantId: id }, data: { idType: dto.idType } });
+      }
+
+      return row;
     });
-    return this.flattenTags(updated);
+
+    if (actor && (dto.idNumber || dto.idType)) {
+      await this.auditLogService.log({
+        userId: actor.userId,
+        action: 'UPDATE_TENANT_REGISTRATION',
+        entityType: 'TenantRegistration',
+        entityId: id,
+        changes: {
+          tenantId: id,
+          idType: dto.idType ?? registration?.idType ?? null,
+          status: registration?.status ?? 'NOT_REGISTERED',
+          changedFields: [dto.idNumber ? 'idNumber' : null, dto.idType ? 'idType' : null].filter(Boolean),
+        },
+        ip: actor.ip,
+        userAgent: actor.userAgent,
+      });
+    }
+
+    return {
+      ...this.flattenTags(updated),
+      idNumberMasked: encryptedIdNumber
+        ? this.crypto.maskStored(encryptedIdNumber)
+        : (await this.maskedIdNumbers([id])).get(id) ?? null,
+    };
+  }
+
+  /** 读取居住登记（只返回脱敏证件号）。 */
+  async getRegistration(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+    if (!tenant) throw new NotFoundException('租客不存在');
+    const registration = await this.prisma.tenantRegistration.findUnique({ where: { tenantId } });
+    if (!registration) throw new NotFoundException('该租客尚未登记证件信息');
+    return this.registrationView(registration);
+  }
+
+  /**
+   * 写入/更新居住登记（SEC-08 / T271）。
+   * 只改状态或备注时不要求 idNumber；首次登记必须带证件号。
+   */
+  async upsertRegistration(
+    tenantId: string,
+    dto: UpsertTenantRegistrationDto,
+    actor: { userId: string; ip: string; userAgent: string },
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+    if (!tenant) throw new NotFoundException('租客不存在');
+
+    const existing = await this.prisma.tenantRegistration.findUnique({ where: { tenantId } });
+    if (!existing && !dto.idNumber) {
+      throw new BadRequestException('首次登记必须提供证件号');
+    }
+    if (existing && dto.status) {
+      assertRegistrationTransition(existing.status, dto.status);
+    }
+
+    let encryptedIdNumber: string | null = null;
+    let idNumberHash: string | null = null;
+    if (dto.idNumber) {
+      idNumberHash = this.crypto.hashIdNumber(dto.idNumber);
+      await this.assertIdNumberAvailable(idNumberHash, tenantId);
+      encryptedIdNumber = this.crypto.encrypt(dto.idNumber);
+    }
+
+    const status: RegistrationStatus = dto.status ?? existing?.status ?? 'NOT_REGISTERED';
+    const registeredAt =
+      status === 'REGISTERED' ? (existing?.registeredAt ?? new Date()) : null;
+
+    const saved = await this.prisma.$transaction(async (tx) => {
+      const row = existing
+        ? await tx.tenantRegistration.update({
+            where: { tenantId },
+            data: {
+              idType: dto.idType,
+              ...(encryptedIdNumber && idNumberHash
+                ? { idNumber: encryptedIdNumber, idNumberHash }
+                : {}),
+              status,
+              registeredAt,
+              ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+            },
+          })
+        : await tx.tenantRegistration.create({
+            data: {
+              tenantId,
+              idType: dto.idType,
+              idNumber: encryptedIdNumber as string,
+              idNumberHash,
+              status,
+              registeredAt,
+              notes: dto.notes ?? null,
+            },
+          });
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId || null,
+          action: 'UPDATE_TENANT_REGISTRATION',
+          entityType: 'TenantRegistration',
+          entityId: row.id,
+          changes: {
+            tenantId,
+            idType: dto.idType,
+            status,
+            changedFields: [
+              dto.idNumber ? 'idNumber' : null,
+              dto.status ? 'status' : null,
+              dto.notes !== undefined ? 'notes' : null,
+            ].filter(Boolean),
+          } as never,
+          ip: actor.ip || 'unknown',
+          userAgent: actor.userAgent || 'unknown',
+        },
+      });
+
+      return row;
+    });
+
+    return this.registrationView(saved);
   }
 
   async remove(id: string) {
@@ -299,6 +480,40 @@ export class TenantsService {
   private flattenTags<T extends { tags?: { tag: { id: string; name: string } }[] }>(tenant: T) {
     const { tags, ...rest } = tenant;
     return { ...rest, tags: (tags ?? []).map((row) => row.tag) };
+  }
+
+  private assertIdPair(idType?: IdType, idNumber?: string, existingIdType?: IdType): void {
+    if (idNumber && !idType && !existingIdType) {
+      throw new BadRequestException('提供证件号时必须同时提供证件类型');
+    }
+    if (idType && !idNumber && !existingIdType) {
+      throw new BadRequestException('提供证件类型时必须同时提供证件号');
+    }
+  }
+
+  private async assertIdNumberAvailable(hash: string, excludeTenantId?: string): Promise<void> {
+    const existing = await this.prisma.tenantRegistration.findUnique({ where: { idNumberHash: hash } });
+    if (existing && existing.tenantId !== excludeTenantId) {
+      throw new ConflictException('该证件号已登记在其它租客名下');
+    }
+  }
+
+  private registrationView(registration: {
+    tenantId: string;
+    idType: IdType;
+    idNumber: string;
+    status: RegistrationStatus;
+    registeredAt: Date | null;
+    notes: string | null;
+  }) {
+    return {
+      tenantId: registration.tenantId,
+      idType: registration.idType,
+      idNumberMasked: this.crypto.maskStored(registration.idNumber),
+      status: registration.status,
+      registeredAt: registration.registeredAt,
+      notes: registration.notes,
+    };
   }
 
   private async maskedIdNumbers(tenantIds: string[]) {

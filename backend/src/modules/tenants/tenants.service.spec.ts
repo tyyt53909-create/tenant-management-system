@@ -8,36 +8,49 @@ import { AuditLogService } from '../audit/audit-log.service.js';
 describe('TenantsService', () => {
   let service: TenantsService;
   let prisma: PrismaService;
-  let crypto: { maskStored: ReturnType<typeof vi.fn>; decrypt: ReturnType<typeof vi.fn> };
+  let crypto: {
+    maskStored: ReturnType<typeof vi.fn>;
+    decrypt: ReturnType<typeof vi.fn>;
+    encrypt: ReturnType<typeof vi.fn>;
+    hashIdNumber: ReturnType<typeof vi.fn>;
+  };
   let auditLog: { log: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
-    crypto = { maskStored: vi.fn((value: string) => `masked:${value}`), decrypt: vi.fn() };
+    crypto = {
+      maskStored: vi.fn((value: string) => `masked:${value}`),
+      decrypt: vi.fn(),
+      encrypt: vi.fn((plain: string) => `enc:${plain}`),
+      hashIdNumber: vi.fn((plain: string) => `hash:${plain}`),
+    };
     auditLog = { log: vi.fn() };
+    const prismaMock: any = {
+      tenant: {
+        findUnique: vi.fn(),
+        findMany: vi.fn(),
+        count: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
+      tenantRegistration: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        upsert: vi.fn(),
+      },
+      tag: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
+      },
+      auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
+    };
+    prismaMock.$transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(prismaMock));
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TenantsService,
-        {
-          provide: PrismaService,
-          useValue: {
-            tenant: {
-              findUnique: vi.fn(),
-              findMany: vi.fn(),
-              count: vi.fn(),
-              create: vi.fn(),
-              update: vi.fn(),
-              delete: vi.fn(),
-            },
-            tenantRegistration: {
-              findMany: vi.fn().mockResolvedValue([]),
-              findUnique: vi.fn(),
-            },
-            tag: {
-              findMany: vi.fn().mockResolvedValue([]),
-              findFirst: vi.fn(),
-            },
-          },
-        },
+        { provide: PrismaService, useValue: prismaMock },
         { provide: CryptoService, useValue: crypto },
         { provide: AuditLogService, useValue: auditLog },
       ],
@@ -429,6 +442,177 @@ describe('TenantsService', () => {
       await expect(service.findOneForTenant('tenant-1', undefined)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('居住登记与证件号（T271）', () => {
+    const idNumber = '440101199001011234';
+    const baseDto = {
+      name: '张三',
+      phone: '13800138000',
+      email: 'zhangsan@example.com',
+    };
+
+    it('创建租客时同事务写入加密登记，响应只返回脱敏值', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(prisma.tenantRegistration, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(prisma.tenant, 'create').mockResolvedValue({ id: 'tenant-1', ...baseDto } as any);
+      vi.spyOn(prisma.tenantRegistration, 'create').mockResolvedValue({} as any);
+
+      const result = await service.create({
+        ...baseDto,
+        idType: 'ID_CARD' as any,
+        idNumber,
+      });
+
+      expect(prisma.tenantRegistration.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 'tenant-1',
+          idType: 'ID_CARD',
+          idNumber: `enc:${idNumber}`,
+          idNumberHash: `hash:${idNumber}`,
+        }),
+      });
+      expect(result.idNumberMasked).toBe(`masked:enc:${idNumber}`);
+      expect(result).not.toHaveProperty('idNumber');
+      expect(crypto.encrypt).toHaveBeenCalledWith(idNumber);
+    });
+
+    it('证件号已登记在其它租客名下 → 409 且不建租客', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue(null);
+      (prisma as any).tenantRegistration.findUnique.mockResolvedValue({ tenantId: 'other' });
+
+      await expect(
+        service.create({ ...baseDto, idType: 'ID_CARD' as any, idNumber }),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.tenant.create).not.toHaveBeenCalled();
+    });
+
+    it('证件类型与号码不成对 → 400', async () => {
+      await expect(service.create({ ...baseDto, idNumber } as any)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(
+        service.create({ ...baseDto, idType: 'ID_CARD' as any } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('更新租客证件号：写登记 upsert 并记录不改值的审计', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({ id: 'tenant-1', ...baseDto } as any);
+      (prisma as any).tenantRegistration.findUnique
+        .mockResolvedValueOnce({ tenantId: 'tenant-1', idType: 'ID_CARD', status: 'NOT_REGISTERED' })
+        .mockResolvedValueOnce(null);
+      vi.spyOn(prisma.tenant, 'update').mockResolvedValue({ id: 'tenant-1', ...baseDto } as any);
+      (prisma as any).tenantRegistration.upsert.mockResolvedValue({});
+
+      const result = await service.update(
+        'tenant-1',
+        { idNumber, idType: 'ID_CARD' as any },
+        { userId: 'admin-1', ip: '127.0.0.1', userAgent: 'vitest' },
+      );
+
+      expect((prisma as any).tenantRegistration.upsert).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1' },
+        create: expect.objectContaining({ idNumber: `enc:${idNumber}` }),
+        update: expect.objectContaining({ idNumber: `enc:${idNumber}` }),
+      });
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'UPDATE_TENANT_REGISTRATION',
+          changes: expect.objectContaining({ changedFields: ['idNumber', 'idType'] }),
+        }),
+      );
+      expect(JSON.stringify(auditLog.log.mock.calls)).not.toContain(idNumber);
+      expect(result.idNumberMasked).toBe(`masked:enc:${idNumber}`);
+    });
+
+    it('首次登记必须带证件号', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({ id: 'tenant-1' } as any);
+      (prisma as any).tenantRegistration.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.upsertRegistration(
+          'tenant-1',
+          { idType: 'ID_CARD' as any, status: 'REGISTERED' as any },
+          { userId: 'admin-1', ip: '', userAgent: '' },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('状态只改进不退：REGISTERED → NOT_REGISTERED 抛 409', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({ id: 'tenant-1' } as any);
+      (prisma as any).tenantRegistration.findUnique.mockResolvedValue({
+        tenantId: 'tenant-1',
+        idType: 'ID_CARD',
+        status: 'REGISTERED',
+      });
+
+      await expect(
+        service.upsertRegistration(
+          'tenant-1',
+          { idType: 'ID_CARD' as any, status: 'NOT_REGISTERED' as any },
+          { userId: 'admin-1', ip: '', userAgent: '' },
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('只改状态：不要求证件号，写 registeredAt 与审计', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({ id: 'tenant-1' } as any);
+      (prisma as any).tenantRegistration.findUnique.mockResolvedValue({
+        tenantId: 'tenant-1',
+        idType: 'ID_CARD',
+        idNumber: 'enc:old',
+        idNumberHash: 'hash:old',
+        status: 'PENDING',
+        registeredAt: null,
+      });
+      (prisma as any).tenantRegistration.update.mockResolvedValue({
+        id: 'reg-1',
+        tenantId: 'tenant-1',
+        idType: 'ID_CARD',
+        idNumber: 'enc:old',
+        status: 'REGISTERED',
+        registeredAt: new Date('2026-10-24T00:00:00Z'),
+        notes: null,
+      });
+
+      const result = await service.upsertRegistration(
+        'tenant-1',
+        { idType: 'ID_CARD' as any, status: 'REGISTERED' as any },
+        { userId: 'admin-1', ip: '', userAgent: '' },
+      );
+
+      expect(result).toMatchObject({ status: 'REGISTERED', idNumberMasked: 'masked:enc:old' });
+      expect((prisma as any).tenantRegistration.update).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1' },
+        data: expect.objectContaining({ status: 'REGISTERED', registeredAt: expect.any(Date) }),
+      });
+      expect((prisma as any).auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'UPDATE_TENANT_REGISTRATION',
+          entityId: 'reg-1',
+          changes: expect.objectContaining({ status: 'REGISTERED', changedFields: ['status'] }),
+        }),
+      });
+      expect(JSON.stringify((prisma as any).auditLog.create.mock.calls)).not.toContain('enc:old');
+    });
+
+    it('getRegistration 无登记 → 404；有登记只返回脱敏值', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({ id: 'tenant-1' } as any);
+      (prisma as any).tenantRegistration.findUnique.mockResolvedValueOnce(null);
+      await expect(service.getRegistration('tenant-1')).rejects.toThrow(NotFoundException);
+
+      (prisma as any).tenantRegistration.findUnique.mockResolvedValueOnce({
+        tenantId: 'tenant-1',
+        idType: 'ID_CARD',
+        idNumber: 'enc:x',
+        status: 'REGISTERED',
+        registeredAt: new Date('2026-10-24T00:00:00Z'),
+        notes: null,
+      });
+      const view = await service.getRegistration('tenant-1');
+      expect(view.idNumberMasked).toBe('masked:enc:x');
+      expect(view).not.toHaveProperty('idNumber');
     });
   });
 });

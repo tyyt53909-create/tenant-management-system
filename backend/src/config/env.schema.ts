@@ -151,6 +151,21 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
       }
     },
   },
+  {
+    key: 'ENCRYPTION_KEY_PREVIOUS',
+    description: '换钥过渡期的旧加密密钥（逗号分隔，可多把）；仅用于解密历史密文',
+    secret: true,
+    validate: (value) => {
+      try {
+        for (const part of value.split(',')) {
+          if (part.trim()) resolveFieldKey(part.trim());
+        }
+        return null;
+      } catch {
+        return '每把旧钥都必须是 32 字节（base64 / 64 位 hex / 原文）';
+      }
+    },
+  },
   { key: 'FIELD_ENCRYPTION_KEY', description: '旧版加密密钥别名，仅兼容旧部署', secret: true },
   {
     key: 'REDIS_URL',

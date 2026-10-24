@@ -30,6 +30,16 @@ export function resolveFieldKey(raw: string | undefined): Buffer {
   throw new FieldCryptoError('FIELD_ENCRYPTION_KEY 必须是 32 字节，可用 base64、64 位十六进制或 32 字节原文');
 }
 
+/** 旧密钥列表：逗号分隔，用于换钥过渡期解密历史密文（新钥始终加密）。 */
+export function resolvePreviousFieldKeys(raw: string | undefined): Buffer[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => resolveFieldKey(part));
+}
+
 export function isEncryptedField(value: string): boolean {
   return value.startsWith(`${VERSION}:`);
 }
@@ -62,6 +72,22 @@ export function decryptField(payload: string, key: Buffer): string {
   }
 }
 
+/** 依次尝试多把密钥解密；全部失败时抛出最后一次错误。 */
+export function decryptFieldWithKeys(payload: string, keys: Buffer[]): string {
+  if (keys.length === 0) {
+    throw new FieldCryptoError('没有可用的解密密钥');
+  }
+  let lastError: unknown;
+  for (const key of keys) {
+    try {
+      return decryptField(payload, key);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new FieldCryptoError('证件号解密失败');
+}
+
 export function hashIdNumber(plain: string, key: Buffer): string {
   return createHmac('sha256', key).update(`id-number:${normalizeIdNumber(plain)}`).digest('hex');
 }
@@ -77,8 +103,12 @@ export function maskIdNumber(plain: string): string {
 }
 
 export function maskStoredIdNumber(stored: string, key: Buffer | null): string {
+  return maskStoredIdNumberWithKeys(stored, key ? [key] : []);
+}
+
+export function maskStoredIdNumberWithKeys(stored: string, keys: Buffer[]): string {
   try {
-    const plain = isEncryptedField(stored) ? decryptField(stored, requireKey(key)) : stored;
+    const plain = isEncryptedField(stored) ? decryptFieldWithKeys(stored, keys) : stored;
     return maskIdNumber(plain);
   } catch {
     return '********';

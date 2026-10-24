@@ -14,10 +14,12 @@ const KEY = '0123456789abcdef0123456789abcdef';
 describe('CryptoService 密钥来源', () => {
   const originalEncryptionKey = process.env.ENCRYPTION_KEY;
   const originalFieldKey = process.env.FIELD_ENCRYPTION_KEY;
+  const originalPreviousKey = process.env.ENCRYPTION_KEY_PREVIOUS;
 
   afterEach(() => {
     restoreEnv('ENCRYPTION_KEY', originalEncryptionKey);
     restoreEnv('FIELD_ENCRYPTION_KEY', originalFieldKey);
+    restoreEnv('ENCRYPTION_KEY_PREVIOUS', originalPreviousKey);
   });
 
   it('从 ENCRYPTION_KEY 取密钥（与 .env.example / compose / docs 口径一致）', () => {
@@ -50,6 +52,22 @@ describe('CryptoService 密钥来源', () => {
 
     expect(() => service.encrypt('440101199001011234')).toThrow(/ENCRYPTION_KEY/);
     expect(() => service.decrypt('v1:aa:bb:cc')).toThrow(/ENCRYPTION_KEY/);
+  });
+
+  it('过渡期旧钥可解密历史密文，新数据只用当前钥', () => {
+    const oldKey = 'abcdef0123456789abcdef0123456789';
+    const oldService = new CryptoService(new ConfigService({ ENCRYPTION_KEY: oldKey }));
+    const legacy = oldService.encrypt('440101199001011234');
+
+    const service = new CryptoService(
+      new ConfigService({ ENCRYPTION_KEY: KEY, ENCRYPTION_KEY_PREVIOUS: oldKey }),
+    );
+
+    expect(service.decrypt(legacy)).toBe('440101199001011234');
+    expect(service.maskStored(legacy)).toBe('4401**********1234');
+
+    const fresh = service.encrypt('440101199001011234');
+    expect(() => oldService.decrypt(fresh)).toThrow();
   });
 
   it('解密失败时抛错，不会被列表脱敏吞掉', () => {
