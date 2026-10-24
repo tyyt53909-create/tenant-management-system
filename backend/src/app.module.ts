@@ -25,6 +25,7 @@ import { TagsModule } from './modules/tags/tags.module.js';
 import { BuildingsModule } from './modules/buildings/buildings.module.js';
 import { ContractsModule } from './modules/contracts/contracts.module.js';
 import { BillsModule } from './modules/bills/bills.module.js';
+import { DepositsModule } from './modules/deposits/deposits.module.js';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module.js';
 import { MetersModule } from './modules/meters/meters.module.js';
 import { PrepayModule } from './modules/prepay/prepay.module.js';
@@ -77,6 +78,7 @@ import { StaffModule } from './modules/staff/staff.module.js';
     SpaceModule,
     ContractsModule,
     BillsModule,
+    DepositsModule,
     MaintenanceModule,
     MetersModule,
     PrepayModule,
