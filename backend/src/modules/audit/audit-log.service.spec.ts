@@ -37,11 +37,14 @@ describe('AuditLogService', () => {
     expect(result?.id).toBe('a-1');
   });
 
-  it('无 userId 时跳过，避免伪造审计归属', async () => {
-    await expect(service.log({
+  it('匿名事件落库时 userId 为 null，不伪造操作者', async () => {
+    vi.spyOn(prisma.auditLog, 'create').mockResolvedValue({ id: 'a1' } as never);
+    await service.log({
       action: 'POST /api/rooms', entityType: 'rooms', entityId: '-', changes: {}, ip: '127.0.0.1', userAgent: 'test',
-    })).resolves.toBeNull();
-    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: null }),
+    });
   });
 
   it('findAll 应支持 entity 过滤与分页', async () => {

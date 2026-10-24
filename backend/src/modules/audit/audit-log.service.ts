@@ -17,10 +17,14 @@ export class AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
 
   async log(record: AuditRecord) {
-    // AuditLog.userId is a required FK. Never invent an actor for anonymous requests.
-    const userId = record.userId;
-    if (!userId) return null;
-    return this.prisma.auditLog.create({ data: { ...record, userId, changes: record.changes as never } });
+    // 匿名请求允许 userId 为空；绝不伪造操作者（SEC-06 / T270）。
+    return this.prisma.auditLog.create({
+      data: {
+        ...record,
+        userId: record.userId ?? null,
+        changes: record.changes as never,
+      },
+    });
   }
 
   async findAll(query: QueryAuditLogsDto) {
