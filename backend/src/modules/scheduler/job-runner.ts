@@ -2,7 +2,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 export const JOB_SKIPPED = Symbol('JOB_SKIPPED');
 
-export type JobTriggerName = 'CRON' | 'MANUAL';
+export type JobTriggerName = 'CRON' | 'MANUAL' | 'QUEUE';
 
 export interface JobRunOutcome<T> {
   status: 'SUCCESS' | 'PARTIAL' | 'SKIPPED';

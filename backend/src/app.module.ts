@@ -38,6 +38,7 @@ import { SchedulerModule } from './modules/scheduler/scheduler.module.js';
 import { PublicModule } from './modules/public/public.module.js';
 import { StatisticsModule } from './modules/statistics/statistics.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
+import { JobsModule } from './modules/jobs/jobs.module.js';
 import { MetricsModule } from './common/metrics/metrics.module.js';
 import { AlertModule } from './common/alerts/alert.module.js';
 import { TenantCapabilitiesModule } from './modules/tenant-capabilities/tenant-capabilities.module.js';
@@ -100,6 +101,8 @@ import { StaffModule } from './modules/staff/staff.module.js';
     StatisticsModule,
     // 业务设置中心（FIN-11 / T276）：ADMIN 读写 + 审计
     SettingsModule,
+    // 后台任务队列（OPS-05 / T278）
+    JobsModule,
   ],
   controllers: [AppController],
   providers: [

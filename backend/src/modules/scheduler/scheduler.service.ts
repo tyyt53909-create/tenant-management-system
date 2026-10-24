@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { JobRunner, PrismaAdvisoryJobLock, type JobTriggerName, type JobStatus } from './job-runner.js';
 import { MetricsService } from '../../common/metrics/metrics.service.js';
 import { AlertService } from '../../common/alerts/alert.service.js';
+import { JobsQueueService } from '../jobs/jobs-queue.service.js';
 import {
   SYSTEM_OPERATOR,
   TIMEZONE,
@@ -57,6 +58,7 @@ export class SchedulerService {
     @Optional() private readonly metrics?: MetricsService,
     @Optional() private readonly alerts?: AlertService,
     @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly jobs?: JobsQueueService,
   ) {
     this.dailyJobsService =
       dailyJobsService ??
@@ -73,19 +75,35 @@ export class SchedulerService {
   /** 每日任务（Asia/Shanghai 凌晨 1:00） */
   @Cron('0 0 1 * * *', { name: 'daily-jobs', timeZone: TIMEZONE })
   async handleDailyCron() {
-    await this.rerun('daily-jobs', 'CRON');
+    await this.triggerScheduled('daily-jobs', new Date().toISOString().slice(0, 10));
   }
 
   /** 月度账单生成（Asia/Shanghai 每月 1 日 01:10） */
   @Cron('0 10 1 * * *', { name: 'monthly-bill-generation', timeZone: TIMEZONE })
   async handleMonthlyBillCron() {
-    await this.rerun('monthly-bill-generation', 'CRON');
+    await this.triggerScheduled('monthly-bill-generation', new Date().toISOString().slice(0, 7));
   }
 
   /** 通知保留 180 天（Asia/Shanghai 每日 01:20） */
   @Cron('0 20 1 * * *', { name: 'notification-cleanup', timeZone: TIMEZONE })
   async handleNotificationCleanupCron() {
-    await this.rerun('notification-cleanup', 'CRON');
+    await this.triggerScheduled('notification-cleanup', new Date().toISOString().slice(0, 10));
+  }
+
+  /**
+   * cron 触发入口（OPS-05 / T278）：
+   * - Worker 进程不重复触发 cron；
+   * - 队列开启时只入队，由独立 Worker 执行；
+   * - 队列关闭时保持原同步执行，便于本地与单机部署。
+   */
+  private async triggerScheduled(name: string, dedupeKey: string): Promise<void> {
+    if (this.config?.get<string>('PROCESS_ROLE') === 'worker') return;
+    if (this.jobs?.enabled) {
+      const jobId = await this.jobs.enqueue(name, dedupeKey);
+      this.logger.log(`任务 ${name} 已入队（jobId=${jobId ?? 'deduplicated'}）`);
+      return;
+    }
+    await this.rerun(name, 'CRON');
   }
 
   /**

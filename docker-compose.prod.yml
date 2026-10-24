@@ -115,6 +115,12 @@ services:
       THROTTLE_AUTH_LIMIT: ${THROTTLE_AUTH_LIMIT:-}
       THROTTLE_OTP_LIMIT: ${THROTTLE_OTP_LIMIT:-}
       THROTTLE_OTP_IP_LIMIT: ${THROTTLE_OTP_IP_LIMIT:-}
+      QUEUE_ENABLED: ${QUEUE_ENABLED:-false}
+      QUEUE_CONCURRENCY: ${QUEUE_CONCURRENCY:-2}
+      QUEUE_ATTEMPTS: ${QUEUE_ATTEMPTS:-3}
+      QUEUE_BACKOFF_MS: ${QUEUE_BACKOFF_MS:-5000}
+      QUEUE_PREFIX: ${QUEUE_PREFIX:-tenant-jobs}
+      PROCESS_ROLE: web
     volumes:
       - uploads:/app/uploads
     depends_on:
@@ -125,6 +131,17 @@ services:
     networks:
       - internal
     # 注意：不对外映射端口，只经 web 反代
+
+  # 后台任务 Worker（OPS-05 / T278）：与 backend 共用镜像，只消费队列、不监听 HTTP。
+  worker:
+    extends:
+      service: backend
+    command: ["node", "dist/worker.js"]
+    environment:
+      PROCESS_ROLE: worker
+      QUEUE_ENABLED: "true"
+    healthcheck:
+      disable: true
 
   web:
     image: ${WEB_IMAGE:-tenant-web}:${TAG:-local}
