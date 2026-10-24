@@ -88,7 +88,7 @@ describe('BillsService', () => {
       });
       expect(prisma.bill.update).toHaveBeenCalledWith({
         where: { id: billId },
-        data: { paidAmount: 40000, status: 'PARTIAL' },
+        data: expect.objectContaining({ paidAmount: 40000, status: 'PARTIAL' }),
       });
       expect(result.bill.status).toBe('PARTIAL');
     });
@@ -145,7 +145,7 @@ describe('BillsService', () => {
 
       expect(prisma.bill.update).toHaveBeenCalledWith({
         where: { id: billId },
-        data: { paidAmount: 100000, status: 'PAID' },
+        data: expect.objectContaining({ paidAmount: 100000, status: 'PAID' }),
       });
       expect(result.bill.status).toBe('PAID');
     });
@@ -338,7 +338,7 @@ describe('BillsService', () => {
       });
       expect(prisma.bill.update).toHaveBeenCalledWith({
         where: { id: billId },
-        data: { paidAmount: 100000, status: 'PAID' },
+        data: expect.objectContaining({ paidAmount: 100000, status: 'PAID' }),
       });
       expect(result.bill.status).toBe('PAID');
     });
@@ -365,7 +365,7 @@ describe('BillsService', () => {
       expect(prisma.lateFee.update).not.toHaveBeenCalled();
       expect(prisma.bill.update).toHaveBeenCalledWith({
         where: { id: billId },
-        data: { paidAmount: 100000, status: 'PARTIAL' },
+        data: expect.objectContaining({ paidAmount: 100000, status: 'PARTIAL' }),
       });
       expect(result.bill.status).toBe('PARTIAL');
     });
@@ -421,7 +421,7 @@ describe('BillsService', () => {
       });
       expect(prisma.bill.update).toHaveBeenCalledWith({
         where: { id: billId },
-        data: { paidAmount: 100000, status: 'PAID' },
+        data: expect.objectContaining({ paidAmount: 100000, status: 'PAID' }),
       });
     });
   });

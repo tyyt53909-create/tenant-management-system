@@ -36,7 +36,7 @@ export class ManagementSummaryService {
       this.prisma.contract.groupBy({by:['status'],_count:{_all:true}}),
       this.prisma.contract.count({where:{status:'ACTIVE',endDate:{gte:today,lte:horizon}}}),
       this.prisma.bill.aggregate({where:{status:{not:'CANCELLED'}},_count:{_all:true},_sum:{amount:true,paidAmount:true}}),
-      this.prisma.bill.count({where:{status:'OVERDUE'}}),
+      this.prisma.bill.count({where:{isOverdue:true,status:{in:['PENDING','PARTIAL']}}}),
       this.prisma.maintenanceRequest.groupBy({by:['status'],_count:{_all:true}}),
       this.prisma.maintenanceRequest.count({where:{priority:'URGENT',status:{in:[...openStates]}}}),
       this.prisma.prepayAccount.aggregate({_count:{_all:true},_sum:{balanceCache:true}}),
