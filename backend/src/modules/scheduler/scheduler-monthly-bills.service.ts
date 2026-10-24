@@ -41,17 +41,28 @@ export class SchedulerMonthlyBillsService {
 
     for (const contract of contracts) {
         const cycleMonths = ({ MONTHLY: 1, QUARTERLY: 3, SEMI_ANNUAL: 6, ANNUAL: 12 } as Record<string, number>)[contract.paymentCycle];
-        // 付款周期按自然年锚定；只在周期起始月生成账单。
-        if (!cycleMonths || (month - 1) % cycleMonths !== 0) continue;
+        if (!cycleMonths) continue;
+
+        const contractStart = new Date(contract.startDate);
+        const contractEnd = new Date(contract.endDate);
+        const startParts = getBusinessDateParts(contractStart);
+        const startIndex = startParts.year * 12 + (startParts.month - 1);
+        const currentIndex = year * 12 + (month - 1);
+        const elapsedMonths = currentIndex - startIndex;
+        // 以「合同起始月」为锚点，每 cycleMonths 个月出一次账；
+        // 不能按自然年 1/4/7/10 月，否则 2 月起的季付合同会错过首期。
+        if (elapsedMonths < 0 || elapsedMonths % cycleMonths !== 0) continue;
+
         const periodStart = new Date(Date.UTC(year, month - 1, 1));
         const periodEnd = new Date(Date.UTC(year, month - 1 + cycleMonths, 0));
         const period = `${year}-${String(month).padStart(2, '0')}`;
+
+        // 首期从合同起始日开始，末期截到合同结束日，按实际在租天数折算。
+        const activeStart = contractStart > periodStart ? contractStart : periodStart;
+        const activeEnd = contractEnd < periodEnd ? contractEnd : periodEnd;
         const cycleDays = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86_400_000) + 1;
-        const contractStart = new Date(contract.startDate);
-        const proratedDays = contractStart > periodStart
-          ? Math.max(0, Math.min(cycleDays, Math.floor((periodEnd.getTime() - contractStart.getTime()) / 86_400_000) + 1))
-          : cycleDays;
-        if (!proratedDays) continue;
+        const proratedDays = Math.floor((activeEnd.getTime() - activeStart.getTime()) / 86_400_000) + 1;
+        if (proratedDays <= 0 || proratedDays > cycleDays) continue;
         const amount = proratedDays === cycleDays
           ? contract.rentAmount
           : Math.round((contract.rentAmount * proratedDays) / cycleDays);

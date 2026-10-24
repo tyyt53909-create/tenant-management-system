@@ -425,6 +425,8 @@ describe('SchedulerService（定时任务）', () => {
       rentAmount: 180000,
       paymentCycle: 'MONTHLY',
       paymentDay: 5,
+      startDate: new Date('2026-01-01T00:00:00.000Z'),
+      endDate: new Date('2027-12-31T00:00:00.000Z'),
       tenant: { userId: 'u-1' },
     };
 
@@ -481,14 +483,14 @@ describe('SchedulerService（定时任务）', () => {
       expect(result.skipped).toBe(1);
     });
 
-    it('仅 ACTIVE + MONTHLY 且未到期的合同进入生成范围', async () => {
+    it('ACTIVE 且未到期的合同进入生成范围（不再只看 MONTHLY）', async () => {
       prisma.contract.findMany.mockResolvedValue([]);
 
       await service.generateMonthlyBills();
 
       const where = prisma.contract.findMany.mock.calls[0][0].where;
       expect(where.status).toBe('ACTIVE');
-      expect(where.paymentCycle).toBe('MONTHLY');
+      expect(where).not.toHaveProperty('paymentCycle');
       expect(where.endDate.gte).toBeInstanceOf(Date);
     });
 

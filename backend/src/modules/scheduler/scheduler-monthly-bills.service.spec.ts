@@ -56,6 +56,38 @@ describe('SchedulerMonthlyBillsService', () => {
     expect(input.snapshot).toMatchObject({ cycle: 'MONTHLY', periodStart: '2026-02-01', periodEnd: '2026-02-28', proratedDays: 14 });
   });
 
+  it('季付以合同起始月为锚点：2 月起的合同在 2/5/8/11 月出账', async () => {
+    prisma.contract.findMany.mockResolvedValue([contract('QUARTERLY', '2026-02-15')]);
+
+    await service.generateMonthlyBills(new Date('2026-03-15T12:00:00Z'));
+    expect(bills.create).not.toHaveBeenCalled();
+
+    await service.generateMonthlyBills(new Date('2026-02-15T12:00:00Z'));
+    expect(bills.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ period: '2026-02', snapshot: expect.objectContaining({ proratedDays: 75 }) }),
+    );
+
+    await service.generateMonthlyBills(new Date('2026-05-15T12:00:00Z'));
+    expect(bills.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ period: '2026-05', amount: 90000 }),
+    );
+  });
+
+  it('末期不足整周期时按实际在租天数折算', async () => {
+    const earlyEnd = {
+      ...contract('ANNUAL'),
+      endDate: new Date('2026-06-30T00:00:00Z'),
+    };
+    prisma.contract.findMany.mockResolvedValue([earlyEnd]);
+
+    await service.generateMonthlyBills(new Date('2026-01-15T12:00:00Z'));
+
+    const input = bills.create.mock.calls[0][0];
+    expect(input.amount).toBeGreaterThan(0);
+    expect(input.amount).toBeLessThan(90000);
+    expect(input.snapshot).toMatchObject({ proratedDays: 181, cycle: 'ANNUAL' });
+  });
+
   it('已存在账单时重跑跳过且不创建', async () => {
     prisma.contract.findMany.mockResolvedValue([contract('MONTHLY')]);
     prisma.bill.findFirst.mockResolvedValue({ id: 'existing' });
