@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T258
 plan_ref: SEC-02
 stage: M1
@@ -8,8 +8,8 @@ priority: P0
 model_tier: 强
 branch: feature/T258-sec-02
 start_time: 2026-10-23
-complete_time:
-merge_commit:
+complete_time: 2026-10-24
+merge_commit: 7b923f9
 blocked_by:
 depends_on: T252
 acceptance_evidence: tasks/evidence/T258.md
@@ -75,7 +75,9 @@ handoff: docs/handoff/2026-10-23-T258-JWT与会话强化.md
 - 基线：`84cb471`（`origin/develop`，含 T257 回填）
 - 模型：DeepSeek V4.1 Flash
 - 开始日期：2026-10-23
-- 状态：in_progress
+- 完成日期：2026-10-24
+- 合并：PR #64，merge commit `7b923f9`
+- 状态：completed
 
 ## 风险
 
