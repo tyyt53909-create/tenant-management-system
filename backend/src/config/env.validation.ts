@@ -80,6 +80,13 @@ export function checkEnvironment(env: Record<string, unknown>): EnvCheck {
     }
   }
 
+  if (read(env, 'MULTI_INSTANCE') === 'true' && read(env, 'STORAGE_DRIVER') !== 's3') {
+    const message =
+      'MULTI_INSTANCE=true 时必须使用 STORAGE_DRIVER=s3（本地 uploads 不跨实例共享）';
+    if (productionLike) errors.push(message);
+    else warnings.push(message);
+  }
+
   if (read(env, 'STORAGE_DRIVER') === 's3') {
     const missing = ['OSS_BUCKET', 'OSS_ACCESS_KEY_ID', 'OSS_ACCESS_KEY_SECRET'].filter(
       (key) => !read(env, key),
