@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Put, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import { TenantsService } from './tenants.service.js';
 import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
 import { QueryTenantsDto } from './dto/query-tenants.dto.js';
+import { UpsertTenantRegistrationDto } from './dto/upsert-tenant-registration.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -43,6 +44,28 @@ export class TenantsController {
     });
   }
 
+  @Get(':id/registration')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  getRegistration(@Param('id') id: string) {
+    return this.tenantsService.getRegistration(id);
+  }
+
+  @Put(':id/registration')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  upsertRegistration(
+    @Request() req: AuditRequestContext,
+    @Param('id') id: string,
+    @Body() dto: UpsertTenantRegistrationDto,
+  ) {
+    return this.tenantsService.upsertRegistration(id, dto, {
+      userId: req.user?.userId ?? '',
+      ip: req.ip ?? 'unknown',
+      userAgent: req.headers?.['user-agent'] ?? 'unknown',
+    });
+  }
+
   // 租客详情：管理者看全部；租客仅可看自己（越权按 404 处理）
   @Get(':id')
   @UseGuards(RolesGuard)
@@ -58,8 +81,16 @@ export class TenantsController {
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  update(@Param('id') id: string, @Body() updateTenantDto: UpdateTenantDto) {
-    return this.tenantsService.update(id, updateTenantDto);
+  update(
+    @Request() req: AuditRequestContext,
+    @Param('id') id: string,
+    @Body() updateTenantDto: UpdateTenantDto,
+  ) {
+    return this.tenantsService.update(id, updateTenantDto, {
+      userId: req.user?.userId ?? '',
+      ip: req.ip ?? 'unknown',
+      userAgent: req.headers?.['user-agent'] ?? 'unknown',
+    });
   }
 
   @Delete(':id')

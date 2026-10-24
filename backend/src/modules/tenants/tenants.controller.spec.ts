@@ -132,10 +132,18 @@ describe('TenantsController', () => {
 
       vi.spyOn(service, 'update').mockResolvedValue(mockTenant as any);
 
-      const result = await controller.update('tenant-123', dto);
+      const result = await controller.update(
+        { user: { userId: 'admin-1' }, ip: '10.0.0.8', headers: { 'user-agent': 'browser' } },
+        'tenant-123',
+        dto,
+      );
 
       expect(result.name).toBe('张三（已更新）');
-      expect(service.update).toHaveBeenCalledWith('tenant-123', dto);
+      expect(service.update).toHaveBeenCalledWith('tenant-123', dto, {
+        userId: 'admin-1',
+        ip: '10.0.0.8',
+        userAgent: 'browser',
+      });
     });
   });
 

@@ -2182,15 +2182,19 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "",
+          "200": {
+            "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
+          },
+          "201": {
+            "description": ""
           },
           "default": {
             "description": "错误",
@@ -2355,6 +2359,106 @@
         ]
       }
     },
+    "/api/tenants/{id}/registration": {
+      "get": {
+        "operationId": "TenantsController_getRegistration",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Tenants"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "TenantsController_upsertRegistration",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertTenantRegistrationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Tenants"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/tenants/{id}": {
       "get": {
         "operationId": "TenantsController_findOne",
@@ -2424,11 +2528,12 @@
         },
         "responses": {
           "200": {
-            "description": "",
+            "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -9374,11 +9479,59 @@
           },
           "notes": {
             "type": "string"
+          },
+          "idType": {
+            "type": "string",
+            "description": "证件类型与号码必须成对出现；号码加密后存 TenantRegistration（SEC-08 / T271）。",
+            "enum": [
+              "OTHER",
+              "ID_CARD",
+              "PASSPORT"
+            ]
+          },
+          "idNumber": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 64
           }
         },
         "required": [
           "name",
           "phone"
+        ]
+      },
+      "UpsertTenantRegistrationDto": {
+        "type": "object",
+        "properties": {
+          "idType": {
+            "type": "string",
+            "enum": [
+              "OTHER",
+              "ID_CARD",
+              "PASSPORT"
+            ]
+          },
+          "idNumber": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 64
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "REGISTERED",
+              "PENDING",
+              "NOT_REGISTERED",
+              "REJECTED"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "idType"
         ]
       },
       "UpdateTenantDto": {

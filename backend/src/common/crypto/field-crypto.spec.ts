@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { buildIdNumberMigration } from './id-number-migration.js';
 import {
   decryptField,
+  decryptFieldWithKeys,
   encryptField,
   hashIdNumber,
   isEncryptedField,
   maskIdNumber,
   maskStoredIdNumber,
+  maskStoredIdNumberWithKeys,
   resolveFieldKey,
 } from './field-crypto.js';
 
@@ -45,6 +47,15 @@ describe('field crypto', () => {
     expect(maskStoredIdNumber(stored, key)).not.toContain(idNumber);
   });
 
+  it('换钥过渡期可用旧钥解密/脱敏，新钥仍然优先', () => {
+    const oldKey = resolveFieldKey('abcdef0123456789abcdef0123456789');
+    const stored = encryptField(idNumber, oldKey);
+
+    expect(decryptFieldWithKeys(stored, [key, oldKey])).toBe(idNumber);
+    expect(maskStoredIdNumberWithKeys(stored, [key, oldKey])).toBe('4401**********1234');
+    expect(() => decryptFieldWithKeys(stored, [key])).toThrow();
+  });
+
   it('没有钥匙时不能把密文原样返回', () => {
     const stored = encryptField(idNumber, key);
     expect(maskStoredIdNumber(stored, null)).toBe('********');
@@ -78,6 +89,26 @@ describe('id number migration plan', () => {
       'encrypt',
     );
     expect(plan.duplicates).toEqual([{ hash: hashIdNumber(idNumber, key), ids: ['reg-1', 'reg-2'] }]);
+  });
+
+  it('rotate 用旧钥解密、用新钥重新加密并重算 hash', () => {
+    const oldKey = resolveFieldKey('abcdef0123456789abcdef0123456789');
+    const stored = encryptField(idNumber, oldKey);
+    const oldHash = hashIdNumber(idNumber, oldKey);
+
+    const plan = buildIdNumberMigration(
+      [{ id: 'reg-1', idNumber: stored, idNumberHash: oldHash }],
+      key,
+      'rotate',
+      [oldKey],
+    );
+
+    expect(plan.updates).toHaveLength(1);
+    const rotated = plan.updates[0];
+    expect(rotated.idNumber).not.toBe(stored);
+    expect(decryptField(rotated.idNumber, key)).toBe(idNumber);
+    expect(rotated.idNumberHash).toBe(hashIdNumber(idNumber, key));
+    expect(() => decryptField(rotated.idNumber, oldKey)).toThrow();
   });
 
   it('回滚把密文解回明文并清空哈希，明文行跳过', () => {

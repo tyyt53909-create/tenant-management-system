@@ -137,6 +137,16 @@
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="formData.email" placeholder="请输入邮箱" />
         </el-form-item>
+        <el-form-item label="证件类型" prop="idType">
+          <el-select v-model="formData.idType" clearable placeholder="不修改证件信息时留空">
+            <el-option label="身份证" value="ID_CARD" />
+            <el-option label="护照" value="PASSPORT" />
+            <el-option label="其他" value="OTHER" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="证件号" prop="idNumber">
+          <el-input v-model="formData.idNumber" placeholder="新增时填写；编辑留空表示不修改" />
+        </el-form-item>
         <el-form-item label="紧急联系人" prop="emergencyContact">
           <el-input v-model="formData.emergencyContact" placeholder="请输入紧急联系人" />
         </el-form-item>
@@ -226,6 +236,7 @@ const formData = reactive({
   name: '',
   phone: '',
   email: '',
+  idType: '',
   idNumber: '',
   emergencyContact: '',
   emergencyPhone: '',
@@ -300,6 +311,7 @@ const handleEdit = (row: Tenant) => {
     name: row.name,
     phone: row.phone,
     email: row.email,
+    idType: '',
     idNumber: '',
     emergencyContact: row.emergencyContact || '',
     emergencyPhone: row.emergencyPhone || '',
@@ -338,9 +350,19 @@ const handleSubmit = async () => {
 
     submitLoading.value = true;
     try {
-      const { idNumber: _unsupported, tagIds, ...data }: any = formData;
+      const { idType, idNumber, tagIds, ...data }: any = formData;
       // 标签以 tagIds 单独提交（T215）；空数组表示清空标签
       data.tagIds = tagIds;
+      if (idNumber) {
+        if (!idType && !currentEditId.value) {
+          ElMessage.warning('填写证件号时请选择证件类型');
+          return;
+        }
+        data.idNumber = idNumber;
+        if (idType) data.idType = idType;
+      } else if (idType) {
+        data.idType = idType;
+      }
       if(!data.email)delete data.email;
 
       if (currentEditId.value) {
@@ -367,6 +389,7 @@ const handleDialogClose = () => {
     name: '',
     phone: '',
     email: '',
+    idType: '',
     idNumber: '',
     emergencyContact: '',
     emergencyPhone: '',

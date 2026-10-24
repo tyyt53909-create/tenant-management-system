@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  decryptField,
+  decryptFieldWithKeys,
   encryptField,
   hashIdNumber,
-  maskStoredIdNumber,
+  maskStoredIdNumberWithKeys,
   resolveFieldKey,
+  resolvePreviousFieldKeys,
 } from './field-crypto.js';
 
 /**
@@ -23,7 +24,7 @@ export class CryptoService {
   }
 
   decrypt(payload: string): string {
-    return decryptField(payload, this.key());
+    return decryptFieldWithKeys(payload, this.decryptionKeys());
   }
 
   hashIdNumber(plain: string): string {
@@ -31,13 +32,11 @@ export class CryptoService {
   }
 
   maskStored(stored: string): string {
-    let key: Buffer | null = null;
     try {
-      key = this.key();
+      return maskStoredIdNumberWithKeys(stored, this.decryptionKeys());
     } catch {
-      key = null;
+      return '********';
     }
-    return maskStoredIdNumber(stored, key);
   }
 
   private key(): Buffer {
@@ -47,5 +46,14 @@ export class CryptoService {
       (typeof configured === 'string' && configured.trim() !== '' ? configured : undefined) ??
       this.configService.get<string>('FIELD_ENCRYPTION_KEY');
     return resolveFieldKey(raw);
+  }
+
+  /**
+   * 解密密钥链：当前钥优先，其后是 `ENCRYPTION_KEY_PREVIOUS` 的旧钥。
+   * 加密始终只用当前钥；旧钥仅用于换钥过渡期读取历史密文。
+   */
+  private decryptionKeys(): Buffer[] {
+    const previous = this.configService.get<string>('ENCRYPTION_KEY_PREVIOUS');
+    return [this.key(), ...resolvePreviousFieldKeys(previous)];
   }
 }

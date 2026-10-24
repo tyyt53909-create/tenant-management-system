@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsEmail, IsOptional, Matches, IsArray, ArrayMaxSize } from 'class-validator';
+import { IsString, IsNotEmpty, IsEmail, IsOptional, Matches, IsArray, ArrayMaxSize, IsEnum, MinLength, MaxLength } from 'class-validator';
+import { IdType } from '@prisma/client';
 
 export class CreateTenantDto {
   @IsString()
@@ -35,4 +36,15 @@ export class CreateTenantDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  /** 证件类型与号码必须成对出现；号码加密后存 TenantRegistration（SEC-08 / T271）。 */
+  @IsEnum(IdType)
+  @IsOptional()
+  idType?: IdType;
+
+  @IsString()
+  @MinLength(4, { message: '证件号至少 4 位' })
+  @MaxLength(64, { message: '证件号过长' })
+  @IsOptional()
+  idNumber?: string;
 }
