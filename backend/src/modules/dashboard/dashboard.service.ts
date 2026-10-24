@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 export interface DashboardStats {
   totalRooms: number;
@@ -39,7 +40,10 @@ const ROOM_STATUS_ORDER = ['VACANT', 'RESERVED', 'OCCUPIED', 'MAINTENANCE'] as c
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly clock: BusinessClock,
+  ) {}
 
   /**
    * 首页统计卡片数据
@@ -82,19 +86,15 @@ export class DashboardService {
    */
   async getRevenueTrend(months = 6): Promise<RevenueTrendItem[]> {
     const safeMonths = Math.min(Math.max(Math.trunc(Number(months)) || 6, 1), 24);
-    const now = new Date();
+    const currentMonth = this.clock.startOfMonth(this.clock.todayUtc());
 
     const buckets = new Map<string, number>();
     for (let i = 0; i < safeMonths; i++) {
-      const monthDate = new Date(
-        now.getFullYear(),
-        now.getMonth() - (safeMonths - 1) + i,
-        1,
-      );
-      buckets.set(this.formatMonth(monthDate), 0);
+      const monthDate = this.clock.addMonths(currentMonth, -(safeMonths - 1) + i);
+      buckets.set(this.clock.monthKey(monthDate), 0);
     }
 
-    const rangeStart = new Date(now.getFullYear(), now.getMonth() - (safeMonths - 1), 1);
+    const rangeStart = this.clock.addMonths(currentMonth, -(safeMonths - 1));
 
     const payments = await this.prisma.paymentRecord.findMany({
       where: { paidAt: { gte: rangeStart } },
@@ -102,7 +102,7 @@ export class DashboardService {
     });
 
     for (const payment of payments) {
-      const monthKey = this.formatMonth(new Date(payment.paidAt));
+      const monthKey = this.clock.monthKey(new Date(payment.paidAt));
       const current = buckets.get(monthKey);
       if (current !== undefined) {
         buckets.set(monthKey, current + payment.amount);
@@ -131,7 +131,4 @@ export class DashboardService {
     }));
   }
 
-  private formatMonth(date: Date): string {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-  }
 }

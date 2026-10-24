@@ -7,6 +7,7 @@ import { PrepayService } from './prepay.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { CapabilityGuard } from '../../common/guards/capability.guard.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('预付流水 HTTP 分页转换', () => {
   let app: INestApplication;
@@ -17,7 +18,7 @@ describe('预付流水 HTTP 分页转换', () => {
     vi.clearAllMocks();
     service.findTransactionsByTenant.mockResolvedValue(rows);
     const module = await Test.createTestingModule({
-      controllers: [PrepayController], providers: [{ provide: PrepayService, useValue: service }],
+      controllers: [PrepayController], providers: [{ provide: PrepayService, useValue: service }, { provide: BusinessClock, useValue: { formatDate: () => '2026-10-24' } }],
     })
       .overrideGuard(JwtAuthGuard).useValue({ canActivate(context: ExecutionContext) {
         context.switchToHttp().getRequest().user = { role: 'TENANT', tenantId: 'authenticated-tenant' };

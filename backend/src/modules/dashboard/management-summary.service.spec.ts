@@ -1,5 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ManagementSummaryService } from './management-summary.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('V3 管理摘要：来源与聚合口径',()=>{
   let prisma:any;let service:ManagementSummaryService;
@@ -16,7 +18,7 @@ describe('V3 管理摘要：来源与聚合口径',()=>{
       checkoutRecord:{groupBy:vi.fn().mockResolvedValue([]),aggregate:vi.fn().mockResolvedValue({_sum:{totalRefund:null}})},
       notification:{groupBy:vi.fn().mockResolvedValue([]),count:vi.fn().mockResolvedValue(0)},
     };
-    service=new ManagementSummaryService(prisma);
+    service=new ManagementSummaryService(prisma, new BusinessClock(new ConfigService({})));
   });
   it('无记录时才返回真实零值，不把数据库异常当作空数据',async()=>{
     const result=await service.snapshot('admin');expect(result.rooms.total).toBe(0);expect(result.bills.remaining).toBe(0);expect(result.ownerId).toBe('admin');

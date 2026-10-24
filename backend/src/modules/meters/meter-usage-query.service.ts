@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Prisma, MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
@@ -16,7 +18,14 @@ export interface ExportMeterReadingsQuery {
 
 @Injectable()
 export class MeterUsageQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly clock: BusinessClock;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() clock?: BusinessClock,
+  ) {
+    this.clock = clock ?? new BusinessClock(new ConfigService());
+  }
 
   async exportReadings(query: ExportMeterReadingsQuery) {
     const where: Prisma.MeterReadingWhereInput = {};
@@ -69,8 +78,7 @@ export class MeterUsageQueryService {
 
   async getUsageOverview(query: QueryUsageOverviewDto) {
     const { buildingId } = query;
-    const now = new Date();
-    const targetMonth = query.month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const targetMonth = query.month || this.clock.monthKey();
 
     const [yearStr, monthStr] = targetMonth.split('-');
     const year = parseInt(yearStr, 10);

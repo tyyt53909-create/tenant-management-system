@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrepayService } from './prepay.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { CreatePrepayAccountDto } from './dto/create-prepay-account.dto.js';
 import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
 import { QueryPrepayAccountsDto } from './dto/query-prepay-accounts.dto.js';
@@ -16,7 +17,10 @@ import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../commo
 @Controller('prepay-accounts')
 @UseGuards(JwtAuthGuard)
 export class PrepayController {
-  constructor(private readonly prepayService: PrepayService) {}
+  constructor(
+    private readonly prepayService: PrepayService,
+    private readonly clock: BusinessClock,
+  ) {}
 
   @Post()
   @UseGuards(RolesGuard)
@@ -52,7 +56,7 @@ export class PrepayController {
   @Roles('ADMIN')
   async exportTransactions(@Query() query: QueryPrepayTransactionsDto, @Res({ passthrough: true }) res: Response) {
     const csv = await this.prepayService.exportTransactions(query);
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const dateStr = this.clock.formatDate().replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="prepay-transactions-${dateStr}.csv"`);
     return csv;

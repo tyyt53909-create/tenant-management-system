@@ -19,6 +19,7 @@ import { Roles } from '../../common/decorators/roles.decorator.js';
 import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
 import type { ExportMeterReadingsQuery } from './meter-usage-query.service.js';
 import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 @Controller('meters')
 @UseGuards(JwtAuthGuard)
@@ -27,6 +28,7 @@ export class MetersController {
     private readonly metersService: MetersService,
     private readonly metersSimulatorService: MetersSimulatorService,
     private readonly reconciliationService: MeterReconciliationService,
+    private readonly clock: BusinessClock,
   ) {}
 
   /**
@@ -99,7 +101,7 @@ export class MetersController {
   @Roles('ADMIN')
   async exportReadings(@Query() query: ExportMeterReadingsQuery, @Res({ passthrough: true }) res: Response) {
     const csv = await this.metersService.exportReadings(query);
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const dateStr = this.clock.formatDate().replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="meter-readings-${dateStr}.csv"`);
     return csv;

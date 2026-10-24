@@ -1,12 +1,22 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { randomHex } from '../../common/utils/secure-random.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { METER_TYPE_LABEL, NOT_SIMULATED } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterBillingService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly clock: BusinessClock;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() clock?: BusinessClock,
+  ) {
+    this.clock = clock ?? new BusinessClock(new ConfigService());
+  }
 
   /**
    * 讀數扣費：用量 × 當前單價
@@ -77,13 +87,12 @@ export class MeterBillingService {
     const shortfall = amount - deducted;
     let bill = null;
     if (shortfall > 0) {
-      const dueDate = new Date(reading.readingTime);
-      dueDate.setDate(dueDate.getDate() + 7);
+      const dueDate = this.clock.addDays(this.clock.todayUtc(reading.readingTime), 7);
 
       bill = await tx.bill.create({
         data: {
           contractId: contract.id,
-          billNumber: `B${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+          billNumber: `B${Date.now()}${randomHex(3)}`,
           billType: 'UTILITY',
           period: this.formatPeriod(reading.readingTime),
           amount: shortfall,
@@ -108,7 +117,7 @@ export class MeterBillingService {
   }
 
   private formatPeriod(date: Date): string {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return this.clock.monthKey(date);
   }
 
   /**

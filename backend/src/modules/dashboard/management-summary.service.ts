@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 function counts<T extends { _count: { _all: number } }>(rows:T[], field:keyof T) {
   return Object.fromEntries(rows.map(row=>[String(row[field]),row._count._all]));
@@ -9,15 +10,18 @@ const sumCounts=(values:Record<string,number>)=>Object.values(values).reduce((su
 /** 后台 V3 摘要：全量聚合，不把当前列表页冒充全局统计；金额保持「分」。 */
 @Injectable()
 export class ManagementSummaryService {
-  constructor(private readonly prisma:PrismaService) {}
+  constructor(
+    private readonly prisma:PrismaService,
+    private readonly clock:BusinessClock,
+  ) {}
 
   async snapshot(userId:string) {
     if(!userId)throw new UnauthorizedException('缺少当前管理员身份');
-    const now=new Date();
-    const today=new Date(Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()));
-    const horizon=new Date(today.getTime()+30*86400000);
-    const monthStart=new Date(now.getFullYear(),now.getMonth(),1);
-    const monthEnd=new Date(now.getFullYear(),now.getMonth()+1,1);
+    const now=this.clock.now();
+    const today=this.clock.todayUtc();
+    const horizon=this.clock.addDays(today,30);
+    const monthStart=this.clock.startOfMonth(today);
+    const monthEnd=this.clock.addMonths(monthStart,1);
     const readingRange={gte:monthStart,lt:monthEnd};
     const openStates=['SUBMITTED','ACKNOWLEDGED','ASSIGNED','IN_PROGRESS','PENDING_CONFIRM'] as const;
     const [roomRows,cleanRows,tenants,enabledTenants,residentTenants,draftTenants,unlinkedTenants,contractRows,expiring,billTotals,overdue,repairRows,urgentRepairs,prepayTotals,lowBalances,negativeBalances,zeroBalances,meterRows,readMeters,water,electricity,checkoutRows,pendingRefund,noticeRows,urgentNotices]=await Promise.all([

@@ -259,6 +259,18 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
     validate: integerRange(10, 14),
   },
   {
+    key: 'BUSINESS_TIMEZONE',
+    description: '业务时区（IANA，默认 Asia/Shanghai）',
+    validate: (value) => {
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date());
+        return null;
+      } catch {
+        return '不是合法的 IANA 时区';
+      }
+    },
+  },
+  {
     key: 'FEATURE_METER_SIMULATOR',
     description: '虚拟水电表模拟器开关；生产必须为 false',
     validate: oneOf(...BOOLEAN_VALUES),
