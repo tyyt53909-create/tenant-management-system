@@ -87,7 +87,7 @@ export class StatisticsService {
           status: { not: 'CANCELLED' },
           ...(query.buildingId ? { contract: { buildingId: query.buildingId } } : {}),
         },
-        select: { amount: true, billType: true, status: true },
+        select: { amount: true, billType: true, status: true, isOverdue: true },
       }),
       this.prisma.maintenanceRequest.count({
         where: {
@@ -132,7 +132,7 @@ export class StatisticsService {
       bills.filter((b) => b.billType === 'UTILITY'),
       (b) => b.amount,
     );
-    const overdueCount = bills.filter((b) => b.status === 'OVERDUE').length;
+    const overdueCount = bills.filter((b) => b.isOverdue).length;
 
     const total = rooms.length;
     const occupied = rooms.filter((r) => occupiedIds.has(r.id)).length;

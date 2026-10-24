@@ -28,6 +28,7 @@ describe('SchedulerService（定时任务）', () => {
       room: { findUnique: vi.fn(), update: vi.fn() },
       $transaction: vi.fn(),
       bill: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+      lateFeeAccrual: { upsert: vi.fn().mockResolvedValue({ id: 'accrual-1' }) },
       maintenanceRequest: { updateMany: vi.fn() },
       prepayAccount: {
         findMany: vi.fn(),
@@ -155,7 +156,7 @@ describe('SchedulerService（定时任务）', () => {
   });
 
   describe('checkOverdueBills', () => {
-    it('到期未缴 → OVERDUE + 滞纳金建议 + 逾期提醒', async () => {
+    it('到期未缴 → isOverdue + 按日应计 + 刷新建议（不重复发逾期提醒）', async () => {
       prisma.bill.findMany.mockResolvedValue([
         {
           id: 'b-1',
@@ -171,7 +172,14 @@ describe('SchedulerService（定时任务）', () => {
 
       expect(prisma.bill.update).toHaveBeenCalledWith({
         where: { id: 'b-1' },
-        data: { status: 'OVERDUE' },
+        data: { isOverdue: true, overdueDays: 2 },
+      });
+      expect(prisma.lateFeeAccrual.upsert).toHaveBeenCalledWith({
+        where: {
+          billId_accrualDate: { billId: 'b-1', accrualDate: new Date('2026-10-13T00:00:00.000Z') },
+        },
+        create: expect.objectContaining({ billId: 'b-1', amount: expect.any(Number) }),
+        update: { amount: expect.any(Number) },
       });
       // 第 4 个参数是「业务日零点」：定时任务在凌晨执行，用真实 now 会把昨天的账单算成逾期 0 天（T208）
       expect(billsService.addLateFee).toHaveBeenCalledWith(
@@ -180,9 +188,8 @@ describe('SchedulerService（定时任务）', () => {
         SYSTEM_OPERATOR,
         new Date('2026-10-13T00:00:00.000Z'),
       );
-      expect(notifications.create).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: 'u-1', title: '账单逾期提醒', priority: 'URGENT' }),
-      );
+      // 逾期当天只由提醒任务的 overdue-d1 节点发一次，这里不再重复
+      expect(notifications.create).not.toHaveBeenCalled();
       expect(result).toEqual({ overdue: 1, suggested: 1 });
     });
 
@@ -209,9 +216,7 @@ describe('SchedulerService（定时任务）', () => {
         SYSTEM_OPERATOR,
         new Date('2026-10-14T00:00:00.000Z'),
       );
-      expect(notifications.create).toHaveBeenCalledWith(
-        expect.objectContaining({ body: expect.stringContaining('逾期 1 天') }),
-      );
+      expect(prisma.lateFeeAccrual.upsert).toHaveBeenCalled();
       expect(result).toEqual({ overdue: 1, suggested: 1 });
       vi.setSystemTime(FIXED_NOW);
     });
@@ -232,7 +237,7 @@ describe('SchedulerService（定时任务）', () => {
 
       expect(result.overdue).toBe(1);
       expect(result.suggested).toBe(0);
-      expect(notifications.create).toHaveBeenCalled();
+      expect(prisma.lateFeeAccrual.upsert).toHaveBeenCalled();
     });
 
     it('本金已缴清（仅滞纳金未结）→ 不重复产生建议', async () => {

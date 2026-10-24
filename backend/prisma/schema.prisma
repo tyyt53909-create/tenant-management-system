@@ -548,17 +548,23 @@ model Bill {
   dueDate DateTime   @db.Date
   status  BillStatus @default(PENDING)
 
+  /// 逾期与缴付进度解耦（FIN-04 / T272）：status 只表示 PENDING/PARTIAL/PAID/CANCELLED
+  isOverdue   Boolean @default(false)
+  overdueDays Int     @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   /// 租金账单为 RENT:{contractId}:{period}。空值表示允许重复，例如同一账期的多笔水电补缴。
   dedupKey String? @unique
 
-  paymentRecords PaymentRecord[]
-  lateFees       LateFee[]
+  paymentRecords  PaymentRecord[]
+  lateFees        LateFee[]
+  lateFeeAccruals LateFeeAccrual[]
 
   @@index([contractId, status])
   @@index([status, dueDate])
+  @@index([isOverdue, dueDate])
   @@map("bills")
 }
 
@@ -693,6 +699,21 @@ model LateFee {
 
   @@index([billId])
   @@map("late_fees")
+}
+
+/// 滞纳金按日应计（FIN-04 / T272）：billId + accrualDate 唯一，重复任务幂等。
+model LateFeeAccrual {
+  id     String @id @default(cuid())
+  billId String
+  bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  accrualDate DateTime @db.Date
+  amount      Int
+  createdAt   DateTime @default(now())
+
+  @@unique([billId, accrualDate])
+  @@index([billId])
+  @@map("late_fee_accruals")
 }
 
 // 11. PrepayAccount（预付账户）

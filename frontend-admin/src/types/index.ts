@@ -132,6 +132,9 @@ export interface Bill {
   paidAmount: number;
   dueDate: string;
   status: 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+  /** 逾期是独立维度（FIN-04 / T272），由每日任务维护 */
+  isOverdue?: boolean;
+  overdueDays?: number;
   /**
    * 列表接口随行返回的滞纳金摘要（T157）。
    * 用于避免对当前页每行再发一次 GET /bills/:id/late-fees（原 N+1）。

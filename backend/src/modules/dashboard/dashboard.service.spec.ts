@@ -72,7 +72,7 @@ describe('DashboardService', () => {
       expect(prisma.tenant.count).toHaveBeenCalledWith({ where: { isActive: true } });
       expect(prisma.contract.count).toHaveBeenCalledWith({ where: { status: 'ACTIVE' } });
       expect(prisma.bill.count).toHaveBeenCalledWith({
-        where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+        where: { status: { in: ['PENDING', 'PARTIAL'] } },
       });
       expect(prisma.maintenanceRequest.count).toHaveBeenCalledWith({
         where: {

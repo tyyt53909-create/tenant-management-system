@@ -1,5 +1,5 @@
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export enum BillStatus {
   PENDING = 'PENDING',
@@ -44,6 +44,12 @@ export class QueryBillsDto {
   @IsString()
   @IsOptional()
   buildingId?: string;
+
+  /** 只看逾期未缴清（FIN-04 / T272）；`status=OVERDUE` 仍兼容但会映射到本参数。 */
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  @IsOptional()
+  overdue?: boolean;
 
   @IsDateString()
   @IsOptional()

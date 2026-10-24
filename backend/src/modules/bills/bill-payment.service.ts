@@ -17,6 +17,7 @@ import {
   applyDepositCollection,
   reverseDepositCollection,
 } from '../deposits/deposit-ledger.util.js';
+import { computeOverdue, derivePaymentStatus } from './bill-overdue.util.js';
 
 interface RawClient {
   $queryRaw?: (query: Prisma.Sql) => Promise<unknown>;
@@ -168,11 +169,20 @@ export class BillPaymentService {
       const newPaidAmount = bill.paidAmount + billPortion;
       const outstandingAfter = outstandingFees - (dto.amount - billPortion);
       const fullySettledAll = newPaidAmount >= bill.amount && outstandingAfter <= 0;
-      const newStatus = fullySettledAll ? 'PAID' : 'PARTIAL';
+      // 本金与滞纳金都结清才算 PAID；只清本金但滞纳金未核销时保持 PARTIAL（沿用 FIN-05 语义）
+      const newStatus = fullySettledAll
+        ? 'PAID'
+        : newPaidAmount > 0
+          ? 'PARTIAL'
+          : 'PENDING';
+      // 逾期是独立维度：缴清即清除，部分缴款仍保留逾期标记（FIN-04 / T272）
+      const overdue = newStatus === 'PAID'
+        ? { isOverdue: false, overdueDays: 0 }
+        : computeOverdue(bill.dueDate, this.clock.todayUtc());
 
       const updatedBill = await tx.bill.update({
         where: { id: billId },
-        data: { paidAmount: newPaidAmount, status: newStatus },
+        data: { paidAmount: newPaidAmount, status: newStatus, ...overdue },
       });
 
       // FIN-03：押金账单收款同步记入押金台账
@@ -260,18 +270,14 @@ export class BillPaymentService {
       });
 
       const newPaid = Math.max(0, bill.paidAmount - payment.billPortion);
-      const newStatus =
-        newPaid >= bill.amount
-          ? 'PAID'
-          : newPaid > 0
-            ? 'PARTIAL'
-            : bill.dueDate < this.clock.todayUtc()
-              ? 'OVERDUE'
-              : 'PENDING';
+      const newStatus = derivePaymentStatus(bill.amount, newPaid);
+      const overdue = newStatus === 'PAID'
+        ? { isOverdue: false, overdueDays: 0 }
+        : computeOverdue(bill.dueDate, this.clock.todayUtc());
 
       const updatedBill = await tx.bill.update({
         where: { id: billId },
-        data: { paidAmount: newPaid, status: newStatus },
+        data: { paidAmount: newPaid, status: newStatus, ...overdue },
       });
 
       // FIN-03：押金收款作废时冲减台账

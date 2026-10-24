@@ -3,7 +3,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { BillsService } from '../bills/bills.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { NotificationPriority } from '../notifications/dto/create-notification.dto.js';
-import { LateFeeUtil } from '../bills/utils/late-fee.util.js';
+import { LateFeeUtil, type LateFeeRule } from '../bills/utils/late-fee.util.js';
+import { computeOverdue, dailyLateFeeAmount } from '../bills/bill-overdue.util.js';
 import { roomUpdateForContractTransition } from '../contracts/contract-transitions.js';
 import {
   SYSTEM_OPERATOR,
@@ -127,7 +128,7 @@ export class SchedulerDailyJobsService {
   }
 
   // ------------------------------------------------------------------
-  // 2. 逾期检查（PENDING/PARTIAL → OVERDUE + 滞纳金建议 + 提醒）
+  // 2. 逾期检查（独立 isOverdue + 每日滞纳金应计；提醒交给第 3 节，避免当天重复）
   // ------------------------------------------------------------------
 
   async checkOverdueBills(): Promise<{ overdue: number; suggested: number }> {
@@ -135,44 +136,47 @@ export class SchedulerDailyJobsService {
 
     const bills = await this.prisma.bill.findMany({
       where: { status: { in: ['PENDING', 'PARTIAL'] }, dueDate: { lt: today } },
-      include: { contract: { include: { tenant: { select: { userId: true } } } } },
+      include: {
+        contract: {
+          select: { lateFeeRule: true, tenant: { select: { userId: true } } },
+        },
+      },
     });
 
     let overdue = 0;
     let suggested = 0;
 
     for (const bill of bills) {
+      const { overdueDays } = computeOverdue(bill.dueDate, today);
       await this.prisma.bill.update({
         where: { id: bill.id },
-        data: { status: 'OVERDUE' },
+        data: { isOverdue: true, overdueDays },
       });
       overdue++;
 
-      // 未缴金额 > 0 时刷新滞纳金建议（已确认的账单会 409，跳过）
-      if (bill.amount - bill.paidAmount > 0) {
-        try {
-          // 传业务日零点：任务 01:00 上海执行时用真实 now 会把昨天的账单算成「逾期 0 天」
-          // 从而抛「账单尚未逾期」，滞纳金建议整批失败且再也不会重试（T208）
-          await this.billsService.addLateFee(bill.id, {}, SYSTEM_OPERATOR, today);
-          suggested++;
-        } catch (error) {
-          if (!(error instanceof ConflictException)) {
-            this.logger.warn(`滞纳金建议失败（billId=${bill.id}）：${(error as Error).message}`);
-          }
-        }
-      }
+      const baseAmount = bill.amount - bill.paidAmount;
+      if (baseAmount <= 0) continue;
 
-      const userId = bill.contract?.tenant?.userId;
-      if (userId) {
-        const overdueDays = LateFeeUtil.overdueDays(bill.dueDate, today);
-        await this.notify(
-          userId,
-          '账单逾期提醒',
-          `您有账单逾期 ${overdueDays} 天，请尽快缴费`,
-          'URGENT',
-          { billId: bill.id },
-          `BILL_OVERDUE:${userId}:${bill.id}`,
+      try {
+        // 当天增量 = 累计应付(today) - 累计应付(yesterday)，唯一键保证重复执行幂等
+        const amount = dailyLateFeeAmount(
+          (bill.contract?.lateFeeRule ?? {}) as LateFeeRule,
+          baseAmount,
+          overdueDays,
         );
+        await this.prisma.lateFeeAccrual.upsert({
+          where: { billId_accrualDate: { billId: bill.id, accrualDate: today } },
+          create: { billId: bill.id, accrualDate: today, amount },
+          update: { amount },
+        });
+
+        // 建议值仍以 LateFee 承载，刷新为当前累计应付
+        await this.billsService.addLateFee(bill.id, {}, SYSTEM_OPERATOR, today);
+        suggested++;
+      } catch (error) {
+        if (!(error instanceof ConflictException)) {
+          this.logger.warn(`滞纳金应计失败（billId=${bill.id}）：${(error as Error).message}`);
+        }
       }
     }
 
@@ -187,7 +191,7 @@ export class SchedulerDailyJobsService {
     const today = startOfTodayUtc();
 
     const bills = await this.prisma.bill.findMany({
-      where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+      where: { status: { in: ['PENDING', 'PARTIAL'] } },
       include: { contract: { include: { tenant: { select: { userId: true } } } } },
     });
 

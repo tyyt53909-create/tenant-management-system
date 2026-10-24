@@ -20,8 +20,8 @@
             { value: 'PAID', label: '已缴清' },
           ]"
           :key="tab.value"
-          :class="{ active: queryForm.status === tab.value }"
-          @click="queryForm.status = tab.value; handleQuery()"
+          :class="{ active: tab.value === 'OVERDUE' ? queryForm.overdue === 'true' : queryForm.status === tab.value }"
+          @click="selectTab(tab.value)"
         >
           {{ tab.label }}
         </button>
@@ -92,6 +92,7 @@
         <el-table-column label="状态 / 滞纳金" width="120">
           <template #default="{ row }">
             <div class="bill-status">
+              <el-tag v-if="row.isOverdue" type="danger" size="small">逾期 {{ row.overdueDays ?? 0 }} 天</el-tag>
               <el-tag :type="statusTypeMap[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
               <button
                 v-if="showLateFee(row as Bill)"
@@ -246,7 +247,8 @@ const isOverdueByDate = (bill: Bill) => overdueDaysOf(bill) > 0;
 const unpaidOf = (bill: Bill) => Math.max(0, bill.amount - bill.paidAmount);
 
 const showOverdue = (bill: Bill) =>
-  ['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status) && isOverdueByDate(bill);
+  bill.isOverdue === true ||
+  (['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status) && isOverdueByDate(bill));
 
 const formatMonthDay = (value: unknown) => {
   const date = formatDateOnly(value);
@@ -363,11 +365,12 @@ const {
   fetchData,
   handleQuery,
   handleReset,
-} = usePagedTable<Bill, { status: string; billType: string }>({
+} = usePagedTable<Bill, { status: string; billType: string; overdue: string }>({
   fetchApi: async (params) => {
     const p: Record<string, any> = { page: params.page, limit: params.limit };
     if (params.status) p.status = params.status;
     if (params.billType) p.billType = params.billType;
+    if (params.overdue === 'true') p.overdue = true;
     const res = await getBills(p);
     return {
       data: (res.data as Bill[]).map((b) => ({
@@ -377,14 +380,25 @@ const {
       meta: res.meta,
     };
   },
-  defaultQuery: { status: '', billType: '' },
+  defaultQuery: { status: '', billType: '', overdue: '' },
   onSuccess: (data) => {
     applySummaries(data);
   },
 });
 
+const selectTab = (value: string) => {
+  if (value === 'OVERDUE') {
+    queryForm.status = '';
+    queryForm.overdue = 'true';
+  } else {
+    queryForm.status = value;
+    queryForm.overdue = '';
+  }
+  handleQuery();
+};
+
 const emptyText = computed(() =>
-  queryForm.status || queryForm.billType
+  queryForm.status || queryForm.billType || queryForm.overdue
     ? '没有符合条件的账单，试试调整状态或类型'
     : '暂无账单，点击右上角「新增账单」开始录入'
 );

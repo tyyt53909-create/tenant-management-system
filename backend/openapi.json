@@ -5789,6 +5789,15 @@
             }
           },
           {
+            "name": "overdue",
+            "required": false,
+            "in": "query",
+            "description": "只看逾期未缴清（FIN-04 / T272）；`status=OVERDUE` 仍兼容但会映射到本参数。",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "startDate",
             "required": false,
             "in": "query",
@@ -5896,6 +5905,15 @@
             }
           },
           {
+            "name": "overdue",
+            "required": false,
+            "in": "query",
+            "description": "只看逾期未缴清（FIN-04 / T272）；`status=OVERDUE` 仍兼容但会映射到本参数。",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "startDate",
             "required": false,
             "in": "query",
@@ -5999,6 +6017,15 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "overdue",
+            "required": false,
+            "in": "query",
+            "description": "只看逾期未缴清（FIN-04 / T272）；`status=OVERDUE` 仍兼容但会映射到本参数。",
+            "schema": {
+              "type": "boolean"
             }
           },
           {

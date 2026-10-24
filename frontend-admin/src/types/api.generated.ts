@@ -6368,6 +6368,8 @@ export interface operations {
                 billType?: components["schemas"]["Object"];
                 contractId?: string;
                 buildingId?: string;
+                /** @description 只看逾期未缴清（FIN-04 / T272）；`status=OVERDUE` 仍兼容但会映射到本参数。 */
+                overdue?: boolean;
                 startDate?: string;
                 endDate?: string;
             };
@@ -6440,6 +6442,8 @@ export interface operations {
                 billType?: components["schemas"]["Object"];
                 contractId?: string;
                 buildingId?: string;
+                /** @description 只看逾期未缴清（FIN-04 / T272）；`status=OVERDUE` 仍兼容但会映射到本参数。 */
+                overdue?: boolean;
                 startDate?: string;
                 endDate?: string;
             };
@@ -6477,6 +6481,8 @@ export interface operations {
                 billType?: components["schemas"]["Object"];
                 contractId?: string;
                 buildingId?: string;
+                /** @description 只看逾期未缴清（FIN-04 / T272）；`status=OVERDUE` 仍兼容但会映射到本参数。 */
+                overdue?: boolean;
                 startDate?: string;
                 endDate?: string;
             };
