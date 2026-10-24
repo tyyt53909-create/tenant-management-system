@@ -582,6 +582,38 @@
   },
   {
     "method": "GET",
+    "path": "/api/jobs/failed",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/jobs/failed/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/jobs/failed/:id/retry",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/jobs/stats",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/maintenance",
     "public": false,
     "roles": [

@@ -7,9 +7,10 @@ import { SchedulerController } from './scheduler.controller.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { BillsModule } from '../bills/bills.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
+import { JobsModule } from '../jobs/jobs.module.js';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), PrismaModule, BillsModule, NotificationsModule],
+  imports: [ScheduleModule.forRoot(), PrismaModule, BillsModule, NotificationsModule, JobsModule],
   controllers: [SchedulerController],
   providers: [SchedulerDailyJobsService, SchedulerMonthlyBillsService, SchedulerService],
   exports: [SchedulerDailyJobsService, SchedulerMonthlyBillsService, SchedulerService],

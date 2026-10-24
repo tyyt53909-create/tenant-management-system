@@ -239,6 +239,7 @@ enum JobRunStatus {
 enum JobTrigger {
   CRON
   MANUAL
+  QUEUE
 }
 
 // 设备类型

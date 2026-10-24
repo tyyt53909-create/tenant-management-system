@@ -168,6 +168,20 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
   },
   { key: 'FIELD_ENCRYPTION_KEY', description: '旧版加密密钥别名，仅兼容旧部署', secret: true },
   {
+    key: 'QUEUE_ENABLED',
+    description: '是否启用 BullMQ 后台任务队列（true/false，默认 false）',
+    validate: (value) => (['true', 'false'].includes(value.toLowerCase()) ? null : '只能是 true 或 false'),
+  },
+  { key: 'QUEUE_CONCURRENCY', description: 'Worker 并发数（默认 2）' },
+  { key: 'QUEUE_ATTEMPTS', description: '任务最大尝试次数（默认 3）' },
+  { key: 'QUEUE_BACKOFF_MS', description: '失败重试指数退避基数（毫秒，默认 5000）' },
+  { key: 'QUEUE_PREFIX', description: 'BullMQ key 前缀（默认 tenant-jobs，Web/Worker 必须一致）' },
+  {
+    key: 'PROCESS_ROLE',
+    description: '进程角色：web（默认）/ worker；worker 不触发 cron',
+    validate: (value) => (['web', 'worker'].includes(value.toLowerCase()) ? null : '只能是 web 或 worker'),
+  },
+  {
     key: 'METRICS_TOKEN',
     description: 'Prometheus /api/metrics 抓取令牌；未设置时仅非生产环境暴露',
     secret: true,
