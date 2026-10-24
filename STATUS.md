@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `docs/T261-backfill`
-> 集成基準: `origin/develop` @ `9eb44cf`
+> 分支: `feature/T262-fin-09`
+> 集成基準: `origin/develop` @ `e11d456`
 > 發布就緒: **NO-GO**
 > Gates: 11 pass / 0 fail / 3 not-run
 
@@ -18,7 +18,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | exit 0 |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 106 files / 1026 tests |
+| 後端單元測試 | ✅ pass | 107 files / 1036 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | exit 0 |
 | 管理後台單元測試 | ✅ pass | 17 files / 79 tests |
@@ -43,14 +43,14 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 0 |
+| 進行中 | 1 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 7 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- 無
+- **T262 BusinessClock 与业务日期（FIN-09）**（active，plan FIN-09，`feature/T262-fin-09`）
 
 ### 阻擋發布
 - 無
@@ -82,12 +82,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 32 | 17 | 10 | 1 | 14 |
+| 未分類 | 33 | 17 | 10 | 2 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T262 BusinessClock 与业务日期](docs/handoff/2026-10-24-T262-BusinessClock与业务日期.md)
 - [交接记录：T261 文件与附件模型](docs/handoff/2026-10-24-T261-文件与附件模型.md)
 - [交接记录：T260 身份绑定与注册策略](docs/handoff/2026-10-24-T260-身份绑定与注册策略.md)
 - [交接记录：T259 OTP 与登录防护](docs/handoff/2026-10-24-T259-OTP与登录防护.md)
@@ -95,7 +96,6 @@
 - [交接记录：T257 全域 deny-by-default 授权](docs/handoff/2026-10-23-T257-deny-by-default.md)
 - [交接记录：T256 错误码目录](docs/handoff/2026-10-23-T256-错误码目录.md)
 - [交接记录：T254 Nginx 边界——上传上限、TLS、安全头与限流](docs/handoff/2026-10-23-T254-Nginx边界加固.md)
-- [交接记录：T253 Node 24 LTS、优雅关闭与镜像加固](docs/handoff/2026-10-23-T253-Node24与优雅关闭.md)
 
 ---
 
@@ -103,13 +103,13 @@
 
 - 資料模型：**35** 張表
 - OpenAPI 路由：**142** 條
-- 後端程式碼：**18845** 行
+- 後端程式碼：**19131** 行
 - 管理後台程式碼：**27788** 行
 - 小程序程式碼：**6643** 行
-- 文件：**131** 份
+- 文件：**132** 份
 
 ### 測試
-- 後端單元：106 files / 1026 tests
+- 後端單元：107 files / 1036 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：17 files / 79 tests
 - 小程序單元：112 tests
