@@ -87,6 +87,24 @@
   },
   {
     "method": "POST",
+    "path": "/api/auth/password/change",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/password/forgot",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/password/reset",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
     "path": "/api/auth/refresh",
     "public": true,
     "roles": []
@@ -1011,6 +1029,38 @@
   {
     "method": "POST",
     "path": "/api/scheduler/run-monthly-bills",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/staff/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/:id/reset-password",
     "public": false,
     "roles": [
       "ADMIN"

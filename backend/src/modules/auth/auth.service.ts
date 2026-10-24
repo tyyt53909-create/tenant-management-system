@@ -34,6 +34,8 @@ import {
   type LoginAttemptStore,
 } from './login-attempt.store.js';
 import * as bcrypt from 'bcrypt';
+import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto } from './dto/password.dto.js';
+import { resolveBcryptRounds } from '../../config/password.config.js';
 
 @Injectable()
 export class AuthService {
@@ -410,6 +412,38 @@ export class AuthService {
 
   async bindInviteCode(userId: string, dto: BindInviteCodeDto) {
     return this.federatedAuthService.bindInviteCode(userId, dto);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, passwordHash: true } });
+    if (!user?.passwordHash || !(await bcrypt.compare(dto.oldPassword, user.passwordHash))) {
+      throw new UnauthorizedException('当前密码不正确');
+    }
+    const passwordHash = await bcrypt.hash(dto.newPassword, resolveBcryptRounds(this.configService.get<string>('BCRYPT_ROUNDS')));
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    await this.jwtService.revokeUserSessions(userId);
+    return { message: '密码已修改' };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (user) {
+      try { await this.emailOtpService.sendCode(email); } catch { /* 对外不泄漏账户或邮件投递状态 */ }
+    }
+    return { message: '若邮箱对应有效账号，验证码将发送至该邮箱' };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const email = dto.email.trim().toLowerCase();
+    const valid = await this.emailOtpService.verifyCode(email, dto.code);
+    if (!valid) throw new BadRequestException('验证码无效或已过期');
+    const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (!user) throw new BadRequestException('验证码无效或已过期');
+    const passwordHash = await bcrypt.hash(dto.newPassword, resolveBcryptRounds(this.configService.get<string>('BCRYPT_ROUNDS')));
+    await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await this.jwtService.revokeUserSessions(user.id);
+    return { message: '密码已重置' };
   }
 
   /** 查找尚未绑定用户、且邮箱/手机号精确匹配的预建租客档案。 */

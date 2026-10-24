@@ -22,6 +22,7 @@ import {
   extractRefreshToken,
 } from './auth-cookie.util.js';
 import { durationMsOr } from '../../common/utils/duration.js';
+import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto } from './dto/password.dto.js';
 
 @Controller('auth')
 export class AuthController {
@@ -222,5 +223,25 @@ export class AuthController {
   async bindInviteCode(@CurrentUser() userParam: CurrentUserParam, @Body() dto: BindInviteCodeDto) {
     const user = resolveAuthUser(userParam);
     return this.authService.bindInviteCode(user.userId, dto);
+  }
+
+  @Post('password/change')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(@CurrentUser() current: CurrentUserParam, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(resolveAuthUser(current).userId, dto);
+  }
+
+  @Post('password/forgot')
+  @Public()
+  @AuthThrottle()
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('password/reset')
+  @Public()
+  @AuthThrottle()
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 }

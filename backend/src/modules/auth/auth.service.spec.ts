@@ -79,8 +79,12 @@ async function createService(
   prisma: PrismaMock;
   store: MemoryLoginAttemptStore;
   invite: InviteCodeMock;
+  jwt: { generateTokens: ReturnType<typeof vi.fn>; revokeUserSessions: ReturnType<typeof vi.fn> };
+  otp: { sendCode: ReturnType<typeof vi.fn>; verifyCode: ReturnType<typeof vi.fn> };
 }> {
   const prisma = createPrismaMock();
+  const jwt = { generateTokens: vi.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }), revokeUserSessions: vi.fn() };
+  const otp = { sendCode: vi.fn(), verifyCode: vi.fn() };
   const invite: InviteCodeMock = {
     validateInviteCode: vi.fn().mockResolvedValue({ valid: false }),
     consumeInviteCode: vi.fn().mockResolvedValue(undefined),
@@ -91,13 +95,11 @@ async function createService(
       { provide: InviteCodeService, useValue: invite },
       {
         provide: JwtAuthService,
-        useValue: {
-          generateTokens: vi.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }),
-        },
+         useValue: jwt,
       },
       { provide: PrismaService, useValue: prisma },
       { provide: GoogleAuthService, useValue: {} },
-      { provide: EmailOtpService, useValue: {} },
+      { provide: EmailOtpService, useValue: otp },
       { provide: TenantCapabilityService, useValue: {} },
       {
         provide: ConfigService,
@@ -112,7 +114,7 @@ async function createService(
     ],
   }).compile();
 
-  return { service: moduleRef.get(AuthService), prisma, store, invite };
+  return { service: moduleRef.get(AuthService), prisma, store, invite, jwt, otp };
 }
 
 function userWith(over: Record<string, unknown> = {}) {
@@ -333,5 +335,39 @@ describe('AuthService 注册策略（DEC-03）', () => {
     ).rejects.toMatchObject({ status: 403 });
     expect(prisma.user.create).not.toHaveBeenCalled();
     expect(prisma.tenant.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService 密码生命周期', () => {
+  it('change requires correct old password and revokes sessions after successful change', async () => {
+    const { service, prisma, jwt } = await createService();
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-1', passwordHash: await bcrypt.hash('old-password', 10) });
+    await expectStatus(service.changePassword('user-1', { oldPassword: 'wrong-password', newPassword: 'new-password' }), 401);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    await service.changePassword('user-1', { oldPassword: 'old-password', newPassword: 'new-password' });
+    expect(prisma.user.update).toHaveBeenCalled();
+    expect(jwt.revokeUserSessions).toHaveBeenCalledWith('user-1');
+  });
+
+  it('forgot responds identically for known and unknown emails', async () => {
+    const { service, prisma, otp } = await createService();
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1' }).mockResolvedValueOnce(null);
+    const known = await service.forgotPassword({ email: 'User@Example.com' });
+    const unknown = await service.forgotPassword({ email: 'missing@example.com' });
+    expect(known).toEqual(unknown);
+    expect(otp.sendCode).toHaveBeenCalledWith('user@example.com');
+    expect(otp.sendCode).toHaveBeenCalledTimes(1);
+  });
+
+  it('reset validates OTP, hashes password, and revokes sessions', async () => {
+    const { service, prisma, otp, jwt } = await createService();
+    otp.verifyCode.mockResolvedValue(false);
+    await expectStatus(service.resetPassword({ email: 'user@example.com', code: '000000', newPassword: 'new-password' }), 400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    otp.verifyCode.mockResolvedValue(true);
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+    await service.resetPassword({ email: 'User@Example.com', code: '123456', newPassword: 'new-password' });
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'u1' }, data: { passwordHash: expect.stringMatching(/^\$2[aby]\$/) } }));
+    expect(jwt.revokeUserSessions).toHaveBeenCalledWith('u1');
   });
 });
