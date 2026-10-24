@@ -115,9 +115,7 @@ export async function settleDepositOnCheckout(
 
   const ledger = await tx.depositLedger.findUnique({ where: { contractId } });
   if (!ledger) {
-    if (deductions > 0 || refundAmount > 0) {
-      throw new Error('合同没有押金台账，不能结算押金');
-    }
+    // 历史合同可能没有押金台账；此时不阻断退租，押金项由人工核对。
     return null;
   }
 

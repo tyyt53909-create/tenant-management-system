@@ -171,7 +171,7 @@ export class CheckoutService {
 
       if (dto.status && dto.status !== record.status) {
         const allowed: Record<string, readonly string[]> = {
-          DRAFT: ['PENDING', 'CANCELLED'],
+          DRAFT: ['PENDING', 'COMPLETED', 'CANCELLED'],
           PENDING: ['DRAFT', 'COMPLETED', 'CANCELLED'],
           COMPLETED: [],
           CANCELLED: [],
@@ -218,17 +218,21 @@ export class CheckoutService {
           throw new BadRequestException('完成退租前必须提供结算明细');
         }
 
-        // 结算等式：退款项 - 扣款项 === 实退净额
-        const refundTotal = items
-          .filter((item) => isRefundItemType(item.itemType))
-          .reduce((sum, item) => sum + item.amount, 0);
-        const deductionTotal = items
-          .filter((item) => isDeductionItemType(item.itemType))
-          .reduce((sum, item) => sum + item.amount, 0);
-        if (refundTotal - deductionTotal !== totalRefund) {
-          throw new BadRequestException(
-            `结算等式不成立：退款 ${refundTotal} - 扣款 ${deductionTotal} ≠ 实退 ${totalRefund}`,
-          );
+        // 结算等式：退款项 - 扣款项 === 实退净额。
+        // 仅含扣款项的旧数据（历史 UI 允许只填扣款）不做等式校验，避免阻断存量流程。
+        const hasRefundItems = items.some((item) => isRefundItemType(item.itemType));
+        if (hasRefundItems) {
+          const refundTotal = items
+            .filter((item) => isRefundItemType(item.itemType))
+            .reduce((sum, item) => sum + item.amount, 0);
+          const deductionTotal = items
+            .filter((item) => isDeductionItemType(item.itemType))
+            .reduce((sum, item) => sum + item.amount, 0);
+          if (refundTotal - deductionTotal !== totalRefund) {
+            throw new BadRequestException(
+              `结算等式不成立：退款 ${refundTotal} - 扣款 ${deductionTotal} ≠ 实退 ${totalRefund}`,
+            );
+          }
         }
 
         // 押金台账一次性结清：扣除 + 退还 = 台账余额
