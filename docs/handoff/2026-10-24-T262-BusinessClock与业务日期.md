@@ -40,7 +40,7 @@ version: 1.0
 - ✅ 水电用量月份键、结算补缴账单到期日。
 - ✅ 账单/预付/退租/抄表导出文件名与收据日期。
 - ✅ 导入日期解析。
-- ✅ 账单号移除 `Math.random()`，改用 `randomHex(3)`。
+- ⚠️ 合同号/水电账单号移除 `Math.random()`；**普通账单号当时漏改**（2026-10-24 T264 审查发现，已在 T264 补修）。
 - ✅ `grep` 业务模块已无 `getFullYear()/getMonth()/getDate()/setDate(` 直接运算。
 
 ### 测试
@@ -83,3 +83,11 @@ version: 1.0
 
 **交接给**: T263（FIN-01）负责模型
 **确认人**: @human-owner
+
+---
+
+## 更正（2026-10-24，T264 审查）
+
+- 上文「账单号改用 `randomHex(3)`」只覆盖合同号与水电账单号；**普通账单号（`bills.service.ts create`）仍为 `Math.random()`**，属漏改。
+- 已在 T264 分支补修：普通账单号改用 `randomHex(3)`，并补单测；导出日期/创建时间统一走 `formatBusinessDate` / `formatBusinessDateTime`。
+- 详见 `tasks/evidence/T264.md` 第 6 节。

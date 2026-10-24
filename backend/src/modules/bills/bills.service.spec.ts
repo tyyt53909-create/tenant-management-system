@@ -3,6 +3,11 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { BillsService } from './bills.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
+// 账单号必须走 crypto 随机串（AGENTS 14.4 禁止 Math.random）；固定返回值便于断言。
+vi.mock('../../common/utils/secure-random.js', () => ({
+  randomHex: vi.fn(() => 'ABCDEF'),
+}));
+
 describe('BillsService', () => {
   let service: BillsService;
   let prisma: any;
@@ -663,6 +668,25 @@ describe('BillsService', () => {
       });
     });
 
+    it('create：账单号使用 crypto 随机串（randomHex），不是 Math.random', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.bill.create.mockResolvedValue({ id: billId });
+
+      await service.create({
+        contractId: 'contract-1',
+        billType: 'RENT',
+        period: '2026-11',
+        amount: 100000,
+        dueDate: '2026-11-05',
+      } as any);
+
+      expect(prisma.bill.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          billNumber: expect.stringMatching(/^B\d{13}ABCDEF$/),
+        }),
+      });
+    });
+
     it('create：并发写入同一租金账单时返回已存在记录，而不是 500', async () => {
       prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
       prisma.bill.create.mockRejectedValue({ code: 'P2002' });
@@ -846,6 +870,8 @@ describe('BillsService', () => {
       expect(csv.startsWith('\uFEFF')).toBe(true);
       expect(csv).toContain('账单编号,房间号,租客姓名,租客手机,账单类型,账期,应付金额(元),已付金额(元),未付本金(元),确认滞纳金(元),到期日期,状态,创建时间');
       expect(csv).toContain('B20261001-001,302,李四,13900000002,租金,2026-10,2500.00,2500.00,0.00,0.00,2026-10-05,已支付');
+      // 创建时间按业务时区（Asia/Shanghai）输出，不随进程 TZ 变化
+      expect(csv).toContain('2026-10-01 08:00:00');
     });
   });
 

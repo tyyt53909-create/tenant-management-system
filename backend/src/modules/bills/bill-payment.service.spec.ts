@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { BillPaymentService } from './bill-payment.service.js';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('BillPaymentService', () => {
@@ -187,6 +188,225 @@ describe('BillPaymentService', () => {
         where: { id: 'f1' },
         data: { settledAmount: 0, settledAt: null, settledBy: null },
       });
+    });
+
+    it('作废：已取消账单/收款不存在/冲正记录分别拒绝', async () => {
+      prisma.bill.findUnique.mockResolvedValueOnce(bill({ status: 'CANCELLED' }));
+      await expect(service.voidPayment('b1', 'p1', 'op', 'x')).rejects.toThrow(BadRequestException);
+
+      prisma.bill.findUnique.mockResolvedValueOnce(bill());
+      prisma.paymentRecord.findUnique.mockResolvedValueOnce(null);
+      await expect(service.voidPayment('b1', 'p1', 'op', 'x')).rejects.toThrow(NotFoundException);
+
+      prisma.bill.findUnique.mockResolvedValueOnce(bill());
+      prisma.paymentRecord.findUnique.mockResolvedValueOnce({
+        id: 'p1',
+        billId: 'other',
+        status: 'CONFIRMED',
+      });
+      await expect(service.voidPayment('b1', 'p1', 'op', 'x')).rejects.toThrow(NotFoundException);
+
+      prisma.bill.findUnique.mockResolvedValueOnce(bill());
+      prisma.paymentRecord.findUnique.mockResolvedValueOnce({
+        id: 'p1',
+        billId: 'b1',
+        status: 'REVERSAL',
+      });
+      await expect(service.voidPayment('b1', 'p1', 'op', 'x')).rejects.toThrow(ConflictException);
+    });
+
+    it('作废后账单回退到 OVERDUE（已过期且全额回退）', async () => {
+      const past = new Date('2020-01-01');
+      prisma.bill.findUnique.mockResolvedValue(
+        bill({ amount: 1000, paidAmount: 400, status: 'PARTIAL', dueDate: past }),
+      );
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p1',
+        billId: 'b1',
+        amount: 400,
+        status: 'CONFIRMED',
+        paymentMethod: 'CASH',
+        billPortion: 400,
+        lateFeePortion: 0,
+        lateFeeAllocations: [],
+      });
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'rev1' });
+      prisma.paymentRecord.update.mockResolvedValue({ id: 'p1', status: 'VOIDED' });
+      prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+      const result = await service.voidPayment('b1', 'p1', 'op', 'x');
+      expect(result.bill.status).toBe('OVERDUE');
+    });
+
+    it('作废仅滞纳金部分时账单仍为 PAID', async () => {
+      prisma.bill.findUnique.mockResolvedValue(
+        bill({ amount: 1000, paidAmount: 1000, status: 'PAID' }),
+      );
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p1',
+        billId: 'b1',
+        amount: 100,
+        status: 'CONFIRMED',
+        paymentMethod: 'CASH',
+        billPortion: 0,
+        lateFeePortion: 100,
+        lateFeeAllocations: [{ lateFeeId: 'missing', amount: 100 }],
+      });
+      prisma.lateFee.findUnique = vi.fn().mockResolvedValue(null);
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'rev1' });
+      prisma.paymentRecord.update.mockResolvedValue({ id: 'p1', status: 'VOIDED' });
+      prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+      const result = await service.voidPayment('b1', 'p1', 'op', 'x');
+      expect(result.bill.paidAmount).toBe(1000);
+      expect(result.bill.status).toBe('PAID');
+    });
+
+    it('滞纳金部分回滚后仍未结清时保留已完成标记', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill({ amount: 1000, paidAmount: 500 }));
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p1',
+        billId: 'b1',
+        amount: 100,
+        status: 'CONFIRMED',
+        paymentMethod: 'CASH',
+        billPortion: 0,
+        lateFeePortion: 100,
+        lateFeeAllocations: [{ lateFeeId: 'f1', amount: 100 }],
+      });
+      prisma.lateFee.findUnique = vi.fn().mockResolvedValue({
+        id: 'f1',
+        confirmedAmount: 200,
+        settledAmount: 300,
+      });
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'rev1' });
+      prisma.paymentRecord.update.mockResolvedValue({ id: 'p1', status: 'VOIDED' });
+      prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+      await service.voidPayment('b1', 'p1', 'op', 'x');
+      expect(prisma.lateFee.update).toHaveBeenCalledWith({
+        where: { id: 'f1' },
+        data: { settledAmount: 200 },
+      });
+    });
+
+    it('非 P2002 的数据库异常原样上抛', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill());
+      prisma.paymentRecord.create.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.addPayment('b1', { amount: 100, paymentMethod: 'CASH' } as any, 'op'),
+      ).rejects.toThrow('db down');
+    });
+
+    it('序列返回 0 时不生成收据号', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill());
+      prisma.$queryRaw = vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce([{ nextval: 0 }]);
+
+      await service.addPayment('b1', { amount: 100, paymentMethod: 'CASH' } as any, 'op');
+      expect(prisma.paymentRecord.create.mock.calls[0][0].data.receiptNumber).toBeNull();
+    });
+
+    it('幂等键对应记录已作废时拒绝重放', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill());
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p-old',
+        billId: 'b1',
+        amount: 100,
+        status: 'VOIDED',
+      });
+
+      await expect(
+        service.addPayment(
+          'b1',
+          { amount: 100, paymentMethod: 'CASH', idempotencyKey: 'idem-old' } as any,
+          'op',
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('历史收款无滞纳金分配时按空数组回退', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill({ amount: 1000, paidAmount: 500 }));
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p1',
+        billId: 'b1',
+        amount: 200,
+        status: 'CONFIRMED',
+        paymentMethod: 'CASH',
+        billPortion: 200,
+        lateFeePortion: 0,
+        lateFeeAllocations: null,
+      });
+      prisma.paymentRecord.create.mockResolvedValue({ id: 'rev1' });
+      prisma.paymentRecord.update.mockResolvedValue({ id: 'p1', status: 'VOIDED' });
+      prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+      const result = await service.voidPayment('b1', 'p1', 'op', 'x');
+      expect(result.bill.paidAmount).toBe(300);
+      expect(result.bill.status).toBe('PARTIAL');
+      expect(prisma.lateFee.update).not.toHaveBeenCalled();
+    });
+
+    it('滞纳金金额字段为空时按 0 处理', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill());
+      prisma.lateFee.findMany.mockResolvedValue([
+        { id: 'empty', confirmedAmount: null, settledAmount: null },
+      ]);
+      prisma.lateFee.update.mockImplementation(({ where, data }: any) => ({ id: where.id, ...data }));
+
+      const result = await service.addPayment('b1', { amount: 100, paymentMethod: 'CASH' } as any, 'op');
+      expect(prisma.lateFee.update).not.toHaveBeenCalled();
+      expect(result.bill.status).toBe('PARTIAL');
+    });
+
+    it('滞纳金只核销一部分时保留未结清状态', async () => {
+      prisma.bill.findUnique.mockResolvedValue(
+        bill({ amount: 1000, paidAmount: 900, status: 'PARTIAL' }),
+      );
+      prisma.lateFee.findMany.mockResolvedValue([
+        { id: 'fee', confirmedAmount: 500, settledAmount: 0 },
+      ]);
+      prisma.lateFee.update.mockImplementation(({ where, data }: any) => ({ id: where.id, ...data }));
+
+      const result = await service.addPayment(
+        'b1',
+        { amount: 200, paymentMethod: 'CASH' } as any,
+        'op',
+      );
+
+      expect(prisma.lateFee.update).toHaveBeenCalledWith({
+        where: { id: 'fee' },
+        data: { settledAmount: 100 },
+      });
+      expect(result.bill.status).toBe('PARTIAL');
+    });
+
+    it('序列返回非数组结果时收据号为空', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill());
+      prisma.$queryRaw = vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce({ nextval: 5 });
+
+      await service.addPayment('b1', { amount: 100, paymentMethod: 'CASH' } as any, 'op');
+      expect(prisma.paymentRecord.create.mock.calls[0][0].data.receiptNumber).toBeNull();
+    });
+
+    it('数据库唯一约束冲突（P2002）映射为 409', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill());
+      prisma.paymentRecord.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('dup', {
+          code: 'P2002',
+          clientVersion: '5.22.0',
+        }),
+      );
+
+      await expect(
+        service.addPayment('b1', { amount: 100, paymentMethod: 'CASH' } as any, 'op'),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('重复作废幂等返回已有冲正', async () => {
