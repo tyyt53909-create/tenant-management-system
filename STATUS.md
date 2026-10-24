@@ -1,6 +1,6 @@
 # 项目状态跟踪
 
-> 分支: `feature/T276-fin-11-settings`
+> 分支: `develop`
 > 集成基準: `origin/develop` @ `392cf06`
 > 發布就緒: **NO-GO**
 > Gates: 11 pass / 1 fail / 2 not-run
