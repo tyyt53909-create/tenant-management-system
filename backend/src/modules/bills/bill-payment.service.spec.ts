@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { BillPaymentService } from './bill-payment.service.js';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -888,6 +888,110 @@ describe('BillPaymentService', () => {
           }),
         }),
       );
+    });
+
+    it('payWithPrepay 各种越权、状态与边界异常分支', async () => {
+      // 1. 账单不存在
+      prisma.bill.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.payWithPrepay('not-exist', {}, { userId: 'u1', role: 'ADMIN' }),
+      ).rejects.toThrow(NotFoundException);
+
+      // 2. 租客端查无 Tenant 档案
+      prisma.bill.findUnique.mockResolvedValueOnce({
+        id: 'b1',
+        contract: { tenantId: 't1', roomId: 'r1' },
+      });
+      prisma.tenant.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.payWithPrepay('b1', {}, { userId: 'u1', role: 'TENANT' }),
+      ).rejects.toThrow(ForbiddenException);
+
+      // 3. 租客端操作他人账单
+      prisma.bill.findUnique.mockResolvedValueOnce({
+        id: 'b1',
+        contract: { tenantId: 't1', roomId: 'r1' },
+      });
+      prisma.tenant.findUnique.mockResolvedValueOnce({ id: 't-other' });
+      await expect(
+        service.payWithPrepay('b1', {}, { userId: 'u1', role: 'TENANT' }),
+      ).rejects.toThrow(ForbiddenException);
+
+      // 4. 账单已付或已取消
+      prisma.bill.findUnique.mockResolvedValueOnce({
+        id: 'b1',
+        status: 'PAID',
+        contract: { tenantId: 't1', roomId: 'r1' },
+      });
+      await expect(
+        service.payWithPrepay('b1', {}, { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow(BadRequestException);
+
+      // 5. 待缴金额 <= 0
+      prisma.bill.findUnique.mockResolvedValueOnce({
+        id: 'b1',
+        amount: 500,
+        paidAmount: 500,
+        status: 'PENDING',
+        contract: { tenantId: 't1', roomId: 'r1' },
+      });
+      prisma.lateFee.findMany.mockResolvedValueOnce([]);
+      await expect(
+        service.payWithPrepay('b1', {}, { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow(BadRequestException);
+
+      // 6. 预付账户不存在
+      prisma.bill.findUnique.mockResolvedValueOnce({
+        id: 'b1',
+        amount: 1000,
+        paidAmount: 0,
+        status: 'PENDING',
+        contract: { tenantId: 't1', roomId: 'r1' },
+      });
+      prisma.prepayAccount.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.payWithPrepay('b1', {}, { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow();
+
+      // 7. 并发条件扣减余额失败 count === 0
+      prisma.bill.findUnique.mockResolvedValueOnce({
+        id: 'b1',
+        billNumber: 'B001',
+        amount: 1000,
+        paidAmount: 0,
+        status: 'PENDING',
+        contract: { tenantId: 't1', roomId: 'r1' },
+      });
+      prisma.prepayAccount.findUnique.mockResolvedValueOnce({ id: 'pa1', balanceCache: 1000 });
+      prisma.prepayAccount.updateMany.mockResolvedValueOnce({ count: 0 });
+      await expect(
+        service.payWithPrepay('b1', {}, { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow();
+
+      // 8. 租客指定部分金额抵扣且成功抵扣
+      prisma.bill.findUnique.mockResolvedValue({
+        id: 'b1',
+        billNumber: 'B002',
+        amount: 2000,
+        paidAmount: 0,
+        status: 'PENDING',
+        contract: { tenantId: 't1', roomId: 'r1' },
+      });
+      prisma.tenant.findUnique.mockResolvedValueOnce({ id: 't1' });
+      prisma.prepayAccount.findUnique.mockResolvedValueOnce({ id: 'pa1', balanceCache: 5000 });
+      prisma.prepayAccount.updateMany.mockResolvedValueOnce({ count: 1 });
+      prisma.prepayAccount.findUniqueOrThrow.mockResolvedValueOnce({ id: 'pa1', balanceCache: 4500 });
+      prisma.prepayTransaction.create.mockResolvedValueOnce({ id: 'pt-part' });
+      prisma.$queryRaw = vi.fn().mockResolvedValue([{ nextval: 102 }]);
+      prisma.paymentRecord.create.mockResolvedValueOnce({ id: 'pmt-2', amount: 500 });
+      prisma.bill.update.mockResolvedValueOnce({ id: 'b1', status: 'PARTIALLY_PAID', paidAmount: 500 });
+
+      const partialRes = await service.payWithPrepay(
+        'b1',
+        { amount: 500 },
+        { userId: 'u1', role: 'TENANT' },
+      );
+      expect(partialRes.payment.id).toBe('pmt-2');
     });
   });
 });

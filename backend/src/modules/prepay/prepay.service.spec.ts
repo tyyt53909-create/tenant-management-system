@@ -756,5 +756,250 @@ describe('PrepayService', () => {
       expect(triggered).toBe(false);
       expect(prisma.prepayAccount.update).not.toHaveBeenCalled();
     });
+
+    it('createJsapiRechargeOrder：金额非法、账户不存在、管理者下单等全分支覆盖', async () => {
+      // 1. 金额 <= 0
+      await expect(
+        service.createJsapiRechargeOrder(
+          { amount: 0 },
+          { userId: 'u1', role: 'TENANT', tenantId: 't1' },
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      // 2. 租客未找到账户
+      prisma.prepayAccount.findFirst.mockResolvedValueOnce(null);
+      await expect(
+        service.createJsapiRechargeOrder(
+          { amount: 100 },
+          { userId: 'u1', role: 'TENANT', tenantId: 't1' },
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      // 3. 管理者未指定 targetAccountId
+      await expect(
+        service.createJsapiRechargeOrder({ amount: 100 }, { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow(BadRequestException);
+
+      // 4. 管理者指定了不存在的账户
+      prisma.prepayAccount.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.createJsapiRechargeOrder(
+          { amount: 100 },
+          { userId: 'admin', role: 'ADMIN' },
+          'acc-not-exist',
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      // 5. 生产环境缺少 openid
+      const configService = (service as any).configService;
+      configService.get = vi.fn().mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'production';
+        if (key === 'WECHAT_PAY_MOCK') return 'false';
+        return undefined;
+      });
+      prisma.prepayAccount.findUnique.mockResolvedValueOnce({
+        id: 'acc-prod',
+        tenant: { id: 't-prod', userId: 'u-prod', name: '李四' },
+      });
+      prisma.userIdentity.findFirst.mockResolvedValueOnce(null);
+      const paymentProvider = (service as any).paymentProvider;
+      paymentProvider.name = 'wechat-real';
+
+      await expect(
+        service.createJsapiRechargeOrder(
+          { amount: 100 },
+          { userId: 'admin', role: 'ADMIN' },
+          'acc-prod',
+        ),
+      ).rejects.toThrow('未检测到绑定的微信身份');
+
+      // 6. 通道不支持 JSAPI
+      paymentProvider.name = 'wechat-mock';
+      configService.get = vi.fn().mockReturnValue('test');
+      prisma.prepayAccount.findUnique.mockResolvedValueOnce({
+        id: 'acc-real',
+        tenant: { id: 't-real', userId: 'u-real', name: '王五' },
+      });
+      const originalCreateJsapi = paymentProvider.createJsapiOrder;
+      paymentProvider.createJsapiOrder = undefined;
+
+      await expect(
+        service.createJsapiRechargeOrder(
+          { amount: 100 },
+          { userId: 'admin', role: 'ADMIN' },
+          'acc-real',
+        ),
+      ).rejects.toThrow('当前支付通道不支持微信 JSAPI 线上支付');
+
+      paymentProvider.createJsapiOrder = originalCreateJsapi;
+    });
+
+    it('handleRechargeNotify：订单不存在、租客无账号等分支', async () => {
+      // 1. 订单不存在
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce(null);
+      await service.handleRechargeNotify({
+        outTradeNo: 'NOT_FOUND',
+        transactionId: 'tx',
+        tradeState: 'SUCCESS',
+        amount: 100,
+        openid: 'openid',
+      });
+      expect(prisma.prepayAccount.update).not.toHaveBeenCalled();
+
+      // 2. 租客无 userId
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce({
+        id: 'order-nouser',
+        accountId: 'acc-1',
+        tenantId: 't-1',
+        status: 'PENDING',
+        account: { id: 'acc-1', balanceCache: 100 },
+        tenant: { id: 't-1', userId: null },
+      });
+      prisma.prepayRechargeOrder.update.mockResolvedValueOnce({ id: 'order-nouser' });
+      prisma.prepayAccount.update.mockResolvedValueOnce({ id: 'acc-1', balanceCache: 200 });
+      prisma.prepayTransaction.create.mockResolvedValueOnce({ id: 'tx-nouser' });
+
+      await service.handleRechargeNotify({
+        outTradeNo: 'PREPAY_NOUSER',
+        transactionId: 'tx',
+        tradeState: 'SUCCESS',
+        amount: 100,
+        openid: 'openid',
+      });
+      expect((service as any).notificationsService.create).not.toHaveBeenCalled();
+    });
+
+    it('queryAndSyncRechargeOrder：全分支覆盖', async () => {
+      // 1. 订单不存在
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.queryAndSyncRechargeOrder(
+          { outTradeNo: 'NOT_EXIST' },
+          { userId: 'u1', role: 'ADMIN' },
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      // 2. 租客查询他人订单
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce({
+        id: 'o-other',
+        tenantId: 't-other',
+        outTradeNo: 'PREPAY_OTHER',
+      });
+      await expect(
+        service.queryAndSyncRechargeOrder(
+          { outTradeNo: 'PREPAY_OTHER' },
+          { userId: 'u1', role: 'TENANT', tenantId: 't-self' },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+
+      // 3. 订单已经是 SUCCESS
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce({
+        id: 'o-succ',
+        outTradeNo: 'PREPAY_SUCC',
+        status: 'SUCCESS',
+        amount: 5000,
+        paidAt: new Date(),
+        receiptNumber: 'R001',
+      });
+      const succRes = await service.queryAndSyncRechargeOrder(
+        { outTradeNo: 'PREPAY_SUCC' },
+        { userId: 'u1', role: 'ADMIN' },
+      );
+      expect(succRes.status).toBe('SUCCESS');
+
+      // 4. 支付通道不支持 queryOrder
+      const paymentProvider = (service as any).paymentProvider;
+      const originalQueryOrder = paymentProvider.queryOrder;
+      paymentProvider.queryOrder = undefined;
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce({
+        id: 'o-noquery',
+        outTradeNo: 'PREPAY_NOQUERY',
+        status: 'PENDING',
+      });
+      await expect(
+        service.queryAndSyncRechargeOrder(
+          { outTradeNo: 'PREPAY_NOQUERY' },
+          { userId: 'u1', role: 'ADMIN' },
+        ),
+      ).rejects.toThrow('当前支付通道不支持微信查单');
+      paymentProvider.queryOrder = originalQueryOrder;
+
+      // 5. 远端查无此单
+      paymentProvider.queryOrder.mockResolvedValueOnce(null);
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce({
+        id: 'o-null',
+        outTradeNo: 'PREPAY_NULL',
+        status: 'PENDING',
+        amount: 2000,
+      });
+      const nullRes = await service.queryAndSyncRechargeOrder(
+        { outTradeNo: 'PREPAY_NULL' },
+        { userId: 'u1', role: 'ADMIN' },
+      );
+      expect(nullRes.status).toBe('PENDING');
+
+      // 6. 远端返回非 SUCCESS（例如 NOTPAY）
+      paymentProvider.queryOrder.mockResolvedValueOnce({
+        orderId: 'PREPAY_NOTPAY',
+        status: 'NOTPAY',
+        tradeState: 'NOTPAY',
+        amount: 2000,
+      });
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce({
+        id: 'o-notpay',
+        outTradeNo: 'PREPAY_NOTPAY',
+        status: 'PENDING',
+        amount: 2000,
+      });
+      const notpayRes = await service.queryAndSyncRechargeOrder(
+        { outTradeNo: 'PREPAY_NOTPAY' },
+        { userId: 'u1', role: 'ADMIN' },
+      );
+      expect(notpayRes.status).toBe('NOTPAY');
+
+      // 7. 远端返回 SUCCESS 并补全入账
+      paymentProvider.queryOrder.mockResolvedValueOnce({
+        orderId: 'PREPAY_SYNC',
+        status: 'SUCCESS',
+        tradeState: 'SUCCESS',
+        amount: 3000,
+        transactionId: 'tx_sync',
+      });
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValueOnce({
+        id: 'o-sync',
+        accountId: 'acc-1',
+        tenantId: 't-1',
+        outTradeNo: 'PREPAY_SYNC',
+        status: 'PENDING',
+        amount: 3000,
+        account: { id: 'acc-1', balanceCache: 1000 },
+        tenant: { id: 't-1', userId: 'u-1', name: '测试' },
+      });
+      prisma.prepayRechargeOrder.findUniqueOrThrow.mockResolvedValueOnce({
+        id: 'o-sync',
+        outTradeNo: 'PREPAY_SYNC',
+        status: 'SUCCESS',
+        amount: 3000,
+        receiptNumber: 'R002',
+      });
+      const syncRes = await service.queryAndSyncRechargeOrder(
+        { outTradeNo: 'PREPAY_SYNC' },
+        { userId: 'u1', role: 'ADMIN' },
+      );
+      expect(syncRes.status).toBe('SUCCESS');
+    });
+
+    it('triggerLowBalanceAlertIfNeeded：账户缺失或余额高于阈值', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValueOnce(null);
+      expect(await service.triggerLowBalanceAlertIfNeeded('none')).toBe(false);
+
+      prisma.prepayAccount.findUnique.mockResolvedValueOnce({
+        id: 'acc-high',
+        balanceCache: 20000,
+        lowBalanceThreshold: 10000,
+        tenant: { userId: 'u1' },
+      });
+      expect(await service.triggerLowBalanceAlertIfNeeded('acc-high')).toBe(false);
+    });
   });
 });
