@@ -64,17 +64,39 @@ export class AuditLogService {
   async log(record: AuditRecord) {
     const client = record.tx ?? this.prisma;
     const sanitizedChanges = sanitizeAuditValue(record.changes);
-    return client.auditLog.create({
-      data: {
-        userId: record.userId && record.userId !== 'SYSTEM' ? record.userId : null,
-        action: record.action,
-        entityType: record.entityType,
-        entityId: record.entityId,
-        changes: sanitizedChanges as never,
-        ip: record.ip || '127.0.0.1',
-        userAgent: record.userAgent || 'system',
-      },
-    });
+    const userId = record.userId && record.userId !== 'SYSTEM' ? record.userId : null;
+    try {
+      return await client.auditLog.create({
+        data: {
+          userId,
+          action: record.action,
+          entityType: record.entityType,
+          entityId: record.entityId,
+          changes: sanitizedChanges as never,
+          ip: record.ip || '127.0.0.1',
+          userAgent: record.userAgent || 'system',
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        // SEC-06：若操作者外键无效（例如匿名请求、无效 token 或用户在并发异步期间被清理），降级为 null 并保留原始标识，绝不崩溃
+        return await client.auditLog.create({
+          data: {
+            userId: null,
+            action: record.action,
+            entityType: record.entityType,
+            entityId: record.entityId,
+            changes: {
+              ...(typeof sanitizedChanges === 'object' && sanitizedChanges !== null ? sanitizedChanges : {}),
+              _unmatchedUserId: record.userId,
+            } as never,
+            ip: record.ip || '127.0.0.1',
+            userAgent: record.userAgent || 'system',
+          },
+        });
+      }
+      throw error;
+    }
   }
 
   async findAll(query: QueryAuditLogsDto) {
