@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } f
 import { NotificationsService } from './notifications.service.js';
 import { CreateNotificationDto } from './dto/create-notification.dto.js';
 import { QueryNotificationsDto } from './dto/query-notifications.dto.js';
+import { SubscribeReportDto } from './dto/subscribe-report.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -29,6 +30,24 @@ export class NotificationsController {
   unreadCount(@CurrentUser() userParam: CurrentUserParam) {
     const user = resolveAuthUser(userParam);
     return this.notificationsService.unreadCount(user.userId);
+  }
+
+  @Post('wechat/subscribe-report')
+  reportSubscribe(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Body() dto: SubscribeReportDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.notificationsService.reportSubscribe(user.userId, dto);
+  }
+
+  @Get('wechat/subscribe-quota')
+  getSubscribeQuota(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Query('templateId') templateId?: string,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.notificationsService.getSubscribeQuota(user.userId, templateId);
   }
 
   @Patch('read-all')
