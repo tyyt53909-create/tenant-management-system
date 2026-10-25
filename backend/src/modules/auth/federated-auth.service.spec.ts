@@ -4,7 +4,7 @@ import { FederatedAuthService } from './federated-auth.service.js';
 interface TxMock {
   user: { create: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   userIdentity: { create: ReturnType<typeof vi.fn>; upsert: ReturnType<typeof vi.fn> };
-  tenant: { update: ReturnType<typeof vi.fn> };
+  tenant: { updateMany: ReturnType<typeof vi.fn> };
 }
 
 function createPrismaMock() {
@@ -29,7 +29,7 @@ function createPrismaMock() {
       create: vi.fn().mockResolvedValue({}),
       upsert: vi.fn().mockResolvedValue({}),
     },
-    tenant: { update: vi.fn().mockResolvedValue({}) },
+    tenant: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
   };
 
   const prisma = {
@@ -161,8 +161,8 @@ describe('FederatedAuthService Google 身份绑定（DEC-03）', () => {
     expect(ctx.prisma.__tx.userIdentity.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ provider: 'GOOGLE', providerUserId: 'google-sub-1' }),
     });
-    expect(ctx.prisma.__tx.tenant.update).toHaveBeenCalledWith({
-      where: { id: 'tenant-pre' },
+    expect(ctx.prisma.__tx.tenant.updateMany).toHaveBeenCalledWith({
+      where: { id: 'tenant-pre', userId: null },
       data: { userId: 'user-new' },
     });
     expect(ctx.invite.consumeInviteCode).toHaveBeenCalledWith(
@@ -170,6 +170,19 @@ describe('FederatedAuthService Google 身份绑定（DEC-03）', () => {
       'user-new',
       expect.anything(),
     );
+  });
+
+  it('预建档案在事务内已被占用时返回 409，且不核销邀请码', async () => {
+    ctx.google.verifyIdToken.mockResolvedValue(googleUser);
+    ctx.prisma.user.findFirst.mockResolvedValue(null);
+    ctx.invite.validateInviteCode.mockResolvedValue({ valid: true, role: 'TENANT' });
+    ctx.prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
+    ctx.prisma.__tx.tenant.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      ctx.service.googleAuth({ idToken: 't', inviteCode: 'INVITE-1' }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(ctx.invite.consumeInviteCode).not.toHaveBeenCalled();
   });
 });
 
@@ -218,7 +231,7 @@ describe('FederatedAuthService 邮箱 OTP 绑定（DEC-03）', () => {
     expect(ctx.prisma.__tx.userIdentity.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ provider: 'EMAIL', providerUserId: 'new@example.com' }),
     });
-    expect(ctx.prisma.__tx.tenant.update).toHaveBeenCalled();
+    expect(ctx.prisma.__tx.tenant.updateMany).toHaveBeenCalled();
   });
 
   it('已有用户登录只补建身份，不创建账号', async () => {
@@ -285,8 +298,8 @@ describe('FederatedAuthService bindInviteCode', () => {
     const result = await ctx.service.bindInviteCode('user-tenant', { inviteCode: 'INVITE-1' });
 
     expect(result.success).toBe(true);
-    expect(ctx.prisma.__tx.tenant.update).toHaveBeenCalledWith({
-      where: { id: 'tenant-pre' },
+    expect(ctx.prisma.__tx.tenant.updateMany).toHaveBeenCalledWith({
+      where: { id: 'tenant-pre', userId: null },
       data: { userId: 'user-tenant' },
     });
     expect(ctx.prisma.__tx.user.update).toHaveBeenCalledWith({

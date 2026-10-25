@@ -8,6 +8,7 @@ import { UpdateTenantDto } from './dto/update-tenant.dto.js';
 import { QueryTenantsDto } from './dto/query-tenants.dto.js';
 import { UpsertTenantRegistrationDto } from './dto/upsert-tenant-registration.dto.js';
 import { assertRegistrationTransition } from './tenant-registration.js';
+import { normalizeEmail } from '../../common/utils/normalize-contact.js';
 
 /**
  * 租客对外字段白名单（T148 脱敏）
@@ -60,12 +61,10 @@ export class TenantsService {
       throw new ConflictException('手机号已被使用');
     }
 
-    // 2. 检查邮箱唯一性（如果提供）
-    if (dto.email) {
-      const existingEmail = await this.prisma.tenant.findUnique({
-        where: { email: dto.email },
-      });
-
+    // 2. 检查邮箱唯一性（如果提供）。入库前小写，并用不区分大小写的查询挡住存量混合大小写。
+    const email = normalizeEmail(dto.email);
+    if (email) {
+      const existingEmail = await this.findTenantByEmail(email);
       if (existingEmail) {
         throw new ConflictException('邮箱已被使用');
       }
@@ -86,7 +85,7 @@ export class TenantsService {
         data: {
           name: dto.name,
           phone: dto.phone,
-          email: dto.email,
+          email,
           emergencyContact: dto.emergencyContact,
           emergencyPhone: dto.emergencyPhone,
           notes: dto.notes,
@@ -239,6 +238,17 @@ export class TenantsService {
     return tenant;
   }
 
+  /** 按规范化邮箱查找租客。excludeId 用于更新时排除自己。 */
+  private findTenantByEmail(email: string, excludeId?: string) {
+    return this.prisma.tenant.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+  }
+
   async update(
     id: string,
     dto: UpdateTenantDto,
@@ -274,12 +284,10 @@ export class TenantsService {
       }
     }
 
-    // 3. 检查邮箱唯一性（如果修改）
-    if (dto.email && dto.email !== tenant.email) {
-      const existingEmail = await this.prisma.tenant.findUnique({
-        where: { email: dto.email },
-      });
-
+    // 3. 检查邮箱唯一性（如果修改）。比较和入库都走规范化后的邮箱。
+    const email = dto.email === undefined ? undefined : (normalizeEmail(dto.email) ?? null);
+    if (email && email !== tenant.email?.toLowerCase()) {
+      const existingEmail = await this.findTenantByEmail(email, id);
       if (existingEmail) {
         throw new ConflictException('邮箱已被使用');
       }
@@ -287,8 +295,12 @@ export class TenantsService {
 
     // 4. 更新租客；tagIds 未传表示不改动，传 [] 表示清空（T215）
     // idType/idNumber 属于登记表，不能透传给 tenant.update（SEC-08 / T271）
-    const { tagIds, idType: _idType, idNumber: _idNumber, ...rest } = dto;
-    const data: Prisma.TenantUpdateInput = { ...rest };
+    const { tagIds, idType: _idType, idNumber: _idNumber, email: rawEmail, ...rest } = dto;
+    void rawEmail;
+    const data: Prisma.TenantUpdateInput = {
+      ...rest,
+      ...(email !== undefined ? { email } : {}),
+    };
     if (tagIds !== undefined) {
       const validTagIds = await this.assertTagIdsExist(tagIds);
       data.tags = { deleteMany: {}, create: validTagIds.map((tagId) => ({ tagId })) };

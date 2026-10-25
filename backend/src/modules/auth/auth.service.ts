@@ -28,6 +28,7 @@ import { FederatedAuthService } from './federated-auth.service.js';
 import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
 import { resolveLoginProtection, type LoginProtection } from '../../config/password.config.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
+import { claimPreCreatedTenant, findPreCreatedTenant } from './pre-created-tenant.js';
 import {
   LOGIN_ATTEMPT_STORE,
   MemoryLoginAttemptStore,
@@ -82,7 +83,7 @@ export class AuthService {
     }
 
     // 4. 必须存在管理员预建的租客档案（DEC-03：禁止自助创建租客）
-    const preTenant = await this.findPreCreatedTenant({ email, phone });
+    const preTenant = await findPreCreatedTenant(this.prisma, { email, phone });
     if (!preTenant) {
       throw apiError(
         ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED,
@@ -117,10 +118,7 @@ export class AuthService {
         },
       });
 
-      await tx.tenant.update({
-        where: { id: preTenant.id },
-        data: { userId: newUser.id },
-      });
+      await claimPreCreatedTenant(tx, preTenant.id, newUser.id);
 
       // 邀请码一次性：与建号、绑定同事务，核销失败则整体回滚
       await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
@@ -431,17 +429,6 @@ export class AuthService {
     await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
     await this.jwtService.revokeUserSessions(user.id);
     return { message: '密码已重置' };
-  }
-
-  /** 查找尚未绑定用户、且邮箱/手机号精确匹配的预建租客档案。 */
-  private async findPreCreatedTenant(identity: { email?: string; phone?: string }) {
-    const conditions: Array<{ email: string } | { phone: string }> = [];
-    if (identity.email) conditions.push({ email: identity.email });
-    if (identity.phone) conditions.push({ phone: identity.phone });
-    if (conditions.length === 0) return null;
-    return this.prisma.tenant.findFirst({
-      where: { userId: null, OR: conditions },
-    });
   }
 
   private loginProtection(): LoginProtection {

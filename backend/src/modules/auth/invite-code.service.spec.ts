@@ -180,6 +180,13 @@ describe('InviteCodeService', () => {
       });
     });
 
+    it('邀请码存储不可用时拒绝核销，而不是静默成功', async () => {
+      const bare = { inviteCode: undefined } as unknown as typeof prisma;
+      await expect(service.consumeInviteCode('INVITE-VALID', 'user-1', bare as any)).rejects.toMatchObject({
+        status: 500,
+      });
+    });
+
     it('并发核销失败（count=0）时抛出 409', async () => {
       vi.spyOn(prisma.inviteCode, 'updateMany').mockResolvedValue({ count: 0 });
 

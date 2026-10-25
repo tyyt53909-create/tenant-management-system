@@ -126,7 +126,7 @@ describe('AuthController', () => {
 
   /** 桩事务：注册路径建 User + UserIdentity 并绑定预建 Tenant（DEC-03，不新建 Tenant） */
   function stubTransaction(userId: string) {
-    const tenantUpdate = vi.fn().mockResolvedValue({});
+    const tenantUpdate = vi.fn().mockResolvedValue({ count: 1 });
     const identityCreate = vi.fn().mockResolvedValue({});
     const invitedByUpdate = vi.fn().mockResolvedValue({});
     const userCreate = vi.fn().mockResolvedValue({
@@ -145,7 +145,7 @@ describe('AuthController', () => {
           create: identityCreate,
           upsert: vi.fn().mockResolvedValue({}),
         },
-        tenant: { update: tenantUpdate, create: vi.fn().mockResolvedValue({}) },
+        tenant: { updateMany: tenantUpdate, create: vi.fn().mockResolvedValue({}) },
       }),
     );
     return { tenantUpdate, identityCreate, invitedByUpdate, userCreate };
@@ -195,7 +195,7 @@ describe('AuthController', () => {
       expect(result.accessToken).toBe('access-token');
       expect(result.user.id).toBe('user-123');
       expect(tx.tenantUpdate).toHaveBeenCalledWith({
-        where: { id: 'tenant-pre' },
+        where: { id: 'tenant-pre', userId: null },
         data: { userId: 'user-123' },
       });
       expect(tx.identityCreate).toHaveBeenCalledWith({
@@ -636,13 +636,13 @@ describe('AuthController', () => {
       const identityUpsert = vi.fn().mockResolvedValue({});
       const identityCreate = vi.fn().mockResolvedValue({});
       const userUpdate = vi.fn().mockResolvedValue(user);
-      const tenantUpdate = vi.fn().mockResolvedValue({});
+      const tenantUpdate = vi.fn().mockResolvedValue({ count: 1 });
       const userCreate = vi.fn().mockResolvedValue(user);
       vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
         callback({
           user: { create: userCreate, update: userUpdate },
           userIdentity: { create: identityCreate, upsert: identityUpsert },
-          tenant: { update: tenantUpdate, create: vi.fn().mockResolvedValue({}) },
+          tenant: { updateMany: tenantUpdate, create: vi.fn().mockResolvedValue({}) },
         }),
       );
       vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
@@ -772,7 +772,7 @@ describe('AuthController', () => {
         data: expect.objectContaining({ provider: 'GOOGLE', providerUserId: googlePayload.googleId }),
       });
       expect(tx.tenantUpdate).toHaveBeenCalledWith({
-        where: { id: 'tenant-pre' },
+        where: { id: 'tenant-pre', userId: null },
         data: { userId: 'user-new-created' },
       });
       expect(consumeSpy).toHaveBeenCalledWith(
@@ -788,14 +788,14 @@ describe('AuthController', () => {
       const identityUpsert = vi.fn().mockResolvedValue({});
       const identityCreate = vi.fn().mockResolvedValue({});
       const userUpdate = vi.fn().mockResolvedValue(user);
-      const tenantUpdate = vi.fn().mockResolvedValue({});
+      const tenantUpdate = vi.fn().mockResolvedValue({ count: 1 });
       const userCreate = vi.fn().mockResolvedValue(user);
       vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
         callback({
           user: { create: userCreate, update: userUpdate },
           userIdentity: { create: identityCreate, upsert: identityUpsert },
           tenant: {
-            update: tenantUpdate,
+            updateMany: tenantUpdate,
             create: vi.fn().mockResolvedValue({}),
             findFirst: vi.fn().mockResolvedValue(hasTenant ? { id: 'tenant-1' } : null),
           },
@@ -918,7 +918,7 @@ describe('AuthController', () => {
         expect(res.isNewUser).toBe(true);
         expect(res.user.email).toBe('newotp@example.com');
         expect(tx.tenantUpdate).toHaveBeenCalledWith({
-          where: { id: 'tenant-pre' },
+          where: { id: 'tenant-pre', userId: null },
           data: { userId: 'user-otp-new' },
         });
         expect(consumeSpy).toHaveBeenCalledWith('INVITE-OTP', 'user-otp-new', expect.anything());
