@@ -86,6 +86,7 @@ async function createService(
   invite: InviteCodeMock;
   jwt: { generateTokens: ReturnType<typeof vi.fn>; revokeUserSessions: ReturnType<typeof vi.fn> };
   otp: { sendCode: ReturnType<typeof vi.fn>; verifyCode: ReturnType<typeof vi.fn> };
+  wechat: WechatAuthService;
 }> {
   const prisma = createPrismaMock();
   const jwt = { generateTokens: vi.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }), revokeUserSessions: vi.fn() };
