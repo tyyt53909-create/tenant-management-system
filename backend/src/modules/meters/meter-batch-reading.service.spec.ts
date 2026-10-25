@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MeterBatchReadingService } from './meter-batch-reading.service.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MeterPriceService } from './meter-price.service.js';
+import { testPriceService } from './meter-test.providers.js';
 
 describe('MeterBatchReadingService (T196 coverage)', () => {
   let service: MeterBatchReadingService;
@@ -31,8 +33,10 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     const providers: any[] = [
       MeterBatchReadingService,
       { provide: PrismaService, useValue: prismaMock },
+      { provide: MeterPriceService, useValue: testPriceService(prismaMock) },
+      // QLT-02 / T288：billing 改为必填，未显式提供时用替身（该 spec 只验证调用参数）
+      { provide: MeterBillingService, useValue: withBilling ? billingMock : { applyReadingDeduction: vi.fn() } },
     ];
-    if (withBilling) providers.push({ provide: MeterBillingService, useValue: billingMock });
     const module: TestingModule = await Test.createTestingModule({ providers }).compile();
     service = module.get<MeterBatchReadingService>(MeterBatchReadingService);
     prisma = prismaMock;

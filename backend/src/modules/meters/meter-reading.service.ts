@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
@@ -10,17 +10,16 @@ import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterReadingService {
-  private readonly billingService: MeterBillingService;
-  private readonly priceService: MeterPriceService;
-
+  /**
+   * 扣费与计价服务必填（QLT-02 / T288）。
+   * 之前 `?? new MeterBillingService(prisma)` 会在容器漏注册时新建一个没有时钟的实例，
+   * 单价按进程本地时区解析，月末结算可能落到错误的业务日。
+   */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() billingService?: MeterBillingService,
-    @Optional() priceService?: MeterPriceService,
-  ) {
-    this.billingService = billingService ?? new MeterBillingService(prisma);
-    this.priceService = priceService ?? new MeterPriceService(prisma);
-  }
+    private readonly billingService: MeterBillingService,
+    private readonly priceService: MeterPriceService,
+  ) {}
 
   /**
    * 水電讀數登記（docs/02-数据模型.md §2.14）

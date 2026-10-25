@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { MeterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NOT_SIMULATED } from './meter-types.constants.js';
@@ -49,14 +49,11 @@ export interface ReconciliationRow {
  */
 @Injectable()
 export class MeterReconciliationService {
-  private readonly priceService: MeterPriceService;
-
+  /** 计价服务必填（QLT-02 / T288）。 */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() priceService?: MeterPriceService,
-  ) {
-    this.priceService = priceService ?? new MeterPriceService(prisma);
-  }
+    private readonly priceService: MeterPriceService,
+  ) {}
 
   async reconcile(query: ReconcileQuery) {
     const { start, end } = monthRange(query.period);

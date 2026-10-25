@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { MeterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
@@ -33,15 +33,12 @@ const BILL_INCLUDE = {
  */
 @Injectable()
 export class PublicUtilitiesService {
-  private readonly priceService: MeterPriceService;
-
+  /** 计价服务必填（QLT-02 / T288）：公共水电与房间水电必须用同一套生效价逻辑。 */
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
-    @Optional() priceService?: MeterPriceService,
-  ) {
-    this.priceService = priceService ?? new MeterPriceService(prisma);
-  }
+    private readonly priceService: MeterPriceService,
+  ) {}
 
   async findAll(query: QueryPublicUtilityBillDto) {
     const buildingId = await this.resolveBuildingId(query.buildingId);

@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { Prisma, ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
@@ -9,17 +9,12 @@ import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterBatchReadingService {
-  private readonly billingService: MeterBillingService;
-  private readonly priceService: MeterPriceService;
-
+  /** 依赖必填（QLT-02 / T288）：批量抄表与单表抄表必须走同一套计价与时钟。 */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() billingService?: MeterBillingService,
-    @Optional() priceService?: MeterPriceService,
-  ) {
-    this.billingService = billingService ?? new MeterBillingService(prisma);
-    this.priceService = priceService ?? new MeterPriceService(prisma);
-  }
+    private readonly billingService: MeterBillingService,
+    private readonly priceService: MeterPriceService,
+  ) {}
 
   /**
    * 批量抄表工作台底表查询（平铺展示各房源水电表、最新读数及预付余额）

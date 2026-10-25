@@ -39,8 +39,6 @@ import { resolveBcryptRounds } from '../../config/password.config.js';
 
 @Injectable()
 export class AuthService {
-  private readonly federatedAuthService: FederatedAuthService;
-  private readonly loginAttemptStore: LoginAttemptStore;
   private dummyPasswordHash: string | null = null;
 
   constructor(
@@ -51,20 +49,9 @@ export class AuthService {
     private readonly emailOtpService: EmailOtpService,
     private readonly tenantCapabilityService: TenantCapabilityService,
     private readonly configService: ConfigService,
-    @Optional() @Inject(LOGIN_ATTEMPT_STORE) loginAttemptStore?: LoginAttemptStore,
-    @Optional() federatedAuthService?: FederatedAuthService,
-  ) {
-    this.loginAttemptStore = loginAttemptStore ?? new MemoryLoginAttemptStore();
-    this.federatedAuthService =
-      federatedAuthService ??
-      new FederatedAuthService(
-        prisma,
-        googleAuthService,
-        emailOtpService,
-        jwtService,
-        inviteCodeService,
-      );
-  }
+    @Inject(LOGIN_ATTEMPT_STORE) private readonly loginAttemptStore: LoginAttemptStore,
+    private readonly federatedAuthService: FederatedAuthService,
+  ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
     const email = dto.email.toLowerCase().trim();

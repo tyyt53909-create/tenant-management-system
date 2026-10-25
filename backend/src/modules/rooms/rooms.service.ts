@@ -14,18 +14,14 @@ import { UpdateRoomDto } from './dto/update-room.dto.js';
 import { UpdateRoomStatusDto } from './dto/update-room-status.dto.js';
 import { MarkCleanDto } from './dto/mark-clean.dto.js';
 import { QueryRoomsDto } from './dto/query-rooms.dto.js';
-import { MAX_ROOM_PHOTOS, type RoomPhotoDto } from './dto/room-photo.dto.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
-
-/** 允许的房态流转（docs/04-状态机.md §1.3，键与值均为 `status+cleanStatus`） */
-const ALLOWED_ROOM_TRANSITIONS: Record<string, string[]> = {
-  'VACANT+CLEAN': ['RESERVED+CLEAN', 'MAINTENANCE+CLEAN'],
-  'RESERVED+CLEAN': ['OCCUPIED+CLEAN'],
-  'OCCUPIED+CLEAN': ['VACANT+PENDING_CLEAN', 'MAINTENANCE+CLEAN'],
-  'MAINTENANCE+CLEAN': ['OCCUPIED+CLEAN', 'VACANT+PENDING_CLEAN'],
-  'VACANT+PENDING_CLEAN': ['VACANT+CLEANING'],
-  'VACANT+CLEANING': ['VACANT+CLEAN'],
-};
+import { bindPhotoAssets, buildRoomPhotoRows } from './room-photos.js';
+import {
+  assertPreconditionMet,
+  assertTransitionTable,
+  requiredPreconditions,
+  transitionKey,
+} from './room-transitions.js';
 
 @Injectable()
 export class RoomsService {
@@ -58,7 +54,7 @@ export class RoomsService {
     }
 
     // 3. 创建房源（照片随房源同事务写入，并把文件资产绑定为公开房源照片）
-    const photos = this.buildRoomPhotoRows(dto.photos ?? []);
+    const photos = buildRoomPhotoRows(dto.photos ?? []);
     return this.prisma.$transaction(async (tx) => {
       const created = await tx.room.create({
         data: {
@@ -75,7 +71,7 @@ export class RoomsService {
         },
       });
 
-      await this.bindPhotoAssets(tx, dto.photos ?? [], created.id);
+      await bindPhotoAssets(tx, dto.photos ?? [], created.id);
 
       return tx.room.findUniqueOrThrow({
         where: { id: created.id },
@@ -87,65 +83,6 @@ export class RoomsService {
         },
       });
     });
-  }
-
-  /** 从站内 URL 提取对象键；非上传地址直接拒绝。 */
-  private photoKey(url: string): string {
-    const match = /^\/api\/(?:public\/)?files\/([A-Za-z0-9._-]+)$/.exec(url);
-    if (!match) {
-      throw new BadRequestException('照片地址必须来自文件上传接口');
-    }
-    return match[1];
-  }
-
-  /** 校验照片资产存在，并绑定为 ROOM_PHOTO / PUBLIC / owner=ROOM。 */
-  private async bindPhotoAssets(
-    db: Prisma.TransactionClient | PrismaService,
-    photos: RoomPhotoDto[],
-    roomId: string,
-  ): Promise<void> {
-    const keys = [
-      ...new Set(
-        photos.flatMap((photo) => [
-          this.photoKey(photo.fileUrl),
-          ...(photo.thumbnail ? [this.photoKey(photo.thumbnail)] : []),
-        ]),
-      ),
-    ];
-    if (keys.length === 0) return;
-
-    const assets = await db.fileAsset.findMany({
-      where: { key: { in: keys } },
-      select: { key: true },
-    });
-    const found = new Set(assets.map((asset) => asset.key));
-    const missing = keys.filter((key) => !found.has(key));
-    if (missing.length > 0) {
-      throw new BadRequestException(`照片未通过文件上传接口登记：${missing[0]}`);
-    }
-
-    await db.fileAsset.updateMany({
-      where: { key: { in: keys } },
-      data: {
-        purpose: 'ROOM_PHOTO',
-        visibility: 'PUBLIC',
-        ownerType: 'ROOM',
-        ownerId: roomId,
-      },
-    });
-  }
-
-  /** 校验照片上限并生成落库字段；数组顺序即 sortOrder，第一张为封面。 */
-  private buildRoomPhotoRows(photos: RoomPhotoDto[]) {
-    if (photos.length > MAX_ROOM_PHOTOS) {
-      throw new BadRequestException(`房源照片最多 ${MAX_ROOM_PHOTOS} 张`);
-    }
-    return photos.map((photo, index) => ({
-      fileUrl: photo.fileUrl,
-      thumbnail: photo.thumbnail ?? null,
-      fileSize: photo.fileSize ?? 0,
-      sortOrder: index,
-    }));
   }
 
   async findAll(query: QueryRoomsDto, actorRole?: string, actorTenantId?: string) {
@@ -324,7 +261,7 @@ export class RoomsService {
 
     // 提供 photos 时全量替换照片；房源与照片同事务，避免「照片删了但房源没更新」。
     if (photos !== undefined) {
-      const photoRows = this.buildRoomPhotoRows(photos);
+      const photoRows = buildRoomPhotoRows(photos);
       const updated = await this.prisma.$transaction(async (tx) => {
         if (expectedVersion !== undefined) {
           const result = await tx.room.updateMany({
@@ -344,7 +281,7 @@ export class RoomsService {
           await tx.roomPhoto.createMany({
             data: photoRows.map((photo) => ({ ...photo, roomId: id })),
           });
-          await this.bindPhotoAssets(tx, photos, id);
+          await bindPhotoAssets(tx, photos, id);
         }
 
         return tx.room.findUniqueOrThrow({
@@ -387,60 +324,60 @@ export class RoomsService {
    * - 仅允许流转表中的组合；非法流转 400
    * - 前置条件：RESERVED 需草稿合同；RESERVED→OCCUPIED 需合同起始日已到；
    *   VACANT+PENDING_CLEAN 需退租记录；MAINTENANCE 需报修工单
+   *
+   * 规则表已抽到 `room-transitions.ts`（纯函数可单测），这里只负责查库。
    */
   private async assertTransitionAllowed(
     room: { id: string; status: string; cleanStatus: string },
     targetStatus: string,
     targetCleanStatus: string,
   ) {
-    const from = `${room.status}+${room.cleanStatus}`;
-    const to = `${targetStatus}+${targetCleanStatus}`;
+    const from = transitionKey(room.status, room.cleanStatus);
+    const to = transitionKey(targetStatus, targetCleanStatus);
 
-    if (from === to) return;
+    assertTransitionTable(from, to);
 
-    const allowed = ALLOWED_ROOM_TRANSITIONS[from] ?? [];
-    if (!allowed.includes(to)) {
-      throw apiError(ErrorCode.ROOM_NOT_AVAILABLE, `不允许的房态流转：${from} → ${to}`);
+    for (const precondition of requiredPreconditions(from, to)) {
+      assertPreconditionMet(precondition, await this.hasPrecondition(room.id, precondition.kind));
     }
+  }
 
-    if (to === 'RESERVED+CLEAN') {
-      const draftContract = await this.prisma.contract.findFirst({
-        where: { roomId: room.id, status: 'DRAFT' },
-      });
-      if (!draftContract) {
-        throw new BadRequestException('流转前置条件不满足：该房间没有草稿合同');
+  /** 查询流转前置数据是否存在（按 kind 分派，避免每个条件各写一段 if）。 */
+  private async hasPrecondition(
+    roomId: string,
+    kind: ReturnType<typeof requiredPreconditions>[number]['kind'],
+  ): Promise<boolean> {
+    switch (kind) {
+      case 'DRAFT_CONTRACT': {
+        const draft = await this.prisma.contract.findFirst({
+          where: { roomId, status: 'DRAFT' },
+          select: { id: true },
+        });
+        return !!draft;
       }
-    }
-
-    if (from === 'RESERVED+CLEAN' && to === 'OCCUPIED+CLEAN') {
-      const contract = await this.prisma.contract.findFirst({
-        where: {
-          roomId: room.id,
-          status: { in: ['DRAFT', 'ACTIVE'] },
-          startDate: { lte: new Date() },
-        },
-      });
-      if (!contract) {
-        throw new BadRequestException('流转前置条件不满足：合同起始日期未到');
+      case 'CONTRACT_STARTED': {
+        const contract = await this.prisma.contract.findFirst({
+          where: { roomId, status: { in: ['DRAFT', 'ACTIVE'] }, startDate: { lte: new Date() } },
+          select: { id: true },
+        });
+        return !!contract;
       }
-    }
-
-    if (to === 'VACANT+PENDING_CLEAN') {
-      const checkout = await this.prisma.checkoutRecord.findFirst({
-        where: { roomId: room.id },
-      });
-      if (!checkout) {
-        throw new BadRequestException('流转前置条件不满足：该房间没有退租记录');
+      case 'CHECKOUT_RECORD': {
+        const checkout = await this.prisma.checkoutRecord.findFirst({
+          where: { roomId },
+          select: { id: true },
+        });
+        return !!checkout;
       }
-    }
-
-    if (to === 'MAINTENANCE+CLEAN') {
-      const maintenance = await this.prisma.maintenanceRequest.findFirst({
-        where: { roomId: room.id },
-      });
-      if (!maintenance) {
-        throw new BadRequestException('流转前置条件不满足：该房间没有报修工单');
+      case 'MAINTENANCE_REQUEST': {
+        const request = await this.prisma.maintenanceRequest.findFirst({
+          where: { roomId },
+          select: { id: true },
+        });
+        return !!request;
       }
+      default:
+        return true;
     }
   }
 
@@ -518,7 +455,7 @@ export class RoomsService {
 
     let photo = null;
     if (dto.photo) {
-      await this.bindPhotoAssets(this.prisma, [dto.photo], id);
+      await bindPhotoAssets(this.prisma, [dto.photo], id);
       photo = await this.prisma.roomPhoto.create({
         data: {
           roomId: id,

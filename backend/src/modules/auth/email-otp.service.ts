@@ -1,10 +1,9 @@
-import { Inject, Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { randomOtpCode } from '../../common/utils/secure-random.js';
 import {
-  MemoryOtpStore,
   OTP_MAX_FAILED_ATTEMPTS,
   OTP_STORE,
   type OtpRecord,
@@ -18,16 +17,20 @@ const OTP_SEND_COOLDOWN_MS = 60 * 1000;
 @Injectable()
 export class EmailOtpService {
   private readonly logger = new Logger(EmailOtpService.name);
-  private readonly otpStore: OtpStore;
   private readonly hashSecret: Buffer;
   private transporter: Transporter | null = null;
   private readonly fromAddress: string;
 
+  /**
+   * `OTP_STORE` 必填（QLT-02 / T288）。
+   * 之前 `?? new MemoryOtpStore()` 会在 AuthModule 工厂漏注册时静默退化成进程内存：
+   * 多实例下「A 发的验证码 B 验证不了」，而日志里看不出来。
+   * 存储实现选择（Redis / 内存）由 AuthModule 统一决定。
+   */
   constructor(
     private readonly configService: ConfigService,
-    @Optional() @Inject(OTP_STORE) otpStore?: OtpStore,
+    @Inject(OTP_STORE) private readonly otpStore: OtpStore,
   ) {
-    this.otpStore = otpStore ?? new MemoryOtpStore();
     this.hashSecret = this.resolveHashSecret();
     const host = this.configService.get<string>('SMTP_HOST');
     const port = this.configService.get<number>('SMTP_PORT') || 465;

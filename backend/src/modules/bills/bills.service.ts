@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import type { Prisma, BillType, BillStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
@@ -17,8 +17,6 @@ import {
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { isUniqueConstraintError } from '../../common/utils/prisma-error.js';
 import { rentBillDedupKey } from '../../common/utils/duplicate-keys.js';
-import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
-import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 import { BillPaymentService } from './bill-payment.service.js';
 import { BillLateFeeService } from './bill-late-fee.service.js';
 import { BillReceiptService } from './bill-receipt.service.js';
@@ -99,22 +97,19 @@ export function summarizeLateFees(
 
 @Injectable()
 export class BillsService {
-  private readonly paymentService: BillPaymentService;
-  private readonly lateFeeService: BillLateFeeService;
-  private readonly receiptService: BillReceiptService;
-
+  /**
+   * 依赖全部必填（QLT-02 / T288）。
+   *
+   * 此前 4 个依赖都是 `@Optional()` + `?? new X()`：容器漏注册时不会报错，
+   * 而是悄悄 new 一个「没有 Redis / 没有支付通道」的实例继续跑，
+   * 直到业务中途才发现。现在改由 BillsModule 显式提供，缺失即启动失败。
+   */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() paymentService?: BillPaymentService,
-    @Optional() lateFeeService?: BillLateFeeService,
-    @Optional() receiptService?: BillReceiptService,
-    @Optional() @Inject(PAYMENT_PROVIDER) payments?: PaymentProvider,
-  ) {
-    const provider = payments ?? new OfflinePaymentProvider();
-    this.paymentService = paymentService ?? new BillPaymentService(prisma, provider);
-    this.lateFeeService = lateFeeService ?? new BillLateFeeService(prisma);
-    this.receiptService = receiptService ?? new BillReceiptService(prisma);
-  }
+    private readonly paymentService: BillPaymentService,
+    private readonly lateFeeService: BillLateFeeService,
+    private readonly receiptService: BillReceiptService,
+  ) {}
 
   async create(dto: CreateBillDto) {
     // 验证合同存在

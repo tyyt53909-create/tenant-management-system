@@ -13,6 +13,8 @@ import { EmailOtpService } from './email-otp.service.js';
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
 import { AuthService } from './auth.service.js';
 import * as bcrypt from 'bcrypt';
+import { LOGIN_ATTEMPT_STORE, MemoryLoginAttemptStore } from './login-attempt.store.js';
+import { FederatedAuthService } from './federated-auth.service.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -92,6 +94,21 @@ describe('AuthController', () => {
             },
             $transaction: vi.fn(),
           },
+        },
+        // QLT-02 / T288：登录失败计数与 FederatedAuthService 改为必填
+        { provide: LOGIN_ATTEMPT_STORE, useValue: new MemoryLoginAttemptStore() },
+        {
+          // 用真实实现装配（与改动前 AuthService 内部 new 的行为一致），
+          // 这样 Google / 邮箱验证码用例仍然验证真实业务分支。
+          provide: FederatedAuthService,
+          useFactory: (
+            prisma: PrismaService,
+            google: GoogleAuthService,
+            otp: EmailOtpService,
+            jwt: JwtAuthService,
+            invite: InviteCodeService,
+          ) => new FederatedAuthService(prisma, google, otp, jwt, invite),
+          inject: [PrismaService, GoogleAuthService, EmailOtpService, JwtAuthService, InviteCodeService],
         },
         // Cookie 的 Secure 标志由 ConfigService 决定（生产环境 true）
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'development' }) },

@@ -4,6 +4,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PublicUtilitiesService } from './public-utilities.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { MeterPriceService } from '../meters/meter-price.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { ConfigService } from '@nestjs/config';
 
 class UniqueViolation extends Error {
   code = 'P2002';
@@ -40,6 +43,14 @@ describe('PublicUtilitiesService', () => {
         PublicUtilitiesService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: audit },
+        // QLT-02 / T288：计价服务改为必填
+        {
+          provide: MeterPriceService,
+          useValue: new MeterPriceService(
+            prisma as never,
+            new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
+          ),
+        },
       ],
     }).compile();
     service = moduleRef.get(PublicUtilitiesService);

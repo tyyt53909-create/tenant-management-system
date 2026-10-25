@@ -8,15 +8,17 @@ import { NotificationsGateway } from './notifications.gateway.js';
 
 @Injectable()
 export class NotificationsService {
-  private readonly dispatcher: NotificationDispatcher;
-
+  /**
+   * 渠道调度器由容器注入（QLT-02 / T288）。
+   * 之前 `?? NotificationDispatcher.createDefault(prisma)` 会在模块漏注册时
+   * 现场 new 一套渠道，导致测试替身失效、也无法在部署时替换渠道实现。
+   * `NotificationsGateway` 仍可缺省：Worker / 单测进程里没有 WebSocket server。
+   */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() dispatcher?: NotificationDispatcher,
+    private readonly dispatcher: NotificationDispatcher,
     @Optional() private readonly gateway?: NotificationsGateway,
-  ) {
-    this.dispatcher = dispatcher ?? NotificationDispatcher.createDefault(prisma);
-  }
+  ) {}
 
   async create(dto: CreateNotificationDto) {
     const user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
