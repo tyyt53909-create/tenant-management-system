@@ -485,6 +485,20 @@ export class BillsService {
   }
 
   /**
+   * 单笔收款记录收据凭证（支持作废状态与防伪码）
+   */
+  async getPaymentReceipt(billId: string, paymentId: string, tenantId?: string) {
+    return this.receiptService.getPaymentReceipt(billId, paymentId, tenantId);
+  }
+
+  /**
+   * 生成收据 PDF 二进制文档流
+   */
+  async generateReceiptPdf(billId: string, paymentId?: string, tenantId?: string) {
+    return this.receiptService.generateReceiptPdf(billId, paymentId, tenantId);
+  }
+
+  /**
    * 单据快速识别与智能匹配（支持粘贴文本、微信单据码、单号识别）
    */
   async recognizeVoucher(rawInput: string) {

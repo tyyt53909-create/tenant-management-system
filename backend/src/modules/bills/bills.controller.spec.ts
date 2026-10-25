@@ -24,6 +24,9 @@ describe('BillsController (T293 / T294 / PAY-01 / PAY-02)', () => {
       findPayments: vi.fn(),
       addLateFee: vi.fn(),
       findLateFees: vi.fn(),
+      getReceipt: vi.fn(),
+      getPaymentReceipt: vi.fn(),
+      generateReceiptPdf: vi.fn(),
     };
     clock = {
       todayUtc: vi.fn(),
@@ -101,5 +104,49 @@ describe('BillsController (T293 / T294 / PAY-01 / PAY-02)', () => {
 
     await controller.findPayments('b1');
     expect(billsService.findPayments).toHaveBeenCalledWith('b1');
+  });
+
+  describe('receipts and pdf export', () => {
+    it('getReceipt 委托 billsService 并传递租客 tenantId', async () => {
+      billsService.getReceipt.mockResolvedValue({ receiptNumber: 'RCP-1' });
+      const userParam = { user: { id: 'u1', role: 'TENANT', tenantId: 't1' } } as any;
+      const res = await controller.getReceipt(userParam, 'b1');
+      expect(res).toEqual({ receiptNumber: 'RCP-1' });
+      expect(billsService.getReceipt).toHaveBeenCalledWith('b1', 't1');
+    });
+
+    it('getReceiptPdf 导出账单收据 PDF 响应流', async () => {
+      const mockPdf = Buffer.from('%PDF-1.4 test %%EOF');
+      billsService.generateReceiptPdf.mockResolvedValue(mockPdf);
+      const userParam = { user: { id: 'u1', role: 'ADMIN' } } as any;
+      const res = { setHeader: vi.fn(), end: vi.fn() } as any;
+
+      await controller.getReceiptPdf(userParam, 'b1', res);
+      expect(billsService.generateReceiptPdf).toHaveBeenCalledWith('b1', undefined, undefined);
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'inline; filename="receipt-b1.pdf"');
+      expect(res.end).toHaveBeenCalledWith(mockPdf);
+    });
+
+    it('getPaymentReceipt 委托 billsService 并校验租客身份', async () => {
+      billsService.getPaymentReceipt.mockResolvedValue({ receiptNumber: 'R1' });
+      const userParam = { user: { id: 'u1', role: 'TENANT', tenantId: 't1' } } as any;
+      const res = await controller.getPaymentReceipt(userParam, 'b1', 'p1');
+      expect(res).toEqual({ receiptNumber: 'R1' });
+      expect(billsService.getPaymentReceipt).toHaveBeenCalledWith('b1', 'p1', 't1');
+    });
+
+    it('getPaymentReceiptPdf 导出单笔收款收据 PDF 响应流', async () => {
+      const mockPdf = Buffer.from('%PDF-1.4 test payment %%EOF');
+      billsService.generateReceiptPdf.mockResolvedValue(mockPdf);
+      const userParam = { user: { id: 'u1', role: 'TENANT', tenantId: 't1' } } as any;
+      const res = { setHeader: vi.fn(), end: vi.fn() } as any;
+
+      await controller.getPaymentReceiptPdf(userParam, 'b1', 'p1', res);
+      expect(billsService.generateReceiptPdf).toHaveBeenCalledWith('b1', 'p1', 't1');
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'inline; filename="receipt-p1.pdf"');
+      expect(res.end).toHaveBeenCalledWith(mockPdf);
+    });
   });
 });
