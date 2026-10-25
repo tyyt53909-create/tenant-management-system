@@ -60,8 +60,9 @@ jobs:
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       ALLOW_INTEGRATION_RESET: "true"
-      INTEGRATION_ADMIN_DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
-      INTEGRATION_DATABASE_URL: postgresql://integration_tester:integration_tester_password@localhost:5432/test_db?schema=public
+      # psql 不认识 Prisma 专属的 ?schema= 参数，psql 用的 URL 不能带。
+      INTEGRATION_ADMIN_DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+      INTEGRATION_DATABASE_URL: postgresql://integration_tester:integration_tester_password@localhost:5432/test_db
       INTEGRATION_DATABASE_MARKER: ci-integration-marker-t316
       INTEGRATION_TESTER_PASSWORD: integration_tester_password
       INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/1
