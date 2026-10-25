@@ -10,6 +10,8 @@ const openApiPath = resolve(process.cwd(), 'openapi.json');
 const frontendTypesPath = resolve(process.cwd(), '../frontend-admin/src/types/api.generated.ts');
 
 async function main() {
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'openapi-export-jwt-secret-min-32-bytes!';
+  process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef';
   const check = process.argv.includes('--check');
   const app = await NestFactory.create(AppModule, { logger: ['error'] });
   app.setGlobalPrefix('api');

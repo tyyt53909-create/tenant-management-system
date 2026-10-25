@@ -20,6 +20,9 @@ describe('TenantsController', () => {
             update: vi.fn(),
             remove: vi.fn(),
             revealIdNumber: vi.fn(),
+            getMyRegistration: vi.fn(),
+            submitMyRegistration: vi.fn(),
+            getMyOverview: vi.fn(),
           },
         },
       ],
@@ -157,6 +160,39 @@ describe('TenantsController', () => {
 
       expect(result.message).toBe('租客已删除');
       expect(service.remove).toHaveBeenCalledWith('tenant-123');
+    });
+  });
+
+  describe('tenant self-service endpoints (LSE-05 / T297)', () => {
+    it('getMyRegistration 委托 tenantsService', async () => {
+      vi.spyOn(service, 'getMyRegistration').mockResolvedValue({ status: 'PENDING' } as any);
+      const userParam = { user: { id: 'u1', role: 'TENANT', tenantId: 't1' } } as any;
+      const res = await controller.getMyRegistration(userParam);
+      expect(res).toEqual({ status: 'PENDING' });
+      expect(service.getMyRegistration).toHaveBeenCalledWith('t1');
+    });
+
+    it('submitMyRegistration 传递租客身份与审计上下文', async () => {
+      vi.spyOn(service, 'submitMyRegistration').mockResolvedValue({ message: '提交成功' } as any);
+      const userParam = { user: { id: 'u1', role: 'TENANT', tenantId: 't1' } } as any;
+      const req = { ip: '127.0.0.1', headers: { 'user-agent': 'agent' } } as any;
+      const dto = { idType: 'ID_CARD' as any, idNumber: '110101199001011234' };
+
+      const res = await controller.submitMyRegistration(req, userParam, dto);
+      expect(res).toEqual({ message: '提交成功' });
+      expect(service.submitMyRegistration).toHaveBeenCalledWith('t1', dto, {
+        userId: 'u1',
+        ip: '127.0.0.1',
+        userAgent: 'agent',
+      });
+    });
+
+    it('getMyOverview 聚合租客总览', async () => {
+      vi.spyOn(service, 'getMyOverview').mockResolvedValue({ bound: true } as any);
+      const userParam = { user: { id: 'u1', role: 'TENANT', tenantId: 't1' } } as any;
+      const res = await controller.getMyOverview(userParam);
+      expect(res).toEqual({ bound: true });
+      expect(service.getMyOverview).toHaveBeenCalledWith('u1', 't1');
     });
   });
 });

@@ -11,6 +11,7 @@ export * from './maintenance.js'
 export * from './prepay.js'
 export * from './cleaning.js'
 export * from './notifications.js'
+export * from './tenants.js'
 
 // 亦支持领域命名空间导入
 import * as auth from './auth.js'
@@ -20,6 +21,7 @@ import * as maintenance from './maintenance.js'
 import * as prepay from './prepay.js'
 import * as cleaning from './cleaning.js'
 import * as notifications from './notifications.js'
+import * as tenants from './tenants.js'
 
 export const api = {
   auth,
@@ -29,6 +31,7 @@ export const api = {
   prepay,
   cleaning,
   notifications,
+  tenants,
 }
 
 export default api

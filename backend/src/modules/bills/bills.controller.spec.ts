@@ -27,6 +27,7 @@ describe('BillsController (T293 / T294 / PAY-01 / PAY-02)', () => {
       getReceipt: vi.fn(),
       getPaymentReceipt: vi.fn(),
       generateReceiptPdf: vi.fn(),
+      findMyReceipts: vi.fn(),
     };
     clock = {
       todayUtc: vi.fn(),
@@ -147,6 +148,14 @@ describe('BillsController (T293 / T294 / PAY-01 / PAY-02)', () => {
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
       expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'inline; filename="receipt-p1.pdf"');
       expect(res.end).toHaveBeenCalledWith(mockPdf);
+    });
+
+    it('findMyReceipts 委托 billsService 查询租客收据列表', async () => {
+      billsService.findMyReceipts.mockResolvedValue([{ receiptNumber: 'R1' }]);
+      const userParam = { user: { id: 'u1', role: 'TENANT', tenantId: 't1' } } as any;
+      const res = await controller.findMyReceipts(userParam);
+      expect(res).toEqual([{ receiptNumber: 'R1' }]);
+      expect(billsService.findMyReceipts).toHaveBeenCalledWith('t1');
     });
   });
 });

@@ -499,6 +499,13 @@ export class BillsService {
   }
 
   /**
+   * 租客读取名下全部收款收据明细（LSE-05 / T297）
+   */
+  async findMyReceipts(tenantId?: string) {
+    return this.receiptService.findMyReceipts(tenantId);
+  }
+
+  /**
    * 单据快速识别与智能匹配（支持粘贴文本、微信单据码、单号识别）
    */
   async recognizeVoucher(rawInput: string) {

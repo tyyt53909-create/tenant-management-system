@@ -5,6 +5,7 @@ import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
 import { QueryTenantsDto } from './dto/query-tenants.dto.js';
 import { UpsertTenantRegistrationDto } from './dto/upsert-tenant-registration.dto.js';
+import { SubmitTenantRegistrationDto } from './dto/submit-tenant-registration.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -31,6 +32,46 @@ export class TenantsController {
   @Roles('ADMIN')
   findAll(@Query() query: QueryTenantsDto) {
     return this.tenantsService.findAll(query);
+  }
+
+  // 租客自助中心总览数据看板（T297 / LSE-05）
+  @Get('me/overview')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT')
+  getMyOverview(@CurrentUser() userParam: CurrentUserParam) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.tenantId ?? '';
+    const userId = user.id ?? user.userId ?? '';
+    return this.tenantsService.getMyOverview(userId, tenantId);
+  }
+
+  // 租客查看本人的实名登记状态（T297 / LSE-05）
+  @Get('me/registration')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT')
+  getMyRegistration(@CurrentUser() userParam: CurrentUserParam) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.tenantId ?? '';
+    return this.tenantsService.getMyRegistration(tenantId);
+  }
+
+  // 租客自助提交实名登记（T297 / LSE-05）
+  @Post('me/registration')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT')
+  submitMyRegistration(
+    @Request() req: AuditRequestContext,
+    @CurrentUser() userParam: CurrentUserParam,
+    @Body() dto: SubmitTenantRegistrationDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.tenantId ?? '';
+    const userId = user.id ?? user.userId ?? '';
+    return this.tenantsService.submitMyRegistration(tenantId, dto, {
+      userId,
+      ip: req.ip ?? 'unknown',
+      userAgent: req.headers?.['user-agent'] ?? 'unknown',
+    });
   }
 
   @Get(':id/id-number')

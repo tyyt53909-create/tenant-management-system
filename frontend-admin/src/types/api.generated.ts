@@ -748,6 +748,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tenants/me/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TenantsController_getMyOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tenants/me/registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TenantsController_getMyRegistration"];
+        put?: never;
+        post: operations["TenantsController_submitMyRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tenants/{id}/id-number": {
         parameters: {
             query?: never;
@@ -1579,6 +1611,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["BillsController_findMy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/bills/my/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["BillsController_findMyReceipts"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2767,6 +2815,14 @@ export interface components {
              */
             idType?: "OTHER" | "ID_CARD" | "PASSPORT";
             idNumber?: string;
+        };
+        SubmitTenantRegistrationDto: {
+            /** @enum {string} */
+            idType: "OTHER" | "ID_CARD" | "PASSPORT";
+            idNumber: string;
+            realName?: string;
+            emergencyContact?: string;
+            emergencyPhone?: string;
         };
         UpsertTenantRegistrationDto: {
             /** @enum {string} */
@@ -5033,6 +5089,103 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateTenantDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    TenantsController_getMyOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    TenantsController_getMyRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    TenantsController_submitMyRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitTenantRegistrationDto"];
             };
         };
         responses: {
@@ -7578,6 +7731,37 @@ export interface operations {
                 startDate?: string;
                 endDate?: string;
             };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    BillsController_findMyReceipts: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;

@@ -382,6 +382,15 @@
     ]
   },
   {
+    "method": "GET",
+    "path": "/api/bills/my/receipts",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
     "method": "POST",
     "path": "/api/bills/recognize",
     "public": false,
@@ -1542,6 +1551,30 @@
     "public": false,
     "roles": [
       "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tenants/me/overview",
+    "public": false,
+    "roles": [
+      "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/tenants/me/registration",
+    "public": false,
+    "roles": [
+      "TENANT"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/tenants/me/registration",
+    "public": false,
+    "roles": [
+      "TENANT"
     ]
   }
 ]

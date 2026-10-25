@@ -7,6 +7,7 @@ import { CreateTenantDto } from './dto/create-tenant.dto.js';
 import { UpdateTenantDto } from './dto/update-tenant.dto.js';
 import { QueryTenantsDto } from './dto/query-tenants.dto.js';
 import { UpsertTenantRegistrationDto } from './dto/upsert-tenant-registration.dto.js';
+import { SubmitTenantRegistrationDto } from './dto/submit-tenant-registration.dto.js';
 import { assertRegistrationTransition } from './tenant-registration.js';
 import { normalizeEmail } from '../../common/utils/normalize-contact.js';
 
@@ -449,6 +450,287 @@ export class TenantsService {
     });
 
     return this.registrationView(saved);
+  }
+
+  /**
+   * 租客读取本人的居住登记（LSE-05 / T297）。未登记时返回 NOT_REGISTERED。
+   */
+  async getMyRegistration(tenantId: string) {
+    if (!tenantId) {
+      return {
+        tenantId: null,
+        idType: null,
+        idNumberMasked: null,
+        status: 'NOT_REGISTERED' as RegistrationStatus,
+        registeredAt: null,
+        notes: null,
+      };
+    }
+    const registration = await this.prisma.tenantRegistration.findUnique({ where: { tenantId } });
+    if (!registration) {
+      return {
+        tenantId,
+        idType: null,
+        idNumberMasked: null,
+        status: 'NOT_REGISTERED' as RegistrationStatus,
+        registeredAt: null,
+        notes: null,
+      };
+    }
+    return this.registrationView(registration);
+  }
+
+  /**
+   * 租客自助提交居住登记认证（LSE-05 / T297）。
+   * 状态固定进入 PENDING 等待管家审核；已审核通过的登记禁止租客私自篡改。
+   */
+  async submitMyRegistration(
+    tenantId: string,
+    dto: SubmitTenantRegistrationDto,
+    actor: { userId: string; ip: string; userAgent: string },
+  ) {
+    if (!tenantId) {
+      throw new NotFoundException('租客档案不存在，请先绑定房源邀请码');
+    }
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('租客档案不存在');
+
+    const existing = await this.prisma.tenantRegistration.findUnique({ where: { tenantId } });
+    if (existing && existing.status === 'REGISTERED') {
+      throw new ConflictException('您已完成实名认证，如需变更证件信息请联系专属管家');
+    }
+
+    const idNumberHash = this.crypto.hashIdNumber(dto.idNumber);
+    await this.assertIdNumberAvailable(idNumberHash, tenantId);
+    const encryptedIdNumber = this.crypto.encrypt(dto.idNumber);
+
+    const saved = await this.prisma.$transaction(async (tx) => {
+      // 租客更新真实姓名或紧急联系方式
+      if (dto.realName || dto.emergencyContact || dto.emergencyPhone) {
+        await tx.tenant.update({
+          where: { id: tenantId },
+          data: {
+            ...(dto.realName ? { name: dto.realName.trim() } : {}),
+            ...(dto.emergencyContact !== undefined ? { emergencyContact: dto.emergencyContact } : {}),
+            ...(dto.emergencyPhone !== undefined ? { emergencyPhone: dto.emergencyPhone } : {}),
+          },
+        });
+      }
+
+      const row = existing
+        ? await tx.tenantRegistration.update({
+            where: { tenantId },
+            data: {
+              idType: dto.idType,
+              idNumber: encryptedIdNumber,
+              idNumberHash,
+              status: 'PENDING',
+              registeredAt: null,
+              notes: '租客端自助提交实名认证',
+            },
+          })
+        : await tx.tenantRegistration.create({
+            data: {
+              tenantId,
+              idType: dto.idType,
+              idNumber: encryptedIdNumber,
+              idNumberHash,
+              status: 'PENDING',
+              registeredAt: null,
+              notes: '租客端自助提交实名认证',
+            },
+          });
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId || null,
+          action: 'SUBMIT_TENANT_REGISTRATION',
+          entityType: 'TenantRegistration',
+          entityId: row.id,
+          changes: {
+            tenantId,
+            idType: dto.idType,
+            status: 'PENDING',
+            changedFields: ['idType', 'idNumber'],
+          } as never,
+          ip: actor.ip || 'unknown',
+          userAgent: actor.userAgent || 'unknown',
+        },
+      });
+
+      return row;
+    });
+
+    return {
+      message: '实名登记提交成功，请等待管家审核',
+      registration: this.registrationView(saved),
+    };
+  }
+
+  /**
+   * 租客自助中心总览数据聚合（LSE-05 / T297）
+   */
+  async getMyOverview(userId: string, tenantId: string) {
+    if (!tenantId) {
+      return {
+        bound: false,
+        message: '尚未绑定房源邀请码，请先绑定房源',
+        tenant: null,
+        registration: {
+          status: 'NOT_REGISTERED' as RegistrationStatus,
+          idNumberMasked: null,
+        },
+        contract: null,
+        bills: {
+          pendingCount: 0,
+          pendingAmount: 0,
+          pendingAmountYuan: '0.00',
+        },
+        prepay: {
+          hasAccount: false,
+          balance: 0,
+          balanceYuan: '0.00',
+        },
+        maintenance: {
+          activeCount: 0,
+          latestItem: null,
+        },
+        unreadNotificationsCount: 0,
+      };
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: {
+        registration: true,
+        contracts: {
+          where: { status: 'ACTIVE' },
+          include: {
+            room: {
+              include: {
+                building: true,
+              },
+            },
+          },
+          orderBy: { startDate: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('租客档案不存在');
+    }
+
+    const activeContract = tenant.contracts[0] || null;
+    let daysRemaining: number | null = null;
+    if (activeContract?.endDate) {
+      const now = new Date();
+      const end = new Date(activeContract.endDate);
+      const diffTime = end.getTime() - now.getTime();
+      daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+    }
+
+    // 统计待缴账单
+    const pendingBills = await this.prisma.bill.findMany({
+      where: {
+        contract: { tenantId },
+        status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+      },
+      select: {
+        id: true,
+        amount: true,
+        paidAmount: true,
+      },
+    });
+    const pendingCount = pendingBills.length;
+    const pendingAmount = pendingBills.reduce((sum, b) => sum + Math.max(0, b.amount - b.paidAmount), 0);
+
+    // 查询预付账户
+    const prepayAccount = await this.prisma.prepayAccount.findFirst({
+      where: { tenantId },
+      select: { balanceCache: true },
+    });
+
+    // 查询处理中的报修工单
+    const activeMaintenance = await this.prisma.maintenanceRequest.findMany({
+      where: {
+        tenantId,
+        status: { in: ['SUBMITTED', 'ACKNOWLEDGED', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_CONFIRM'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    });
+
+    // 查询未读通知数
+    const unreadNotificationsCount = await this.prisma.notification.count({
+      where: {
+        userId,
+        isRead: false,
+      },
+    });
+
+    return {
+      bound: true,
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        phone: tenant.phone,
+        email: tenant.email,
+        emergencyContact: tenant.emergencyContact,
+        emergencyPhone: tenant.emergencyPhone,
+      },
+      registration: tenant.registration
+        ? this.registrationView(tenant.registration)
+        : {
+            tenantId,
+            idType: null,
+            idNumberMasked: null,
+            status: 'NOT_REGISTERED' as RegistrationStatus,
+            registeredAt: null,
+            notes: null,
+          },
+      contract: activeContract
+        ? {
+            id: activeContract.id,
+            contractNumber: activeContract.contractNumber,
+            roomNumber: activeContract.room.roomNumber,
+            buildingName: activeContract.room.building.name,
+            buildingAddress: activeContract.room.building.address,
+            landlordName: (activeContract.room.building.metadata as any)?.landlordName || '栖居管家',
+            landlordPhone: (activeContract.room.building.metadata as any)?.landlordPhone || '',
+            startDate: activeContract.startDate,
+            endDate: activeContract.endDate,
+            rentAmount: activeContract.rentAmount,
+            depositAmount: activeContract.depositAmount,
+            paymentCycle: activeContract.paymentCycle,
+            daysRemaining,
+          }
+        : null,
+      bills: {
+        pendingCount,
+        pendingAmount,
+        pendingAmountYuan: (pendingAmount / 100).toFixed(2),
+      },
+      prepay: {
+        hasAccount: prepayAccount !== null,
+        balance: prepayAccount?.balanceCache ?? 0,
+        balanceYuan: ((prepayAccount?.balanceCache ?? 0) / 100).toFixed(2),
+      },
+      maintenance: {
+        activeCount: activeMaintenance.length,
+        latestItem: activeMaintenance[0]
+          ? {
+              id: activeMaintenance[0].id,
+              title: activeMaintenance[0].title,
+              category: activeMaintenance[0].category,
+              status: activeMaintenance[0].status,
+              createdAt: activeMaintenance[0].createdAt,
+            }
+          : null,
+      },
+      unreadNotificationsCount,
+    };
   }
 
   async remove(id: string) {

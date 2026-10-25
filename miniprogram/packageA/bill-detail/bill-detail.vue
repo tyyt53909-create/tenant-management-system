@@ -2,7 +2,7 @@
   <view class="q-page page-safe-bottom">
     <text class="q-eyebrow">BILL DETAILS / 费用明细</text>
     <text class="q-title">每一笔，清楚可见。</text>
-    <text class="q-description">核对账单，生成单据发给房东即可快速识别核销。</text>
+    <text class="q-description">支持微信线上支付直缴；亦可生成转账单据发给管家自动核销。</text>
 
     <view v-if="blocked" class="q-surface q-empty" style="margin-top: 24rpx;">
       <text class="q-empty-title">功能已被暂停</text>
@@ -27,7 +27,34 @@
       <view class="q-detail-row"><text>金额大写</text><text class="chinese-uppercase">{{ voucherData ? voucherData.chineseUppercase : '零元整' }}</text></view>
     </view>
 
-    <!-- 线下转账与缴费单据卡片 (核心功能) -->
+    <!-- 线上微信支付直缴卡片 (PAY-01 / LSE-05) -->
+    <view v-if="bill && !blocked && isUnpaid" class="q-surface pay-online-section">
+      <view class="section-header">
+        <text class="section-title">⚡ 微信支付线上直缴</text>
+        <text class="section-subtitle">支持微信零钱、信用卡与分付，实时到账自动开具防伪电子收据</text>
+      </view>
+      <button class="pay-btn-green" :loading="paying" @tap="handleWechatPay">
+        {{ paying ? '正在拉起微信支付…' : `💳 微信支付直缴 ¥ ${voucherData ? voucherData.amountToPayYuan : '0.00'}` }}
+      </button>
+    </view>
+
+    <!-- 官方电子收款收据卡片 (PAY-03 / LSE-05) -->
+    <view v-if="bill && !blocked && hasPaid" class="q-surface receipt-section">
+      <view class="section-header">
+        <text class="section-title">📜 官方电子收款收据</text>
+        <text class="section-subtitle">本账单已开具官方防伪收据凭证，支持在线验真与 PDF 下载保存</text>
+      </view>
+      <view class="receipt-actions-row">
+        <button class="q-btn-primary" @tap="handleViewReceipt">
+          📄 查看电子收据
+        </button>
+        <button class="q-btn-secondary" @tap="handleDownloadPdf">
+          📥 下载 PDF 凭单
+        </button>
+      </view>
+    </view>
+
+    <!-- 线下转账与缴费单据卡片 (备选功能) -->
     <view v-if="bill && !blocked" class="q-surface voucher-section">
       <view class="section-header">
         <text class="section-title">缴费单据与转账核销</text>
@@ -82,6 +109,47 @@
       <text class="q-description">转账后请将单据图片或文本发给房东微信。房东在管理后台粘贴后，系统将自动识别单据编号与金额完成核销，并生成正式电子收据。</text>
     </view>
 
+    <!-- 电子收据详情弹窗 (Modal) -->
+    <view v-if="showReceiptModal" class="poster-modal-mask" @tap="closeReceiptModal">
+      <view class="receipt-modal-card" @tap.stop>
+        <view class="pm-header">
+          <text class="pm-title">栖居房屋租赁 · 电子收款收据</text>
+          <text class="pm-close" @tap="closeReceiptModal">×</text>
+        </view>
+        <scroll-view scroll-y class="receipt-scroll" v-if="receiptData">
+          <view class="receipt-badge-row">
+            <text class="receipt-official-seal">栖居官方凭证</text>
+            <text class="receipt-verify-code">防伪校验码: {{ receiptData.verifyCode }}</text>
+          </view>
+          <view class="receipt-content-box">
+            <view class="q-detail-row"><text>收据编号</text><text class="mono-text">{{ receiptData.receiptNumber }}</text></view>
+            <view class="q-detail-row"><text>关联账单</text><text class="mono-text">{{ receiptData.billNumber }}</text></view>
+            <view class="q-detail-row"><text>承租租客</text><text>{{ receiptData.tenantName }}</text></view>
+            <view class="q-detail-row"><text>承租房源</text><text>{{ receiptData.buildingName }} {{ receiptData.roomNumber }}</text></view>
+            <view class="q-detail-row"><text>缴款时间</text><text>{{ receiptData.paidAt ? receiptData.paidAt.slice(0, 19).replace('T', ' ') : '—' }}</text></view>
+            <view class="q-detail-row"><text>金额合计</text><text class="receipt-money">¥ {{ receiptData.totalAmountYuan }}</text></view>
+            <view class="q-detail-row"><text>大写金额</text><text class="chinese-uppercase">{{ receiptData.amountInChinese }}</text></view>
+          </view>
+          <view v-if="receiptData.payments && receiptData.payments.length" class="receipt-payments-block">
+            <text class="receipt-sub-title">入账支付流水</text>
+            <view v-for="p in receiptData.payments" :key="p.id" class="receipt-payment-item">
+              <view class="rp-left">
+                <text class="rp-method">{{ p.paymentMethodLabel || p.paymentMethod }}</text>
+                <text class="rp-time">{{ p.paidAt ? p.paidAt.slice(0, 16).replace('T', ' ') : '' }}</text>
+              </view>
+              <view class="rp-right">
+                <text class="rp-amount">¥ {{ p.amountYuan }}</text>
+                <text v-if="p.status === 'VOIDED'" class="q-pill danger">已作废</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+        <view class="pm-footer">
+          <button class="q-btn-primary" @tap="handleDownloadPdf">📥 下载并保存收据 PDF</button>
+        </view>
+      </view>
+    </view>
+
     <!-- 单据图片生成与预览弹窗 (Modal) -->
     <view v-if="showPosterModal" class="poster-modal-mask" @tap="closePosterModal">
       <view class="poster-modal-card" @tap.stop>
@@ -112,7 +180,13 @@
 </template>
 
 <script>
-import { getBillDetail } from '../../api/index.js'
+import {
+  getBillDetail,
+  payBillWithWechatJsapi,
+  queryWechatPaymentStatus,
+  getBillReceipt,
+  downloadBillReceiptPdf,
+} from '../../api/index.js'
 import { ensureTenantSession, hasCapability } from '../../utils/session.js'
 import { getLandlordContact, copyToClipboard, makePhoneCall } from '../../utils/contact.js'
 import {
@@ -133,6 +207,9 @@ export default {
       generatingPoster: false,
       posterFilePath: '',
       showPosterModal: false,
+      paying: false,
+      showReceiptModal: false,
+      receiptData: null,
     }
   },
   computed: {
@@ -153,6 +230,14 @@ export default {
           CANCELLED: '已取消',
         }[this.bill?.status] || ''
       )
+    },
+    isUnpaid() {
+      if (!this.bill) return false
+      const unpaid = Math.max(0, (this.bill.amount || 0) - (this.bill.paidAmount || 0))
+      return unpaid > 0 && this.bill.status !== 'PAID' && this.bill.status !== 'CANCELLED'
+    },
+    hasPaid() {
+      return (this.bill?.paidAmount || 0) > 0 || this.bill?.status === 'PAID'
     },
     landlordContact() {
       if (!this.bill) return getLandlordContact()
@@ -194,6 +279,87 @@ export default {
         this.loading = false
       }
     },
+    async handleWechatPay() {
+      if (this.paying || !this.bill) return
+      const unpaid = Math.max(0, (this.bill.amount || 0) - (this.bill.paidAmount || 0))
+      if (unpaid <= 0) {
+        uni.showToast({ title: '账单已结清，无需重复支付', icon: 'none' })
+        return
+      }
+      this.paying = true
+      uni.showLoading({ title: '准备支付…' })
+      try {
+        const payParams = await payBillWithWechatJsapi(this.bill.id, { amount: unpaid })
+        uni.hideLoading()
+        await new Promise((resolve, reject) => {
+          if (typeof uni === 'undefined' || !uni.requestPayment) {
+            resolve({ mock: true })
+            return
+          }
+          uni.requestPayment({
+            provider: 'wxpay',
+            timeStamp: String(payParams.timeStamp),
+            nonceStr: payParams.nonceStr,
+            package: payParams.package,
+            signType: payParams.signType || 'RSA',
+            paySign: payParams.paySign,
+            success: resolve,
+            fail: (err) => {
+              if (err && (err.errMsg?.includes('cancel') || err.message?.includes('cancel'))) {
+                reject(new Error('用户已取消支付'))
+              } else {
+                reject(err)
+              }
+            },
+          })
+        })
+
+        if (payParams.outTradeNo) {
+          uni.showLoading({ title: '确认入账…' })
+          try {
+            await queryWechatPaymentStatus(this.bill.id, { outTradeNo: payParams.outTradeNo })
+          } catch (e) {
+            // webhook 兜底
+          }
+          uni.hideLoading()
+        }
+        uni.showToast({ title: '支付完成！', icon: 'success' })
+        await this.load()
+      } catch (err) {
+        uni.hideLoading()
+        const msg = err?.message || '发起支付失败'
+        uni.showToast({ title: msg, icon: 'none' })
+      } finally {
+        this.paying = false
+      }
+    },
+    async handleViewReceipt() {
+      if (!this.bill) return
+      uni.showLoading({ title: '加载收据…' })
+      try {
+        this.receiptData = await getBillReceipt(this.bill.id)
+        this.showReceiptModal = true
+      } catch (err) {
+        uni.showToast({ title: err?.message || '无法获取收据明细', icon: 'none' })
+      } finally {
+        uni.hideLoading()
+      }
+    },
+    closeReceiptModal() {
+      this.showReceiptModal = false
+    },
+    async handleDownloadPdf() {
+      if (!this.bill) return
+      uni.showLoading({ title: '正在导出 PDF…' })
+      try {
+        await downloadBillReceiptPdf(this.bill.id)
+        uni.showToast({ title: '已打开电子收据', icon: 'success' })
+      } catch (err) {
+        uni.showToast({ title: err?.message || '下载收据失败', icon: 'none' })
+      } finally {
+        uni.hideLoading()
+      }
+    },
     async handleGeneratePoster() {
       if (!this.voucherData) return
       this.generatingPoster = true
@@ -202,51 +368,53 @@ export default {
         const filePath = await drawVoucherPoster('voucherCanvas', this.voucherData, this)
         this.posterFilePath = filePath
         this.showPosterModal = true
-        // 自动尝试保存到相册
-        saveVoucherImage(filePath).catch(() => {})
       } catch (err) {
-        uni.showToast({ title: err?.message || '生成图片失败，请重试', icon: 'none' })
+        uni.showToast({ title: '单据生成失败，请重试', icon: 'none' })
       } finally {
         this.generatingPoster = false
         uni.hideLoading()
       }
     },
-    handleSaveImage() {
-      if (!this.posterFilePath) return
-      saveVoucherImage(this.posterFilePath)
-    },
     handleCopyText() {
       if (!this.voucherData) return
       const text = generateVoucherText(this.voucherData)
-      copyToClipboard(text, '单据摘要')
+      copyToClipboard(text, '单据文本已复制，可粘贴发给房东')
     },
     copyWechat() {
-      if (!this.landlordContact?.wechat) return
-      copyToClipboard(this.landlordContact.wechat, '房东微信号')
+      if (this.landlordContact.wechat) {
+        copyToClipboard(this.landlordContact.wechat, '房东微信已复制')
+      }
     },
     callLandlord() {
-      if (!this.landlordContact?.phone) return
-      makePhoneCall(this.landlordContact.phone)
+      if (this.landlordContact.phone) {
+        makePhoneCall(this.landlordContact.phone)
+      }
     },
     closePosterModal() {
       this.showPosterModal = false
     },
+    async handleSaveImage() {
+      if (!this.posterFilePath) return
+      await saveVoucherImage(this.posterFilePath)
+    },
     back() {
-      uni.switchTab({ url: '/pages/bills/bills' })
+      uni.navigateBack()
     },
   },
 }
 </script>
 
 <style scoped>
+.page-safe-bottom {
+  padding-bottom: 80rpx;
+}
 .bill-hero {
   text-align: center;
-  padding: 14rpx 0 24rpx;
+  padding: 16rpx 0 24rpx;
 }
 .bill-label {
-  display: block;
-  font-size: 24rpx;
-  color: #817e76;
+  font-size: 26rpx;
+  color: #7d776d;
 }
 .bill-hero .q-money {
   display: block;
@@ -275,6 +443,38 @@ export default {
 }
 .q-outline {
   margin-top: 28rpx;
+}
+
+/* 微信支付直缴 */
+.pay-online-section {
+  margin-top: 24rpx;
+  background: #f4fbf5;
+  border: 1rpx solid #d2edd6;
+}
+.pay-btn-green {
+  background: #07c160;
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: 14rpx;
+  padding: 22rpx 0;
+  line-height: 1;
+  box-shadow: 0 4rpx 12rpx rgba(7, 193, 96, 0.2);
+}
+
+/* 官方电子收据卡片 */
+.receipt-section {
+  margin-top: 24rpx;
+  background: #fbf9f5;
+  border: 1rpx solid #e8e2d5;
+}
+.receipt-actions-row {
+  display: flex;
+  gap: 16rpx;
+}
+.receipt-actions-row .q-btn-primary,
+.receipt-actions-row .q-btn-secondary {
+  flex: 1;
 }
 
 /* 凭单卡片区 */
@@ -424,7 +624,7 @@ export default {
   pointer-events: none;
 }
 
-/* 海报弹窗 */
+/* 弹窗通用 */
 .poster-modal-mask {
   position: fixed;
   top: 0;
@@ -438,7 +638,8 @@ export default {
   z-index: 999;
   padding: 40rpx;
 }
-.poster-modal-card {
+.poster-modal-card,
+.receipt-modal-card {
   width: 100%;
   max-width: 620rpx;
   background: #ffffff;
@@ -477,15 +678,91 @@ export default {
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
 }
 .pm-footer {
-  padding: 24rpx 32rpx 32rpx;
-  background: #faf8f5;
+  padding: 24rpx 32rpx;
   border-top: 1rpx solid #f0ece3;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
 .pm-hint {
-  display: block;
-  text-align: center;
   font-size: 21rpx;
   color: #8c867c;
-  margin-top: 14rpx;
+  text-align: center;
+}
+
+/* 电子收据弹窗特殊样式 */
+.receipt-scroll {
+  padding: 24rpx 32rpx;
+  max-height: 60vh;
+  box-sizing: border-box;
+}
+.receipt-badge-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+.receipt-official-seal {
+  background: #b24128;
+  color: #fff;
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+  font-weight: 600;
+}
+.receipt-verify-code {
+  font-size: 20rpx;
+  color: #7d766b;
+  font-family: monospace;
+}
+.receipt-content-box {
+  background: #fbf9f5;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  margin-bottom: 20rpx;
+}
+.receipt-money {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #272421;
+}
+.mono-text {
+  font-family: monospace;
+}
+.receipt-sub-title {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #3b3630;
+  margin-bottom: 12rpx;
+}
+.receipt-payment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12rpx 0;
+  border-bottom: 1rpx solid #f1ece4;
+}
+.rp-left {
+  display: flex;
+  flex-direction: column;
+}
+.rp-method {
+  font-size: 24rpx;
+  color: #272421;
+}
+.rp-time {
+  font-size: 20rpx;
+  color: #8a8377;
+}
+.rp-right {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+.rp-amount {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #272421;
 }
 </style>
