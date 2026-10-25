@@ -8,6 +8,8 @@ import { QueryBillsDto } from './dto/query-bills.dto.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { VoidPaymentDto } from './dto/void-payment.dto.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
+import { WechatJsapiPayDto, WechatPayQueryDto } from './dto/wechat-pay.dto.js';
+import { WechatPaymentService } from './payment/wechat-payment.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -21,6 +23,7 @@ export class BillsController {
   constructor(
     private readonly billsService: BillsService,
     private readonly clock: BusinessClock,
+    private readonly wechatPaymentService: WechatPaymentService,
   ) {}
 
   @Post()
@@ -169,5 +172,31 @@ export class BillsController {
   @Roles('ADMIN')
   remove(@Param('id') id: string) {
     return this.billsService.remove(id);
+  }
+
+  // 微信支付 JSAPI 下单（租客/管理者）
+  @Post(':id/pay/wechat-jsapi')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  payWithWechatJsapi(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto?: WechatJsapiPayDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.wechatPaymentService.createJsapiOrder(id, user.userId, user.role, dto);
+  }
+
+  // 微信支付主动查单补单（租客/管理者）
+  @Post(':id/pay/wechat-query')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  queryWechatPayment(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto: WechatPayQueryDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.wechatPaymentService.queryAndSyncPayment(id, user.userId, user.role, dto);
   }
 }

@@ -271,6 +271,24 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/api/bills/:id/pay/wechat-jsapi",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/bills/:id/pay/wechat-query",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/api/bills/:id/payments",
     "public": false,
@@ -986,6 +1004,12 @@
     "method": "POST",
     "path": "/api/notifications/wechat/subscribe-report",
     "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/payments/wechat/notify",
+    "public": true,
     "roles": []
   },
   {

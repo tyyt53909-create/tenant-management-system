@@ -33,3 +33,31 @@ export const getMyBills = (params) => {
 export const getBillDetail = (id) => {
   return request.get(`/bills/${id}`)
 }
+
+/**
+ * 微信支付 JSAPI 下单
+ * @param {string} billId - 账单 ID
+ * @param {{ amount?: number }} [data]
+ * @returns {Promise<{
+ *   appId: string,
+ *   timeStamp: string,
+ *   nonceStr: string,
+ *   package: string,
+ *   signType: string,
+ *   paySign: string,
+ *   outTradeNo: string
+ * }>}
+ */
+export const payBillWithWechatJsapi = (billId, data) => {
+  return request.post(`/bills/${billId}/pay/wechat-jsapi`, data)
+}
+
+/**
+ * 微信支付状态主动查询补单
+ * @param {string} billId - 账单 ID
+ * @param {{ outTradeNo: string }} data
+ * @returns {Promise<{ synced: boolean, order: any, bill: any }>}
+ */
+export const queryWechatPaymentStatus = (billId, data) => {
+  return request.post(`/bills/${billId}/pay/wechat-query`, data)
+}
