@@ -15,10 +15,10 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | 188 warnings / 0 errors |
+| 後端 lint | ✅ pass | 196 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 137 files / 1275 tests |
-| 後端 e2e | ✅ pass | 3 files / 63 tests |
+| 後端單元測試 | ✅ pass | 137 files / 1281 tests |
+| 後端 e2e | ✅ pass | 4 files / 69 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
 | 管理後台 build | ✅ pass | exit 0 |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 真实审计 financial-audit 4 passed |
+| 整合測試 | ✅ pass | 19 files / 53 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -42,7 +42,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 8 |
+| 進行中 | 9 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -57,6 +57,7 @@
 - **T320 押金冲正与退租闭环（R07 / R08）**（active，plan FIN-03，`feature/T320-deposit-checkout`）
 - **T321 会话撤销原子化（R03 / SEC-02）**（active，plan SEC-02，`feature/T321-session-atomic`）
 - **T322 WebSocket 身份与连线生命周期（R04 / COM-02）**（active，plan COM-02，`feature/T322-websocket-lifecycle`）
+- **T323 真实财务与业务审计日志（R09 / SEC-06）**（active，plan SEC-06，`feature/T323-financial-audit`）
 
 ### 阻擋發布
 - 無
@@ -88,7 +89,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 68 | 46 | 39 | 8 | 14 |
+| 未分類 | 69 | 46 | 39 | 9 | 14 |
 
 ---
 
@@ -109,16 +110,16 @@
 
 - 資料模型：**41** 張表
 - OpenAPI 路由：**177** 條
-- 後端程式碼：**24383** 行
-- 管理後台程式碼：**31520** 行
+- 後端程式碼：**24613** 行
+- 管理後台程式碼：**31500** 行
 - 小程序程式碼：**6842** 行
 - 文件：**174** 份
 
 ### 測試
-- 後端單元：未提供
-- 後端 e2e：未提供
-- 管理後台單元：未提供
-- 小程序單元：未提供
+- 後端單元：137 files / 1281 tests
+- 後端 e2e：4 files / 69 tests
+- 管理後台單元：22 files / 112 tests
+- 小程序單元：125 tests
 
 ---
 
