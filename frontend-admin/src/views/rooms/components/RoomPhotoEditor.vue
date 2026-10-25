@@ -65,6 +65,7 @@ import {
   removeRoomPhotoAt,
   validateRoomPhotoFile,
 } from '@/utils/roomPhotos';
+import { apiErrorMessage } from '@/utils/apiError';
 
 const props = withDefaults(
   defineProps<{
@@ -105,10 +106,8 @@ function beforeUpload(file: UploadRawFile) {
 }
 
 function uploadErrorMessage(error: unknown) {
-  const data = (error as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-  const message = Array.isArray(data?.message) ? data.message.join('；') : data?.message;
-  if (typeof message === 'string' && message) return message;
-  return '照片上传失败，请重试';
+  // COM-05 / T285：上传失败也走统一错误解析（错误码优先，数组 message 已合并）
+  return apiErrorMessage(error, '照片上传失败，请重试');
 }
 
 async function handleUpload(options: UploadRequestOptions) {

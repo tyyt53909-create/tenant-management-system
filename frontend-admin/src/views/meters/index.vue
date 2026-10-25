@@ -214,6 +214,8 @@ import {
 import type { Meter } from '@/types';
 import { usePagedTable } from '@/composables';
 import { formatMoney } from '@/utils/money';
+import { apiErrorMessage } from '@/utils/apiError';
+import { notifyApiError } from '@/utils/notify';
 
 const exporting = ref(false);
 const dialogVisible = ref(false);
@@ -319,7 +321,7 @@ const handleDelete = async (row: Meter) => {
     ElMessage.success('删除成功');
     fetchData();
   } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error('删除失败');
+    if (error !== 'cancel') notifyApiError(error, '删除失败');
   }
 };
 
@@ -340,7 +342,7 @@ const handleOpenSettle = async (row: Meter) => {
     const res = await getUnsettledUsage(row.id);
     unsettledInfo.value = res;
   } catch (err: any) {
-    ElMessage.error(err?.response?.data?.message || err?.message || '获取未结算用量失败');
+    ElMessage.error(apiErrorMessage(err, '获取未结算用量失败'));
   } finally {
     settleDataLoading.value = false;
   }
@@ -360,7 +362,7 @@ const handleConfirmSettle = async () => {
     settleDialogVisible.value = false;
     fetchData();
   } catch (err: any) {
-    ElMessage.error(err?.response?.data?.message || err?.message || '结算失败');
+    ElMessage.error(apiErrorMessage(err, '结算失败'));
   } finally {
     settleSubmitLoading.value = false;
   }

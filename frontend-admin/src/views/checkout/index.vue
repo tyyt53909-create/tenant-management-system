@@ -192,6 +192,7 @@ import { downloadCsvFromServer } from '@/utils/csv';
 import { formatMoney } from '@/utils/money';
 import { usePagedTable } from '@/composables';
 import type { CheckoutItem, CheckoutItemType, CheckoutRecord } from '@/types';
+import { notifyApiError } from '@/utils/notify';
 
 interface ItemTypeMeta {
   label: string;
@@ -315,8 +316,8 @@ const handleExportCsv = async () => {
       `退租结算记录_${new Date().toISOString().split('T')[0]}.csv`,
     );
     ElMessage.success('导出成功');
-  } catch {
-    ElMessage.error('导出失败');
+  } catch (error) {
+    notifyApiError(error, '导出失败');
   } finally {
     exporting.value = false;
   }
@@ -349,7 +350,7 @@ const handleDelete = async (row: CheckoutRecord) => {
     ElMessage.success('删除成功');
     fetchData();
   } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error('删除失败');
+    if (error !== 'cancel') notifyApiError(error, '删除失败');
   }
 };
 

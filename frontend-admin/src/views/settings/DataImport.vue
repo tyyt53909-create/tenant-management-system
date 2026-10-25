@@ -82,6 +82,7 @@ import { ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { UploadFile } from 'element-plus';
 import { commitImport, downloadTemplate, previewImport, type ImportEntity, type ImportResult } from '@/api/imports';
+import { apiErrorMessage } from '@/utils/apiError';
 
 const entities: { key: ImportEntity; label: string }[] = [
   { key: 'tenants', label: '① 租客' },
@@ -135,7 +136,7 @@ const handlePreview = async (entity: ImportEntity) => {
     results.value[entity] = await previewImport(entity, file);
   } catch (error: any) {
     results.value[entity] = undefined;
-    ElMessage.error(error?.response?.data?.message || '预检失败');
+    ElMessage.error(apiErrorMessage(error, '预检失败'));
   } finally {
     busy.value = '';
   }
@@ -160,7 +161,7 @@ const handleCommit = async (entity: ImportEntity) => {
     results.value[entity] = result;
     ElMessage.success(`已写入 ${result.imported} 行`);
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '写入失败，未改动任何数据');
+    ElMessage.error(apiErrorMessage(error, '写入失败，未改动任何数据'));
   } finally {
     busy.value = '';
   }

@@ -170,6 +170,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { getBatchSheet, submitBatchReadings } from '@/api/meters';
 import type { BatchSheetItem, BatchReadingSubmitItem } from '@/api/meters';
 import { formatMoney } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -217,7 +218,7 @@ async function fetchSheet() {
     const list = await getBatchSheet();
     sheetList.value = list;
   } catch (err: any) {
-    ElMessage.error(err?.message || '获取抄表底表失败');
+    notifyApiError(err, '获取抄表底表失败');
   } finally {
     loading.value = false;
   }
@@ -368,7 +369,7 @@ async function handleSubmitBatch() {
       emit('success');
     }
   } catch (err: any) {
-    ElMessage.error(err?.message || '批量提交失败');
+    notifyApiError(err, '批量提交失败');
   } finally {
     submitting.value = false;
   }

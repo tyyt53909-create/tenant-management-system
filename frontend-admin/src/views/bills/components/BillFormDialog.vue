@@ -42,6 +42,7 @@ import EntitySelect from '@/components/common/EntitySelect.vue';
 import { createBill, updateBill } from '@/api/bills';
 import type { Bill } from '@/types';
 import { centsToYuan } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 export interface BillFormModel {
   contractId: string;
@@ -131,8 +132,8 @@ const handleSubmit = async () => {
       }
       emit('update:modelValue', false);
       emit('success');
-    } catch {
-      ElMessage.error('操作失败');
+    } catch (error) {
+      notifyApiError(error, '操作失败');
     } finally {
       submitLoading.value = false;
     }

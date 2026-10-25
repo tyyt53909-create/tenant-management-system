@@ -172,6 +172,7 @@ import { ref, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { runMeterSimulator, type SimulationResultResponse } from '@/api/meters';
 import type { Meter } from '@/types';
+import { notifyApiError } from '@/utils/notify';
 
 const props = defineProps<{
   visible: boolean;
@@ -239,7 +240,7 @@ const handleRun = async () => {
     ElMessage.success(res.message || '模拟运行完成');
     emit('success');
   } catch (err: any) {
-    ElMessage.error(err.response?.data?.message || err.message || '模拟运行失败');
+    notifyApiError(err, '模拟运行失败');
   } finally {
     loading.value = false;
   }

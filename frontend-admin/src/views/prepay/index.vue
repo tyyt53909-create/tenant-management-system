@@ -182,6 +182,7 @@ import {
 import type { PrepayAccount, PrepayTransaction, PrepayTransactionType } from '@/api/prepay';
 import { downloadCsvFromServer } from '@/utils/csv';
 import { centsToYuan, formatMoney, formatSignedMoney } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const loadError=ref('');
@@ -342,8 +343,8 @@ const handleExportCsv = async () => {
       `预付流水汇总_${new Date().toISOString().split('T')[0]}.csv`,
     );
     ElMessage.success('导出成功');
-  } catch {
-    ElMessage.error('导出失败');
+  } catch (error) {
+    notifyApiError(error, '导出失败');
   } finally {
     exporting.value = false;
   }
@@ -360,8 +361,8 @@ const handleExportAccountCsv = async () => {
       `预付账户流水_${account.roomNumber || account.roomId}_${new Date().toISOString().split('T')[0]}.csv`,
     );
     ElMessage.success('导出成功');
-  } catch {
-    ElMessage.error('导出失败');
+  } catch (error) {
+    notifyApiError(error, '导出失败');
   } finally {
     exporting.value = false;
   }

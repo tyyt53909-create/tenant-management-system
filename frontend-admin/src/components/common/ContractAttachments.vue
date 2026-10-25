@@ -16,6 +16,7 @@ import { onUnmounted, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
 import ProtectedImage from './ProtectedImage.vue';
+import { apiErrorMessage } from '@/utils/apiError';
 interface Attachment { id:string;fileName:string;downloadUrl:string;fileSize:number }
 const props=withDefaults(defineProps<{contractId:string;editable?:boolean}>(),{editable:true});
 const input=ref<HTMLInputElement>();
@@ -63,7 +64,7 @@ async function upload(event:Event){
         await request.post(`/contracts/${encodeURIComponent(id)}/attachments`,form,{headers:{'Content-Type':'multipart/form-data'},timeout:60000,silentError:true});
         saved++;
       }catch(error:any){
-        if(active&&id===props.contractId)failures.value.push(`${file.name}：${error.response?.data?.message || '未确认保存，请刷新列表核对后再上传。'}`);
+        if(active&&id===props.contractId)failures.value.push(`${file.name}：${apiErrorMessage(error, '未确认保存，请刷新列表核对后再上传。')}`);
       }
     }
     if(!active||id!==props.contractId)return;

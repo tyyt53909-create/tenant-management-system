@@ -36,8 +36,13 @@ export async function downloadCsvFromServer(
     window.URL.revokeObjectURL(blobUrl);
     ElMessage.success('导出成功，文件已开始下载');
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : '导出失败，请稍后重试';
-    ElMessage.error(message || '导出失败，请稍后重试');
+    // 统一解析 + 标记已提示，避免调用页面再弹一次「导出失败」（COM-05 / T285）
+    const [{ apiErrorMessage }, { markApiErrorNotified }] = await Promise.all([
+      import('./apiError'),
+      import('./notify'),
+    ]);
+    ElMessage.error(apiErrorMessage(err, '导出失败，请稍后重试'));
+    markApiErrorNotified(err);
     throw err;
   }
 }

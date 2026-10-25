@@ -72,11 +72,51 @@ export const createMeterReading = (
   return request.post(`/meters/${meterId}/readings`, data);
 };
 
+/** 水电结算结果（后端 `meter-billing.service.ts` 的返回形状） */
+export interface MeterSettleResult {
+  meterId: string;
+  settled: boolean;
+  usage: number;
+  amount: number;
+  unitPrice?: number;
+  baselineReading?: number;
+  currentReading?: number;
+  reason?: string;
+  deduction?: ReadingDeduction;
+}
+
+/** 未结算用量（后端 `getUnsettledUsage` 的返回形状） */
+export interface UnsettledUsage {
+  meterId: string;
+  meterNumber?: string;
+  meterType?: Meter['meterType'];
+  unitPrice?: number;
+  roomNumber?: string;
+  tenantName?: string | null;
+  prepayBalance?: number | null;
+  lastSettledReading: number;
+  lastSettledTime: string | null;
+  currentReading: number;
+  readingTime: string | null;
+  unsettledUsage: number;
+  estimatedAmount: number;
+  targetReadingId?: string;
+  hasReadings: boolean;
+}
+
+/** 批量结算汇总（后端 `settleBatch` 的返回形状） */
+export interface SettleBatchResult {
+  total: number;
+  successCount: number;
+  failureCount: number;
+  results: Array<MeterSettleResult & { success: boolean; error?: string }>;
+}
+
 /** 周期结算指定水电表（采集与结算拆分） */
 export const settleMeter = (
   meterId: string,
   data?: { settleUntil?: string; notes?: string }
-): Promise<any> => {
+): Promise<MeterSettleResult> => {
   return request.post(`/meters/${meterId}/settle`, data || {});
 };
 
@@ -84,14 +124,14 @@ export const settleMeter = (
 export const getUnsettledUsage = (
   meterId: string,
   params?: { settleUntil?: string }
-): Promise<any> => {
+): Promise<UnsettledUsage> => {
   return request.get(`/meters/${meterId}/unsettled-usage`, { params });
 };
 
 /** 批量周期结算水电表 */
 export const settleBatch = (
   data: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string }
-): Promise<any> => {
+): Promise<SettleBatchResult> => {
   return request.post('/meters/settle-batch', data);
 };
 

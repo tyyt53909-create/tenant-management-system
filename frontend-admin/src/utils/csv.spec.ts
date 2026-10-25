@@ -72,10 +72,12 @@ describe('CSV 单一管道（T275）', () => {
     expect(ElMessage.success).toHaveBeenCalledWith('导出成功，文件已开始下载');
   });
 
-  it('后端导出：失败时提示并抛出', async () => {
-    vi.mocked(request.get).mockRejectedValueOnce(new Error('Network Error'));
+  it('后端导出：失败时按统一错误解析提示并抛出', async () => {
+    const failure = new Error('Network Error');
+    vi.mocked(request.get).mockRejectedValueOnce(failure);
 
     await expect(downloadCsvFromServer('/bills/export')).rejects.toThrow('Network Error');
-    expect(ElMessage.error).toHaveBeenCalledWith('Network Error');
+    // T285：不再把浏览器英文原文弹给用户，统一成中文网络错误提示
+    expect(ElMessage.error).toHaveBeenCalledWith('网络错误，请检查网络连接');
   });
 });
