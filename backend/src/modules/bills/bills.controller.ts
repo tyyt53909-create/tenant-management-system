@@ -8,8 +8,10 @@ import { QueryBillsDto } from './dto/query-bills.dto.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { VoidPaymentDto } from './dto/void-payment.dto.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
+import { CreateRefundDto } from './dto/create-refund.dto.js';
 import { WechatJsapiPayDto, WechatPayQueryDto } from './dto/wechat-pay.dto.js';
 import { WechatPaymentService } from './payment/wechat-payment.service.js';
+import { PaymentRefundService } from './payment/payment-refund.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -24,6 +26,7 @@ export class BillsController {
     private readonly billsService: BillsService,
     private readonly clock: BusinessClock,
     private readonly wechatPaymentService: WechatPaymentService,
+    private readonly paymentRefundService: PaymentRefundService,
   ) {}
 
   @Post()
@@ -198,5 +201,27 @@ export class BillsController {
   ) {
     const user = resolveAuthUser(userParam);
     return this.wechatPaymentService.queryAndSyncPayment(id, user.userId, user.role, dto);
+  }
+
+  // 申请原路退款（仅管理者）
+  @Post(':id/payments/:paymentId/refund')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  createRefund(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+    @Body() dto: CreateRefundDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.paymentRefundService.createRefund(id, paymentId, dto, user.userId);
+  }
+
+  // 查询账单退款记录（仅管理者）
+  @Get(':id/refunds')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  getRefunds(@Param('id') id: string) {
+    return this.paymentRefundService.getBillRefunds(id);
   }
 }

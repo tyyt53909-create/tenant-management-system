@@ -306,6 +306,14 @@
   },
   {
     "method": "POST",
+    "path": "/api/bills/:id/payments/:paymentId/refund",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
     "path": "/api/bills/:id/payments/:paymentId/void",
     "public": false,
     "roles": [
@@ -319,6 +327,14 @@
     "roles": [
       "ADMIN",
       "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/:id/refunds",
+    "public": false,
+    "roles": [
+      "ADMIN"
     ]
   },
   {
@@ -1007,8 +1023,46 @@
     "roles": []
   },
   {
+    "method": "GET",
+    "path": "/api/payments/reconciliation/batches",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/payments/reconciliation/batches/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/payments/reconciliation/items/:id/resolve",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/payments/reconciliation/run",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "POST",
     "path": "/api/payments/wechat/notify",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/payments/wechat/refund-notify",
     "public": true,
     "roles": []
   },

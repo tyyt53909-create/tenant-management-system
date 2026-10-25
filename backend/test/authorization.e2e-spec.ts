@@ -14,6 +14,7 @@ import { InviteCodeService } from '../src/modules/auth/invite-code.service.js';
 import { JwtAuthService } from '../src/modules/auth/jwt.service.js';
 import { BillsController } from '../src/modules/bills/bills.controller.js';
 import { WechatPaymentService } from '../src/modules/bills/payment/wechat-payment.service.js';
+import { PaymentRefundService } from '../src/modules/bills/payment/payment-refund.service.js';
 import { BillsService } from '../src/modules/bills/bills.service.js';
 import { BuildingsController } from '../src/modules/buildings/buildings.controller.js';
 import { BuildingsService } from '../src/modules/buildings/buildings.service.js';
@@ -177,6 +178,14 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
             createJsapiOrder: vi.fn(),
             queryAndSyncPayment: vi.fn(),
             handleNotify: vi.fn(),
+          },
+        },
+        {
+          provide: PaymentRefundService,
+          useValue: {
+            createRefund: vi.fn(),
+            handleRefundNotify: vi.fn(),
+            getBillRefunds: vi.fn(),
           },
         },
         { provide: CheckoutService, useValue: checkoutService },

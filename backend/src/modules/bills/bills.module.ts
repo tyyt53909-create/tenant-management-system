@@ -12,6 +12,8 @@ import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 import { MockPaymentProvider } from './payment/mock-payment.provider.js';
 import { WechatPaymentProvider } from './payment/wechat-payment.provider.js';
 import { WechatPaymentService } from './payment/wechat-payment.service.js';
+import { PaymentRefundService } from './payment/payment-refund.service.js';
+import { PaymentReconciliationService } from './payment/payment-reconciliation.service.js';
 
 @Module({
   imports: [PrismaModule, ConfigModule],
@@ -22,6 +24,8 @@ import { WechatPaymentService } from './payment/wechat-payment.service.js';
     BillLateFeeService,
     BillReceiptService,
     WechatPaymentService,
+    PaymentRefundService,
+    PaymentReconciliationService,
     {
       // 微信支付直连商户（DEC-04）/ 模拟器通道
       provide: PAYMENT_PROVIDER,
@@ -58,6 +62,8 @@ import { WechatPaymentService } from './payment/wechat-payment.service.js';
     BillLateFeeService,
     BillReceiptService,
     WechatPaymentService,
+    PaymentRefundService,
+    PaymentReconciliationService,
     PAYMENT_PROVIDER,
   ],
 })

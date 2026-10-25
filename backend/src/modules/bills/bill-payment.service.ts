@@ -336,6 +336,136 @@ export class BillPaymentService {
     });
   }
 
+  /**
+   * 执行退款冲正（PAY-02 / T294）
+   * - 悲观行锁串行化
+   * - 原收款保留，生成负数冲正记录 REVERSAL
+   * - 若全额退款，原收款标记为 VOIDED
+   * - 账单本金与滞纳金按比例/顺序冲退回滚
+   * - 若涉及押金账单，联动 reverseDepositCollection 冲减押金台账
+   * - 记录真实财务冲正审计事件
+   */
+  async applyRefundReversal(params: {
+    billId: string;
+    paymentId: string;
+    refundAmount: number;
+    outRefundNo: string;
+    refundId?: string;
+    operatorId: string;
+    reason?: string;
+  }) {
+    const { billId, paymentId, refundAmount, outRefundNo, refundId, operatorId, reason } = params;
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockBill(tx, billId);
+
+      const bill = await tx.bill.findUnique({ where: { id: billId } });
+      if (!bill) throw new NotFoundException('账单不存在');
+
+      const payment = await tx.paymentRecord.findUnique({ where: { id: paymentId } });
+      if (!payment || payment.billId !== billId) {
+        throw new NotFoundException('收款记录不存在');
+      }
+
+      const isFull = refundAmount === payment.amount;
+      const refundBillPortion = Math.min(refundAmount, payment.billPortion);
+      const refundLateFeePortion = Math.max(0, refundAmount - refundBillPortion);
+
+      // 回滚滞纳金核销
+      if (refundLateFeePortion > 0) {
+        const allocations =
+          (payment.lateFeeAllocations as unknown as FeeAllocation[] | null) ?? [];
+        let remainingFeeRollback = refundLateFeePortion;
+        for (const allocation of allocations) {
+          if (remainingFeeRollback <= 0) break;
+          const fee = await tx.lateFee.findUnique({ where: { id: allocation.lateFeeId } });
+          if (!fee) continue;
+          const rollbackAmount = Math.min(remainingFeeRollback, allocation.amount);
+          remainingFeeRollback -= rollbackAmount;
+          const newSettled = Math.max(0, (fee.settledAmount ?? 0) - rollbackAmount);
+          const stillSettled =
+            (fee.confirmedAmount ?? 0) > 0 && newSettled >= (fee.confirmedAmount ?? 0);
+          await tx.lateFee.update({
+            where: { id: fee.id },
+            data: {
+              settledAmount: newSettled,
+              ...(stillSettled ? {} : { settledAt: null, settledBy: null }),
+            },
+          });
+        }
+      }
+
+      // 创建冲正记录
+      const reversal = await tx.paymentRecord.create({
+        data: {
+          billId,
+          amount: -refundAmount,
+          paymentMethod: payment.paymentMethod,
+          status: 'REVERSAL',
+          billPortion: -refundBillPortion,
+          lateFeePortion: -refundLateFeePortion,
+          paidAt: new Date(),
+          confirmedBy: operatorId,
+          notes: `微信退款冲正 (${outRefundNo})${reason ? `: ${reason}` : ''}`,
+          transactionNumber: refundId || outRefundNo,
+          ...(isFull ? { reversalOfId: payment.id } : {}),
+        },
+      });
+
+      if (isFull) {
+        await tx.paymentRecord.update({
+          where: { id: payment.id },
+          data: {
+            status: 'VOIDED',
+            voidedAt: new Date(),
+            voidedBy: operatorId,
+            voidReason: `微信原路退款 (${outRefundNo})${reason ? `: ${reason}` : ''}`,
+          },
+        });
+      }
+
+      const newPaid = Math.max(0, bill.paidAmount - refundBillPortion);
+      const newStatus = derivePaymentStatus(bill.amount, newPaid);
+      const overdue =
+        newStatus === 'PAID'
+          ? { isOverdue: false, overdueDays: 0 }
+          : computeOverdue(bill.dueDate, this.clock.todayUtc());
+
+      const updatedBill = await tx.bill.update({
+        where: { id: billId },
+        data: { paidAmount: newPaid, status: newStatus, ...overdue },
+      });
+
+      // 押金账单退款冲减押金台账
+      await reverseDepositCollection(tx, {
+        bill: updatedBill,
+        amount: refundBillPortion,
+        operatorId,
+      });
+
+      // 审计日志
+      await this.auditLog?.recordEvent({
+        tx,
+        action: 'PAYMENT_REVERSAL',
+        entityType: 'RefundRecord',
+        entityId: outRefundNo,
+        actorId: operatorId,
+        before: { billPaidAmount: bill.paidAmount, billStatus: bill.status },
+        after: { billPaidAmount: newPaid, billStatus: newStatus },
+        reason: `微信退款: ${reason ?? outRefundNo}`,
+        context: {
+          billId,
+          paymentRecordId: payment.id,
+          reversalRecordId: reversal.id,
+          refundAmount,
+          outRefundNo,
+          refundId,
+        },
+      });
+
+      return { reversal, bill: updatedBill };
+    });
+  }
+
   /** 滞纳金未核销余额（分） */
   private lateFeeOutstanding(fee: { confirmedAmount: number | null; settledAmount: number | null }) {
     return Math.max(0, (fee.confirmedAmount ?? 0) - (fee.settledAmount ?? 0));
