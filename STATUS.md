@@ -1,11 +1,23 @@
 # 项目状态跟踪
 
-> 分支: `feature/T318-bill-write-guard`
+> 分支: `feature/T322-websocket-lifecycle`
 > 集成基準: `origin/develop` @ `071f08a`
 > 發布就緒: **NO-GO**
-> Gates: 12 pass / 0 fail / 2 not-run
+> Gates: 0 pass / 0 fail / 14 not-run
 
 ### NO-GO 原因
+  - 後端 lint: not-run
+  - 後端型別檢查: not-run
+  - 後端單元測試: not-run
+  - 後端 e2e: not-run
+  - 管理後台 lint: not-run
+  - 管理後台單元測試: not-run
+  - 管理後台 build: not-run
+  - 小程序單元測試: not-run
+  - 小程序 build: not-run
+  - OpenAPI 生成物: not-run
+  - 文檔檢查: not-run
+  - 整合測試: not-run
   - 安全掃描: not-run
   - 人工 UAT: not-run
 
@@ -15,20 +27,20 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 後端型別檢查 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 後端單元測試 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 後端 e2e | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 管理後台 lint | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 管理後台單元測試 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 管理後台 build | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 小程序單元測試 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 小程序 build | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| OpenAPI 生成物 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 文檔檢查 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 整合測試 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
-| 安全掃描 | ⏸ not-run | 尚无 CI artifact |
-| 人工 UAT | ⏸ not-run | 尚无验收纪录 |
+| 後端 lint | ⏸ not-run | 未提供 |
+| 後端型別檢查 | ⏸ not-run | 未提供 |
+| 後端單元測試 | ⏸ not-run | 未提供 |
+| 後端 e2e | ⏸ not-run | 未提供 |
+| 管理後台 lint | ⏸ not-run | 未提供 |
+| 管理後台單元測試 | ⏸ not-run | 未提供 |
+| 管理後台 build | ⏸ not-run | 未提供 |
+| 小程序單元測試 | ⏸ not-run | 未提供 |
+| 小程序 build | ⏸ not-run | 未提供 |
+| OpenAPI 生成物 | ⏸ not-run | 未提供 |
+| 文檔檢查 | ⏸ not-run | 未提供 |
+| 整合測試 | ⏸ not-run | 未提供 |
+| 安全掃描 | ⏸ not-run | 未提供 |
+| 人工 UAT | ⏸ not-run | 未提供 |
 
 ---
 
@@ -42,7 +54,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 4 |
+| 進行中 | 8 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -53,6 +65,10 @@
 - **T316 整合测试环境保护（R01 / QLT-05）**（active，plan QLT-05，`feature/T316-int-harness-guard`）
 - **T317 租客身份认领（R02 / SEC-04）**（active，plan SEC-04，`feature/T317-tenant-claim`）
 - **T318 账单写入与收款幂等（R05 / FIN-05）**（active，plan FIN-05，`feature/T318-bill-write-guard`）
+- **T319 租金计费与首期补账（R06 / FIN-02）**（active，plan FIN-02，`feature/T319-rent-charge`）
+- **T320 押金冲正与退租闭环（R07 / R08）**（active，plan FIN-03，`feature/T320-deposit-checkout`）
+- **T321 会话撤销原子化（R03 / SEC-02）**（active，plan SEC-02，`feature/T321-session-atomic`）
+- **T322 WebSocket 身份与连线生命周期（R04 / COM-02）**（active，plan COM-02，`feature/T322-websocket-lifecycle`）
 
 ### 阻擋發布
 - 無
@@ -84,7 +100,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 64 | 46 | 39 | 4 | 14 |
+| 未分類 | 68 | 46 | 39 | 8 | 14 |
 
 ---
 
@@ -105,16 +121,16 @@
 
 - 資料模型：**41** 張表
 - OpenAPI 路由：**177** 條
-- 後端程式碼：**23864** 行
+- 後端程式碼：**24383** 行
 - 管理後台程式碼：**31520** 行
 - 小程序程式碼：**6842** 行
 - 文件：**174** 份
 
 ### 測試
-- 後端單元：本机未重跑全量门禁；见 tasks/evidence/T318.md
-- 後端 e2e：本机未重跑全量门禁；见 tasks/evidence/T318.md
-- 管理後台單元：本机未重跑全量门禁；见 tasks/evidence/T318.md
-- 小程序單元：本机未重跑全量门禁；见 tasks/evidence/T318.md
+- 後端單元：未提供
+- 後端 e2e：未提供
+- 管理後台單元：未提供
+- 小程序單元：未提供
 
 ---
 
