@@ -24,6 +24,8 @@ import { EmailOtpService } from './email-otp.service.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { WechatAuthService } from './wechat-auth.service.js';
+import { WechatLoginDto, WechatBindDto } from './dto/wechat-auth.dto.js';
 import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
 import { resolveLoginProtection, type LoginProtection } from '../../config/password.config.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
@@ -54,6 +56,7 @@ export class AuthService {
     @Inject(LOGIN_ATTEMPT_STORE) private readonly loginAttemptStore: LoginAttemptStore,
     private readonly federatedAuthService: FederatedAuthService,
     private readonly auditLog: AuditLogService,
+    private readonly wechatAuthService: WechatAuthService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
@@ -420,6 +423,18 @@ export class AuthService {
 
   async googleAuth(dto: GoogleAuthDto): Promise<GoogleAuthResponseDto> {
     return this.federatedAuthService.googleAuth(dto);
+  }
+
+  getWechatConfig() {
+    return this.wechatAuthService.getWechatConfig();
+  }
+
+  async wechatLogin(dto: WechatLoginDto) {
+    return this.wechatAuthService.login(dto);
+  }
+
+  async wechatBind(dto: WechatBindDto) {
+    return this.wechatAuthService.bind(dto);
   }
 
   async sendEmailCode(dto: SendEmailCodeDto) {

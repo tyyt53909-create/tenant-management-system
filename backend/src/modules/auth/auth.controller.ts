@@ -11,6 +11,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
+import { WechatLoginDto, WechatBindDto } from './dto/wechat-auth.dto.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import { AuthThrottle, OtpEmailThrottle } from '../../common/decorators/throttle.decorators.js';
 import { AuthService } from './auth.service.js';
@@ -181,6 +182,49 @@ export class AuthController {
     @Res({ passthrough: true }) res?: Response,
   ): Promise<GoogleAuthResponseDto> {
     const result = await this.authService.googleAuth(dto);
+    if (res && result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
+    }
+    return result;
+  }
+
+  /**
+   * 获取微信小程序 AppID 配置
+   */
+  @Get('wechat/config')
+  @Public()
+  getWechatConfig() {
+    return this.authService.getWechatConfig();
+  }
+
+  /**
+   * 微信一键登录
+   */
+  @Post('wechat/login')
+  @Public()
+  @AuthThrottle()
+  async wechatLogin(
+    @Body() dto: WechatLoginDto,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const result = await this.authService.wechatLogin(dto);
+    if (res && result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
+    }
+    return result;
+  }
+
+  /**
+   * 微信账号绑定预建租客身份
+   */
+  @Post('wechat/bind')
+  @Public()
+  @AuthThrottle()
+  async wechatBind(
+    @Body() dto: WechatBindDto,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const result = await this.authService.wechatBind(dto);
     if (res && result?.refreshToken) {
       setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }

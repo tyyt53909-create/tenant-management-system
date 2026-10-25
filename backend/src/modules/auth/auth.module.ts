@@ -21,6 +21,8 @@ import { RedisService } from '../../redis/redis.service.js';
 
 import { AuthService } from './auth.service.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { WechatApiService } from './wechat-api.service.js';
+import { WechatAuthService } from './wechat-auth.service.js';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { FederatedAuthService } from './federated-auth.service.js';
     InviteCodeService,
     GoogleAuthService,
     EmailOtpService,
+    WechatApiService,
+    WechatAuthService,
     {
       provide: OTP_STORE,
       inject: [RedisService],
@@ -78,6 +82,6 @@ import { FederatedAuthService } from './federated-auth.service.js';
       },
     },
   ],
-  exports: [AuthService, FederatedAuthService, JwtAuthService, InviteCodeService, GoogleAuthService, EmailOtpService, PassportModule],
+  exports: [AuthService, FederatedAuthService, JwtAuthService, InviteCodeService, GoogleAuthService, EmailOtpService, WechatApiService, WechatAuthService, PassportModule],
 })
 export class AuthModule {}

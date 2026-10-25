@@ -15,6 +15,7 @@ import { AuthService } from './auth.service.js';
 import * as bcrypt from 'bcrypt';
 import { LOGIN_ATTEMPT_STORE, MemoryLoginAttemptStore } from './login-attempt.store.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { WechatAuthService } from './wechat-auth.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 
 describe('AuthController', () => {
@@ -25,6 +26,7 @@ describe('AuthController', () => {
   let emailOtpService: EmailOtpService;
   let tenantCapabilityService: TenantCapabilityService;
   let prisma: PrismaService;
+  let wechatAuthService: WechatAuthService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -115,6 +117,14 @@ describe('AuthController', () => {
         // Cookie 的 Secure 标志由 ConfigService 决定（生产环境 true）
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'development' }) },
         { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
+        {
+          provide: WechatAuthService,
+          useValue: {
+            getWechatConfig: vi.fn().mockReturnValue({ appId: 'wx-test-appid', mockEnabled: true }),
+            login: vi.fn(),
+            bind: vi.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -125,6 +135,7 @@ describe('AuthController', () => {
     emailOtpService = module.get<EmailOtpService>(EmailOtpService);
     tenantCapabilityService = module.get<TenantCapabilityService>(TenantCapabilityService);
     prisma = module.get<PrismaService>(PrismaService);
+    wechatAuthService = module.get<WechatAuthService>(WechatAuthService);
   });
 
   /** 桩事务：注册路径建 User + UserIdentity 并绑定预建 Tenant（DEC-03，不新建 Tenant） */
@@ -1057,6 +1068,48 @@ describe('AuthController', () => {
       await expect(
         controller.getMe({ user: { userId: 'non-existent' } }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('wechat endpoints', () => {
+    it('getWechatConfig 返回配置', () => {
+      const config = controller.getWechatConfig();
+      expect(config).toEqual({ appId: 'wx-test-appid', mockEnabled: true });
+    });
+
+    it('wechatLogin 调用 wechatAuthService.login 并注入 cookie', async () => {
+      const mockResult = {
+        isBound: true,
+        accessToken: 'wx-access',
+        refreshToken: 'wx-refresh',
+        user: { id: 'u1', email: 'e', phone: 'p', role: 'TENANT' },
+      };
+      vi.spyOn(wechatAuthService, 'login').mockResolvedValue(mockResult);
+      const resMock = { cookie: vi.fn() } as any;
+
+      const res = await controller.wechatLogin({ code: 'test-code' }, resMock);
+      expect(res).toBe(mockResult);
+      expect(wechatAuthService.login).toHaveBeenCalledWith({ code: 'test-code' });
+      expect(resMock.cookie).toHaveBeenCalled();
+    });
+
+    it('wechatBind 调用 wechatAuthService.bind 并注入 cookie', async () => {
+      const mockResult = {
+        isBound: true,
+        accessToken: 'wx-access',
+        refreshToken: 'wx-refresh',
+        user: { id: 'u1', email: 'e', phone: 'p', role: 'TENANT' },
+      };
+      vi.spyOn(wechatAuthService, 'bind').mockResolvedValue(mockResult);
+      const resMock = { cookie: vi.fn() } as any;
+
+      const res = await controller.wechatBind(
+        { bindTicket: 'wt_1', inviteCode: 'INV_1' },
+        resMock,
+      );
+      expect(res).toBe(mockResult);
+      expect(wechatAuthService.bind).toHaveBeenCalledWith({ bindTicket: 'wt_1', inviteCode: 'INV_1' });
+      expect(resMock.cookie).toHaveBeenCalled();
     });
   });
 });

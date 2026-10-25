@@ -20,6 +20,7 @@ import {
   MemoryLoginAttemptStore,
 } from './login-attempt.store.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { WechatAuthService } from './wechat-auth.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 
 const WRONG_PASSWORD = 'wrong-password';
@@ -85,6 +86,7 @@ async function createService(
   invite: InviteCodeMock;
   jwt: { generateTokens: ReturnType<typeof vi.fn>; revokeUserSessions: ReturnType<typeof vi.fn> };
   otp: { sendCode: ReturnType<typeof vi.fn>; verifyCode: ReturnType<typeof vi.fn> };
+  wechat: WechatAuthService;
 }> {
   const prisma = createPrismaMock();
   const jwt = { generateTokens: vi.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }), revokeUserSessions: vi.fn() };
@@ -120,11 +122,27 @@ async function createService(
         provide: FederatedAuthService,
         useValue: { googleAuth: vi.fn(), sendEmailCode: vi.fn(), loginWithEmailCode: vi.fn(), bindInviteCode: vi.fn() },
       },
+      {
+        provide: WechatAuthService,
+        useValue: {
+          getWechatConfig: vi.fn().mockReturnValue({ appId: 'wx-appid', mockEnabled: true }),
+          login: vi.fn(),
+          bind: vi.fn(),
+        },
+      },
       { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
     ],
   }).compile();
 
-  return { service: moduleRef.get(AuthService), prisma, store, invite, jwt, otp };
+  return {
+    service: moduleRef.get(AuthService),
+    prisma,
+    store,
+    invite,
+    jwt,
+    otp,
+    wechat: moduleRef.get<WechatAuthService>(WechatAuthService),
+  };
 }
 
 function userWith(over: Record<string, unknown> = {}) {
@@ -392,5 +410,18 @@ describe('AuthService 密码生命周期', () => {
     await service.resetPassword({ email: 'User@Example.com', code: '123456', newPassword: 'new-password' });
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'u1' }, data: { passwordHash: expect.stringMatching(/^\$2[aby]\$/) } }));
     expect(jwt.revokeUserSessions).toHaveBeenCalledWith('u1');
+  });
+
+  it('delegates wechat operations to WechatAuthService', async () => {
+    const { service, wechat } = await createService();
+    expect(service.getWechatConfig()).toEqual({ appId: 'wx-appid', mockEnabled: true });
+
+    (wechat.login as any).mockResolvedValue({ isBound: true });
+    expect(await service.wechatLogin({ code: 'c1' })).toEqual({ isBound: true });
+    expect(wechat.login).toHaveBeenCalledWith({ code: 'c1' });
+
+    (wechat.bind as any).mockResolvedValue({ isBound: true });
+    expect(await service.wechatBind({ bindTicket: 't1', inviteCode: 'i1' })).toEqual({ isBound: true });
+    expect(wechat.bind).toHaveBeenCalledWith({ bindTicket: 't1', inviteCode: 'i1' });
   });
 });
