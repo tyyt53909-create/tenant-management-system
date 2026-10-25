@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { ContractsService } from './contracts.service.js';
+import { SchedulerMonthlyBillsService } from '../scheduler/scheduler-monthly-bills.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -27,6 +28,7 @@ describe('ContractsService（租客隔离，T148）', () => {
       providers: [
         ContractsService,
         { provide: PrismaService, useValue: prismaMock },
+        { provide: SchedulerMonthlyBillsService, useValue: { issueDueRentBills: vi.fn() } },
         {
           provide: SettingsService,
           useValue: {

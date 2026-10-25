@@ -3,6 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { BillsService } from './bills/bills.service.js';
 import { CheckoutService } from './checkout/checkout.service.js';
 import { ContractsService } from './contracts/contracts.service.js';
+import { SchedulerMonthlyBillsService } from './scheduler/scheduler-monthly-bills.service.js';
 import { MaintenanceService } from './maintenance/maintenance.service.js';
 import { NotificationsService } from './notifications/notifications.service.js';
 import { PrepayService } from './prepay/prepay.service.js';
@@ -50,6 +51,7 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
         CheckoutService,
         NotificationsService,
         { provide: PrismaService, useValue: prismaMock },
+        { provide: SchedulerMonthlyBillsService, useValue: { issueDueRentBills: vi.fn() } },
         // QLT-02 / T288：NotificationsService 的 dispatcher 改为必填
         {
           provide: NotificationDispatcher,

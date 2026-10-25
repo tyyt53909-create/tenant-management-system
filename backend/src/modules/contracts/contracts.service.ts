@@ -17,12 +17,14 @@ import {
   isContractTransitionAllowed,
   roomUpdateForContractTransition,
 } from './contract-transitions.js';
+import { SchedulerMonthlyBillsService } from '../scheduler/scheduler-monthly-bills.service.js';
 
 @Injectable()
 export class ContractsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
+    private readonly rentBills: SchedulerMonthlyBillsService,
   ) {}
 
   async create(dto: CreateContractDto) {
@@ -213,6 +215,16 @@ export class ContractsService {
       );
     }
 
+    if ((dto.startDate || dto.paymentCycle) && contract.status !== 'DRAFT') {
+      const posted = await this.prisma.bill.findFirst({
+        where: { contractId: id, billType: 'RENT', status: { not: 'CANCELLED' } },
+        select: { id: true },
+      });
+      if (posted) {
+        throw new ConflictException('已有租金账单的合同不能再改起始日或付款周期，以免改写已入账账期');
+      }
+    }
+
     if (dto.startDate || dto.endDate) {
       const start = dto.startDate ? new Date(dto.startDate) : contract.startDate;
       const end = dto.endDate ? new Date(dto.endDate) : contract.endDate;
@@ -231,7 +243,7 @@ export class ContractsService {
     if (dto.lateFeeRule) updateData.lateFeeRule = dto.lateFeeRule as Prisma.InputJsonValue;
     if (dto.status) updateData.status = dto.status;
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       // 同房源唯一未结束合同（docs/04 §2.4）不能只在 create() 检查：续签会为同一房间
       // 新建一份 DRAFT（旧合同仍 ACTIVE），此时若把新 DRAFT 提前置为 ACTIVE，就会同房间
       // 两份 ACTIVE 合同 → 同月两笔租金账单（月账单幂等键是 contractId+period，不含 roomId）。
@@ -266,7 +278,7 @@ export class ContractsService {
         });
       }
 
-      const updated = await tx.contract.update({ where: { id }, data: updateData });
+      const saved = await tx.contract.update({ where: { id }, data: updateData });
 
       if (statusChanged) {
         // 房间随动与定时任务共用同一份规则（contract-transitions.ts）
@@ -279,8 +291,13 @@ export class ContractsService {
         }
       }
 
-      return updated;
+      return saved;
     });
+
+    if (statusChanged && dto.status === 'ACTIVE') {
+      await this.rentBills.issueDueRentBills(id);
+    }
+    return updated;
   }
 
   async remove(id: string) {
