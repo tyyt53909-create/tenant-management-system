@@ -4,6 +4,7 @@
  * 供 backup-db.sh 与单元测试共用，不依赖数据库。
  */
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const BACKUP_PREFIX = 'tenant';
 
@@ -54,4 +55,52 @@ export function expiredBackups(fileNames, { now = new Date(), retentionDays = 14
     const date = parseBackupDate(path.basename(name));
     return date !== null && date.getTime() < cutoff;
   });
+}
+
+/**
+ * 数据库身份：忽略密码和 query（sslmode 等）。
+ * 解析失败时退回去空白后的原串，避免把坏 URL 当成「不同库」而放行。
+ */
+export function databaseIdentity(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  try {
+    const url = new URL(text);
+    const scheme = url.protocol.replace(':', '');
+    if (scheme !== 'postgres' && scheme !== 'postgresql') return text;
+    const port = url.port || '5432';
+    const database = decodeURIComponent(url.pathname.replace(/^\//, ''));
+    const user = decodeURIComponent(url.username || '');
+    return `${user}@${url.hostname.toLowerCase()}:${port}/${database}`;
+  } catch {
+    return text;
+  }
+}
+
+export function sameDatabaseTarget(left, right) {
+  const a = databaseIdentity(left);
+  const b = databaseIdentity(right);
+  return a !== '' && a === b;
+}
+
+function isDirectRun() {
+  const entry = process.argv[1];
+  return Boolean(entry) && import.meta.url === pathToFileURL(entry).href;
+}
+
+if (isDirectRun()) {
+  const [command, ...args] = process.argv.slice(2);
+  if (command === 'expired') {
+    const retentionDays = Number(args[0]);
+    const names = args.slice(1);
+    for (const name of expiredBackups(names, { retentionDays })) {
+      process.stdout.write(`${name}\n`);
+    }
+  } else if (command === 'same-database') {
+    process.exit(sameDatabaseTarget(args[0], args[1]) ? 0 : 1);
+  } else {
+    process.stderr.write('用法：backup-core.mjs expired <days> <file...>\n');
+    process.stderr.write('      backup-core.mjs same-database <url-a> <url-b>\n');
+    process.exit(2);
+  }
 }

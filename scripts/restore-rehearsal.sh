@@ -22,8 +22,8 @@ fi
 : "${REHEARSAL_DATABASE_URL:?必须设置 REHEARSAL_DATABASE_URL（独立空库）}"
 command -v psql >/dev/null || { echo "缺少 psql" >&2; exit 1; }
 
-if [ -n "${DATABASE_URL:-}" ] && [ "$REHEARSAL_DATABASE_URL" = "$DATABASE_URL" ]; then
-  echo "拒绝执行：演练库不能与 DATABASE_URL 相同" >&2
+if [ -n "${DATABASE_URL:-}" ] && node "$(dirname "$0")/backup-core.mjs" same-database "$REHEARSAL_DATABASE_URL" "$DATABASE_URL"; then
+  echo "拒绝执行：演练库不能与 DATABASE_URL 指向同一数据库" >&2
   exit 1
 fi
 

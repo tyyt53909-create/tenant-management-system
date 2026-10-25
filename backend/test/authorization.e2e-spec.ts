@@ -200,6 +200,18 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
               }
               return { id };
             }),
+            findMessages: vi.fn(async (id: string, user: { role?: string; tenantId?: string }) => {
+              if (user.role === 'TENANT' && (id !== 'mr-mine' || user.tenantId !== 'tenant-self')) {
+                throw new NotFoundException('报修记录不存在');
+              }
+              return { data: [] };
+            }),
+            addMessage: vi.fn(async (id: string, _dto: unknown, user: { role?: string; tenantId?: string }) => {
+              if (user.role === 'TENANT' && (id !== 'mr-mine' || user.tenantId !== 'tenant-self')) {
+                throw new NotFoundException('报修记录不存在');
+              }
+              return { id: 'msg-1' };
+            }),
             create: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
@@ -363,6 +375,23 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
     it('GET /maintenance/:id 他人工单 → 404', async () => {
       await as(request(app.getHttpServer()).get('/maintenance/mr-other'), 'TENANT').expect(404);
+    });
+
+    it('GET /maintenance/:id/messages 他人工单 → 404', async () => {
+      await as(request(app.getHttpServer()).get('/maintenance/mr-other/messages'), 'TENANT').expect(404);
+    });
+
+    it('GET /maintenance/:id/messages 自己的工单 → 200', async () => {
+      await as(request(app.getHttpServer()).get('/maintenance/mr-mine/messages'), 'TENANT').expect(200);
+    });
+
+    it('POST /maintenance/:id/messages 他人工单 → 404', async () => {
+      await as(request(app.getHttpServer()).post('/maintenance/mr-other/messages').send({ body: 'hello' }), 'TENANT').expect(404);
+    });
+
+    it('GET /maintenance/:id/messages 未登录 → 401，保洁 → 403', async () => {
+      await request(app.getHttpServer()).get('/maintenance/mr-mine/messages').expect(401);
+      await as(request(app.getHttpServer()).get('/maintenance/mr-mine/messages'), 'CLEANER').expect(403);
     });
 
     it('GET /checkout 租客仅走自己的记录（不调用全量查询）', async () => {

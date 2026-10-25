@@ -42,6 +42,22 @@ describe('NotificationsGateway（T282）', () => {
     expect(bad.disconnect).toHaveBeenCalledWith(true);
   });
 
+  it('query string 里的 token 不采用，避免进访问日志', async () => {
+    const jwt = { verifyToken: vi.fn() };
+    const gateway = new NotificationsGateway(jwt as never);
+    const client: any = {
+      handshake: { auth: {}, query: { token: 'access-token' } },
+      data: {},
+      join: vi.fn(),
+      disconnect: vi.fn(),
+    };
+
+    await gateway.handleConnection(client);
+
+    expect(jwt.verifyToken).not.toHaveBeenCalled();
+    expect(client.disconnect).toHaveBeenCalledWith(true);
+  });
+
   it('emitNotification 只向该用户房间推送；无 server 时静默', () => {
     const gateway = new NotificationsGateway({ verifyToken: vi.fn() } as never);
     gateway.emitNotification('u1', { id: 'n1' });
