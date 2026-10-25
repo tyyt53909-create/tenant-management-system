@@ -17,7 +17,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | 188 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 131 files / 1227 tests |
+| 後端單元測試 | ✅ pass | 137 files / 1275 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
