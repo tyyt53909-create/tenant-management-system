@@ -232,6 +232,79 @@ export class BillReceiptService {
   }
 
   /**
+   * 租客读取名下全部收款收据明细（LSE-05 / T297）
+   */
+  async findMyReceipts(tenantId?: string) {
+    if (!tenantId) {
+      return [];
+    }
+
+    const payments = await this.prisma.paymentRecord.findMany({
+      where: {
+        bill: {
+          contract: {
+            tenantId,
+          },
+        },
+        receiptNumber: { not: null },
+      },
+      include: {
+        bill: {
+          include: {
+            contract: {
+              include: {
+                room: {
+                  include: {
+                    building: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { paidAt: 'desc' },
+      take: 50,
+    });
+
+    return payments.map((p) => {
+      const bill = p.bill;
+      const amountAbs = Math.abs(p.amount);
+      const verifyCode = p.receiptNumber
+        ? this.computeVerifyCode(p.receiptNumber, p.amount, p.paidAt)
+        : '';
+      const isVoided = p.status === 'VOIDED';
+
+      return {
+        paymentId: p.id,
+        receiptNumber: p.receiptNumber,
+        billId: bill.id,
+        billNumber: bill.billNumber,
+        billType: bill.billType,
+        billTypeLabel: BILL_TYPE_LABEL[bill.billType] || bill.billType,
+        period: bill.period,
+        amount: amountAbs,
+        amountYuan: centsToYuanString(amountAbs),
+        amountInChinese: centsToChineseRMB(amountAbs),
+        paymentMethod: p.paymentMethod,
+        paymentMethodLabel: PAYMENT_METHOD_LABEL[p.paymentMethod] || p.paymentMethod,
+        transactionNumber: p.transactionNumber,
+        paidAt: p.paidAt,
+        status: p.status || 'CONFIRMED',
+        isVoided,
+        voidedAt: p.voidedAt,
+        voidReason: p.voidReason,
+        roomNumber: bill.contract?.room?.roomNumber || '',
+        buildingName: bill.contract?.room?.building?.name || '',
+        verifyCode,
+        receiptUrl: `/api/bills/${bill.id}/payments/${p.id}/receipt`,
+        pdfUrl: `/api/bills/${bill.id}/payments/${p.id}/receipt/pdf`,
+        verifyUrl: `/api/public/receipts/${encodeURIComponent(p.receiptNumber || '')}/verify?code=${verifyCode}`,
+      };
+    });
+  }
+
+  /**
    * 公开收据验真查验（@Public()，脱敏展示，支持有效与作废状态查验）
    */
   async verifyReceipt(receiptNumber: string, code?: string) {

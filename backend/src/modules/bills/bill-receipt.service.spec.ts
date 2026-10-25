@@ -12,7 +12,7 @@ describe('BillReceiptService', () => {
   beforeEach(async () => {
     prisma = {
       bill: { findUnique: vi.fn(), findFirst: vi.fn() },
-      paymentRecord: { findUnique: vi.fn() },
+      paymentRecord: { findUnique: vi.fn(), findMany: vi.fn() },
     };
     configService = new ConfigService({
       JWT_SECRET: 'test-anti-counterfeit-secret-key-32',
@@ -255,6 +255,84 @@ describe('BillReceiptService', () => {
       });
 
       await expect(service.getPaymentReceipt('b1', 'p1', 'different-tenant')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findMyReceipts (LSE-05 / T297)', () => {
+    it('returns empty array when tenantId is not provided', async () => {
+      expect(await service.findMyReceipts('')).toEqual([]);
+      expect(await service.findMyReceipts(undefined)).toEqual([]);
+    });
+
+    it('returns receipt list for tenant with formatted money, verifyCode and status', async () => {
+      const paidDate = new Date('2026-10-25T10:00:00Z');
+      prisma.paymentRecord.findMany.mockResolvedValue([
+        {
+          id: 'p1',
+          billId: 'b1',
+          receiptNumber: 'R20261025000001',
+          amount: 250000,
+          status: 'CONFIRMED',
+          paymentMethod: 'WECHAT',
+          transactionNumber: 'WX_TRX_1',
+          paidAt: paidDate,
+          voidedAt: null,
+          voidReason: null,
+          bill: {
+            id: 'b1',
+            billNumber: 'BILL-001',
+            billType: 'RENT',
+            period: '2026-10',
+            contract: {
+              room: {
+                roomNumber: '101',
+                building: { name: 'A栋' },
+              },
+            },
+          },
+        },
+        {
+          id: 'p2',
+          billId: 'b2',
+          receiptNumber: 'R20261025000002',
+          amount: 5000,
+          status: 'VOIDED',
+          paymentMethod: 'CUSTOM_PAY',
+          transactionNumber: null,
+          paidAt: paidDate,
+          voidedAt: new Date('2026-10-25T12:00:00Z'),
+          voidReason: '重复交款',
+          bill: {
+            id: 'b2',
+            billNumber: 'BILL-002',
+            billType: 'SPECIAL_SERVICE',
+            period: '2026-10',
+            contract: null,
+          },
+        },
+      ]);
+
+      const list = await service.findMyReceipts('t1');
+      expect(list).toHaveLength(2);
+
+      const first = list[0];
+      expect(first.receiptNumber).toBe('R20261025000001');
+      expect(first.amount).toBe(250000);
+      expect(first.amountYuan).toBe('2500.00');
+      expect(first.paymentMethodLabel).toBe('微信支付');
+      expect(first.isVoided).toBe(false);
+      expect(first.verifyCode).toHaveLength(16);
+      expect(first.roomNumber).toBe('101');
+      expect(first.buildingName).toBe('A栋');
+      expect(first.receiptUrl).toBe('/api/bills/b1/payments/p1/receipt');
+
+      const second = list[1];
+      expect(second.isVoided).toBe(true);
+      expect(second.voidReason).toBe('重复交款');
+      expect(second.paymentMethodLabel).toBe('CUSTOM_PAY');
+      expect(second.billTypeLabel).toBe('SPECIAL_SERVICE');
+      expect(second.roomNumber).toBe('');
+      expect(second.buildingName).toBe('');
     });
   });
 

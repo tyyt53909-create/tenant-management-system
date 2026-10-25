@@ -71,6 +71,17 @@ export class BillsController {
     return this.billsService.findAll(query);
   }
 
+  // 租客查看名下所有电子收款收据列表（T297 / LSE-05）
+  @Get('my/receipts')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.bill.read')
+  findMyReceipts(@CurrentUser() userParam: CurrentUserParam) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.role === 'TENANT' ? (user.tenantId ?? '') : undefined;
+    return this.billsService.findMyReceipts(tenantId);
+  }
+
   // 单据快速识别与智能匹配（仅管理员）
   @Post('recognize')
   @UseGuards(RolesGuard)

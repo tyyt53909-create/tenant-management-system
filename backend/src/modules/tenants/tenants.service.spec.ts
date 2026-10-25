@@ -45,6 +45,10 @@ describe('TenantsService', () => {
         findMany: vi.fn().mockResolvedValue([]),
         findFirst: vi.fn(),
       },
+      bill: { findMany: vi.fn().mockResolvedValue([]) },
+      prepayAccount: { findFirst: vi.fn().mockResolvedValue(null) },
+      maintenanceRequest: { findMany: vi.fn().mockResolvedValue([]) },
+      notification: { count: vi.fn().mockResolvedValue(0) },
       auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
     };
     prismaMock.$transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(prismaMock));
@@ -627,6 +631,167 @@ describe('TenantsService', () => {
       const view = await service.getRegistration('tenant-1');
       expect(view.idNumberMasked).toBe('masked:enc:x');
       expect(view).not.toHaveProperty('idNumber');
+    });
+  });
+
+  describe('tenant self-service (LSE-05 / T297)', () => {
+    describe('getMyRegistration', () => {
+      it('租客未建档案或无登记返回 NOT_REGISTERED，不报 404', async () => {
+        expect(await service.getMyRegistration('')).toEqual({
+          tenantId: null,
+          idType: null,
+          idNumberMasked: null,
+          status: 'NOT_REGISTERED',
+          registeredAt: null,
+          notes: null,
+        });
+
+        (prisma as any).tenantRegistration.findUnique.mockResolvedValueOnce(null);
+        expect(await service.getMyRegistration('tenant-1')).toEqual({
+          tenantId: 'tenant-1',
+          idType: null,
+          idNumberMasked: null,
+          status: 'NOT_REGISTERED',
+          registeredAt: null,
+          notes: null,
+        });
+      });
+
+      it('已登记返回脱敏视图', async () => {
+        (prisma as any).tenantRegistration.findUnique.mockResolvedValueOnce({
+          tenantId: 'tenant-1',
+          idType: 'ID_CARD',
+          idNumber: 'enc:12345678',
+          status: 'PENDING',
+          registeredAt: null,
+          notes: '测试',
+        });
+        const res = await service.getMyRegistration('tenant-1');
+        expect(res.status).toBe('PENDING');
+        expect(res.idNumberMasked).toBe('masked:enc:12345678');
+      });
+    });
+
+    describe('submitMyRegistration', () => {
+      it('缺少 tenantId 抛出 NotFoundException', async () => {
+        await expect(
+          service.submitMyRegistration('', { idType: 'ID_CARD' as any, idNumber: '110101199001011234' }, { userId: 'u1', ip: '', userAgent: '' }),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('已 REGISTERED 状态禁止私自篡改', async () => {
+        vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({ id: 'tenant-1' } as any);
+        (prisma as any).tenantRegistration.findUnique.mockResolvedValue({
+          tenantId: 'tenant-1',
+          status: 'REGISTERED',
+        });
+
+        await expect(
+          service.submitMyRegistration('tenant-1', { idType: 'ID_CARD' as any, idNumber: '110101199001011234' }, { userId: 'u1', ip: '', userAgent: '' }),
+        ).rejects.toThrow(ConflictException);
+      });
+
+      it('提交实名登记写入 PENDING 状态并记录审计', async () => {
+        vi.spyOn(prisma.tenant, 'findUnique')
+          .mockResolvedValueOnce({ id: 'tenant-1' } as any)
+          .mockResolvedValueOnce(null); // id hash check
+        (prisma as any).tenantRegistration.findUnique
+          .mockResolvedValueOnce(null) // existing
+          .mockResolvedValueOnce(null); // hash collision
+        vi.spyOn(prisma.tenant, 'update').mockResolvedValue({} as any);
+        (prisma as any).tenantRegistration.create.mockResolvedValue({
+          id: 'reg-new',
+          tenantId: 'tenant-1',
+          idType: 'ID_CARD',
+          idNumber: 'enc:110101199001011234',
+          status: 'PENDING',
+          registeredAt: null,
+          notes: '租客端自助提交实名认证',
+        });
+
+        const res = await service.submitMyRegistration(
+          'tenant-1',
+          { idType: 'ID_CARD' as any, idNumber: '110101199001011234', realName: '张真实' },
+          { userId: 'u1', ip: '127.0.0.1', userAgent: 'test-agent' },
+        );
+
+        expect(res.message).toContain('提交成功');
+        expect(res.registration.status).toBe('PENDING');
+        expect(res.registration.idNumberMasked).toBe('masked:enc:110101199001011234');
+        expect(prisma.tenant.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'tenant-1' },
+            data: expect.objectContaining({ name: '张真实' }),
+          }),
+        );
+      });
+    });
+
+    describe('getMyOverview', () => {
+      it('无 tenantId 返回未绑定概览', async () => {
+        const overview = await service.getMyOverview('u1', '');
+        expect(overview.bound).toBe(false);
+        expect(overview.tenant).toBeNull();
+      });
+
+      it('返回租客生效合同、待缴账单、预付余额与活跃报修总览', async () => {
+        vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({
+          id: 'tenant-1',
+          name: '李四',
+          phone: '13800000002',
+          email: 'lisi@example.com',
+          registration: {
+            tenantId: 'tenant-1',
+            idType: 'ID_CARD',
+            idNumber: 'enc:123',
+            status: 'REGISTERED',
+            registeredAt: new Date('2026-10-01'),
+            notes: null,
+          },
+          contracts: [
+            {
+              id: 'c-1',
+              contractNumber: 'CN-2026-001',
+              startDate: new Date('2026-10-01'),
+              endDate: new Date('2027-10-01'),
+              rentAmount: 300000,
+              depositAmount: 300000,
+              paymentCycle: 'MONTHLY',
+              room: {
+                roomNumber: '101',
+                building: {
+                  name: 'A栋',
+                  address: '科技路1号',
+                  metadata: { landlordName: '王管家', landlordPhone: '13900001111' },
+                },
+              },
+            },
+          ],
+        } as any);
+
+        (prisma.bill.findMany as any).mockResolvedValue([
+          { id: 'b1', amount: 300000, paidAmount: 100000 },
+        ]);
+        (prisma as any).prepayAccount.findFirst.mockResolvedValue({ balanceCache: 50000 });
+        (prisma as any).maintenanceRequest.findMany.mockResolvedValue([
+          { id: 'm1', title: '水管漏水', category: 'PLUMBING', status: 'IN_PROGRESS', createdAt: new Date() },
+        ]);
+        (prisma.notification.count as any).mockResolvedValue(3);
+
+        const overview = await service.getMyOverview('u1', 'tenant-1');
+        expect(overview.bound).toBe(true);
+        expect(overview.tenant?.name).toBe('李四');
+        expect(overview.registration.status).toBe('REGISTERED');
+        expect(overview.contract?.contractNumber).toBe('CN-2026-001');
+        expect(overview.contract?.daysRemaining).toBeGreaterThan(0);
+        expect(overview.bills.pendingCount).toBe(1);
+        expect(overview.bills.pendingAmount).toBe(200000);
+        expect(overview.bills.pendingAmountYuan).toBe('2000.00');
+        expect(overview.prepay.balance).toBe(50000);
+        expect(overview.prepay.balanceYuan).toBe('500.00');
+        expect(overview.maintenance.activeCount).toBe(1);
+        expect(overview.unreadNotificationsCount).toBe(3);
+      });
     });
   });
 });

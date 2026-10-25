@@ -1226,5 +1226,11 @@ describe('BillsService', () => {
       }));
       expect(csv).toContain('B-CONFIRMED,A1,租客,123,租金,2026-10,100.00,100.00,0.00,2.00,2026-10-10,已支付');
     });
+
+    it('findMyReceipts：委托 receiptService 查询租客收款收据', async () => {
+      prisma.paymentRecord.findMany.mockResolvedValue([]);
+      const res = await service.findMyReceipts('tenant-1');
+      expect(res).toEqual([]);
+    });
   });
 });
