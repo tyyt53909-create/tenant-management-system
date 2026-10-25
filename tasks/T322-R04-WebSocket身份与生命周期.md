@@ -1,16 +1,19 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T322
 plan_ref: COM-02
 stage: M2
 priority: P0
 model_tier: 强
 branch: feature/T322-websocket-lifecycle
+merge_commit: 0b56a62
 start_time: 2026-10-25
+completed_time: 2026-10-25
 blocked_by:
 depends_on: T321
 acceptance_evidence: tasks/evidence/T322.md
+handoff: docs/handoff/2026-10-25-T315-T323-生产化第二轮修复批次.md
 ---
 
 # T322：WebSocket 身份与连线生命周期（R04 / COM-02）

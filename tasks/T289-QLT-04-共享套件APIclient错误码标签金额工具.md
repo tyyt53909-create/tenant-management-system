@@ -1,17 +1,19 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T289
 plan_ref: QLT-04
 stage: M2
 priority: P1
 model_tier: 普通
 branch: feature/T289-qlt-04-shared-kit
+merge_commit: 51fd04d
 start_time: 2026-10-25
+completed_time: 2026-10-25
 blocked_by:
 depends_on: T256, T275, T285, T287
 acceptance_evidence: tasks/evidence/T289.md
-handoff:
+handoff: docs/handoff/2026-10-25-T289-三端共享套件.md
 ---
 
 # T289：共享套件——API client、错误码、标签、金额工具（QLT-04）
