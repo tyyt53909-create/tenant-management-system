@@ -256,6 +256,13 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
     description: 'Google 模拟登录开关；生产必须为 false',
     validate: oneOf(...BOOLEAN_VALUES),
   },
+  { key: 'WECHAT_APPID', description: '微信小程序 AppID（可选）' },
+  { key: 'WECHAT_APP_SECRET', description: '微信小程序 AppSecret（可选）', secret: true },
+  {
+    key: 'WECHAT_AUTH_MOCK',
+    description: '微信模拟登录开关；生产必须为 false',
+    validate: oneOf(...BOOLEAN_VALUES),
+  },
   {
     key: 'OTP_DEV_BYPASS',
     description: '万能验证码开关；生产必须为 false',

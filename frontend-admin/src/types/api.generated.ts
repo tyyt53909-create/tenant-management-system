@@ -307,6 +307,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/wechat/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取微信小程序 AppID 配置 */
+        get: operations["AuthController_getWechatConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/wechat/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 微信一键登录 */
+        post: operations["AuthController_wechatLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/wechat/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 微信账号绑定预建租客身份 */
+        post: operations["AuthController_wechatBind"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/send-email-code": {
         parameters: {
             query?: never;
@@ -2198,6 +2249,27 @@ export interface components {
             };
             isNewUser?: boolean;
         };
+        WechatLoginDto: {
+            code: string;
+        };
+        WechatLoginResponseDto: {
+            isBound: boolean;
+            accessToken?: string;
+            refreshToken?: string;
+            user?: {
+                id: string;
+                email: string | null;
+                phone: string | null;
+                role: string;
+                avatarUrl?: string | null;
+            };
+            bindTicket?: string;
+        };
+        WechatBindDto: {
+            bindTicket: string;
+            inviteCode?: string;
+            phoneCode?: string;
+        };
         SendEmailCodeDto: {
             /** Format: email */
             email: string;
@@ -3358,6 +3430,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GoogleAuthResponseDto"];
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    AuthController_getWechatConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    AuthController_wechatLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WechatLoginDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WechatLoginResponseDto"];
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    AuthController_wechatBind: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WechatBindDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WechatLoginResponseDto"];
                 };
             };
             /** @description 错误 */

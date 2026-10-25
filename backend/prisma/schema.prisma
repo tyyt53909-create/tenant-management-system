@@ -212,6 +212,7 @@ enum UserRole {
 enum IdentityProvider {
   GOOGLE
   EMAIL
+  WECHAT_MP
 }
 
 // 邀请码状态
@@ -458,8 +459,9 @@ model UserIdentity {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   provider       IdentityProvider
-  /// GOOGLE 存 sub；EMAIL 存规范化后的邮箱
+  /// GOOGLE 存 sub；EMAIL 存规范化后的邮箱；WECHAT_MP 存 openid
   providerUserId String
+  unionId        String?
   email          String?
   emailVerifiedAt DateTime?
 
@@ -468,6 +470,7 @@ model UserIdentity {
 
   @@unique([provider, providerUserId])
   @@index([userId])
+  @@index([unionId])
   @@map("user_identities")
 }
 

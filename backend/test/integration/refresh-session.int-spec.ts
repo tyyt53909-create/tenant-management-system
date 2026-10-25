@@ -16,7 +16,7 @@ const Redis = RedisImport as unknown as new (url: string) => {
   keys(pattern: string): Promise<string[]>;
 };
 
-const redis = new Redis('redis://127.0.0.1:6379/15');
+const redis = new Redis(process.env.INTEGRATION_REDIS_URL || 'redis://127.0.0.1:6379/15');
 
 function session(jti: string, issuedAt: number): RefreshSession {
   return {

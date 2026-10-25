@@ -178,6 +178,24 @@
     "roles": []
   },
   {
+    "method": "POST",
+    "path": "/api/auth/wechat/bind",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/wechat/config",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/wechat/login",
+    "public": true,
+    "roles": []
+  },
+  {
     "method": "GET",
     "path": "/api/bills",
     "public": false,

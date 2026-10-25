@@ -74,7 +74,12 @@ export function checkEnvironment(env: Record<string, unknown>): EnvCheck {
     }
   }
 
-  for (const key of ['OTP_DEV_BYPASS', 'GOOGLE_AUTH_MOCK', 'FEATURE_METER_SIMULATOR'] as const) {
+  for (const key of [
+    'OTP_DEV_BYPASS',
+    'GOOGLE_AUTH_MOCK',
+    'FEATURE_METER_SIMULATOR',
+    'WECHAT_AUTH_MOCK',
+  ] as const) {
     if (productionLike && read(env, key) === 'true') {
       errors.push(`生产/预发环境禁止 ${key}=true`);
     }

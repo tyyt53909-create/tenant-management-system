@@ -65,6 +65,32 @@ export const loginWithGoogle = (data) => {
 }
 
 /**
+ * 获取微信小程序配置
+ * @returns {Promise<{ appId: string, mockEnabled: boolean }>}
+ */
+export const getWechatConfig = () => {
+  return request.get('/auth/wechat/config')
+}
+
+/**
+ * 微信一键登录
+ * @param {{ code: string }} data
+ * @returns {Promise<LoginResponse>}
+ */
+export const loginWithWechat = (data) => {
+  return request.post('/auth/wechat/login', data)
+}
+
+/**
+ * 微信绑定身份
+ * @param {{ bindTicket: string, inviteCode?: string, phoneCode?: string }} data
+ * @returns {Promise<LoginResponse>}
+ */
+export const bindWechat = (data) => {
+  return request.post('/auth/wechat/bind', data)
+}
+
+/**
  * 获取当前登录用户信息
  * @returns {Promise<{ id: string, email: string, phone?: string, role: string, tenant?: any }>}
  */

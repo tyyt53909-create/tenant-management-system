@@ -8,6 +8,23 @@
       </view>
 
       <view class="form-section">
+        <!-- #ifdef MP-WEIXIN -->
+        <view class="wechat-login-section">
+          <button
+            class="btn-wechat-primary"
+            :loading="wechatLoading"
+            :disabled="wechatLoading"
+            @tap="handleWechatLogin"
+          >
+            <text class="btn-wechat-text">微信一键快捷登录</text>
+          </button>
+        </view>
+
+        <view class="wechat-divider">
+          <text class="wechat-divider-text">或其他登录方式</text>
+        </view>
+        <!-- #endif -->
+
         <!-- 登录方式切换 Tab -->
         <view class="login-tabs">
           <view 
@@ -104,15 +121,14 @@
           </button>
         </view>
 
+        <!-- #ifdef H5 -->
         <!-- 第三方账号登录 -->
         <view class="oauth-divider">
           <text class="oauth-divider-text">或使用第三方账号快捷登录</text>
         </view>
 
         <view class="oauth-btn-wrap">
-          <!-- #ifdef H5 -->
           <view id="g_id_signin_container" class="google-official-btn"></view>
-          <!-- #endif -->
           <button
             v-if="!gisButtonLoaded && mockEnabled"
             class="btn-google"
@@ -123,10 +139,60 @@
             <text>{{ googleLoading ? '正在验证 Google 登录…' : 'Sign in with Google' }}</text>
           </button>
         </view>
+        <!-- #endif -->
 
         <!-- 贴心指引 -->
         <view class="tips">
           <text class="tips-hint">🔑 租客账号由管理员预建并发放邀请码；首次登录时请填写邀请码，未受邀邮箱无法开通。</text>
+        </view>
+      </view>
+
+      <!-- 微信身份绑定弹窗 -->
+      <view v-if="showWechatBindModal" class="bind-modal-mask">
+        <view class="bind-modal-card">
+          <view class="bind-modal-header">
+            <text class="bind-modal-title">关联租客身份</text>
+            <text class="bind-modal-desc">首次使用微信登录，请关联您的预建租客档案</text>
+          </view>
+          
+          <view class="bind-modal-body">
+            <!-- 方式 1：微信手机号快速绑定 -->
+            <button
+              class="btn-phone-bind"
+              open-type="getPhoneNumber"
+              @getphonenumber="handleGetPhoneNumber"
+              :loading="bindingWechat"
+              :disabled="bindingWechat"
+            >
+              手机号一键验证绑定
+            </button>
+            
+            <view class="bind-or-divider">
+              <text class="bind-or-text">或使用邀请码绑定</text>
+            </view>
+
+            <!-- 方式 2：邀请码绑定 -->
+            <view class="input-group">
+              <input
+                class="input"
+                v-model="wechatInviteCode"
+                placeholder="请输入管理员发放的邀请码"
+                placeholder-class="placeholder"
+              />
+            </view>
+            <button
+              class="btn-invite-bind"
+              :loading="bindingWechat"
+              :disabled="bindingWechat"
+              @tap="handleWechatInviteBind"
+            >
+              验证邀请码并绑定
+            </button>
+          </view>
+
+          <view class="bind-modal-footer">
+            <text class="btn-cancel-bind" @tap="showWechatBindModal = false">暂不绑定</text>
+          </view>
         </view>
       </view>
     </view>
@@ -139,7 +205,9 @@ import {
   sendEmailCode, 
   loginWithEmailCode, 
   loginWithGoogle, 
-  getGoogleClientId 
+  getGoogleClientId,
+  loginWithWechat,
+  bindWechat,
 } from '../../api/index.js'
 import { openHome } from '../../utils/session.js'
 
@@ -166,7 +234,12 @@ export default {
       gisButtonLoaded: false,
       // 后端是否开启「模拟 Google 登录」开发者通道（T206：改由后端 GOOGLE_AUTH_MOCK 决定，
       // 未开启时前端不再提供模拟入口，否则点下去只会拿到 503）
-      mockEnabled: false
+      mockEnabled: false,
+      wechatLoading: false,
+      showWechatBindModal: false,
+      bindTicket: '',
+      wechatInviteCode: '',
+      bindingWechat: false
     }
   },
   mounted() {
@@ -406,6 +479,92 @@ export default {
     },
     handleLogin() {
       return this.handlePasswordLogin()
+    },
+    async handleWechatLogin() {
+      if (this.wechatLoading) return
+      this.wechatLoading = true
+      try {
+        const loginRes = await new Promise((resolve, reject) => {
+          uni.login({
+            provider: 'weixin',
+            success: resolve,
+            fail: reject,
+          })
+        })
+        if (!loginRes || !loginRes.code) {
+          uni.showToast({ title: '获取微信登录授权失败', icon: 'none' })
+          return
+        }
+
+        const res = await loginWithWechat({ code: loginRes.code })
+        uni.setStorageSync('access_token', res.accessToken)
+        uni.setStorageSync('refresh_token', res.refreshToken)
+        uni.setStorageSync('user_role', res.user.role)
+        uni.showToast({ title: '登录成功', icon: 'success' })
+        openHome(res.user.role)
+      } catch (error) {
+        const errCode = error.code || (error.data && error.data.code)
+        const details = error.details || (error.data && error.data.details)
+        if (errCode === 'AUTH_WECHAT_UNBOUND' && details?.bindTicket) {
+          this.bindTicket = details.bindTicket
+          this.showWechatBindModal = true
+        } else {
+          const msg = error.message || (error.data && error.data.message) || '微信登录失败'
+          uni.showToast({ title: msg, icon: 'none' })
+        }
+      } finally {
+        this.wechatLoading = false
+      }
+    },
+    async handleGetPhoneNumber(e) {
+      const code = e?.detail?.code
+      if (!code) {
+        uni.showToast({ title: '已取消手机号授权', icon: 'none' })
+        return
+      }
+      this.bindingWechat = true
+      try {
+        const res = await bindWechat({
+          bindTicket: this.bindTicket,
+          phoneCode: code,
+        })
+        this.finishWechatBind(res)
+      } catch (error) {
+        const msg = error.message || (error.data && error.data.message) || '绑定失败'
+        uni.showToast({ title: msg, icon: 'none' })
+      } finally {
+        this.bindingWechat = false
+      }
+    },
+    async handleWechatInviteBind() {
+      const code = (this.wechatInviteCode || '').trim()
+      if (!code) {
+        uni.showToast({ title: '请输入邀请码', icon: 'none' })
+        return
+      }
+      this.bindingWechat = true
+      try {
+        const res = await bindWechat({
+          bindTicket: this.bindTicket,
+          inviteCode: code,
+        })
+        this.finishWechatBind(res)
+      } catch (error) {
+        const msg = error.message || (error.data && error.data.message) || '绑定失败'
+        uni.showToast({ title: msg, icon: 'none' })
+      } finally {
+        this.bindingWechat = false
+      }
+    },
+    finishWechatBind(res) {
+      this.showWechatBindModal = false
+      this.bindTicket = ''
+      this.wechatInviteCode = ''
+      uni.setStorageSync('access_token', res.accessToken)
+      uni.setStorageSync('refresh_token', res.refreshToken)
+      uni.setStorageSync('user_role', res.user.role)
+      uni.showToast({ title: '绑定成功，欢迎加入！', icon: 'success' })
+      openHome(res.user.role)
     }
   }
 }
@@ -657,5 +816,167 @@ export default {
   color: #8c887f;
   line-height: 1.5;
   display: block;
+}
+
+.wechat-login-section {
+  margin-bottom: 24rpx;
+}
+
+.btn-wechat-primary {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background: #07c160;
+  color: #ffffff;
+  border-radius: 12rpx;
+  font-size: 30rpx;
+  font-weight: bold;
+  border: none;
+}
+
+.btn-wechat-primary::after {
+  border: none;
+}
+
+.wechat-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 20rpx 0 28rpx;
+  position: relative;
+}
+
+.wechat-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1rpx;
+  background: #e9e6de;
+  z-index: 1;
+}
+
+.wechat-divider-text {
+  position: relative;
+  z-index: 2;
+  background: #fffefa;
+  padding: 0 16rpx;
+  color: #a49f95;
+  font-size: 22rpx;
+}
+
+.bind-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 40rpx;
+}
+
+.bind-modal-card {
+  width: 100%;
+  max-width: 580rpx;
+  background: #fffefa;
+  border-radius: 28rpx;
+  padding: 40rpx 36rpx;
+  box-sizing: border-box;
+}
+
+.bind-modal-header {
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+
+.bind-modal-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #4e5845;
+  margin-bottom: 8rpx;
+}
+
+.bind-modal-desc {
+  display: block;
+  font-size: 24rpx;
+  color: #8c887f;
+}
+
+.btn-phone-bind {
+  width: 100%;
+  height: 84rpx;
+  line-height: 84rpx;
+  background: #07c160;
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  font-weight: bold;
+  border: none;
+  margin-bottom: 20rpx;
+}
+
+.btn-phone-bind::after {
+  border: none;
+}
+
+.bind-or-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 20rpx 0;
+  position: relative;
+}
+
+.bind-or-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1rpx;
+  background: #e9e6de;
+  z-index: 1;
+}
+
+.bind-or-text {
+  position: relative;
+  z-index: 2;
+  background: #fffefa;
+  padding: 0 16rpx;
+  color: #a49f95;
+  font-size: 22rpx;
+}
+
+.btn-invite-bind {
+  width: 100%;
+  height: 84rpx;
+  line-height: 84rpx;
+  background: #68715b;
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  font-weight: bold;
+  border: none;
+}
+
+.btn-invite-bind::after {
+  border: none;
+}
+
+.bind-modal-footer {
+  text-align: center;
+  margin-top: 24rpx;
+}
+
+.btn-cancel-bind {
+  font-size: 24rpx;
+  color: #8c887f;
+  cursor: pointer;
 }
 </style>
