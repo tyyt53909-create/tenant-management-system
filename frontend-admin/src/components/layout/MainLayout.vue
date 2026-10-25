@@ -70,6 +70,7 @@ import { usePreferencesStore } from '@/stores/preferences';
 import { useManagementStore } from '@/stores/management';
 import request from '@/utils/request';
 import { stateLabel } from '@/utils/resource';
+import { filterNavigation, roleLabel as roleLabelOf } from '@/utils/access';
 
 const route = useRoute();
 const router = useRouter();
@@ -98,15 +99,15 @@ watch(searchQuery,value=>{
 });
 watch(searchVisible,open=>{if(!open){searchGeneration++;searchController?.abort();if(searchTimer)clearTimeout(searchTimer);recordSearchLoading.value=false;}});
 function openRecord(item:RecordSearchResult){searchVisible.value=false;searchQuery.value='';void router.push({path:`/${item.kind}`,query:{detail:item.id}});}
-const navigation = [
-  { path: '/dashboard', title: '工作台', icon: House, label: 'OVERVIEW / 运营总览', description: '' },
-  { path: '/rooms', title: '房源管理', icon: OfficeBuilding, label: 'SPACES / 房源档案', description: '把状态、租金和入住关系放在一眼能看懂的位置。' },
-  { path: '/space', title: '房源模型', icon: Grid, label: 'SPACE MODEL / 楼栋空间', description: '用 2D 剖面和 3D 等轴模型，查看一栋楼的真实占用状态。' },
+const allNavigation = [
+  { path: '/dashboard', title: '工作台', icon: House, label: 'OVERVIEW / 运营总览', description: '', roles: ['ADMIN'] as const },
+  { path: '/rooms', title: '房源管理', icon: OfficeBuilding, label: 'SPACES / 房源档案', description: '把状态、租金和入住关系放在一眼能看懂的位置。', roles: ['ADMIN', 'CLEANER'] as const },
+  { path: '/space', title: '房源模型', icon: Grid, label: 'SPACE MODEL / 楼栋空间', description: '用 2D 剖面和 3D 等轴模型，查看一栋楼的真实占用状态。', roles: ['ADMIN', 'CLEANER'] as const },
   { path: '/tenants', title: '租客档案', icon: User, label: 'RESIDENTS / 租客资料', description: '从租客本人出发，快速关联房源、合同与收款。' },
   { path: '/contracts', title: '合同管理', icon: Document, label: 'AGREEMENTS / 租赁关系', description: '租赁期限、每月应收和续约提醒，在同一行核对。' },
   { path: '/bills', title: '账单与收款', icon: Wallet, label: 'FINANCE / 账务管理', description: '应收、已收和剩余欠款，放在清楚可核对的位置。' },
   { path: '/maintenance', title: '报修工单', icon: Tools, label: 'SERVICE / 报修协同', description: '按紧急程度和处理进度安排任务，让每个工单都有明确下一步。' },
-  { path: '/cleaning', title: '保洁任务', icon: Brush, label: 'HOUSEKEEPING / 现场工作', description: '按空置房源的真实清洁状态组织工作，保留开始与完成操作。' },
+  { path: '/cleaning', title: '保洁任务', icon: Brush, label: 'HOUSEKEEPING / 现场工作', description: '按空置房源的真实清洁状态组织工作，保留开始与完成操作。', roles: ['ADMIN', 'CLEANER'] as const },
   { path: '/notifications', title: '通知中心', icon: Bell, label: 'INBOX / 通知', description: '重要提醒与服务进展，都汇集在这里。' },
   { path: '/announcements', title: '公告管理', icon: ChatDotSquare, label: 'BROADCAST / 公告', description: '把停水停电、缴费提醒与规则变更，定向送达需要知道的租客。' },
   { path: '/prepay', title: '预付账户', icon: Wallet, label: 'ACCOUNTS / 预付', description: '余额、充值与扣费记录，清晰可追溯。' },
@@ -117,21 +118,30 @@ const navigation = [
   { path: '/buildings', title: '楼栋管理', icon: OfficeBuilding, label: 'BUILDINGS / 楼栋', description: '管理楼栋与空间，为房源建立清晰的归属。' },
   { path: '/audit', title: '审计日志', icon: Tickets, label: 'AUDIT / 操作记录', description: '关键操作留痕，方便核查与追溯。' },
 ];
-const currentPage = computed(() =>
-  navigation.find((item) => item.path === route.path) ||
-  navigation
-    .filter((item) => route.path.startsWith(`${item.path}/`))
-    .sort((a, b) => b.path.length - a.path.length)[0] ||
-  navigation[0]!,
+// 未显式声明 roles 的入口默认仅管理员（FE-01）
+const allNavigationWithRoles = allNavigation.map((item) =>
+  'roles' in item ? item : { ...item, roles: ['ADMIN'] as const },
 );
+/** 按当前账号角色过滤：保洁只看到房源/空间/保洁/通知，租客只看到通知。 */
+const navigation = computed(() =>
+  filterNavigation(allNavigationWithRoles, userStore.user?.role) as typeof allNavigationWithRoles,
+);
+const currentPage = computed(() => {
+  const items = navigation.value;
+  return (
+    items.find((item) => item.path === route.path) ||
+    items
+      .filter((item) => route.path.startsWith(`${item.path}/`))
+      .sort((a, b) => b.path.length - a.path.length)[0] ||
+    // 无权访问 / 无任何可见入口时，顶栏仍需要一个可读标题
+    { ...items[0], path: route.path, title: route.meta?.title ?? '无权访问', description: '' }
+  );
+});
 const today = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date());
 const userInitial = computed(() => userStore.user?.email?.slice(0, 1).toUpperCase() || '管');
 /** 侧栏账户卡的第二行：让「这个账号是谁」一眼可见，不必展开菜单 */
-const roleLabel = computed(() => {
-  const map: Record<string, string> = { ADMIN: '管理员账号', TENANT: '租客账号', CLEANER: '保洁账号' };
-  return map[userStore.user?.role as string] || '当前登录账号';
-});
-const searchResults = computed(() => navigation.filter((item) => `${item.title}${item.description}`.includes(searchQuery.value.trim())));
+const roleLabel = computed(() => roleLabelOf(userStore.user?.role));
+const searchResults = computed(() => navigation.value.filter((item) => `${item.title}${item.description}`.includes(searchQuery.value.trim())));
 function openPage(path: string) { searchVisible.value = false; searchQuery.value = ''; router.push(path); }
 function handleLogout() {
   userStore.logout();
