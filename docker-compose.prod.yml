@@ -49,8 +49,8 @@ services:
   migrate:
     image: ${BACKEND_IMAGE:-tenant-backend}:${TAG:-local}
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     command: ["npx", "prisma", "migrate", "deploy"]
     environment:
       DATABASE_URL: postgresql://${DB_USER:-tenant_user}:${DB_PASSWORD:?生产必须设置 DB_PASSWORD}@postgres:5432/${DB_NAME:-tenant_system}?schema=public
@@ -63,8 +63,8 @@ services:
   backend:
     image: ${BACKEND_IMAGE:-tenant-backend}:${TAG:-local}
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     restart: always
     # T253 / OPS-02：优雅关闭与最小权限运行。
     init: true
@@ -167,8 +167,8 @@ services:
   seed:
     image: ${BACKEND_IMAGE:-tenant-backend}:${TAG:-local}
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     profiles: ["seed"]
     command: ["node", "dist-seed/seed.js"]
     environment:

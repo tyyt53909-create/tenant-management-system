@@ -1,0 +1,12 @@
+{
+  "name": "@tenant/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "三端共享纯函数套件（QLT-04 / T289）：错误码目录、金额工具、联系方式规范化。源码直引，零运行时依赖。",
+  "exports": {
+    "./error-codes": "./src/error-codes.ts",
+    "./money": "./src/money.ts",
+    "./contact": "./src/contact.ts"
+  }
+}

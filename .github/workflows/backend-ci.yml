@@ -82,7 +82,7 @@ jobs:
       
       - name: 运行类型检查
         working-directory: backend
-        run: npx tsc --noEmit
+        run: npx tsc -p tsconfig.typecheck.json --noEmit
       
       - name: 检查 OpenAPI 与前端类型
         working-directory: backend

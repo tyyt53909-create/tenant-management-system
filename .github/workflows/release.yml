@@ -44,7 +44,8 @@ jobs:
       - name: 构建并推送
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          # T289 起 shared/ 源码直引，上下文改为仓库根
+          context: .
           file: ./backend/Dockerfile
           platforms: linux/amd64
           push: true

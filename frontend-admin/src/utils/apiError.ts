@@ -4,7 +4,9 @@
  * 后端 `AllExceptionsFilter` 保证错误响应形如 `{ code, message, details?, requestId }`。
  * 前端一律以 `code` 判断「发生了什么」，`message` 只用于展示；不再用中文文案做条件判断
  * （ISS-25：改文案就会导致逻辑失效，且无法区分 401 的具体原因）。
+ * 错误码常量来自共享包（QLT-04 / T289），展示文案仍归前端 UI 层。
  */
+import { ErrorCode, type ErrorCodeName } from '../../../shared/src/error-codes.js';
 
 export interface ApiErrorBody {
   code?: string;
@@ -27,22 +29,22 @@ export interface ParsedApiError {
 }
 
 /** 按错误码覆盖默认文案：同一 code 在不同页面可以有不同语气时，由调用方传 fallback。 */
-const CODE_MESSAGES: Record<string, string> = {
-  CAPABILITY_DENIED: '当前账号的这项功能已暂停',
-  COMMON_RATE_LIMIT_EXCEEDED: '请求过于频繁，请稍后再试',
-  COMMON_INTERNAL_ERROR: '服务器内部错误，请稍后重试',
-  COMMON_RESOURCE_NOT_FOUND: '资源不存在或已被删除',
-  COMMON_CONFLICT: '数据已存在或被其他操作改动，请刷新后重试',
-  AUTH_TOKEN_EXPIRED: '登录已过期，请重新登录',
-  AUTH_TOKEN_INVALID: '登录状态无效，请重新登录',
-  AUTH_INVALID_CREDENTIALS: '邮箱/手机号或密码错误',
-  AUTH_REFRESH_ROTATING: '登录状态更新中，请稍后重试',
-  PERM_FORBIDDEN: '没有权限执行该操作',
-  PERM_INSUFFICIENT_ROLE: '当前角色无权执行该操作',
-  ROOM_VERSION_CONFLICT: '房态已被其他人更新，请刷新后重试',
-  BILL_ALREADY_PAID: '账单已缴清',
-  BILL_PAYMENT_EXCEEDS_AMOUNT: '收款金额超过应缴金额',
-  PREPAY_INSUFFICIENT_BALANCE: '预付余额不足',
+const CODE_MESSAGES: Partial<Record<ErrorCodeName, string>> = {
+  [ErrorCode.CAPABILITY_DENIED]: '当前账号的这项功能已暂停',
+  [ErrorCode.COMMON_RATE_LIMIT_EXCEEDED]: '请求过于频繁，请稍后再试',
+  [ErrorCode.COMMON_INTERNAL_ERROR]: '服务器内部错误，请稍后重试',
+  [ErrorCode.COMMON_RESOURCE_NOT_FOUND]: '资源不存在或已被删除',
+  [ErrorCode.COMMON_CONFLICT]: '数据已存在或被其他操作改动，请刷新后重试',
+  [ErrorCode.AUTH_TOKEN_EXPIRED]: '登录已过期，请重新登录',
+  [ErrorCode.AUTH_TOKEN_INVALID]: '登录状态无效，请重新登录',
+  [ErrorCode.AUTH_INVALID_CREDENTIALS]: '邮箱/手机号或密码错误',
+  [ErrorCode.AUTH_REFRESH_ROTATING]: '登录状态更新中，请稍后重试',
+  [ErrorCode.PERM_FORBIDDEN]: '没有权限执行该操作',
+  [ErrorCode.PERM_INSUFFICIENT_ROLE]: '当前角色无权执行该操作',
+  [ErrorCode.ROOM_VERSION_CONFLICT]: '房态已被其他人更新，请刷新后重试',
+  [ErrorCode.BILL_ALREADY_PAID]: '账单已缴清',
+  [ErrorCode.BILL_PAYMENT_EXCEEDS_AMOUNT]: '收款金额超过应缴金额',
+  [ErrorCode.PREPAY_INSUFFICIENT_BALANCE]: '预付余额不足',
 };
 
 /** 网络错误（请求未到达服务端）的统一文案。 */
@@ -81,7 +83,7 @@ export function parseApiError(error: unknown, fallback = '操作失败，请稍�
   }
 
   const code = typeof body?.code === 'string' ? body.code : undefined;
-  const codeMessage = code ? CODE_MESSAGES[code] : undefined;
+  const codeMessage = code && code in CODE_MESSAGES ? CODE_MESSAGES[code as ErrorCodeName] : undefined;
   const detailsMessage =
     Array.isArray(body?.details) && body.details.length > 0 ? body.details.map(String).join('；') : undefined;
   const bodyMessage = messageFromBody(body);

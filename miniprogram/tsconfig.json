@@ -9,8 +9,9 @@
     "strict": false,
     "skipLibCheck": true,
     "types": ["@dcloudio/types"],
+    "allowImportingTsExtensions": true,
     "baseUrl": "."
   },
-  "include": ["api/**/*.js", "utils/**/*.js", "globals.d.ts"],
+  "include": ["api/**/*.js", "utils/**/*.js", "globals.d.ts", "../shared/src/money.ts", "../shared/src/error-codes.ts"],
   "exclude": ["node_modules", "dist", "tests"]
 }
