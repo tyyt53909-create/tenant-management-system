@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `develop`
-> 集成基準: `origin/develop` @ `dade00b`
+> 集成基準: `origin/develop` @ `3523b29`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -15,9 +15,9 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | 186 warnings / 0 errors |
+| 後端 lint | ✅ pass | 188 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 128 files / 1207 tests |
+| 後端單元測試 | ✅ pass | 131 files / 1227 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
@@ -42,7 +42,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 4 |
+| 進行中 | 5 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -53,6 +53,7 @@
 - **T285 前端请求层一致性（COM-05）**（active，plan COM-05，`feature/T285-com-05-errors`）
 - **T286 管理后台角色路由、型别化 API、拆分大组件（FE-01）**（active，plan FE-01，`feature/T286-fe-01-rbac`）
 - **T287 小程序工程化：分包、隐私、型别、页面测试（FE-02）**（active，plan FE-02，`feature/T287-fe-02-miniprogram`）
+- **T288 依赖注入清理与大服务拆分（QLT-02）**（active，plan QLT-02，`feature/T288-qlt-02-di`）
 
 ### 阻擋發布
 - 無
@@ -84,12 +85,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 59 | 41 | 34 | 4 | 14 |
+| 未分類 | 60 | 41 | 34 | 5 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T288 依赖注入清理与大服务拆分（QLT-02）](docs/handoff/2026-10-25-T288-依赖注入与大服务拆分.md)
 - [交接记录：T287 小程序工程化（FE-02）](docs/handoff/2026-10-25-T287-小程序工程化.md)
 - [交接记录：T286 角色路由与组件拆分（FE-01）](docs/handoff/2026-10-25-T286-角色路由与组件拆分.md)
 - [交接记录：T285 前端请求层一致性（COM-05）](docs/handoff/2026-10-25-T285-前端请求层一致性.md)
@@ -97,7 +99,6 @@
 - [交接记录：T283 报修工单时间线（COM-03）](docs/handoff/2026-10-25-T283-报修时间线.md)
 - [交接记录：T282 实时推送（COM-02）](docs/handoff/2026-10-25-T282-实时推送.md)
 - [交接记录：T281 性能基准与 SLO（OPS-09）](docs/handoff/2026-10-25-T281-SLO与性能基准.md)
-- [交接记录：T280 备份、PITR 与恢复演练（OPS-07）](docs/handoff/2026-10-25-T280-备份与恢复.md)
 
 ---
 
@@ -105,13 +106,13 @@
 
 - 資料模型：**41** 張表
 - OpenAPI 路由：**177** 條
-- 後端程式碼：**23540** 行
+- 後端程式碼：**23627** 行
 - 管理後台程式碼：**31496** 行
 - 小程序程式碼：**6842** 行
-- 文件：**172** 份
+- 文件：**174** 份
 
 ### 測試
-- 後端單元：128 files / 1207 tests
+- 後端單元：131 files / 1227 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：22 files / 112 tests
 - 小程序單元：125 tests
