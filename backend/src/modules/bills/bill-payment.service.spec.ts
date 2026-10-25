@@ -477,6 +477,321 @@ describe('BillPaymentService', () => {
       expect(result.idempotent).toBe(true);
       expect(prisma.paymentRecord.create).not.toHaveBeenCalled();
     });
+
+    describe('applyRefundReversal (T294 / PAY-02)', () => {
+      it('账单不存在抛出 NotFoundException', async () => {
+        prisma.bill.findUnique.mockResolvedValue(null);
+        await expect(
+          service.applyRefundReversal({
+            billId: 'b-none',
+            paymentId: 'p1',
+            refundAmount: 100,
+            outRefundNo: 'RF_1',
+            operatorId: 'op1',
+          }),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('收款记录不存在或属于其他账单抛出 NotFoundException', async () => {
+        prisma.bill.findUnique.mockResolvedValue(bill());
+        prisma.paymentRecord.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+          id: 'p1',
+          billId: 'other-bill',
+        });
+
+        await expect(
+          service.applyRefundReversal({
+            billId: 'b1',
+            paymentId: 'p1',
+            refundAmount: 100,
+            outRefundNo: 'RF_1',
+            operatorId: 'op1',
+          }),
+        ).rejects.toThrow(NotFoundException);
+
+        await expect(
+          service.applyRefundReversal({
+            billId: 'b1',
+            paymentId: 'p1',
+            refundAmount: 100,
+            outRefundNo: 'RF_1',
+            operatorId: 'op1',
+          }),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('全额退款：生成负额冲正、原单标记 VOIDED、账单回退为 PENDING', async () => {
+        prisma.bill.findUnique.mockResolvedValue(
+          bill({ amount: 1000, paidAmount: 1000, status: 'PAID' }),
+        );
+        prisma.paymentRecord.findUnique.mockResolvedValue({
+          id: 'p-full',
+          billId: 'b1',
+          amount: 1000,
+          paymentMethod: 'WECHAT',
+          billPortion: 1000,
+          lateFeePortion: 0,
+          lateFeeAllocations: [],
+          status: 'CONFIRMED',
+        });
+        prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-full', amount: -1000 });
+        prisma.paymentRecord.update.mockResolvedValue({ id: 'p-full', status: 'VOIDED' });
+        prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+        const result = await service.applyRefundReversal({
+          billId: 'b1',
+          paymentId: 'p-full',
+          refundAmount: 1000,
+          outRefundNo: 'RF_FULL_001',
+          refundId: 'WX_REF_001',
+          operatorId: 'admin-1',
+          reason: '全额退款',
+        });
+
+        expect(prisma.paymentRecord.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            billId: 'b1',
+            amount: -1000,
+            status: 'REVERSAL',
+            reversalOfId: 'p-full',
+            transactionNumber: 'WX_REF_001',
+          }),
+        });
+
+        expect(prisma.paymentRecord.update).toHaveBeenCalledWith({
+          where: { id: 'p-full' },
+          data: expect.objectContaining({
+            status: 'VOIDED',
+            voidReason: expect.stringContaining('全额退款'),
+          }),
+        });
+
+        expect(result.bill.paidAmount).toBe(0);
+        expect(result.bill.status).toBe('PENDING');
+      });
+
+      it('部分退款：原收款保持 CONFIRMED，冲正记录无 reversalOfId，账单仍为 PARTIAL', async () => {
+        prisma.bill.findUnique.mockResolvedValue(
+          bill({ amount: 1000, paidAmount: 1000, status: 'PAID' }),
+        );
+        prisma.paymentRecord.findUnique.mockResolvedValue({
+          id: 'p-part',
+          billId: 'b1',
+          amount: 1000,
+          paymentMethod: 'WECHAT',
+          billPortion: 1000,
+          lateFeePortion: 0,
+          lateFeeAllocations: [],
+          status: 'CONFIRMED',
+        });
+        prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-part', amount: -300 });
+        prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+        const result = await service.applyRefundReversal({
+          billId: 'b1',
+          paymentId: 'p-part',
+          refundAmount: 300,
+          outRefundNo: 'RF_PART_001',
+          operatorId: 'admin-1',
+        });
+
+        expect(prisma.paymentRecord.update).not.toHaveBeenCalled();
+        expect(prisma.paymentRecord.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            amount: -300,
+            status: 'REVERSAL',
+            billPortion: -300,
+            lateFeePortion: -0,
+          }),
+        });
+        expect(result.bill.paidAmount).toBe(700);
+        expect(result.bill.status).toBe('PARTIAL');
+      });
+
+      it('退款含滞纳金回滚：准确按比例回滚滞纳金已结算金额', async () => {
+        prisma.bill.findUnique.mockResolvedValue(
+          bill({ amount: 1000, paidAmount: 1000, status: 'PAID' }),
+        );
+        prisma.paymentRecord.findUnique.mockResolvedValue({
+          id: 'p-fee',
+          billId: 'b1',
+          amount: 500,
+          paymentMethod: 'WECHAT',
+          billPortion: 300,
+          lateFeePortion: 200,
+          lateFeeAllocations: [
+            { lateFeeId: 'fee-1', amount: 150 },
+            { lateFeeId: 'fee-not-found', amount: 50 },
+          ],
+          status: 'CONFIRMED',
+        });
+        prisma.lateFee.findUnique = vi.fn().mockImplementation(({ where }) => {
+          if (where.id === 'fee-1') {
+            return Promise.resolve({
+              id: 'fee-1',
+              confirmedAmount: 150,
+              settledAmount: 150,
+            });
+          }
+          return Promise.resolve(null);
+        });
+
+        prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-fee' });
+        prisma.paymentRecord.update.mockResolvedValue({ id: 'p-fee', status: 'VOIDED' });
+        prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+        await service.applyRefundReversal({
+          billId: 'b1',
+          paymentId: 'p-fee',
+          refundAmount: 500,
+          outRefundNo: 'RF_FEE_001',
+          operatorId: 'admin-1',
+        });
+
+        expect(prisma.lateFee.update).toHaveBeenCalledWith({
+          where: { id: 'fee-1' },
+          data: {
+            settledAmount: 0,
+            settledAt: null,
+            settledBy: null,
+          },
+        });
+      });
+
+      it('滞纳金回滚后仍满足结清金额时保留已结算状态', async () => {
+        prisma.bill.findUnique.mockResolvedValue(
+          bill({ amount: 1000, paidAmount: 1000, status: 'PAID' }),
+        );
+        prisma.paymentRecord.findUnique.mockResolvedValue({
+          id: 'p-fee2',
+          billId: 'b1',
+          amount: 500,
+          paymentMethod: 'WECHAT',
+          billPortion: 400,
+          lateFeePortion: 100,
+          lateFeeAllocations: [{ lateFeeId: 'fee-2', amount: 100 }],
+          status: 'CONFIRMED',
+        });
+        prisma.lateFee.findUnique = vi.fn().mockResolvedValue({
+          id: 'fee-2',
+          confirmedAmount: 50,
+          settledAmount: 150,
+        });
+        prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-fee2' });
+        prisma.paymentRecord.update.mockResolvedValue({ id: 'p-fee2', status: 'VOIDED' });
+        prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+        await service.applyRefundReversal({
+          billId: 'b1',
+          paymentId: 'p-fee2',
+          refundAmount: 500,
+          outRefundNo: 'RF_FEE_002',
+          operatorId: 'admin-1',
+        });
+
+        expect(prisma.lateFee.update).toHaveBeenCalledWith({
+          where: { id: 'fee-2' },
+          data: {
+            settledAmount: 50,
+          },
+        });
+      });
+
+      it('多笔滞纳金分配在满足冲退金额后及时 break', async () => {
+        prisma.bill.findUnique.mockResolvedValue(
+          bill({ amount: 1000, paidAmount: 1000, status: 'PAID' }),
+        );
+        prisma.paymentRecord.findUnique.mockResolvedValue({
+          id: 'p-fee3',
+          billId: 'b1',
+          amount: 500,
+          paymentMethod: 'WECHAT',
+          billPortion: 450,
+          lateFeePortion: 50,
+          lateFeeAllocations: [
+            { lateFeeId: 'fee-a', amount: 50 },
+            { lateFeeId: 'fee-b', amount: 50 },
+          ],
+          status: 'CONFIRMED',
+        });
+        prisma.lateFee.findUnique = vi.fn().mockResolvedValue({
+          id: 'fee-a',
+          confirmedAmount: 100,
+          settledAmount: 100,
+        });
+        prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-fee3' });
+        prisma.paymentRecord.update.mockResolvedValue({ id: 'p-fee3', status: 'VOIDED' });
+        prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+        await service.applyRefundReversal({
+          billId: 'b1',
+          paymentId: 'p-fee3',
+          refundAmount: 500,
+          outRefundNo: 'RF_FEE_003',
+          operatorId: 'admin-1',
+        });
+
+        expect(prisma.lateFee.findUnique).toHaveBeenCalledTimes(1);
+      });
+
+      it('部分退款后账单实缴仍满足应缴时保持 PAID 状态', async () => {
+        prisma.bill.findUnique.mockResolvedValue(
+          bill({ amount: 500, paidAmount: 800, status: 'PAID' }),
+        );
+        prisma.paymentRecord.findUnique.mockResolvedValue({
+          id: 'p-over',
+          billId: 'b1',
+          amount: 800,
+          paymentMethod: 'WECHAT',
+          billPortion: 800,
+          lateFeePortion: 0,
+          lateFeeAllocations: null,
+          status: 'CONFIRMED',
+        });
+        prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-over' });
+        prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+        const result = await service.applyRefundReversal({
+          billId: 'b1',
+          paymentId: 'p-over',
+          refundAmount: 200,
+          outRefundNo: 'RF_OVER_001',
+          operatorId: 'admin-1',
+        });
+
+        expect(result.bill.paidAmount).toBe(600);
+        expect(result.bill.status).toBe('PAID');
+        expect(result.bill.isOverdue).toBe(false);
+      });
+
+      it('退款含滞纳金冲退但无分配记录时安全跳过', async () => {
+        prisma.bill.findUnique.mockResolvedValue(
+          bill({ amount: 1000, paidAmount: 1000, status: 'PAID' }),
+        );
+        prisma.paymentRecord.findUnique.mockResolvedValue({
+          id: 'p-no-alloc',
+          billId: 'b1',
+          amount: 500,
+          paymentMethod: 'WECHAT',
+          billPortion: 400,
+          lateFeePortion: 100,
+          lateFeeAllocations: null,
+          status: 'CONFIRMED',
+        });
+        prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-no-alloc' });
+        prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
+
+        const result = await service.applyRefundReversal({
+          billId: 'b1',
+          paymentId: 'p-no-alloc',
+          refundAmount: 500,
+          outRefundNo: 'RF_NO_ALLOC',
+          operatorId: 'admin-1',
+        });
+
+        expect(result.bill.paidAmount).toBe(600);
+      });
+    });
   });
 
   it('finds payment history and rejects unknown bills', async () => {

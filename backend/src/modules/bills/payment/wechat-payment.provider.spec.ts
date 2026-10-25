@@ -174,5 +174,84 @@ describe('Payment Providers (T293 / PAY-01)', () => {
       expect(res.openid).toBe('user_openid_123');
       expect(res.attach).toContain('bill-test-abc');
     });
+
+    it('成功解密退款通知 AEAD_AES_256_GCM 密文', async () => {
+      const provider = new WechatPaymentProvider({
+        appId: 'wx_real_appid',
+        mchId: '1600000001',
+        privateKey,
+        apiV3Key,
+      });
+
+      const refundPlaintext = JSON.stringify({
+        out_trade_no: 'WXP_001',
+        transaction_id: '4200001',
+        out_refund_no: 'RF_123456',
+        refund_id: '5000001',
+        refund_status: 'SUCCESS',
+        amount: { total: 300000, refund: 300000 },
+        user_received_account: '招商银行(0123)',
+      });
+
+      const nonce = randomBytes(12).toString('hex');
+      const associatedData = 'refund';
+      const cipher = createCipheriv('aes-256-gcm', Buffer.from(apiV3Key, 'utf8'), Buffer.from(nonce, 'utf8'));
+      cipher.setAAD(Buffer.from(associatedData, 'utf8'));
+      const encrypted = Buffer.concat([cipher.update(refundPlaintext, 'utf8'), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+      const ciphertext = Buffer.concat([encrypted, authTag]).toString('base64');
+
+      const notifyBody = {
+        resource: {
+          algorithm: 'AEAD_AES_256_GCM',
+          ciphertext,
+          associated_data: associatedData,
+          nonce,
+        },
+      };
+
+      const res = await provider.verifyAndParseRefundNotify({}, notifyBody);
+      expect(res.outRefundNo).toBe('RF_123456');
+      expect(res.refundId).toBe('5000001');
+      expect(res.refundStatus).toBe('SUCCESS');
+      expect(res.amount.refund).toBe(300000);
+      expect(res.userReceivedAccount).toBe('招商银行(0123)');
+    });
+
+    it('解析微信交易对账单 CSV 内容', async () => {
+      const provider = new WechatPaymentProvider({
+        appId: 'wx_real_appid',
+        mchId: '1600000001',
+        privateKey,
+        apiV3Key,
+      });
+
+      const mockCsv = [
+        '交易时间,公众账号ID,商户号,子商户号,设备号,微信订单号,商户订单号,用户标识,交易类型,交易状态,付款银行,货币种类,总金额,应结订单金额,代金券金额,微信退款单号,商户退款单号,退款金额,充值券退款金额,退款类型,退款状态,商品名称,商户数据包,手续费,费率,订单金额,申请退款金额,费率备注',
+        '`2026-10-25 10:00:00,`wx123,`1600001,`0,`,`420001,`WP_001,`openid1,`JSAPI,`SUCCESS,`BOC_CREDIT,`CNY,`250.00,`250.00,`0.00,`0,`0,`0.00,`0.00,`,`,`栖居生活,`attach,`1.50,`0.60%,`250.00,`0.00,`',
+        '`总交易单数,`总交易额,`总退款金额,`总代金券金额,`手续费总金额,`订单总金额,`申请退款总金额',
+        '`1,`250.00,`0.00,`0.00,`1.50,`250.00,`0.00',
+      ].join('\n');
+
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ download_url: 'https://api.mch.weixin.qq.com/download/bill.csv' }),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => mockCsv,
+        } as any);
+
+      const items = await provider.downloadTradeBill('2026-10-25');
+      expect(items).toHaveLength(1);
+      expect(items[0].transactionId).toBe('420001');
+      expect(items[0].outTradeNo).toBe('WP_001');
+      expect(items[0].totalAmount).toBe(25000); // 250.00 元 -> 25000 分
+      expect(items[0].tradeState).toBe('SUCCESS');
+    });
   });
 });

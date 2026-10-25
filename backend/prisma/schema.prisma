@@ -111,6 +111,30 @@ enum PaymentStatus {
   REVERSAL // 冲正记录（金额为负）
 }
 
+// 退款状态（PAY-02）
+enum RefundStatus {
+  PROCESSING // 退款中
+  SUCCESS // 退款成功
+  FAILED // 退款失败
+  CLOSED // 退款关闭
+}
+
+// 对账批次状态（PAY-02）
+enum ReconciliationBatchStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// 对账明细差异类型（PAY-02）
+enum ReconciliationItemType {
+  MATCHED // 完全匹配平账
+  SYSTEM_MISSING // 微信有流水，系统漏单
+  WECHAT_MISSING // 系统有记录，微信无记录
+  AMOUNT_MISMATCH // 金额不一致
+  STATUS_MISMATCH // 状态不一致
+}
+
 // 付款方式
 enum PaymentMethod {
   CASH // 现金
@@ -568,6 +592,7 @@ model Bill {
   dedupKey String? @unique
 
   paymentRecords  PaymentRecord[]
+  refundRecords   RefundRecord[]
   lateFees        LateFee[]
   lateFeeAccruals LateFeeAccrual[]
 
@@ -679,6 +704,8 @@ model PaymentRecord {
   notes       String?  @db.Text
 
   createdAt DateTime @default(now())
+
+  refundRecords RefundRecord[]
 
   @@unique([billId, transactionNumber])
   @@index([billId])
@@ -1164,6 +1191,94 @@ model MeterPriceHistory {
   @@index([meterType, effectiveDate])
   @@index([meterId, effectiveDate])
   @@map("meter_price_history")
+}
+
+// 25. RefundRecord（退款记录，PAY-02）
+model RefundRecord {
+  id              String        @id @default(cuid())
+  paymentRecordId String
+  paymentRecord   PaymentRecord @relation(fields: [paymentRecordId], references: [id])
+
+  billId String
+  bill   Bill   @relation(fields: [billId], references: [id])
+
+  outRefundNo String       @unique
+  refundId    String?      @unique
+  amount      Int // 退款金额（分）
+  reason      String?      @db.Text
+  status      RefundStatus @default(PROCESSING)
+  channel     String       @default("WECHAT")
+  operatorId  String
+
+  userReceivedAccount String?
+  successAt           DateTime?
+  rawResponse         Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([paymentRecordId])
+  @@index([billId])
+  @@index([status])
+  @@map("refund_records")
+}
+
+// 26. PaymentReconciliationBatch（对账批次表，PAY-02）
+model PaymentReconciliationBatch {
+  id          String   @id @default(cuid())
+  batchNumber String   @unique
+  billDate    DateTime @db.Date
+  channel     String   @default("WECHAT")
+
+  totalWechatCount  Int @default(0)
+  totalWechatAmount Int @default(0)
+  totalSystemCount  Int @default(0)
+  totalSystemAmount Int @default(0)
+
+  matchedCount     Int                       @default(0)
+  discrepancyCount Int                       @default(0)
+  status           ReconciliationBatchStatus @default(COMPLETED)
+  summary          Json?
+  executedBy       String
+
+  createdAt DateTime @default(now())
+
+  items PaymentReconciliationItem[]
+
+  @@index([billDate])
+  @@index([status])
+  @@map("payment_reconciliation_batches")
+}
+
+// 27. PaymentReconciliationItem（对账明细与差异表，PAY-02）
+model PaymentReconciliationItem {
+  id      String                     @id @default(cuid())
+  batchId String
+  batch   PaymentReconciliationBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  outTradeNo    String?
+  transactionId String?
+  outRefundNo   String?
+  refundId      String?
+
+  wechatAmount Int?
+  systemAmount Int?
+  wechatStatus String?
+  systemStatus String?
+
+  type ReconciliationItemType
+
+  resolved     Boolean   @default(false)
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  resolveNotes String?   @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([batchId, type])
+  @@index([outTradeNo])
+  @@index([transactionId])
+  @@map("payment_reconciliation_items")
 }
 
 // 25. UserCapabilityOverride（租客能力覆写）
