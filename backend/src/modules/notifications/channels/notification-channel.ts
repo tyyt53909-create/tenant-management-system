@@ -1,6 +1,7 @@
 export interface NotificationMessage {
   userId: string;
   email?: string | null;
+  phone?: string | null;
   title: string;
   body: string;
   priority: 'NORMAL' | 'URGENT';

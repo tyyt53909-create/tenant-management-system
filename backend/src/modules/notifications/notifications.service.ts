@@ -30,6 +30,7 @@ export class NotificationsService {
     const notification = await this.dispatcher.dispatch({
       userId: dto.userId,
       email: user.email,
+      phone: user.phone,
       title: dto.title,
       body: dto.body,
       priority: dto.priority ?? 'NORMAL',

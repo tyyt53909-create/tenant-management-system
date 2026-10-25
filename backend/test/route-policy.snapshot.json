@@ -77,6 +77,12 @@
   },
   {
     "method": "POST",
+    "path": "/api/auth/bind-phone-sms",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
     "path": "/api/auth/google",
     "public": true,
     "roles": []
@@ -120,6 +126,12 @@
   {
     "method": "POST",
     "path": "/api/auth/login-email-code",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/login-sms-code",
     "public": true,
     "roles": []
   },
@@ -174,6 +186,12 @@
   {
     "method": "POST",
     "path": "/api/auth/send-email-code",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/send-sms-code",
     "public": true,
     "roles": []
   },

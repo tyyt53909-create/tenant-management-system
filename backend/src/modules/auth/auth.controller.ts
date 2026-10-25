@@ -13,6 +13,7 @@ import { Public } from '../../common/decorators/public.decorator.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { WechatLoginDto, WechatBindDto } from './dto/wechat-auth.dto.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
+import { SendSmsCodeDto, LoginSmsCodeDto, BindPhoneSmsDto } from './dto/sms-otp.dto.js';
 import { AuthThrottle, OtpEmailThrottle } from '../../common/decorators/throttle.decorators.js';
 import { AuthService } from './auth.service.js';
 import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
@@ -242,6 +243,16 @@ export class AuthController {
   }
 
   /**
+   * 发送手机短信验证码 (OTP)
+   */
+  @Post('send-sms-code')
+  @Public()
+  @OtpEmailThrottle()
+  async sendSmsCode(@Body() dto: SendSmsCodeDto) {
+    return this.authService.sendSmsCode(dto);
+  }
+
+  /**
    * 邮箱验证码免密登录 / 自动注册
    */
   @Post('login-email-code')
@@ -256,6 +267,36 @@ export class AuthController {
       setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
     return result;
+  }
+
+  /**
+   * 手机短信验证码免密登录 / 自动注册
+   */
+  @Post('login-sms-code')
+  @Public()
+  @AuthThrottle()
+  async loginWithSmsCode(
+    @Body() dto: LoginSmsCodeDto,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const result = await this.authService.loginWithSmsCode(dto);
+    if (res && result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
+    }
+    return result;
+  }
+
+  /**
+   * 登录用户通过短信验证码绑定手机号
+   */
+  @Post('bind-phone-sms')
+  @UseGuards(JwtAuthGuard)
+  async bindPhoneSms(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Body() dto: BindPhoneSmsDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.authService.bindPhoneSms(user.userId, dto);
   }
 
   /**

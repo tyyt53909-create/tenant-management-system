@@ -266,6 +266,15 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
   { key: 'WECHAT_SUBSCRIBE_TEMPLATE_BILL', description: '微信订阅消息-账单通知模板ID（可选）' },
   { key: 'WECHAT_SUBSCRIBE_TEMPLATE_MAINTENANCE', description: '微信订阅消息-报修工单模板ID（可选）' },
   { key: 'WECHAT_SUBSCRIBE_TEMPLATE_CONTRACT', description: '微信订阅消息-合同通知模板ID（可选）' },
+  { key: 'ALIYUN_SMS_ACCESS_KEY_ID', description: '阿里云短信 AccessKey ID（可选）', secret: true },
+  { key: 'ALIYUN_SMS_ACCESS_KEY_SECRET', description: '阿里云短信 AccessKey Secret（可选）', secret: true },
+  { key: 'ALIYUN_SMS_SIGN_NAME', description: '阿里云短信签名名称（可选）' },
+  { key: 'ALIYUN_SMS_TEMPLATE_CODE_OTP', description: '阿里云短信验证码模板 Code（可选）' },
+  {
+    key: 'SMS_MOCK',
+    description: '短信模拟下发开关；生产必须为 false',
+    validate: oneOf(...BOOLEAN_VALUES),
+  },
   {
     key: 'OTP_DEV_BYPASS',
     description: '万能验证码开关；生产必须为 false',

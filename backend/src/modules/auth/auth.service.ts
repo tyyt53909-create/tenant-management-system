@@ -22,6 +22,7 @@ import { GoogleAuthService } from './google-auth.service.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { EmailOtpService } from './email-otp.service.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
+import { SendSmsCodeDto, LoginSmsCodeDto, BindPhoneSmsDto } from './dto/sms-otp.dto.js';
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
 import { FederatedAuthService } from './federated-auth.service.js';
 import { WechatAuthService } from './wechat-auth.service.js';
@@ -447,6 +448,18 @@ export class AuthService {
 
   async bindInviteCode(userId: string, dto: BindInviteCodeDto) {
     return this.federatedAuthService.bindInviteCode(userId, dto);
+  }
+
+  async sendSmsCode(dto: SendSmsCodeDto) {
+    return this.federatedAuthService.sendSmsCode(dto);
+  }
+
+  async loginWithSmsCode(dto: LoginSmsCodeDto) {
+    return this.federatedAuthService.loginWithSmsCode(dto);
+  }
+
+  async bindPhoneSms(userId: string, dto: BindPhoneSmsDto) {
+    return this.federatedAuthService.bindPhoneSms(userId, dto);
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {

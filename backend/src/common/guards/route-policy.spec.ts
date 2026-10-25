@@ -61,6 +61,8 @@ const PUBLIC_ROUTE_ALLOWLIST = new Set([
   'POST /api/auth/google',
   'POST /api/auth/send-email-code',
   'POST /api/auth/login-email-code',
+  'POST /api/auth/send-sms-code',
+  'POST /api/auth/login-sms-code',
   'GET /api/auth/google/client-id',
   'GET /api/auth/wechat/config',
   'POST /api/auth/wechat/login',
