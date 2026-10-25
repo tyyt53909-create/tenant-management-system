@@ -65,6 +65,9 @@ export class RoomsService {
           area: dto.area,
           facilities: dto.facilities as Prisma.InputJsonValue,
           description: dto.description,
+          listingPrice: dto.listingPrice,
+          isListed: dto.isListed ?? true,
+          availableDate: dto.availableDate ? new Date(dto.availableDate) : undefined,
           status: 'VACANT', // 默认空闲
           cleanStatus: 'CLEAN', // 默认已清洁
           ...(photos.length > 0 ? { photos: { create: photos } } : {}),
@@ -252,10 +255,13 @@ export class RoomsService {
     await this.assertTransitionAllowed(room, targetStatus, targetCleanStatus);
 
     // 4. 更新（乐观锁：提供 version 时校验；每次成功更新 version 递增）
-    const { version: expectedVersion, facilities, photos, ...fields } = dto;
+    const { version: expectedVersion, facilities, photos, availableDate, ...fields } = dto;
     const data: Prisma.RoomUncheckedUpdateInput = {
       ...fields,
       ...(facilities !== undefined ? { facilities: facilities as Prisma.InputJsonValue } : {}),
+      ...(availableDate !== undefined
+        ? { availableDate: availableDate ? new Date(availableDate) : null }
+        : {}),
       version: { increment: 1 },
     };
 

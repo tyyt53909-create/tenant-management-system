@@ -38,6 +38,32 @@ enum CleanStatus {
   CLEANING // 清洁中
 }
 
+// 意向线索状态
+enum LeadStatus {
+  NEW // 新留资待跟进
+  FOLLOWING // 跟进中
+  CONVERTED // 已转签约
+  CLOSED // 已关闭
+}
+
+// 线索来源渠道
+enum LeadSource {
+  MINIPROGRAM // 小程序
+  WEB // 网页
+  FRIEND_SHARE // 朋友分享
+  POSTER // 海报扫码
+  OFFLINE // 线下到访/电话
+  OTHER // 其他
+}
+
+// 看房预约状态
+enum AppointmentStatus {
+  PENDING // 待管家确认排期
+  CONFIRMED // 已确认/已排期
+  COMPLETED // 已看房
+  CANCELLED // 已取消
+}
+
 // 公共区域类型
 enum PublicAreaType {
   HALLWAY // 走廊
@@ -335,6 +361,13 @@ model Room {
   status      RoomStatus  @default(VACANT)
   cleanStatus CleanStatus @default(CLEAN)
 
+  /// 挂牌月租金（分）
+  listingPrice  Int?
+  /// 是否上架公开挂牌展示
+  isListed      Boolean   @default(true)
+  /// 预计起租可用日期
+  availableDate DateTime? @db.Date
+
   version Int @default(0) // 乐观锁
 
   createdAt DateTime @default(now())
@@ -347,6 +380,8 @@ model Room {
   photos              RoomPhoto[]
   utilityAllocations  PublicUtilityAllocation[]
   roomShape           RoomShape?
+  leads               Lead[]
+  appointments        ViewingAppointment[]
 
   @@unique([buildingId, floor, roomNumber])
   @@index([buildingId, status])
@@ -1515,4 +1550,60 @@ enum AnnouncementAudience {
   BUILDING
   TAGS
   TENANTS
+}
+
+// 46. Lead（意向线索，LSE-01 / T298）
+model Lead {
+  id             String     @id @default(cuid())
+  name           String
+  phone          String
+  roomType       RoomType?
+  budgetMin      Int?
+  budgetMax      Int?
+  expectedMoveIn DateTime?  @db.Date
+  source         LeadSource @default(MINIPROGRAM)
+  status         LeadStatus @default(NEW)
+  notes          String?    @db.Text
+
+  roomId String?
+  room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  followUpBy     String?
+  lastFollowedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([phone])
+  @@index([roomId])
+  @@map("leads")
+}
+
+// 47. ViewingAppointment（看房预约，LSE-01 / T298）
+model ViewingAppointment {
+  id              String            @id @default(cuid())
+  roomId          String
+  room            Room              @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  name            String
+  phone           String
+  appointmentTime DateTime
+  visitorsCount   Int               @default(1)
+  status          AppointmentStatus @default(PENDING)
+  notes           String?           @db.Text
+  feedback        String?           @db.Text
+  cancelledReason String?           @db.Text
+
+  userId      String?
+  confirmedBy String?
+  confirmedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roomId, appointmentTime])
+  @@index([status, appointmentTime])
+  @@index([phone])
+  @@map("viewing_appointments")
 }

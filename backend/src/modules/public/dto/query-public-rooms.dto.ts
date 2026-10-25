@@ -35,4 +35,16 @@ export class QueryPublicRoomsDto {
   @IsOptional()
   @IsEnum(RoomType)
   roomType?: RoomType;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minPrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxPrice?: number;
 }

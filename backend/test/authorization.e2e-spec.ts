@@ -48,6 +48,10 @@ import { SpaceController } from '../src/modules/space/space.controller.js';
 import { SpaceService } from '../src/modules/space/space.service.js';
 import { FloorPlansController } from '../src/modules/floor-plans/floor-plans.controller.js';
 import { FloorPlansService } from '../src/modules/floor-plans/floor-plans.service.js';
+import { LeadsController } from '../src/modules/leads/leads.controller.js';
+import { LeadsService } from '../src/modules/leads/leads.service.js';
+import { AppointmentsController } from '../src/modules/appointments/appointments.controller.js';
+import { AppointmentsService } from '../src/modules/appointments/appointments.service.js';
 import { BusinessClock } from '../src/common/business-clock/business-clock.service.js';
 
 /**
@@ -163,6 +167,8 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         RoomsController,
         AuthController,
         PrepayController,
+        LeadsController,
+        AppointmentsController,
       ],
       providers: [
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
@@ -296,6 +302,26 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         {
           provide: JwtAuthService,
           useValue: { generateTokens: vi.fn(), verifyToken: vi.fn(), refreshAccessToken: vi.fn() },
+        },
+        {
+          provide: LeadsService,
+          useValue: {
+            findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findOne: vi.fn(),
+            update: vi.fn(),
+            remove: vi.fn(),
+          },
+        },
+        {
+          provide: AppointmentsService,
+          useValue: {
+            findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findMy: vi.fn().mockResolvedValue([]),
+            findOne: vi.fn(),
+            confirm: vi.fn(),
+            complete: vi.fn(),
+            cancel: vi.fn(),
+          },
         },
         {
           provide: PrismaService,
@@ -602,6 +628,24 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
     it('ADMIN 可读可写', async () => {
       await as(request(app.getHttpServer()).get('/tags'), 'ADMIN').expect(200);
       await as(request(app.getHttpServer()).post('/tags').send({ name: '学生' }), 'ADMIN').expect(201);
+    });
+  });
+
+  describe('招租管线与看房预约（LSE-01 / T298）', () => {
+    it('线索管理：未登录 401，TENANT/CLEANER 403，ADMIN 200', async () => {
+      await request(app.getHttpServer()).get('/leads').expect(401);
+      await as(request(app.getHttpServer()).get('/leads'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/leads'), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).get('/leads'), 'ADMIN').expect(200);
+    });
+
+    it('看房预约管理：全量预约未登录 401，TENANT 403，ADMIN 200；租客本人预约允许 TENANT 访问', async () => {
+      await request(app.getHttpServer()).get('/appointments').expect(401);
+      await as(request(app.getHttpServer()).get('/appointments'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/appointments'), 'ADMIN').expect(200);
+
+      // 租客访问本人预约端点 /appointments/my
+      await as(request(app.getHttpServer()).get('/appointments/my'), 'TENANT', 'tenant-self').expect(200);
     });
   });
 

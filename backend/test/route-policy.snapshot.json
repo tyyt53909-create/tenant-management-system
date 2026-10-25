@@ -63,6 +63,57 @@
   },
   {
     "method": "GET",
+    "path": "/api/appointments",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/appointments/:id",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/appointments/:id/cancel",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/appointments/:id/complete",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/appointments/:id/confirm",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/appointments/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/audit-logs",
     "public": false,
     "roles": [
@@ -785,6 +836,38 @@
   },
   {
     "method": "GET",
+    "path": "/api/leads",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/leads/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/leads/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/leads/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/maintenance",
     "public": false,
     "roles": [
@@ -1268,6 +1351,12 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/api/public/appointments",
+    "public": true,
+    "roles": []
+  },
+  {
     "method": "GET",
     "path": "/api/public/buildings",
     "public": true,
@@ -1282,6 +1371,12 @@
   {
     "method": "GET",
     "path": "/api/public/files/:key",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/public/leads",
     "public": true,
     "roles": []
   },
@@ -1312,6 +1407,12 @@
   {
     "method": "GET",
     "path": "/api/public/rooms/:id",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/public/rooms/:id/share",
     "public": true,
     "roles": []
   },

@@ -6,11 +6,7 @@ import { BillReceiptService } from '../bills/bill-receipt.service.js';
 
 describe('PublicController', () => {
   let controller: PublicController;
-  let publicService: {
-    listBuildings: ReturnType<typeof vi.fn>;
-    listRooms: ReturnType<typeof vi.fn>;
-    getRoom: ReturnType<typeof vi.fn>;
-  };
+  let publicService: any;
   let receiptService: {
     verifyReceipt: ReturnType<typeof vi.fn>;
     generatePublicReceiptPdf: ReturnType<typeof vi.fn>;
@@ -29,6 +25,7 @@ describe('PublicController', () => {
     controller = new PublicController(
       publicService as unknown as PublicService,
       receiptService as unknown as BillReceiptService,
+      { verifyToken: vi.fn().mockResolvedValue({ sub: 'user-1' }) } as any,
     );
   });
 
@@ -52,6 +49,16 @@ describe('PublicController', () => {
       const res = await controller.getRoom('r1');
       expect(res).toEqual({ id: 'r1', roomNumber: '101' });
       expect(publicService.getRoom).toHaveBeenCalledWith('r1');
+    });
+
+    it('getRoomShareInfo, createLead, createAppointment 正常委托 service 处理', async () => {
+      publicService.getRoomShareInfo = vi.fn().mockResolvedValue({ title: '分享' });
+      publicService.createLead = vi.fn().mockResolvedValue({ id: 'lead-1' });
+      publicService.createAppointment = vi.fn().mockResolvedValue({ id: 'appt-1' });
+
+      expect(await controller.getRoomShareInfo('r1')).toEqual({ title: '分享' });
+      expect(await controller.createLead({ name: '张', phone: '13800000000' } as any)).toEqual({ id: 'lead-1' });
+      expect(await controller.createAppointment({ roomId: 'r1' } as any, { headers: {} } as any)).toEqual({ id: 'appt-1' });
     });
   });
 
