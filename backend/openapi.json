@@ -5730,6 +5730,138 @@
         ]
       }
     },
+    "/api/scheduler/run-daily": {
+      "post": {
+        "operationId": "SchedulerController_runDaily",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "手动触发每日任务（合同流转/逾期检查/提醒/报修自动确认/预付提醒）",
+        "tags": [
+          "Scheduler"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/scheduler/run-monthly-bills": {
+      "post": {
+        "operationId": "SchedulerController_runMonthlyBills",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "手动触发月度账单生成",
+        "tags": [
+          "Scheduler"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/scheduler/jobs/{name}/run": {
+      "post": {
+        "operationId": "SchedulerController_runJob",
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "按任务名手动重跑。另一个实例正在跑时返回 SKIPPED。",
+        "tags": [
+          "Scheduler"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/bills": {
       "post": {
         "operationId": "BillsController_create",
@@ -6631,6 +6763,184 @@
         ]
       }
     },
+    "/api/jobs/stats": {
+      "get": {
+        "operationId": "JobsController_stats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/jobs/failed": {
+      "get": {
+        "operationId": "JobsController_failed",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/jobs/failed/{id}/retry": {
+      "post": {
+        "operationId": "JobsController_retry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/jobs/failed/{id}": {
+      "delete": {
+        "operationId": "JobsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/deposits/{contractId}": {
       "get": {
         "operationId": "DepositsController_get",
@@ -6701,19 +7011,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -6760,19 +7066,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -6819,19 +7121,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -8946,316 +9244,6 @@
         ]
       }
     },
-    "/api/scheduler/run-daily": {
-      "post": {
-        "operationId": "SchedulerController_runDaily",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "201": {
-            "description": ""
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "summary": "手动触发每日任务（合同流转/逾期检查/提醒/报修自动确认/预付提醒）",
-        "tags": [
-          "Scheduler"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/scheduler/run-monthly-bills": {
-      "post": {
-        "operationId": "SchedulerController_runMonthlyBills",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "201": {
-            "description": ""
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "summary": "手动触发月度账单生成",
-        "tags": [
-          "Scheduler"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/scheduler/jobs/{name}/run": {
-      "post": {
-        "operationId": "SchedulerController_runJob",
-        "parameters": [
-          {
-            "name": "name",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "201": {
-            "description": ""
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "summary": "按任务名手动重跑。另一个实例正在跑时返回 SKIPPED。",
-        "tags": [
-          "Scheduler"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/jobs/stats": {
-      "get": {
-        "operationId": "JobsController_stats",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Jobs"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/jobs/failed": {
-      "get": {
-        "operationId": "JobsController_failed",
-        "parameters": [
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Jobs"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/jobs/failed/{id}/retry": {
-      "post": {
-        "operationId": "JobsController_retry",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "201": {
-            "description": ""
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Jobs"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/jobs/failed/{id}": {
-      "delete": {
-        "operationId": "JobsController_remove",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Jobs"
-        ],
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
     "/api/public/buildings": {
       "get": {
         "operationId": "PublicController_listBuildings",
@@ -9580,6 +9568,9 @@
           "inviteCode": {
             "type": "string"
           },
+          "emailCode": {
+            "type": "string"
+          },
           "phone": {
             "type": "string"
           }
@@ -9587,7 +9578,8 @@
         "required": [
           "email",
           "password",
-          "inviteCode"
+          "inviteCode",
+          "emailCode"
         ]
       },
       "RegisterResponseDto": {
@@ -9707,6 +9699,10 @@
               "CLEANER",
               "TENANT"
             ]
+          },
+          "tenantId": {
+            "type": "string",
+            "description": "租客邀请必须指定预建档案。职员邀请不要填。"
           }
         }
       },
@@ -10868,6 +10864,7 @@
         "properties": {
           "status": {
             "type": "string",
+            "description": "只允许取消。实收和结清状态由收款、滞纳金和冲正计算。",
             "enum": [
               "PENDING",
               "PARTIAL",
@@ -10875,10 +10872,6 @@
               "OVERDUE",
               "CANCELLED"
             ]
-          },
-          "paidAmount": {
-            "type": "number",
-            "minimum": 0
           }
         }
       },
@@ -10956,6 +10949,10 @@
           "reason": {
             "type": "string",
             "maxLength": 200
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "maxLength": 128
           }
         },
         "required": [
@@ -10972,6 +10969,10 @@
           "notes": {
             "type": "string",
             "maxLength": 200
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "maxLength": 128
           }
         },
         "required": [

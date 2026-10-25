@@ -172,6 +172,36 @@ export async function ensurePrepayFunded(tenantId: string, roomId: string, amoun
 }
 
 /** 直接登记读数（autoSettle 可控，供结算前置使用） */
+export async function setupDepositLedger(contractId: string, amount = 600000) {
+  const { req, headers } = await apiContext();
+  try {
+    const period = new Date().toISOString().slice(0, 7);
+    const billRes = await req.post('bills', {
+      headers,
+      data: {
+        contractId,
+        billType: 'DEPOSIT',
+        period: `${period}-DEP-${uid().slice(-4)}`,
+        amount,
+        dueDate: new Date(Date.now() + 10 * 86400000).toISOString(),
+      },
+    });
+    if (billRes.status() !== 201) throw new Error('创建押金账单失败: ' + billRes.status());
+    const bill = await billRes.json();
+    const payRes = await req.post(`bills/${bill.id}/payments`, {
+      headers,
+      data: {
+        amount,
+        paymentMethod: 'BANK_TRANSFER',
+        transactionNumber: `DEP-TXN-${uid()}`,
+      },
+    });
+    if (payRes.status() !== 201) throw new Error('押金账单收款失败: ' + payRes.status());
+  } finally {
+    await req.dispose();
+  }
+}
+
 export async function postReading(meterId: string, currentReading: number, opts: { autoSettle?: boolean; readingTime?: string } = {}) {
   const { req, headers } = await apiContext();
   try {

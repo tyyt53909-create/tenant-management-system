@@ -9,7 +9,7 @@ test.describe('账单收款', () => {
     const bill = await createPendingBill(seed.contract.id, seed.uid.slice(-4));
 
     await page.goto('/bills');
-    const row = page.getByRole('row', { name: new RegExp(seed.room.roomNumber) });
+    const row = page.getByRole('row', { name: new RegExp(bill.billNumber) });
     await expect(row).toBeVisible({ timeout: 10000 });
     await expect(row).toContainText('待支付');
 
@@ -25,6 +25,6 @@ test.describe('账单收款', () => {
     // 弹窗关闭后行状态更新（bill 金额唯一，行内 billNumber 可二次确认）
     await expect(page.getByRole('dialog', { name: '登记收款' })).toBeHidden({ timeout: 8000 });
     await expect(page.getByText(bill.billNumber).first()).toBeVisible({ timeout: 8000 });
-    await expect(page.getByRole('row', { name: new RegExp(seed.room.roomNumber) })).toContainText('已支付', { timeout: 8000 });
+    await expect(row).toContainText('已支付', { timeout: 8000 });
   });
 });

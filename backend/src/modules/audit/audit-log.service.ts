@@ -50,7 +50,7 @@ export class AuditLogService {
 
     let userId: string | null = null;
     if (event.actorId && event.actorId !== 'SYSTEM') {
-      const user = await client.user.findUnique({
+      const user = await client.user?.findUnique({
         where: { id: event.actorId },
         select: { id: true },
       });

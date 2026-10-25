@@ -45,6 +45,9 @@ describe('AuditLogService（T323 - R09）', () => {
 
   it('recordEvent 在事务 client (tx) 内记录前后值并递归脱敏', async () => {
     const tx = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'admin-1' }),
+      },
       auditLog: {
         create: vi.fn().mockResolvedValue({ id: 'audit-event-1' }),
       },

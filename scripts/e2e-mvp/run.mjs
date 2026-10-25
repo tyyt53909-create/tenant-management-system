@@ -161,7 +161,10 @@ async function main() {
     // 优先动态生成邀请码（T148 新增 POST /auth/invite-codes），保证脚本可重复运行；
     // 生成失败时回退到 INVITE_CODE 环境变量/默认值。
     let inviteCode = INVITE_CODE;
-    const gen = await api('POST', '/auth/invite-codes', { token: adminToken, body: { expiryDays: 1 } });
+    const gen = await api('POST', '/auth/invite-codes', {
+      token: adminToken,
+      body: { expiryDays: 1, role: 'TENANT', tenantId: preTenantId },
+    });
     if ([200, 201].includes(gen.status)) {
       inviteCode = gen.data.code || gen.data.inviteCode || inviteCode;
     } else {
@@ -275,21 +278,22 @@ async function main() {
   // ---------- 步骤 6：登记收款至账单 PAID（含幂等 409） ----------
   await step('6 登记收款至账单 PAID', async () => {
     const txn = 'E2E-TXN-' + uid;
+    const payAmount = bill.amount;
     const res = await api('POST', '/bills/' + bill.id + '/payments', {
       token: adminToken,
-      body: { amount: 300000, paymentMethod: 'BANK_TRANSFER', transactionNumber: txn },
+      body: { amount: payAmount, paymentMethod: 'BANK_TRANSFER', transactionNumber: txn },
     });
     expectStatus(res, 201, '登记收款');
 
     const after = await api('GET', '/bills/' + bill.id, { token: adminToken });
     expectStatus(after, 200, '读取账单');
     assert(after.data.status === 'PAID', '账单应为 PAID，实际 ' + after.data.status);
-    assert(after.data.paidAmount === 300000, 'paidAmount 应为 300000，实际 ' + after.data.paidAmount);
+    assert(after.data.paidAmount === payAmount, 'paidAmount 应为 ' + payAmount + '，实际 ' + after.data.paidAmount);
 
     // 幂等：同交易号重复收款应 409。
     // 注意：已 PAID 的账单会先被「不可收款」拦截并返回 400，
     // 因此幂等必须用「仍可收款」的另一张账单验证（见 6b）。
-    return { detail: 'PAID（paidAmount=300000）' };
+    return { detail: 'PAID（paidAmount=' + payAmount + '）' };
   });
 
   await step('6b 交易号幂等 409', async () => {
