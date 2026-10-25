@@ -1,6 +1,6 @@
 # 项目状态跟踪
 
-> 分支: `feature/T317-tenant-claim`
+> 分支: `feature/T318-bill-write-guard`
 > 集成基準: `origin/develop` @ `071f08a`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
@@ -15,18 +15,18 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | 沿用 develop 证据，本提交未重跑全量 lint |
-| 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 本提交只重跑认证相关 94 项 |
-| 後端 e2e | ✅ pass | 沿用 develop 证据 |
-| 管理後台 lint | ✅ pass | 沿用 develop 证据 |
-| 管理後台單元測試 | ✅ pass | 沿用 develop 证据 |
-| 管理後台 build | ✅ pass | 沿用 develop 证据 |
-| 小程序單元測試 | ✅ pass | 沿用 develop 证据 |
-| 小程序 build | ✅ pass | 沿用 develop 证据 |
-| OpenAPI 生成物 | ✅ pass | 沿用 develop 证据 |
-| 文檔檢查 | ✅ pass | 沿用 develop 证据 |
-| 整合測試 | ✅ pass | claim-invite + journeys 6 passed |
+| 後端 lint | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 後端型別檢查 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 後端單元測試 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 後端 e2e | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 管理後台 lint | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 管理後台單元測試 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 管理後台 build | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 小程序單元測試 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 小程序 build | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| OpenAPI 生成物 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 文檔檢查 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
+| 整合測試 | ✅ pass | 本机未重跑全量门禁；见 tasks/evidence/T318.md |
 | 安全掃描 | ⏸ not-run | 尚无 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚无验收纪录 |
 
@@ -42,7 +42,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 3 |
+| 進行中 | 4 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -52,6 +52,7 @@
 - **T315 修复基准与问题清单（R00 / QLT-05）**（active，plan QLT-05，`feature/T315-repair-baseline`）
 - **T316 整合测试环境保护（R01 / QLT-05）**（active，plan QLT-05，`feature/T316-int-harness-guard`）
 - **T317 租客身份认领（R02 / SEC-04）**（active，plan SEC-04，`feature/T317-tenant-claim`）
+- **T318 账单写入与收款幂等（R05 / FIN-05）**（active，plan FIN-05，`feature/T318-bill-write-guard`）
 
 ### 阻擋發布
 - 無
@@ -83,7 +84,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 63 | 46 | 39 | 3 | 14 |
+| 未分類 | 64 | 46 | 39 | 4 | 14 |
 
 ---
 
@@ -104,16 +105,16 @@
 
 - 資料模型：**41** 張表
 - OpenAPI 路由：**177** 條
-- 後端程式碼：**23845** 行
-- 管理後台程式碼：**31512** 行
+- 後端程式碼：**23864** 行
+- 管理後台程式碼：**31520** 行
 - 小程序程式碼：**6842** 行
 - 文件：**174** 份
 
 ### 測試
-- 後端單元：本提交只重跑认证相关 94 项
-- 後端 e2e：沿用 develop 证据
-- 管理後台單元：沿用 develop 证据
-- 小程序單元：沿用 develop 证据
+- 後端單元：本机未重跑全量门禁；见 tasks/evidence/T318.md
+- 後端 e2e：本机未重跑全量门禁；见 tasks/evidence/T318.md
+- 管理後台單元：本机未重跑全量门禁；见 tasks/evidence/T318.md
+- 小程序單元：本机未重跑全量门禁；见 tasks/evidence/T318.md
 
 ---
 
