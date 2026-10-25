@@ -227,4 +227,100 @@ describe('AnnouncementsService（T284）', () => {
       expect(notifications.create).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('列表与详情', () => {
+    it('按状态与关键词筛选，返回分页 meta', async () => {
+      prisma.announcement.findMany.mockResolvedValue([draft]);
+      prisma.announcement.count.mockResolvedValue(1);
+
+      const result = await service.findAll({ page: 2, limit: 5, status: 'DRAFT', q: ' 停水 ' });
+
+      expect(prisma.announcement.findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'DRAFT',
+          OR: [
+            { title: { contains: '停水', mode: 'insensitive' } },
+            { body: { contains: '停水', mode: 'insensitive' } },
+          ],
+        },
+        skip: 5,
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { creator: { select: { id: true, email: true } } },
+      });
+      expect(result.meta).toEqual({ page: 2, limit: 5, total: 1, totalPages: 1 });
+    });
+
+    it('无筛选条件时不构造 where.OR', async () => {
+      prisma.announcement.findMany.mockResolvedValue([]);
+      prisma.announcement.count.mockResolvedValue(0);
+      await service.findAll({});
+      expect(prisma.announcement.findMany.mock.calls[0][0].where).toEqual({});
+    });
+
+    it('详情不存在 → 404', async () => {
+      prisma.announcement.findUnique.mockResolvedValue(null);
+      await expect(service.findOne('missing')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('草稿编辑', () => {
+    it('草稿可改标题/正文并重新校验目标', async () => {
+      prisma.announcement.findUnique.mockResolvedValue(draft);
+      prisma.tenant.findMany.mockResolvedValue([{ id: 't1' }]);
+      prisma.announcement.update.mockResolvedValue({ ...draft, title: '新标题' });
+
+      const updated = await service.update('a1', {
+        title: ' 新标题 ',
+        body: ' 新正文 ',
+        audience: 'TENANTS',
+        targetIds: ['t1'],
+      });
+
+      expect(prisma.announcement.update).toHaveBeenCalledWith({
+        where: { id: 'a1' },
+        data: expect.objectContaining({
+          title: '新标题',
+          body: '新正文',
+          audience: 'TENANTS',
+          targetIds: ['t1'],
+        }),
+      });
+      expect(updated.title).toBe('新标题');
+    });
+
+    it('编辑不存在 → 404', async () => {
+      prisma.announcement.findUnique.mockResolvedValue(null);
+      await expect(service.update('nope', { title: 't', body: 'b' })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('归档', () => {
+    it('已发布公告归档写入 ARCHIVED', async () => {
+      prisma.announcement.findUnique.mockResolvedValue({ ...draft, status: 'PUBLISHED' });
+      prisma.announcement.update.mockResolvedValue({ ...draft, status: 'ARCHIVED' });
+
+      await expect(service.archive('a1')).resolves.toMatchObject({ status: 'ARCHIVED' });
+      expect(prisma.announcement.update).toHaveBeenCalledWith({
+        where: { id: 'a1' },
+        data: { status: 'ARCHIVED' },
+      });
+    });
+
+    it('归档不存在 → 404', async () => {
+      prisma.announcement.findUnique.mockResolvedValue(null);
+      await expect(service.archive('nope')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('通知服务缺失', () => {
+    it('没有注入通知服务时拒绝发布，而不是静默成功', async () => {
+      const bare = new AnnouncementsService(prisma as never);
+      prisma.announcement.findUnique.mockResolvedValue(draft);
+      await expect(bare.publish('a1')).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.announcement.update).not.toHaveBeenCalled();
+    });
+  });
 });
