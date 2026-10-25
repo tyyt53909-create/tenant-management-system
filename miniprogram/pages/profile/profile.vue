@@ -166,9 +166,9 @@ export default {
       landlordContact: getLandlordContact({}, []),
       capabilities: uni.getStorageSync('user_capabilities') || [],
       menu: [
-        { label: '通知提醒', icon: 'bell', path: '/pages/notifications/notifications' },
-        { label: '我的合同', icon: 'contract', path: '/pages/contract/contract', capability: 'tenant.contract.read' },
-        { label: '账户余额', icon: 'wallet', path: '/pages/account/account', capability: 'tenant.prepay.read' }
+        { label: '通知提醒', icon: 'bell', path: '/packageA/notifications/notifications' },
+        { label: '我的合同', icon: 'contract', path: '/packageA/contract/contract', capability: 'tenant.contract.read' },
+        { label: '账户余额', icon: 'wallet', path: '/packageA/account/account', capability: 'tenant.prepay.read' }
       ]
     }
   },

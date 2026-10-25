@@ -22,12 +22,6 @@
       }
     },
     {
-      "path": "pages/contract/contract",
-      "style": {
-        "navigationBarTitleText": "我的合同"
-      }
-    },
-    {
       "path": "pages/bills/bills",
       "style": {
         "navigationBarTitleText": "我的账单",
@@ -42,37 +36,11 @@
       }
     },
     {
-      "path": "pages/account/account",
-      "style": {
-        "navigationBarTitleText": "我的账户"
-      }
-    },
-    {
       "path": "pages/profile/profile",
       "style": {
         "navigationBarTitleText": "个人中心",
         "navigationStyle": "custom"
       }
-    },
-    {
-      "path": "pages/theme/theme",
-      "style": {
-        "navigationBarTitleText": "主题设置"
-      }
-    },
-    {
-      "path": "pages/notifications/notifications",
-      "style": {
-        "navigationBarTitleText": "通知提醒"
-      }
-    },
-    {
-      "path": "pages/bill-detail/bill-detail",
-      "style": { "navigationBarTitleText": "账单详情" }
-    },
-    {
-      "path": "pages/maintenance/detail",
-      "style": { "navigationBarTitleText": "报修进度" }
     }
   ],
   "globalStyle": {
@@ -114,5 +82,62 @@
         "text": "我的"
       }
     ]
+  },
+  "subPackages": [
+    {
+      "root": "packageA",
+      "pages": [
+        {
+          "path": "contract/contract",
+          "style": {
+            "navigationBarTitleText": "我的合同"
+          }
+        },
+        {
+          "path": "account/account",
+          "style": {
+            "navigationBarTitleText": "我的账户"
+          }
+        },
+        {
+          "path": "theme/theme",
+          "style": {
+            "navigationBarTitleText": "主题设置"
+          }
+        },
+        {
+          "path": "notifications/notifications",
+          "style": {
+            "navigationBarTitleText": "通知提醒"
+          }
+        },
+        {
+          "path": "bill-detail/bill-detail",
+          "style": {
+            "navigationBarTitleText": "账单详情"
+          }
+        },
+        {
+          "path": "maintenance/detail",
+          "style": {
+            "navigationBarTitleText": "报修进度"
+          }
+        }
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/index/index": {
+      "network": "all",
+      "packages": [
+        "packageA"
+      ]
+    },
+    "pages/profile/profile": {
+      "network": "all",
+      "packages": [
+        "packageA"
+      ]
+    }
   }
 }

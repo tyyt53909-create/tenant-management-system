@@ -237,12 +237,12 @@ export function drawVoucherPoster(canvasId, data, vm) {
     // 4. 虚线分割线（卡券撕裂齿线风格）
     ctx.setStrokeStyle('#E2DDD5')
     ctx.setLineWidth(2)
-    ctx.setLineDash([8, 6])
+    ctx.setLineDash([8, 6], 0)
     ctx.beginPath()
     ctx.moveTo(cardX + 20, cardY + 138)
     ctx.lineTo(cardX + cardW - 20, cardY + 138)
     ctx.stroke()
-    ctx.setLineDash([])
+    ctx.setLineDash([], 0)
     ctx.restore()
 
     // 5. 核心金额展示区（醒目英雄金额）

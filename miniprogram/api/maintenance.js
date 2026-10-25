@@ -53,17 +53,18 @@ export const uploadMaintenancePhoto = (filePath) => {
       name: 'file',
       header: token ? { Authorization: `Bearer ${token}` } : {},
       success: (res) => {
-        let data = res.data
+        /** @type {{ url?: string, message?: string }} */
+        let data = {}
         try {
-          data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+          data = typeof res.data === 'string' ? JSON.parse(res.data) : (res.data || {})
         } catch {
           reject(new Error('上传响应解析失败'))
           return
         }
-        if (res.statusCode >= 200 && res.statusCode < 300 && data && data.url) {
-          resolve(data)
+        if (res.statusCode >= 200 && res.statusCode < 300 && data.url) {
+          resolve(/** @type {{ key: string, url: string, fileName: string, fileSize: number, mimeType: string }} */ (data))
         } else {
-          reject(new Error((data && data.message) || `上传失败(${res.statusCode})`))
+          reject(new Error(data.message || `上传失败(${res.statusCode})`))
         }
       },
       fail: () => reject(new Error('上传失败，请检查网络')),

@@ -34,6 +34,7 @@
 import QIcon from '../../components/QIcon.vue'
 import { getMyMaintenance, createMaintenance, uploadMaintenancePhoto } from '../../api/index.js'
 import { ensureTenantSession, hasCapability } from '../../utils/session.js'
+import { withPrivacy } from '../../utils/privacy.js'
 const emptyForm = () => ({ title: '', category: '', categoryText: '', priority: 'NORMAL', priorityText: '普通', description: '', images: [] })
 export default {
   components: { QIcon },
@@ -81,8 +82,8 @@ export default {
     chooseCategory(category) { this.form.category = category.value; this.form.categoryText = category.label },
     choosePriority(priority) { this.form.priority = priority.value; this.form.priorityText = priority.label },
     nextStep() { if (!this.form.category) { uni.showToast({ title: '请选择问题类型', icon: 'none' }); return }; this.step = 2; uni.pageScrollTo({ scrollTop: 0, duration: 0 }) },
-    openDetail(id) { uni.navigateTo({ url: `/pages/maintenance/detail?id=${encodeURIComponent(id)}` }) },
-    chooseImage() { const remaining = 9 - this.form.images.length; if (remaining <= 0) return; uni.chooseImage({ count: remaining, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: res => { this.form.images = [...this.form.images, ...res.tempFilePaths].slice(0, 9) } }) },
+    openDetail(id) { uni.navigateTo({ url: `/packageA/maintenance/detail?id=${encodeURIComponent(id)}` }) },
+    chooseImage() { const remaining = 9 - this.form.images.length; if (remaining <= 0) return; withPrivacy(() => new Promise((resolve, reject) => uni.chooseImage({ count: remaining, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: resolve, fail: reject }))).then(res => { if (res && res.tempFilePaths) this.form.images = [...this.form.images, ...res.tempFilePaths].slice(0, 9) }).catch(() => uni.showToast({ title: '无法打开相册，请检查隐私授权', icon: 'none' })) },
     deleteImage(index) { this.form.images.splice(index, 1) },
     async submitMaintenance() {
       if (this.submitting) return

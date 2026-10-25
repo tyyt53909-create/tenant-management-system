@@ -56,7 +56,7 @@ export default {
     getBillTypeText(type) { return { RENT: '租金', UTILITY: '水电费', OTHER: '其他费用' }[type] || type },
     getBillStatusText(status) { return { PENDING: '待缴费', PARTIAL: '部分缴纳', PAID: '已缴清', OVERDUE: '已逾期', CANCELLED: '已取消' }[status] || status },
     formatDate(date) { return date?.slice(0, 10) || '—' },
-    viewDetail(bill) { uni.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${encodeURIComponent(bill.id)}` }) },
+    viewDetail(bill) { uni.navigateTo({ url: `/packageA/bill-detail/bill-detail?id=${encodeURIComponent(bill.id)}` }) },
   }
 }
 </script>

@@ -2,9 +2,10 @@ import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { hasCapability } from '../utils/session.js'
+import { resolvePageUrl } from './_page-loader.mjs'
 
 async function page(path) {
-  const url = new URL(`../pages/${path}.vue`, import.meta.url)
+  const url = await resolvePageUrl(path)
   const source = await readFile(url, 'utf8')
   const script = source.match(/<script>([\s\S]*?)<\/script>/)[1]
     .replace(/import (\w+) from '[^']+\.vue'/g, (_, name) => `const ${name} = {}`)

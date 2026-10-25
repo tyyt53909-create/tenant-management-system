@@ -68,6 +68,14 @@ export const loginWithGoogle = (data) => {
  * 获取当前登录用户信息
  * @returns {Promise<{ id: string, email: string, phone?: string, role: string, tenant?: any }>}
  */
+/**
+ * 当前登录用户（含角色与租客能力列表，FE-02 / T287 类型化）
+ * @returns {Promise<{
+ *   id: string, email: string, phone?: string|null, role: string,
+ *   capabilities?: string[],
+ *   tenant?: { id: string, name: string } | null
+ * }>}
+ */
 export const getUserInfo = () => {
   return request.get('/auth/me')
 }
