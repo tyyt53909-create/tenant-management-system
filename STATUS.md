@@ -1,23 +1,11 @@
 # 项目状态跟踪
 
-> 分支: `feature/T322-websocket-lifecycle`
+> 分支: `feature/T323-financial-audit`
 > 集成基準: `origin/develop` @ `071f08a`
 > 發布就緒: **NO-GO**
-> Gates: 0 pass / 0 fail / 14 not-run
+> Gates: 12 pass / 0 fail / 2 not-run
 
 ### NO-GO 原因
-  - 後端 lint: not-run
-  - 後端型別檢查: not-run
-  - 後端單元測試: not-run
-  - 後端 e2e: not-run
-  - 管理後台 lint: not-run
-  - 管理後台單元測試: not-run
-  - 管理後台 build: not-run
-  - 小程序單元測試: not-run
-  - 小程序 build: not-run
-  - OpenAPI 生成物: not-run
-  - 文檔檢查: not-run
-  - 整合測試: not-run
   - 安全掃描: not-run
   - 人工 UAT: not-run
 
@@ -27,20 +15,20 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ⏸ not-run | 未提供 |
-| 後端型別檢查 | ⏸ not-run | 未提供 |
-| 後端單元測試 | ⏸ not-run | 未提供 |
-| 後端 e2e | ⏸ not-run | 未提供 |
-| 管理後台 lint | ⏸ not-run | 未提供 |
-| 管理後台單元測試 | ⏸ not-run | 未提供 |
-| 管理後台 build | ⏸ not-run | 未提供 |
-| 小程序單元測試 | ⏸ not-run | 未提供 |
-| 小程序 build | ⏸ not-run | 未提供 |
-| OpenAPI 生成物 | ⏸ not-run | 未提供 |
-| 文檔檢查 | ⏸ not-run | 未提供 |
-| 整合測試 | ⏸ not-run | 未提供 |
-| 安全掃描 | ⏸ not-run | 未提供 |
-| 人工 UAT | ⏸ not-run | 未提供 |
+| 後端 lint | ✅ pass | 188 warnings / 0 errors |
+| 後端型別檢查 | ✅ pass | exit 0 |
+| 後端單元測試 | ✅ pass | 131 files / 1227 tests |
+| 後端 e2e | ✅ pass | 3 files / 63 tests |
+| 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
+| 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
+| 管理後台 build | ✅ pass | exit 0 |
+| 小程序單元測試 | ✅ pass | 125 tests |
+| 小程序 build | ✅ pass | exit 0 |
+| OpenAPI 生成物 | ✅ pass | exit 0 |
+| 文檔檢查 | ✅ pass | exit 0 |
+| 整合測試 | ✅ pass | 真实审计 financial-audit 4 passed |
+| 安全掃描 | ⏸ not-run | 尚無 CI artifact |
+| 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
 ---
 
