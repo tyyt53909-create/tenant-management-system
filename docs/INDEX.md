@@ -24,7 +24,7 @@
 | [02-数据模型.md](./02-数据模型.md) | 数据模型 | 事实来源类 | active | strong | backend/prisma/schema.prisma | 2026-10-17 | 实体关系图、28张表设计（`grep -c '^model '` = 28，对齐 InviteCode 与 JobRun） |
 | [03-权限矩阵.md](./03-权限矩阵.md) | 权限矩阵 | 事实来源类 | draft | strong | src/common/guards/\*\* | 2026-10-15 | 角色权限、数据隔离、§7.3 租客账号能力开关与登入控制 (T173) |
 | [04-状态机.md](./04-状态机.md) | 状态机设计 | 事实来源类 | draft | strong | src/modules/\*\*/\*.service.ts | - | 5个核心状态机流转规则 |
-| [05-接口规范.md](./05-接口规范.md) | 接口规范 | 事实来源类 | draft | strong | src/modules/\*\*/\*.controller.ts | 2026-10-16 | RESTful规范、错误码、接口清单；§10 限流按 T175 落地 |
+| [05-接口规范.md](./05-接口规范.md) | 接口规范 | 事实来源类 | draft | strong | src/modules/\*\*/\*.controller.ts | 2026-10-25 | RESTful规范、错误码、接口清单；租客认领必须绑定指定档案 |
 | [06-安全与合规清单.md](./06-安全与合规清单.md) | 安全与合规 | 决策类 | draft | human | 全项目 | - | 个人信息保护、备份、合规要求 |
 | [07-测试策略.md](./07-测试策略.md) | 测试策略 | 决策类 | draft | strong | src/\*\*/\*.spec.ts | 2026-10-25 | 单元/集成/E2E测试策略；整合测试清空前必须通过库标记 |
 | [08-任务拆分总览.md](./08-任务拆分总览.md) | 任务拆分总览 | 过程类 | draft | strong | tasks/\*\* | 2026-10-11 | 阶段规划、依赖关系、排期 |

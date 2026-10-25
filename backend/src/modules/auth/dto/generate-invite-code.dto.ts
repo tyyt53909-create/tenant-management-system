@@ -21,4 +21,9 @@ export class GenerateInviteCodeDto {
   @IsOptional()
   @IsEnum(UserRole)
   role?: UserRole;
+
+  /** 租客邀请必须指定预建档案。职员邀请不要填。 */
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

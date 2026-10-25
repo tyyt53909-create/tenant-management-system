@@ -138,6 +138,14 @@
           </el-select>
         </el-form-item>
 
+        <el-form-item v-if="generateForm.role === 'TENANT'" label="预建租客">
+          <el-input
+            v-model="generateForm.tenantId"
+            placeholder="预建租客档案 ID"
+          />
+          <span class="form-tip">租客邀请必须绑定一份尚未认领的档案</span>
+        </el-form-item>
+
         <el-form-item label="有效天数">
           <el-input-number
             v-model="generateForm.expiryDays"
@@ -224,6 +232,7 @@ const generateForm = reactive({
   role: 'TENANT' as 'TENANT' | 'ADMIN',
   expiryDays: 365,
   notes: '',
+  tenantId: '',
 });
 
 const resultDialogVisible = ref(false);
@@ -234,17 +243,23 @@ const openGenerateDialog = () => {
   generateForm.role = 'TENANT';
   generateForm.expiryDays = 365;
   generateForm.notes = '';
+  generateForm.tenantId = '';
   generateDialogVisible.value = true;
 };
 
 const submitGenerate = async () => {
   generating.value = true;
   try {
+    if (generateForm.role === 'TENANT' && !generateForm.tenantId.trim()) {
+      ElMessage.error('租客邀请必须填写预建档案 ID');
+      return;
+    }
     const res: any = await generateInviteCode({
       count: generateForm.count,
       role: generateForm.role,
       expiryDays: generateForm.expiryDays,
       notes: generateForm.notes?.trim() || undefined,
+      tenantId: generateForm.role === 'TENANT' ? generateForm.tenantId.trim() : undefined,
     });
 
     generateDialogVisible.value = false;

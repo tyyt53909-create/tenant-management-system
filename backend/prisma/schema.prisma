@@ -403,6 +403,7 @@ model Tenant {
   maintenanceRequests MaintenanceRequest[]
   registration        TenantRegistration?
   tags                TenantTag[]
+  inviteCodes         InviteCode[]
 
   @@index([isActive])
   @@index([phone])
@@ -1194,9 +1195,14 @@ model InviteCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// 租客邀请必须指向一份预建档案。职员邀请保持为空。
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
   @@index([code])
   @@index([status])
   @@index([creatorId])
+  @@index([tenantId])
   @@map("invite_codes")
 }
 

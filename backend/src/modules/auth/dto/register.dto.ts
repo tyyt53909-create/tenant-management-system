@@ -13,6 +13,10 @@ export class RegisterDto {
   @IsNotEmpty({ message: '邀请码不能为空' })
   inviteCode: string;
 
+  @IsString()
+  @IsNotEmpty({ message: '邮箱验证码不能为空' })
+  emailCode: string;
+
   @IsOptional()
   @IsString()
   phone?: string;

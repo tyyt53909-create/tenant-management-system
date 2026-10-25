@@ -39,6 +39,7 @@ function createPrismaMock() {
     },
     tenant: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn().mockResolvedValue({}),
     },
     userIdentity: {
@@ -134,8 +135,8 @@ describe('FederatedAuthService Google 身份绑定（DEC-03）', () => {
   it('新用户有邀请码但无预建租客返回 403', async () => {
     ctx.google.verifyIdToken.mockResolvedValue(googleUser);
     ctx.prisma.user.findFirst.mockResolvedValue(null);
-    ctx.invite.validateInviteCode.mockResolvedValue({ valid: true, role: 'TENANT' });
-    ctx.prisma.tenant.findFirst.mockResolvedValue(null);
+    ctx.invite.validateInviteCode.mockResolvedValue({ valid: true, role: 'TENANT', tenantId: 'tenant-pre' });
+    ctx.prisma.tenant.findUnique.mockResolvedValue(null);
 
     await expect(
       ctx.service.googleAuth({ idToken: 't', inviteCode: 'INVITE-1' }),
@@ -149,8 +150,14 @@ describe('FederatedAuthService Google 身份绑定（DEC-03）', () => {
       valid: true,
       invitedBy: 'admin-1',
       role: 'TENANT',
+      tenantId: 'tenant-pre',
     });
-    ctx.prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
+    ctx.prisma.tenant.findUnique.mockResolvedValue({
+      id: 'tenant-pre',
+      email: 'new@example.com',
+      phone: null,
+      userId: null,
+    });
 
     const result = await ctx.service.googleAuth({ idToken: 't', inviteCode: 'INVITE-1' });
 
@@ -175,8 +182,13 @@ describe('FederatedAuthService Google 身份绑定（DEC-03）', () => {
   it('预建档案在事务内已被占用时返回 409，且不核销邀请码', async () => {
     ctx.google.verifyIdToken.mockResolvedValue(googleUser);
     ctx.prisma.user.findFirst.mockResolvedValue(null);
-    ctx.invite.validateInviteCode.mockResolvedValue({ valid: true, role: 'TENANT' });
-    ctx.prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
+    ctx.invite.validateInviteCode.mockResolvedValue({ valid: true, role: 'TENANT', tenantId: 'tenant-pre' });
+    ctx.prisma.tenant.findUnique.mockResolvedValue({
+      id: 'tenant-pre',
+      email: 'new@example.com',
+      phone: null,
+      userId: null,
+    });
     ctx.prisma.__tx.tenant.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
@@ -218,8 +230,14 @@ describe('FederatedAuthService 邮箱 OTP 绑定（DEC-03）', () => {
       valid: true,
       invitedBy: 'admin-1',
       role: 'TENANT',
+      tenantId: 'tenant-pre',
     });
-    ctx.prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
+    ctx.prisma.tenant.findUnique.mockResolvedValue({
+      id: 'tenant-pre',
+      email: 'new@example.com',
+      phone: null,
+      userId: null,
+    });
 
     const result = await ctx.service.loginWithEmailCode({
       email: 'new@example.com',
@@ -279,32 +297,27 @@ describe('FederatedAuthService bindInviteCode', () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
-  it('无租客档案时按邮箱绑定预建租客并应用邀请码角色', async () => {
+  it('租客不能用职员邀请码提升角色或认领档案', async () => {
     const ctx = createService();
     ctx.invite.validateInviteCode.mockResolvedValue({
       valid: true,
       invitedBy: 'admin-1',
       role: 'CLEANER',
+      tenantId: null,
     });
     ctx.prisma.user.findUnique.mockResolvedValue({
       id: 'user-tenant',
       email: 'tenant@example.com',
       phone: null,
       role: 'TENANT',
+      emailVerifiedAt: new Date(),
       tenant: null,
     });
-    ctx.prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
 
-    const result = await ctx.service.bindInviteCode('user-tenant', { inviteCode: 'INVITE-1' });
-
-    expect(result.success).toBe(true);
-    expect(ctx.prisma.__tx.tenant.updateMany).toHaveBeenCalledWith({
-      where: { id: 'tenant-pre', userId: null },
-      data: { userId: 'user-tenant' },
-    });
-    expect(ctx.prisma.__tx.user.update).toHaveBeenCalledWith({
-      where: { id: 'user-tenant' },
-      data: { invitedBy: 'admin-1', role: 'CLEANER' },
-    });
+    await expect(
+      ctx.service.bindInviteCode('user-tenant', { inviteCode: 'INVITE-1' }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(ctx.prisma.__tx.tenant.updateMany).not.toHaveBeenCalled();
+    expect(ctx.prisma.__tx.user.update).not.toHaveBeenCalled();
   });
 });

@@ -32,6 +32,12 @@ export const ERROR_CATALOG = {
   AUTH_PROFILE_ALREADY_BOUND: { status: HttpStatus.CONFLICT, description: '预建租客档案已被绑定，请联系管理员' },
   AUTH_GOOGLE_EMAIL_UNVERIFIED: { status: HttpStatus.UNAUTHORIZED, description: 'Google 邮箱未验证，无法登录' },
   AUTH_IDENTITY_ROLE_CONFLICT: { status: HttpStatus.CONFLICT, description: '邀请码角色与当前账号角色不匹配' },
+  AUTH_EMAIL_UNVERIFIED: { status: HttpStatus.BAD_REQUEST, description: '认领前必须完成邮箱验证' },
+  AUTH_INVITE_TARGET_MISMATCH: { status: HttpStatus.FORBIDDEN, description: '验证身份与邀请档案不一致' },
+  AUTH_CLAIM_REVERIFY: {
+    status: HttpStatus.CONFLICT,
+    description: '认领未完成，验证码已失效，请重新验证后再试',
+  },
 
   PERM_FORBIDDEN: { status: HttpStatus.FORBIDDEN, description: '无权限访问' },
   PERM_INSUFFICIENT_ROLE: { status: HttpStatus.FORBIDDEN, description: '权限不足' },

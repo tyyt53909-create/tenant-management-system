@@ -28,7 +28,8 @@ import { FederatedAuthService } from './federated-auth.service.js';
 import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
 import { resolveLoginProtection, type LoginProtection } from '../../config/password.config.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
-import { claimPreCreatedTenant, findPreCreatedTenant } from './pre-created-tenant.js';
+import { claimPreCreatedTenant } from './pre-created-tenant.js';
+import { decideInviteClaim } from './claim-invite.js';
 import {
   LOGIN_ATTEMPT_STORE,
   MemoryLoginAttemptStore,
@@ -58,10 +59,18 @@ export class AuthService {
     const email = dto.email.toLowerCase().trim();
     const phone = dto.phone?.trim() || undefined;
 
-    // 1. 验证邀请码
+    if (!dto.emailCode?.trim()) {
+      throw apiError(ErrorCode.AUTH_EMAIL_UNVERIFIED);
+    }
+    const emailVerified = await this.emailOtpService.verifyCode(email, dto.emailCode);
+    if (!emailVerified) {
+      throw apiError(ErrorCode.AUTH_EMAIL_UNVERIFIED, '邮箱验证码错误或已过期');
+    }
+
+    // 1. 验证邀请码。验证码已在 Redis 中核销，不能并入下面的数据库事务。
     const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
     if (!validation.valid) {
-      throw new BadRequestException('邀请码无效');
+      throw apiError(ErrorCode.AUTH_CLAIM_REVERIFY, '邀请码无效，验证码已失效，请重新验证');
     }
 
     // 2. 检查邮箱是否已注册
@@ -82,49 +91,59 @@ export class AuthService {
       }
     }
 
-    // 4. 必须存在管理员预建的租客档案（DEC-03：禁止自助创建租客）
-    const preTenant = await findPreCreatedTenant(this.prisma, { email, phone });
-    if (!preTenant) {
-      throw apiError(
-        ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED,
-        '未找到匹配的预建租客档案，请联系管理员先建档再邀请',
-      );
-    }
+    const invitedTenant = validation.tenantId
+      ? await this.prisma.tenant.findUnique({
+          where: { id: validation.tenantId },
+          select: { id: true, email: true, phone: true, userId: true },
+        })
+      : null;
+    const claim = decideInviteClaim({
+      invite: validation,
+      verifiedEmail: email,
+      suppliedPhone: phone,
+      tenant: invitedTenant,
+    });
 
     // 5. 密码加密（cost 可配置，默认 12；旧 cost 10 哈希仍可验证）
     const passwordHash = await bcrypt.hash(dto.password, this.loginProtection().bcryptRounds);
 
     // 6. 创建用户并绑定预建租客（事务，不新建 Tenant）
-    const user = await this.prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
-        data: {
-          email,
-          phone,
-          passwordHash,
-          role: validation.role ?? 'TENANT',
-          invitedBy: validation.invitedBy ?? null,
-          isActive: true,
-        },
+    let user;
+    try {
+      user = await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email,
+            phone: claim.kind === 'tenant' ? phone : undefined,
+            passwordHash,
+            role: claim.kind === 'staff' ? claim.role : 'TENANT',
+            invitedBy: validation.invitedBy ?? null,
+            isActive: true,
+            emailVerifiedAt: new Date(),
+          },
+        });
+
+        await tx.userIdentity.create({
+          data: {
+            userId: newUser.id,
+            provider: 'EMAIL',
+            providerUserId: email,
+            email,
+            emailVerifiedAt: new Date(),
+          },
+        });
+
+        if (claim.kind === 'tenant') {
+          await claimPreCreatedTenant(tx, claim.tenantId, newUser.id);
+        }
+
+        await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
+        return newUser;
       });
-
-      await tx.userIdentity.create({
-        data: {
-          userId: newUser.id,
-          provider: 'EMAIL',
-          providerUserId: email,
-          email,
-          // 密码注册尚未证明邮箱归属，等 OTP/Google 验证后再置时间
-          emailVerifiedAt: null,
-        },
-      });
-
-      await claimPreCreatedTenant(tx, preTenant.id, newUser.id);
-
-      // 邀请码一次性：与建号、绑定同事务，核销失败则整体回滚
-      await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
-
-      return newUser;
-    });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw apiError(ErrorCode.AUTH_CLAIM_REVERIFY);
+    }
 
     // 7. 生成 JWT Token
     const tokens = await this.jwtService.generateTokens({
@@ -228,6 +247,7 @@ export class AuthService {
         expiryDays,
         dto?.notes,
         role,
+        dto?.tenantId,
       );
       return {
         inviteCodes,
@@ -243,6 +263,7 @@ export class AuthService {
       expiryDays,
       dto?.notes,
       role,
+      dto?.tenantId,
     );
 
     return {

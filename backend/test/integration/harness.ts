@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
+import { EmailOtpService } from '../../src/modules/auth/email-otp.service.js';
 import {
   UnsafeIntegrationTargetError,
   assertIntegrationEnvironment,
@@ -171,15 +172,17 @@ export async function setupTenancy(app: INestApplication, base: SeedBase): Promi
   const inviteResponse = await http(app)
     .post('/auth/invite-codes')
     .set(auth(adminToken))
-    .send({ expiryDays: 1 });
+    .send({ expiryDays: 1, role: 'TENANT', tenantId });
   const inviteCode = (inviteResponse.body.inviteCode ?? inviteResponse.body.code) as string;
   if (!inviteCode) {
     throw new Error(`生成邀请码失败: ${JSON.stringify(inviteResponse.body)}`);
   }
 
+  const emailCode = '654321';
+  await app.get(EmailOtpService).seedCodeForTests(tenantEmail, emailCode);
   const registerResponse = await http(app)
     .post('/auth/register')
-    .send({ email: tenantEmail, password: 'Tenant@123', inviteCode });
+    .send({ email: tenantEmail, password: 'Tenant@123', inviteCode, emailCode });
   if (registerResponse.status !== 201 && registerResponse.status !== 200) {
     throw new Error(`注册失败: ${registerResponse.status} ${JSON.stringify(registerResponse.body)}`);
   }
