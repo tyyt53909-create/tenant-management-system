@@ -6,6 +6,7 @@ import {
   formatVoucherData,
   generateVoucherText,
 } from '../utils/voucher.js'
+import { resolvePageUrl } from './_page-loader.mjs'
 
 let clipboardData = null
 let phoneCalls = []
@@ -34,7 +35,7 @@ beforeEach(() => {
 })
 
 async function loadPage(path) {
-  const url = new URL(`../pages/${path}.vue`, import.meta.url)
+  const url = await resolvePageUrl(path)
   const source = await readFile(url, 'utf8')
   const script = source.match(/<script>([\s\S]*?)<\/script>/)[1]
     .replace(/import (\w+) from '[^']+\.vue'/g, (_, name) => `const ${name} = {}`)

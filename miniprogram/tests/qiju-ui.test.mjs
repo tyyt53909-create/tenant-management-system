@@ -1,9 +1,10 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { resolvePageUrl } from './_page-loader.mjs'
 
 async function page(path) {
-  const url = new URL(`../pages/${path}.vue`, import.meta.url)
+  const url = await resolvePageUrl(path)
   const source = await readFile(url, 'utf8')
   const script = source.match(/<script>([\s\S]*?)<\/script>/)[1]
     .replace(/import (\w+) from '[^']+\.vue'/g, (_, name) => `const ${name} = {}`)
@@ -28,7 +29,7 @@ beforeEach(() => {
 
 test('账单卡片打开真实详情，不模拟付款', async () => {
   const vm = await page('bills/bills'); vm.viewDetail({ id: 'a/b' })
-  assert.deepEqual(navigation, ['/pages/bill-detail/bill-detail?id=a%2Fb'])
+  assert.deepEqual(navigation, ['/packageA/bill-detail/bill-detail?id=a%2Fb'])
   assert.equal(calls.length, 0)
 })
 test('报修类别需要选择，下一步保留真实枚举', async () => {
@@ -63,8 +64,15 @@ test('首页仍是默认入口，详情页不混入原生四个 tab', async () =
   const pages = JSON.parse(await readFile(new URL('../pages.json', import.meta.url), 'utf8'))
   assert.equal(pages.pages[0].path, 'pages/index/index')
   assert.equal(pages.tabBar.list.length, 4)
-  assert.ok(pages.pages.some(p => p.path === 'pages/bill-detail/bill-detail'))
-  assert.ok(pages.pages.some(p => p.path === 'pages/maintenance/detail'))
+  // FE-02 / T287：详情页在 packageA 分包，主包只留 tab 与首屏页面
+  const subPaths = pages.subPackages.flatMap(group => group.pages.map(p => `${group.root}/${p.path}`))
+  assert.ok(subPaths.includes('packageA/bill-detail/bill-detail'))
+  assert.ok(subPaths.includes('packageA/maintenance/detail'))
+  assert.deepEqual(
+    pages.subPackages.map(group => group.root),
+    ['packageA'],
+  )
+  assert.equal(pages.preloadRule['pages/index/index'].packages[0], 'packageA')
 })
 test('待缴费筛选包含逾期和部分缴纳，不遗漏欠款账单', async () => {
   const vm=await page('bills/bills');vm.currentTab='pending'

@@ -175,29 +175,29 @@ export const themeMixin = {
       return state.isDarkMode
     },
 
-    // 颜色
+    // 颜色（直接读 theme.value：computed 里的 this 在 checkJs 下没有 $theme 类型）
     $colors() {
-      return this.$theme.colors
+      return theme.value.colors
     },
 
     // 字体
     $typography() {
-      return this.$theme.typography
+      return theme.value.typography
     },
 
     // 间距
     $spacing() {
-      return this.$theme.spacing
+      return theme.value.spacing
     },
 
     // 圆角
     $radius() {
-      return this.$theme.borderRadius
+      return theme.value.borderRadius
     },
 
     // 阴影
     $shadows() {
-      return this.$theme.shadows
+      return theme.value.shadows
     },
   },
 

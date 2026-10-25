@@ -3,11 +3,25 @@ import { readFile, stat, readdir } from 'node:fs/promises'
 
 const root = new URL('../', import.meta.url)
 const pages = JSON.parse(await readFile(new URL('pages.json', root)))
+// FE-02 / T287：主页 + packageA 分包的完整页面清单
+const pageEntries = [
+  ...pages.pages,
+  ...(pages.subPackages || []).flatMap((group) =>
+    group.pages.map((page) => ({ ...page, path: `${group.root}/${page.path}` })),
+  ),
+]
 const mp = new URL('dist/build/mp-weixin/', root)
 const h5 = new URL('dist/build/h5/', root)
 const app = JSON.parse(await readFile(new URL('app.json', mp)))
-for (const page of pages.pages) {
-  assert.ok(app.pages.includes(page.path), `微信构建缺少页面 ${page.path}`)
+// 构建产物把分包页面放在 `subPackages[].pages`（相对 root），与主包 `pages` 分开登记
+const builtPages = new Set([
+  ...app.pages,
+  ...(app.subPackages || []).flatMap((group) =>
+    group.pages.map((page) => `${group.root}/${typeof page === 'string' ? page : page.path}`),
+  ),
+])
+for (const page of pageEntries) {
+  assert.ok(builtPages.has(page.path), `微信构建缺少页面 ${page.path}`)
   for (const extension of ['js', 'json', 'wxml', 'wxss']) {
     assert.ok((await stat(new URL(`${page.path}.${extension}`, mp))).isFile())
   }
@@ -38,4 +52,4 @@ async function checkScripts(directory) {
 }
 assert.ok(await checkScripts(mp))
 assert.ok(await checkScripts(h5))
-console.log(`微信 ${pages.pages.length} 页及 PNG/H5 资源齐全，生产产物无本地 API 回落`)
+console.log(`微信 ${pageEntries.length} 页（含分包）及 PNG/H5 资源齐全，生产产物无本地 API 回落`)
