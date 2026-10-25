@@ -31,6 +31,7 @@ import { MetersModule } from './modules/meters/meters.module.js';
 import { PrepayModule } from './modules/prepay/prepay.module.js';
 import { CheckoutModule } from './modules/checkout/checkout.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
+import { AnnouncementsModule } from './modules/announcements/announcements.module.js';
 import { FilesModule } from './modules/files/files.module.js';
 import { AuditLogModule } from './modules/audit/audit.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
@@ -91,6 +92,8 @@ import { StaffModule } from './modules/staff/staff.module.js';
     PrepayModule,
     CheckoutModule,
     NotificationsModule,
+    // 公告与定向消息（COM-04 / T284）：发布时复用通知中心
+    AnnouncementsModule,
     FilesModule,
     AuditLogModule,
     DashboardModule,

@@ -99,6 +99,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '退租管理', icon: 'Switch' },
       },
       {
+        path: '/announcements',
+        name: 'Announcements',
+        component: () => import('@/views/announcements/index.vue'),
+        meta: { title: '公告管理', icon: 'ChatDotSquare' },
+      },
+      {
         path: '/notifications',
         name: 'Notifications',
         component: () => import('@/views/notifications/index.vue'),

@@ -441,6 +441,8 @@ model User {
   createdInviteCodes InviteCode[] @relation("CreatedInviteCodes")
   usedInviteCode     InviteCode?  @relation("UsedInviteCode")
 
+  publishedAnnouncements Announcement[] @relation("AnnouncementCreator")
+
   @@index([email])
   @@index([phone])
   @@index([googleId])
@@ -1298,4 +1300,51 @@ model SystemSetting {
   updatedAt   DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+// 41. Announcement（公告与定向消息，COM-04 / T284）
+// 公告本身只保存目标描述，发布时按目标解析出用户并复用通知中心（站内 + WebSocket）。
+model Announcement {
+  id    String @id @default(cuid())
+  title String
+  body  String @db.Text
+
+  priority NotificationPriority @default(NORMAL)
+
+  status   AnnouncementStatus   @default(DRAFT)
+  audience AnnouncementAudience @default(ALL_TENANTS)
+
+  /// 目标范围：BUILDING=楼栋 ID，TAGS=标签 ID，TENANTS=租客 ID；ALL_TENANTS 忽略
+  targetIds String[]
+
+  /// 计划发布时间；为空表示发布动作立即生效
+  publishAt DateTime?
+  expiredAt DateTime?
+
+  createdBy String
+  creator   User   @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+
+  publishedAt    DateTime?
+  /// 最近一次发布成功投递的用户数（重发按去重键幂等）
+  recipientCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([audience])
+  @@map("announcements")
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AnnouncementAudience {
+  ALL_TENANTS
+  BUILDING
+  TAGS
+  TENANTS
 }

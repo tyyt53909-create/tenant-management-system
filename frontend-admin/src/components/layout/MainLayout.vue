@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { House, User, OfficeBuilding, Document, Wallet, Tools, Brush, Bell, TrendCharts, Tickets, Ticket, Odometer, Switch, SwitchButton, Setting, ArrowRight, Search, Menu, Grid } from '@element-plus/icons-vue';
+import { House, User, OfficeBuilding, Document, Wallet, Tools, Brush, Bell, TrendCharts, Tickets, Ticket, Odometer, Switch, SwitchButton, Setting, ArrowRight, Search, Menu, Grid, ChatDotSquare } from '@element-plus/icons-vue';
 import VoucherRecognitionModal from '@/components/common/VoucherRecognitionModal.vue';
 import { useUserStore } from '@/stores/user';
 import { useNotificationStore } from '@/stores/notification';
@@ -108,6 +108,7 @@ const navigation = [
   { path: '/maintenance', title: '报修工单', icon: Tools, label: 'SERVICE / 报修协同', description: '按紧急程度和处理进度安排任务，让每个工单都有明确下一步。' },
   { path: '/cleaning', title: '保洁任务', icon: Brush, label: 'HOUSEKEEPING / 现场工作', description: '按空置房源的真实清洁状态组织工作，保留开始与完成操作。' },
   { path: '/notifications', title: '通知中心', icon: Bell, label: 'INBOX / 通知', description: '重要提醒与服务进展，都汇集在这里。' },
+  { path: '/announcements', title: '公告管理', icon: ChatDotSquare, label: 'BROADCAST / 公告', description: '把停水停电、缴费提醒与规则变更，定向送达需要知道的租客。' },
   { path: '/prepay', title: '预付账户', icon: Wallet, label: 'ACCOUNTS / 预付', description: '余额、充值与扣费记录，清晰可追溯。' },
   { path: '/meters', title: '水电管理', icon: Odometer, label: 'UTILITIES / 水电', description: '记录每一次读数，核对每一笔费用。' },
   { path: '/checkout', title: '退租结算', icon: Switch, label: 'CHECKOUT / 退租', description: '从费用核对到押金结算，妥善完成最后一步。' },
