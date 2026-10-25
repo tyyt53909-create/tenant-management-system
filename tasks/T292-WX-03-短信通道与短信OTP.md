@@ -1,16 +1,19 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T292
 plan_ref: WX-03
 stage: M3
 priority: P2
 model_tier: 普通
 branch: feature/T292-sms-otp
+merge_commit: 562627c
 start_time: 2026-10-25
+completed_time: 2026-10-25
 blocked_by:
 depends_on: COM-01, SEC-03
 acceptance_evidence: tasks/evidence/T292.md
+handoff: docs/handoff/2026-10-25-T292-短信通道与短信OTP.md
 ---
 
 # T292：短信通道与短信 OTP（WX-03）
