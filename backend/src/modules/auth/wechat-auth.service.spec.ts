@@ -289,5 +289,80 @@ describe('WechatAuthService', () => {
         data: { userId: 'u-invite-1' },
       });
     });
+
+    it('手机号路径：手机号已在 User 表中存在且活跃时，直接绑定外部身份至既有用户', async () => {
+      redis.client.get.mockResolvedValue(JSON.stringify({ openid: 'wx_existing_user' }));
+      prisma.userIdentity.findUnique.mockResolvedValue(null);
+      wechatApiService.getPhoneNumber.mockResolvedValue('13955556666');
+      prisma.user.findFirst.mockResolvedValue({
+        id: 'u-existing-99',
+        isActive: true,
+        role: 'TENANT',
+      });
+      prisma.user.update.mockResolvedValue({
+        id: 'u-existing-99',
+        role: 'TENANT',
+        phone: '13955556666',
+      });
+
+      const result = await service.bind({
+        bindTicket: 'wt_ticket_exist',
+        phoneCode: 'code_exist',
+      });
+      expect(result.isBound).toBe(true);
+      expect(prisma.userIdentity.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'u-existing-99',
+          provider: 'WECHAT_MP',
+          providerUserId: 'wx_existing_user',
+        }),
+      });
+    });
+
+    it('入参校验：缺少 bindTicket 或未提供 inviteCode/phoneCode 时抛出 BadRequestException', async () => {
+      await expect(service.bind({ bindTicket: '' } as any)).rejects.toThrow('缺少绑定凭据');
+      await expect(
+        service.bind({ bindTicket: 'wt_123' } as any),
+      ).rejects.toThrow('请提供邀请码或手机号快速验证凭证');
+    });
+
+    it('Redis 不可用时回退进程内存保存与消费 bindTicket', async () => {
+      redis.ready = false;
+      wechatApiService.jscode2session.mockResolvedValue({
+        openid: 'wx_memory_ticket_openid',
+        sessionKey: 'sk_mem',
+      });
+      prisma.userIdentity.findUnique.mockResolvedValue(null);
+
+      let ticket = '';
+      try {
+        await service.login({ code: 'code_mem' });
+      } catch (err: any) {
+        ticket = err.getResponse?.()?.details?.bindTicket;
+      }
+      expect(ticket).toBeTruthy();
+
+      // 在内存中消费该 ticket
+      wechatApiService.getPhoneNumber.mockResolvedValue('13811223344');
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.tenant.findMany.mockResolvedValue([
+        { id: 't-mem-1', phone: '13811223344' },
+      ]);
+      prisma.user.create.mockResolvedValue({
+        id: 'u-mem-1',
+        phone: '13811223344',
+        role: 'TENANT',
+      });
+
+      const bindRes = await service.bind({ bindTicket: ticket, phoneCode: 'p_mem' });
+      expect(bindRes.isBound).toBe(true);
+    });
+
+    it('getWechatConfig 返回配置', () => {
+      expect(service.getWechatConfig()).toEqual({
+        appId: 'test-appid',
+        mockEnabled: true,
+      });
+    });
   });
 });

@@ -175,5 +175,43 @@ describe('WechatApiService', () => {
         ServiceUnavailableException,
       );
     });
+
+    it('getAppId 返回已配置的 appId', () => {
+      expect(service.getAppId()).toBe('wx_real_appid');
+    });
+
+    it('入参为空时直接抛出 BadRequestException', async () => {
+      await expect(service.jscode2session('')).rejects.toThrow('无效的微信授权 code');
+      await expect(service.getPhoneNumber('')).rejects.toThrow('无效的手机号授权凭证');
+    });
+
+    it('微信网络请求发生异常时抛出 ServiceUnavailableException', async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network offline'));
+      await expect(service.jscode2session('valid_code')).rejects.toThrow(/无法连接微信服务器/);
+    });
+
+    it('Redis 关闭时 setCache 与 getCache 优雅回退到进程内存缓存', async () => {
+      redis.ready = false;
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('stable_token')) {
+          return {
+            json: async () => ({ access_token: 'mem_cached_token', expires_in: 7200 }),
+          };
+        }
+        return {
+          json: async () => ({
+            errcode: 0,
+            phone_info: { purePhoneNumber: '13666667777' },
+          }),
+        };
+      });
+
+      const phone = await service.getPhoneNumber('code_mem_phone');
+      expect(phone).toBe('13666667777');
+
+      // 第二次获取 token 应命中进程内存缓存
+      const token = await service.getStableAccessToken();
+      expect(token).toBe('mem_cached_token');
+    });
   });
 });
