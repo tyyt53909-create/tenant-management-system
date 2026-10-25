@@ -27,6 +27,7 @@ describe('TenantsService', () => {
     const prismaMock: any = {
       tenant: {
         findUnique: vi.fn(),
+        findFirst: vi.fn().mockResolvedValue(null),
         findMany: vi.fn(),
         count: vi.fn(),
         create: vi.fn(),
@@ -90,11 +91,24 @@ describe('TenantsService', () => {
     it('应该拒绝重复的邮箱', async () => {
       const existingEmail = { id: 'tenant-456', email: 'zhangsan@example.com' };
 
-      vi.spyOn(prisma.tenant, 'findUnique')
-        .mockResolvedValueOnce(null) // 手机号检查通过
-        .mockResolvedValueOnce(existingEmail as any); // 邮箱重复
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue(existingEmail as any);
 
       await expect(service.create(dto)).rejects.toThrow(ConflictException);
+    });
+
+    it('入库前把邮箱规范成小写', async () => {
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue(null);
+      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue(null);
+      const create = vi.spyOn(prisma.tenant, 'create').mockResolvedValue({ id: 'tenant-123' } as any);
+
+      await service.create({ ...dto, email: '  ZhangSan@Example.com ' });
+
+      expect(create.mock.calls[0][0].data.email).toBe('zhangsan@example.com');
+      expect(prisma.tenant.findFirst).toHaveBeenCalledWith({
+        where: { email: { equals: 'zhangsan@example.com', mode: 'insensitive' } },
+        select: { id: true },
+      });
     });
   });
 

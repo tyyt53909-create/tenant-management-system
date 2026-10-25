@@ -40,6 +40,7 @@ interface PrismaMock {
     findUnique: ReturnType<typeof vi.fn>;
     findFirst: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
   };
   $transaction: ReturnType<typeof vi.fn>;
 }
@@ -58,6 +59,7 @@ function createPrismaMock(): PrismaMock {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     $transaction: vi.fn(),
   };
@@ -287,8 +289,8 @@ describe('AuthService 注册策略（DEC-03）', () => {
     };
     expect(bcrypt.getRounds(created.data.passwordHash)).toBe(12);
     expect(created.data.role).toBe('TENANT');
-    expect(prisma.tenant.update).toHaveBeenCalledWith({
-      where: { id: 'tenant-pre' },
+    expect(prisma.tenant.updateMany).toHaveBeenCalledWith({
+      where: { id: 'tenant-pre', userId: null },
       data: { userId: 'user-new' },
     });
     expect(prisma.tenant.create).not.toHaveBeenCalled();

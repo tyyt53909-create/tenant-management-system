@@ -133,23 +133,24 @@ export class InviteCodeService {
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
     const db = tx ?? this.prisma;
-    if (db.inviteCode) {
-      const result = await db.inviteCode.updateMany({
-        where: {
-          code: code.trim(),
-          status: 'UNUSED',
-          expiresAt: { gt: new Date() },
-        },
-        data: {
-          status: 'USED',
-          usedById,
-          usedAt: new Date(),
-        },
-      });
-      // 并发核销时只有一个请求能把 UNUSED 改成 USED，其余必须整体回滚（T260）。
-      if (result.count === 0) {
-        throw apiError(ErrorCode.AUTH_INVITE_CODE_CONFLICT);
-      }
+    if (!db.inviteCode) {
+      throw apiError(ErrorCode.COMMON_INTERNAL_ERROR, '邀请码存储不可用，已拒绝核销');
+    }
+    const result = await db.inviteCode.updateMany({
+      where: {
+        code: code.trim(),
+        status: 'UNUSED',
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        status: 'USED',
+        usedById,
+        usedAt: new Date(),
+      },
+    });
+    // 并发核销时只有一个请求能把 UNUSED 改成 USED，其余必须整体回滚（T260）。
+    if (result.count === 0) {
+      throw apiError(ErrorCode.AUTH_INVITE_CODE_CONFLICT);
     }
   }
 

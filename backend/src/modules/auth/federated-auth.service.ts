@@ -8,6 +8,7 @@ import { InviteCodeService } from './invite-code.service.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
+import { claimPreCreatedTenant, findPreCreatedTenant } from './pre-created-tenant.js';
 
 interface AuthenticatedUser {
   id: string;
@@ -15,11 +16,6 @@ interface AuthenticatedUser {
   phone: string | null;
   role: UserRole;
   avatarUrl?: string | null;
-}
-
-interface PreCreatedIdentity {
-  email?: string | null;
-  phone?: string | null;
 }
 
 @Injectable()
@@ -94,7 +90,7 @@ export class FederatedAuthService {
       if (!validation.valid) {
         throw apiError(ErrorCode.AUTH_INVITE_CODE_INVALID);
       }
-      const preTenant = await this.findPreCreatedTenant({ email });
+      const preTenant = await findPreCreatedTenant(this.prisma, { email });
       if (!preTenant) {
         throw apiError(
           ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED,
@@ -127,10 +123,7 @@ export class FederatedAuthService {
           },
         });
 
-        await tx.tenant.update({
-          where: { id: preTenant.id },
-          data: { userId: created.id },
-        });
+        await claimPreCreatedTenant(tx, preTenant.id, created.id);
 
         await this.inviteCodeService.consumeInviteCode(dto.inviteCode!, created.id, tx);
         return created;
@@ -212,7 +205,7 @@ export class FederatedAuthService {
       if (!validation.valid) {
         throw apiError(ErrorCode.AUTH_INVITE_CODE_INVALID);
       }
-      const preTenant = await this.findPreCreatedTenant({ email });
+      const preTenant = await findPreCreatedTenant(this.prisma, { email });
       if (!preTenant) {
         throw apiError(
           ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED,
@@ -243,10 +236,7 @@ export class FederatedAuthService {
           },
         });
 
-        await tx.tenant.update({
-          where: { id: preTenant.id },
-          data: { userId: created.id },
-        });
+        await claimPreCreatedTenant(tx, preTenant.id, created.id);
 
         await this.inviteCodeService.consumeInviteCode(dto.inviteCode!, created.id, tx);
         return created;
@@ -294,14 +284,11 @@ export class FederatedAuthService {
 
     const preTenant = user.tenant
       ? null
-      : await this.findPreCreatedTenant({ email: user.email, phone: user.phone });
+      : await findPreCreatedTenant(this.prisma, { email: user.email, phone: user.phone });
 
     await this.prisma.$transaction(async (tx) => {
       if (preTenant) {
-        await tx.tenant.update({
-          where: { id: preTenant.id },
-          data: { userId },
-        });
+        await claimPreCreatedTenant(tx, preTenant.id, userId);
       }
 
       const data: Prisma.UserUpdateInput = {};
@@ -323,23 +310,6 @@ export class FederatedAuthService {
       success: true,
       message: '邀请码兑换成功，房源身份已成功关联！',
     };
-  }
-
-  /** 查找尚未绑定用户、且邮箱/手机号精确匹配的预建租客档案。 */
-  private async findPreCreatedTenant(identity: PreCreatedIdentity) {
-    const conditions: Prisma.TenantWhereInput[] = [];
-    if (identity.email?.trim()) {
-      conditions.push({ email: identity.email.trim().toLowerCase() });
-    }
-    if (identity.phone?.trim()) {
-      conditions.push({ phone: identity.phone.trim() });
-    }
-    if (conditions.length === 0) {
-      return null;
-    }
-    return this.prisma.tenant.findFirst({
-      where: { userId: null, OR: conditions },
-    });
   }
 
   /** 补建/刷新外部身份；EMAIL 与 GOOGLE 都走同一张表。 */
