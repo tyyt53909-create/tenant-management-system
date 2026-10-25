@@ -45,7 +45,14 @@ SIZE="$(wc -c < "$FILE" | tr -d ' ')"
 echo "[backup] 完成：$FILE（${SIZE} bytes）"
 
 if [ "$RETENTION_DAYS" -gt 0 ]; then
-  find "$BACKUP_DIR" -maxdepth 1 -name 'tenant-*.dump' -type f -mtime "+$RETENTION_DAYS" -print -delete
-  find "$BACKUP_DIR" -maxdepth 1 -name 'tenant-*.dump.sha256' -type f -mtime "+$RETENTION_DAYS" -print -delete
-  echo "[backup] 已清理 ${RETENTION_DAYS} 天前的备份"
+  shopt -s nullglob
+  dumps=("$BACKUP_DIR"/tenant-*.dump)
+  if [ "${#dumps[@]}" -gt 0 ]; then
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      rm -f -- "$name" "${name}.sha256"
+      echo "[backup] 删除过期备份：$name"
+    done < <(node "$(dirname "$0")/backup-core.mjs" expired "$RETENTION_DAYS" "${dumps[@]}")
+  fi
+  echo "[backup] 已按文件名时间清理 ${RETENTION_DAYS} 天前的备份（无法解析的文件保留）"
 fi

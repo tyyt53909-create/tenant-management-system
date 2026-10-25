@@ -6,6 +6,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
+import { resolveCorsOrigins } from '../../config/cors.config.js';
 import { JwtAuthService } from '../auth/jwt.service.js';
 
 interface AuthedSocketData {
@@ -16,13 +17,23 @@ interface AuthedSocketData {
  * 通知实时通道（COM-02 / T282）。
  *
  * - 命名空间：`/notifications`
- * - 鉴权：`handshake.auth.token` 或 `?token=` 的 **Access Token**；失败立即断开
+ * - 鉴权：只接受 `handshake.auth.token` 的 **Access Token**；query string 会被代理日志记下，一律忽略
  * - 房间：`user:{userId}`，只向本人推送
+ * - CORS 与 HTTP 共用 `CORS_ORIGINS` 白名单
  * - 离线/不支持 WebSocket 时客户端回退到 `GET /notifications/unread-count` 轮询
  */
 @WebSocketGateway({
   namespace: '/notifications',
-  cors: { origin: true, credentials: true },
+  cors: {
+    origin: (origin, callback) => {
+      if (!origin || resolveCorsOrigins(process.env.CORS_ORIGINS).includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('origin not allowed'), false);
+    },
+    credentials: true,
+  },
 })
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(NotificationsGateway.name);
@@ -66,7 +77,5 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 function readToken(client: Socket): string | undefined {
   const authToken = (client.handshake.auth as { token?: unknown } | undefined)?.token;
   if (typeof authToken === 'string' && authToken.trim()) return authToken.trim();
-  const queryToken = client.handshake.query?.token;
-  const value = Array.isArray(queryToken) ? queryToken[0] : queryToken;
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  return undefined;
 }

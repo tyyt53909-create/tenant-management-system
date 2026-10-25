@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { backupFileName, expiredBackups, parseBackupDate, safeDbName } from './backup-core.mjs';
+import { backupFileName, expiredBackups, parseBackupDate, safeDbName, sameDatabaseTarget } from './backup-core.mjs';
 
 test('备份文件名含 UTC 时间戳，数据库名被清洗', () => {
   const name = backupFileName(new Date('2026-10-25T01:02:03Z'), '../tenant');
@@ -23,4 +23,11 @@ test('过期文件按保留天数筛选，无法解析的保留', () => {
   ];
   assert.deepEqual(expiredBackups(files, { now, retentionDays: 14 }), ['tenant-db-20261001-000000.dump']);
   assert.deepEqual(expiredBackups(files, { now, retentionDays: 0 }), []);
+});
+
+test('同一数据库忽略密码、端口默认值和 query', () => {
+  const base = 'postgresql://user:secret@db.example:5432/tenant';
+  assert.equal(sameDatabaseTarget(base, 'postgres://user:other@db.example/tenant?sslmode=require'), true);
+  assert.equal(sameDatabaseTarget(base, 'postgresql://user:secret@db.example:5432/rehearsal'), false);
+  assert.equal(sameDatabaseTarget('', base), false);
 });

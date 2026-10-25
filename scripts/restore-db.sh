@@ -21,11 +21,17 @@ command -v pg_restore >/dev/null || { echo "缺少 pg_restore（安装 postgresq
 
 if [ -f "$FILE.sha256" ]; then
   echo "[restore] 校验 sha256"
-  sha256sum -c "$FILE.sha256"
+  expected="$(awk 'NR==1 { print $1 }' "$FILE.sha256")"
+  actual="$(sha256sum "$FILE" | awk '{ print $1 }')"
+  if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+    echo "拒绝执行：sha256 不一致" >&2
+    exit 1
+  fi
 fi
 
 echo "[restore] 开始：$(date -u +%FT%TZ) <- $FILE"
-pg_restore "$DATABASE_URL" \
+pg_restore \
+  --dbname="$DATABASE_URL" \
   --clean \
   --if-exists \
   --no-owner \
