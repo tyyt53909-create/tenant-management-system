@@ -1,6 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Optional,
+} from '@nestjs/common';
 import type { Prisma, CheckoutItemType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
 import { QueryCheckoutsDto } from './dto/query-checkouts.dto.js';
@@ -24,7 +31,10 @@ const CHECKOUT_STATUS_LABEL: Record<string, string> = {
 
 @Injectable()
 export class CheckoutService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly auditLog?: AuditLogService,
+  ) {}
 
   async create(dto: CreateCheckoutDto) {
     // 验证合同和房源存在
@@ -298,6 +308,32 @@ export class CheckoutService {
         } else if (record.contract.status !== 'TERMINATED') {
           throw new ConflictException(`合同当前状态为 ${record.contract.status}，不能完成退租`);
         }
+
+        // R09：业务交易内记录真实退租完成前后值
+        await this.auditLog?.recordEvent({
+          tx,
+          action: 'CHECKOUT_COMPLETE',
+          entityType: 'CheckoutRecord',
+          entityId: id,
+          actorId: dto.processedBy ?? record.processedBy,
+          before: {
+            checkoutStatus: record.status,
+            contractStatus: record.contract.status,
+            totalRefund: record.totalRefund,
+          },
+          after: {
+            checkoutStatus: 'COMPLETED',
+            contractStatus: 'TERMINATED',
+            totalRefund,
+            depositDeduction,
+            depositRefund,
+          },
+          reason: (dto.notes ?? record.notes) || undefined,
+          context: {
+            contractId: record.contractId,
+            roomId: record.roomId,
+          },
+        });
       }
 
       return tx.checkoutRecord.findUniqueOrThrow({

@@ -1,28 +1,78 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { QueryAuditLogsDto } from './dto/query-audit-logs.dto.js';
+import { sanitizeAuditValue } from './audit-sanitizer.js';
 
 export interface AuditRecord {
-  userId?: string;
+  tx?: Prisma.TransactionClient;
+  userId?: string | null;
   action: string;
   entityType: string;
   entityId: string;
   changes: unknown;
-  ip: string;
-  userAgent: string;
+  ip?: string;
+  userAgent?: string;
+}
+
+export interface BusinessEventRecord {
+  tx?: Prisma.TransactionClient;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorId?: string | null;
+  before?: unknown;
+  after?: unknown;
+  reason?: string;
+  ip?: string;
+  userAgent?: string;
+  context?: Record<string, unknown>;
 }
 
 @Injectable()
 export class AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async log(record: AuditRecord) {
-    // 匿名请求允许 userId 为空；绝不伪造操作者（SEC-06 / T270）。
-    return this.prisma.auditLog.create({
+  /**
+   * 记录业务审计事件（支持业务事务同生共死）。
+   * 若传入 tx，则与业务数据同一数据库事务提交或回滚；若审计失败，业务事务亦中止。
+   * 自动对 before/after 进行深度递归脱敏。
+   */
+  async recordEvent(event: BusinessEventRecord) {
+    const client = event.tx ?? this.prisma;
+    const sanitizedChanges = {
+      before: sanitizeAuditValue(event.before ?? null),
+      after: sanitizeAuditValue(event.after ?? null),
+      reason: event.reason,
+      actor: event.actorId ?? 'SYSTEM',
+      context: event.context,
+    };
+
+    return client.auditLog.create({
       data: {
-        ...record,
-        userId: record.userId ?? null,
-        changes: record.changes as never,
+        userId: event.actorId && event.actorId !== 'SYSTEM' ? event.actorId : null,
+        action: event.action,
+        entityType: event.entityType,
+        entityId: event.entityId,
+        changes: sanitizedChanges as never,
+        ip: event.ip || '127.0.0.1',
+        userAgent: event.userAgent || 'system',
+      },
+    });
+  }
+
+  async log(record: AuditRecord) {
+    const client = record.tx ?? this.prisma;
+    const sanitizedChanges = sanitizeAuditValue(record.changes);
+    return client.auditLog.create({
+      data: {
+        userId: record.userId && record.userId !== 'SYSTEM' ? record.userId : null,
+        action: record.action,
+        entityType: record.entityType,
+        entityId: record.entityId,
+        changes: sanitizedChanges as never,
+        ip: record.ip || '127.0.0.1',
+        userAgent: record.userAgent || 'system',
       },
     });
   }
@@ -41,8 +91,6 @@ export class AuditLogService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        // 审计的核心是「谁做的」，必须带出操作者信息；
-        // 此前只存 userId 不 include，前端拿不到可读的操作者
         include: {
           user: { select: { id: true, email: true, role: true } },
         },

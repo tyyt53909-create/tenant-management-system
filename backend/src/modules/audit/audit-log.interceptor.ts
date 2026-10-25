@@ -3,29 +3,13 @@ import type { Request, Response } from 'express';
 import { Observable, tap } from 'rxjs';
 import { AuditLogService } from './audit-log.service.js';
 import type { AuthUser } from '../../common/decorators/current-user.decorator.js';
+import { isSensitiveKey, sanitizeAuditValue } from './audit-sanitizer.js';
+
+export { isSensitiveKey, sanitizeAuditValue };
 
 const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
-const SENSITIVE_KEY = /password|passwordhash|code|token|authorization|cookie|idnumber|idcard|phone|email/i;
-const REDACTED = '[REDACTED]';
-
-function isSensitiveKey(key: string): boolean {
-  return SENSITIVE_KEY.test(key.replace(/[^a-z0-9]/gi, ''));
-}
 
 type AuditRequest = Request & { user?: AuthUser; requestId?: string };
-
-/** Copies JSON-like data while masking secrets and safely handling cycles. */
-export function sanitizeAuditValue(value: unknown, seen = new WeakSet<object>()): unknown {
-  if (value === null || typeof value !== 'object') return value;
-  if (seen.has(value)) return '[Circular]';
-  seen.add(value);
-  if (Array.isArray(value)) return value.map((item) => sanitizeAuditValue(item, seen));
-  const result: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value)) {
-    result[key] = isSensitiveKey(key) ? REDACTED : sanitizeAuditValue(child, seen);
-  }
-  return result;
-}
 
 function bodyDiff(body: unknown): Array<{ field: string; before: unknown; after: unknown }> {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) return [];
@@ -59,6 +43,7 @@ export class AuditLogInterceptor implements NestInterceptor {
         next: () => {
           const after = sanitizeAuditValue(request.body ?? {});
           const changes = {
+            type: 'HTTP_REQUEST',
             before: {},
             after,
             diff: bodyDiff(request.body),

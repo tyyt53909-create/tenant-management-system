@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, type PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -15,6 +16,7 @@ import {
   reverseDepositCollection,
 } from '../deposits/deposit-ledger.util.js';
 import { computeOverdue, derivePaymentStatus } from './bill-overdue.util.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 interface RawClient {
   $queryRaw?: (query: Prisma.Sql) => Promise<unknown>;
@@ -36,6 +38,7 @@ export class BillPaymentService {
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
     private readonly clock: BusinessClock,
+    @Optional() private readonly auditLog?: AuditLogService,
   ) {}
 
   /**
@@ -190,6 +193,26 @@ export class BillPaymentService {
         operatorId,
       });
 
+      // R09：业务交易内记录真实财务审计前后值
+      await this.auditLog?.recordEvent({
+        tx,
+        action: 'BILL_PAYMENT',
+        entityType: 'Bill',
+        entityId: billId,
+        actorId: operatorId,
+        before: { paidAmount: bill.paidAmount, status: bill.status },
+        after: { paidAmount: newPaidAmount, status: newStatus },
+        reason: dto.notes ?? dto.paymentMethod,
+        context: {
+          paymentRecordId: payment.id,
+          amount: dto.amount,
+          billPortion,
+          lateFeePortion: dto.amount - billPortion,
+          paymentMethod: dto.paymentMethod,
+          idempotencyKey: dto.idempotencyKey,
+        },
+      });
+
       return { payment, bill: updatedBill, lateFees: settledFees, idempotent: false };
     });
   }
@@ -283,6 +306,31 @@ export class BillPaymentService {
         bill: updatedBill,
         amount: payment.billPortion,
         operatorId,
+      });
+
+      // R09：业务交易内记录真实财务冲正审计前后值
+      await this.auditLog?.recordEvent({
+        tx,
+        action: 'PAYMENT_REVERSAL',
+        entityType: 'PaymentRecord',
+        entityId: payment.id,
+        actorId: operatorId,
+        before: {
+          paymentStatus: payment.status,
+          billPaidAmount: bill.paidAmount,
+          billStatus: bill.status,
+        },
+        after: {
+          paymentStatus: 'VOIDED',
+          billPaidAmount: newPaid,
+          billStatus: newStatus,
+        },
+        reason,
+        context: {
+          billId,
+          reversalRecordId: reversal.id,
+          reversalAmount: reversal.amount,
+        },
       });
 
       return { payment: voided, bill: updatedBill, reversal, idempotent: false };

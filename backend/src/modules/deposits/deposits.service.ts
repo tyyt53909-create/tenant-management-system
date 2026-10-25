@@ -1,6 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 export interface DepositView {
   id: string;
@@ -25,7 +32,10 @@ export interface DepositView {
 
 @Injectable()
 export class DepositsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly auditLog?: AuditLogService,
+  ) {}
 
   /** 管理端查看押金台账（含流水）。 */
   async getByContract(contractId: string): Promise<DepositView> {
@@ -151,6 +161,24 @@ export class DepositsService {
         },
       });
 
+      // R09：业务交易内记录真实押金转移前后值
+      await this.auditLog?.recordEvent({
+        tx,
+        action: 'DEPOSIT_TRANSFER',
+        entityType: 'DepositLedger',
+        entityId: source.id,
+        actorId: operatorId,
+        before: { sourceBalance: source.balance, targetBalance: target.balance },
+        after: { sourceBalance: 0, targetBalance },
+        reason: '续签合同押金转移',
+        context: {
+          fromContractId,
+          toContractId,
+          moved,
+          idempotencyKey,
+        },
+      });
+
       return { from: source.id, to: target.id, moved, targetBalance };
     });
   }
@@ -199,6 +227,23 @@ export class DepositsService {
           balanceAfter: balance,
           operatorId,
           notes: reason,
+          idempotencyKey,
+        },
+      });
+
+      // R09：业务交易内记录真实押金扣退审计前后值
+      await this.auditLog?.recordEvent({
+        tx,
+        action: type === 'REFUND' ? 'DEPOSIT_REFUND' : 'DEPOSIT_DEDUCTION',
+        entityType: 'DepositLedger',
+        entityId: ledger.id,
+        actorId: operatorId,
+        before: { balance: ledger.balance, status: ledger.status },
+        after: { balance: updated.balance, status: updated.status },
+        reason,
+        context: {
+          contractId,
+          amount,
           idempotencyKey,
         },
       });

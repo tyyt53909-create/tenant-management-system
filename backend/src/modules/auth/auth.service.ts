@@ -28,6 +28,7 @@ import { FederatedAuthService } from './federated-auth.service.js';
 import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
 import { resolveLoginProtection, type LoginProtection } from '../../config/password.config.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 import { claimPreCreatedTenant } from './pre-created-tenant.js';
 import { decideInviteClaim } from './claim-invite.js';
 import {
@@ -53,6 +54,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     @Inject(LOGIN_ATTEMPT_STORE) private readonly loginAttemptStore: LoginAttemptStore,
     private readonly federatedAuthService: FederatedAuthService,
+    @Optional() private readonly auditLog?: AuditLogService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
@@ -135,6 +137,19 @@ export class AuthService {
 
         if (claim.kind === 'tenant') {
           await claimPreCreatedTenant(tx, claim.tenantId, newUser.id);
+
+          // R09：业务交易内记录真实身份认领前后值
+          await this.auditLog?.recordEvent({
+            tx,
+            action: 'TENANT_CLAIM',
+            entityType: 'Tenant',
+            entityId: claim.tenantId,
+            actorId: newUser.id,
+            before: { userId: null },
+            after: { userId: newUser.id, role: 'TENANT' },
+            reason: '受邀认领租客档案',
+            context: { email: newUser.email },
+          });
         }
 
         await this.inviteCodeService.consumeInviteCode(dto.inviteCode, newUser.id, tx);
