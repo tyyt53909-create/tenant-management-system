@@ -856,7 +856,8 @@ model MaintenanceRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  photos MaintenancePhoto[]
+  photos   MaintenancePhoto[]
+  messages MaintenanceMessage[]
 
   @@index([roomId, status])
   @@index([tenantId, status])
@@ -878,6 +879,29 @@ model MaintenancePhoto {
 
   @@index([requestId])
   @@map("maintenance_photos")
+}
+
+/// 报修工单时间线（COM-03 / T283）：用户留言 + 系统事件，按时间正序展示。
+model MaintenanceMessage {
+  id        String             @id @default(cuid())
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  /// MESSAGE=双方留言；SYSTEM=状态/派单/完成等系统事件
+  type       MaintenanceMessageType @default(MESSAGE)
+  authorId   String?
+  authorRole String?
+  body       String                 @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([requestId, createdAt])
+  @@map("maintenance_messages")
+}
+
+enum MaintenanceMessageType {
+  MESSAGE
+  SYSTEM
 }
 
 // 25. FileAsset（上传文件归属）—— T159 安全修复

@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
 import { QueryMaintenanceDto } from './dto/query-maintenance.dto.js';
+import { CreateMaintenanceMessageDto } from './dto/create-maintenance-message.dto.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import {
   isMaintenanceTransitionAllowed,
@@ -67,6 +68,16 @@ export class MaintenanceService {
           description: dto.description,
           category: dto.category as MaintenanceCategory,
           priority: (dto.priority as MaintenancePriority) || 'NORMAL',
+        },
+      });
+
+      await tx.maintenanceMessage.create({
+        data: {
+          requestId: request.id,
+          type: 'SYSTEM',
+          authorId: user.userId,
+          authorRole: user.role,
+          body: '提交报修',
         },
       });
 
@@ -217,10 +228,74 @@ export class MaintenanceService {
       updateData.resolvedAt = new Date();
     }
 
-    return this.prisma.maintenanceRequest.update({
-      where: { id },
-      data: updateData,
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.maintenanceRequest.update({
+        where: { id },
+        data: updateData,
+      });
+
+      const events: string[] = [];
+      if (statusChanged) events.push(`状态 ${request.status} → ${updated.status}`);
+      if (dto.assignedTo) events.push(`派单给 ${dto.assignedTo}`);
+      if (dto.resolution) events.push('填写处理结果');
+      if (events.length > 0) {
+        await tx.maintenanceMessage.create({
+          data: {
+            requestId: id,
+            type: 'SYSTEM',
+            authorId: null,
+            authorRole: 'SYSTEM',
+            body: events.join('；'),
+          },
+        });
+      }
+
+      return updated;
     });
+  }
+
+  /** 工单时间线：ADMIN 任意，TENANT 仅自己的工单。 */
+  async findMessages(id: string, user: { userId: string; role: string; tenantId?: string }) {
+    await this.assertRequestAccess(id, user);
+    const messages = await this.prisma.maintenanceMessage.findMany({
+      where: { requestId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { data: messages };
+  }
+
+  /** 双方留言：ADMIN 任意，TENANT 仅自己的工单。 */
+  async addMessage(
+    id: string,
+    dto: CreateMaintenanceMessageDto,
+    user: { userId: string; role: string; tenantId?: string },
+  ) {
+    await this.assertRequestAccess(id, user);
+    const body = dto.body.trim();
+    if (!body) throw new BadRequestException('留言不能为空');
+    return this.prisma.maintenanceMessage.create({
+      data: {
+        requestId: id,
+        type: 'MESSAGE',
+        authorId: user.userId,
+        authorRole: user.role,
+        body,
+      },
+    });
+  }
+
+  private async assertRequestAccess(
+    id: string,
+    user: { role: string; tenantId?: string },
+  ): Promise<void> {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      select: { tenantId: true },
+    });
+    if (!request) throw new NotFoundException('报修记录不存在');
+    if (user.role === 'TENANT' && request.tenantId !== user.tenantId) {
+      throw new NotFoundException('报修记录不存在');
+    }
   }
 
   async remove(id: string) {

@@ -3,6 +3,7 @@ import { MaintenanceService } from './maintenance.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
 import { QueryMaintenanceDto } from './dto/query-maintenance.dto.js';
+import { CreateMaintenanceMessageDto } from './dto/create-maintenance-message.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -53,6 +54,28 @@ export class MaintenanceController {
       return this.maintenanceService.findOneForTenant(id, tenantId);
     }
     return this.maintenanceService.findOne(id);
+  }
+
+  @Get(':id/messages')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.maintenance.read')
+  findMessages(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+    const user = resolveAuthUser(userParam);
+    return this.maintenanceService.findMessages(id, user);
+  }
+
+  @Post(':id/messages')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.maintenance.create')
+  addMessage(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto: CreateMaintenanceMessageDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.maintenanceService.addMessage(id, dto, user);
   }
 
   @Patch(':id')
