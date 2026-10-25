@@ -1,12 +1,16 @@
 /**
  * 展示层格式化工具（T162）
  *
+ * 金额换算（元↔分）算法本体在 shared/src/money.ts（QLT-04 / T289 三端共享），
+ * 本文件只保留小程序的空值展示语义（0 合法、空值 → '—'）。
+ *
  * 背景：页面里常见 `{{ value || '-' }}㎡` 这类写法，有两个问题：
  * 1. 值为空时输出「-㎡」——挂了单位却没有值（合同页面积就显示成「-㎡」）
  * 2. `||` 会把 0 当空值：楼层 0、面积 0 是合法值，却会被显示成「-」
  *
  * 因此统一用显式判空（null / undefined / 空串），保留 0。
  */
+import { formatCents } from '../../shared/src/money.ts'
 
 /** 值是否为空（注意：0 与 false 不算空） */
 export function isEmpty(value) {
@@ -27,14 +31,11 @@ export function withUnit(value, unit, digits) {
   return text + unit
 }
 
-/** 分 → '¥1,000.00'；空值 → '—' */
+/** 分 → '¥1,000.00'；空值 → '—'。换算走共享实现（QLT-04 / T289），本文件保留小程序的空值语义。 */
 export function money(cents) {
   if (isEmpty(cents)) return '—'
-  const n = Number(cents)
-  if (Number.isNaN(n)) return '—'
-  return (
-    '¥' + (n / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  )
+  if (Number.isNaN(Number(cents))) return '—'
+  return formatCents(cents)
 }
 
 /** 长编号等：超长时中间省略，避免撑破卡片 */

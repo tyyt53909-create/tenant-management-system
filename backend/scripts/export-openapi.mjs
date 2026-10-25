@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -14,7 +14,12 @@ const build = spawnSync('npx', ['nest', 'build'], {
 if (build.status) process.exit(build.status ?? 1);
 
 rewriteSwaggerImports(dist);
-await import(pathToFileURL(join(dist, 'openapi/export-openapi.js')).href);
+// T289：rootDir 变为仓库根后 nest build 输出嵌套在 dist/backend/... 下
+const exportEntry =
+  existsSync(join(dist, 'openapi/export-openapi.js'))
+    ? join(dist, 'openapi/export-openapi.js')
+    : join(dist, 'backend/src/openapi/export-openapi.js');
+await import(pathToFileURL(exportEntry).href);
 
 function rewriteSwaggerImports(directory) {
   for (const file of walk(directory)) {

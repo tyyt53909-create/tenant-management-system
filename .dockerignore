@@ -16,3 +16,8 @@ frontend-admin/node_modules
 frontend-admin/dist
 miniprogram/node_modules
 miniprogram/dist
+backend/uploads
+backend/test
+backend/.env*
+tasks
+docs
