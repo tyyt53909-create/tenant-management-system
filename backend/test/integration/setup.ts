@@ -30,3 +30,6 @@ try {
 }
 
 applyIntegrationProcessEnv(target, process.env);
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-min-32-bytes-long!';
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'ci-test-encryption-key-32-bytes!';
+process.env.CORS_ORIGINS = process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000';

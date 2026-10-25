@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -109,6 +110,7 @@ export async function createApp(): Promise<INestApplication> {
   }).compile();
 
   const app = moduleRef.createNestApplication();
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
@@ -145,21 +147,24 @@ export interface Tenancy {
   adminToken: string;
 }
 
+let tenancySeq = 0;
+
 /** J1 的最小前置：预建租客 → 邀请码注册 → 房源 RESERVED → 合同 ACTIVE。 */
 export async function setupTenancy(app: INestApplication, base: SeedBase): Promise<Tenancy> {
+  const seq = ++tenancySeq;
   const adminToken = await login(app, base.adminEmail, base.adminPassword);
 
   const roomResponse = await http(app)
     .post('/rooms')
     .set(auth(adminToken))
-    .send({ buildingId: base.buildingId, roomNumber: `IT-${Date.now()}`, floor: 1, roomType: 'SINGLE', area: 25 });
+    .send({ buildingId: base.buildingId, roomNumber: `IT-${Date.now()}-${seq}`, floor: 1, roomType: 'SINGLE', area: 25 });
   if (roomResponse.status !== 201) {
     throw new Error(`创建房源失败: ${roomResponse.status} ${JSON.stringify(roomResponse.body)}`);
   }
   const roomId = roomResponse.body.id as string;
 
-  const phone = `139${String(Date.now()).slice(-8)}`;
-  const tenantEmail = `tenant-${Date.now()}@example.com`;
+  const phone = `139${String(Date.now() + seq).slice(-8)}`;
+  const tenantEmail = `tenant-${Date.now()}-${seq}@example.com`;
   const tenantResponse = await http(app)
     .post('/tenants')
     .set(auth(adminToken))

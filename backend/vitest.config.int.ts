@@ -15,6 +15,7 @@ export default defineConfig({
     setupFiles: ['test/integration/setup.ts'],
     include: ['test/integration/**/*.int-spec.ts'],
     fileParallelism: false,
+    maxWorkers: 1,
     testTimeout: 30_000,
     hookTimeout: 30_000,
   },

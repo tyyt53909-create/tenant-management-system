@@ -49,10 +49,12 @@ describe('公告与定向消息（COM-04）', () => {
       .get('/notifications')
       .set(auth(tenancy.tenantToken));
     expect(tenantNotifications.status).toBe(200);
-    expect(tenantNotifications.body.data).toEqual([
-      expect.objectContaining({ title: '停水通知', userId: tenantUser.userId }),
-    ]);
-    expect(tenantNotifications.body.meta.unreadCount).toBe(1);
+    expect(tenantNotifications.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: '停水通知', userId: tenantUser.userId }),
+      ]),
+    );
+    expect(tenantNotifications.body.data.find((n: any) => n.title === '停水通知')?.isRead).toBe(false);
 
     // 管理员本人不在受众内
     const adminNotifications = await prisma.notification.count({

@@ -10,7 +10,7 @@ export function createNotificationSocket(getToken: () => string | null): Socket 
   const base = import.meta.env.VITE_WS_URL || window.location.origin;
   return io(`${base}/notifications`, {
     auth: { token: getToken() },
-    transports: ['websocket'],
+    transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 2000,
