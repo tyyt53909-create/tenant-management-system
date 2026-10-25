@@ -44,6 +44,10 @@ export const getStatisticsOverview = (params: {
   return request.get('/statistics/overview', { params });
 };
 
-export const getBuildingsForFilter = (): Promise<{ id: string; name: string }[]> => {
-  return request.get('/buildings', { params: { page: 1, limit: 100 } }).then((res: any) => res.data);
+/** 统计筛选用的楼栋下拉（响应拦截器已解包为 body） */
+export const getBuildingsForFilter = async (): Promise<{ id: string; name: string }[]> => {
+  const res = (await request.get('/buildings', {
+    params: { page: 1, limit: 100 },
+  })) as unknown as { data?: { id: string; name: string }[] };
+  return res?.data ?? [];
 };
