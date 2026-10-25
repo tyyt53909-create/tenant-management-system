@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `feature/T323-financial-audit`
-> 集成基準: `origin/develop` @ `071f08a`
+> 集成基準: `origin/develop` @ `51fd04d`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -42,13 +42,14 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 9 |
+| 進行中 | 10 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
+- **T289 共享套件——API client、错误码、标签、金额工具（QLT-04）**（active，plan QLT-04，`feature/T289-qlt-04-shared-kit`）
 - **T315 修复基准与问题清单（R00 / QLT-05）**（active，plan QLT-05，`feature/T315-repair-baseline`）
 - **T316 整合测试环境保护（R01 / QLT-05）**（active，plan QLT-05，`feature/T316-int-harness-guard`）
 - **T317 租客身份认领（R02 / SEC-04）**（active，plan SEC-04，`feature/T317-tenant-claim`）
@@ -89,7 +90,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 69 | 46 | 39 | 9 | 14 |
+| 未分類 | 70 | 46 | 39 | 10 | 14 |
 
 ---
 
@@ -110,9 +111,9 @@
 
 - 資料模型：**41** 張表
 - OpenAPI 路由：**177** 條
-- 後端程式碼：**24613** 行
-- 管理後台程式碼：**31500** 行
-- 小程序程式碼：**6842** 行
+- 後端程式碼：**24496** 行
+- 管理後台程式碼：**31476** 行
+- 小程序程式碼：**6847** 行
 - 文件：**174** 份
 
 ### 測試
