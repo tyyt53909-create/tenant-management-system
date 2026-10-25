@@ -305,6 +305,24 @@
     ]
   },
   {
+    "method": "GET",
+    "path": "/api/bills/:id/payments/:paymentId/receipt",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/:id/payments/:paymentId/receipt/pdf",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
     "method": "POST",
     "path": "/api/bills/:id/payments/:paymentId/refund",
     "public": false,
@@ -323,6 +341,15 @@
   {
     "method": "GET",
     "path": "/api/bills/:id/receipt",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/bills/:id/receipt/pdf",
     "public": false,
     "roles": [
       "ADMIN",
@@ -1211,6 +1238,24 @@
   {
     "method": "GET",
     "path": "/api/public/files/:key",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/public/receipts/:receiptNumber/pdf",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/public/receipts/:receiptNumber/verify",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/public/receipts/verify",
     "public": true,
     "roles": []
   },

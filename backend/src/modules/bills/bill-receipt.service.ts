@@ -1,7 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createHmac } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { centsToChineseRMB, centsToYuanString } from '../../common/utils/currency.util.js';
 import { summarizeLateFees } from './bills.service.js';
+import { buildReceiptPdf, type ReceiptPdfData } from './utils/receipt-pdf.builder.js';
 
 export const BILL_TYPE_LABEL: Record<string, string> = {
   RENT: '租金',
@@ -12,13 +15,62 @@ export const BILL_TYPE_LABEL: Record<string, string> = {
   OTHER: '其他',
 };
 
+export const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  WECHAT: '微信支付',
+  ALIPAY: '支付宝',
+  BANK_TRANSFER: '银行转账',
+  CASH: '现金',
+  OTHER: '其他',
+};
+
 @Injectable()
 export class BillReceiptService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(BillReceiptService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
 
   /** 滞纳金未核销余额（分） */
   private lateFeeOutstanding(fee: { confirmedAmount: number | null; settledAmount: number | null }) {
     return Math.max(0, (fee.confirmedAmount ?? 0) - (fee.settledAmount ?? 0));
+  }
+
+  /**
+   * 计算收据防伪验真码（HMAC-SHA256 前 16 位大写）
+   */
+  computeVerifyCode(receiptNumber: string, amount: number, paidAt: Date | string): string {
+    const secret =
+      this.configService.get<string>('JWT_SECRET') ||
+      'qiju-receipt-anti-counterfeit-secret';
+
+    const paidAtStr = typeof paidAt === 'string' ? paidAt : paidAt.toISOString();
+    const payload = `${receiptNumber}:${amount}:${paidAtStr}`;
+
+    return createHmac('sha256', secret)
+      .update(payload)
+      .digest('hex')
+      .slice(0, 16)
+      .toUpperCase();
+  }
+
+  /**
+   * 脱敏姓名（张三 -> 张*，李四五 -> 李*五）
+   */
+  maskName(name?: string | null): string {
+    if (!name) return '租客';
+    if (name.length <= 1) return name;
+    if (name.length === 2) return `${name[0]}*`;
+    return `${name[0]}*${name.slice(-1)}`;
+  }
+
+  /**
+   * 脱敏手机号（13812345678 -> 138****5678）
+   */
+  maskPhone(phone?: string | null): string {
+    if (!phone) return '';
+    return phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
   }
 
   /**
@@ -52,7 +104,6 @@ export class BillReceiptService {
       throw new NotFoundException('账单不存在');
     }
 
-    // tenantId === undefined 才代表「管理员视图」；空串是「租客但无档案」，必须走比对（T209）
     if (tenantId !== undefined && (!bill.contract || bill.contract.tenantId !== tenantId)) {
       throw new NotFoundException('收据不存在');
     }
@@ -61,11 +112,17 @@ export class BillReceiptService {
     const confirmedLateFee = lateFeeSummary.amount ?? 0;
     const totalPayable = bill.amount + confirmedLateFee;
     const paymentRecords = bill.paymentRecords || [];
-    const totalPaid = paymentRecords.reduce((sum, p) => sum + p.amount, 0);
+    const totalPaid = paymentRecords
+      .filter((p) => p.status !== 'VOIDED')
+      .reduce((sum, p) => sum + p.amount, 0);
     const unpaid = Math.max(0, totalPayable - totalPaid);
 
+    // 主收据编号（优先取最新一笔未作废收款的收据号，否则回退为 RCP-xxx）
+    const latestPayment = paymentRecords.find((p) => p.status !== 'VOIDED') || paymentRecords[0];
+    const receiptNumber = latestPayment?.receiptNumber || `RCP-${bill.billNumber}`;
+
     return {
-      receiptNumber: `RCP-${bill.billNumber}`,
+      receiptNumber,
       billId: bill.id,
       billNumber: bill.billNumber,
       payerName: bill.contract?.tenant?.name || '租客',
@@ -82,17 +139,300 @@ export class BillReceiptService {
       totalPaid,
       unpaid,
       amountInChinese: centsToChineseRMB(totalPaid > 0 ? totalPaid : bill.paidAmount),
-      payments: paymentRecords.map((p) => ({
-        id: p.id,
-        amount: p.amount,
-        amountYuan: centsToYuanString(p.amount),
-        paymentMethod: p.paymentMethod,
-        transactionNumber: p.transactionNumber,
-        paidAt: p.paidAt,
-        notes: p.notes,
-      })),
+      payments: paymentRecords.map((p) => {
+        const verifyCode = p.receiptNumber
+          ? this.computeVerifyCode(p.receiptNumber, p.amount, p.paidAt)
+          : '';
+        return {
+          id: p.id,
+          receiptNumber: p.receiptNumber,
+          amount: p.amount,
+          amountYuan: centsToYuanString(p.amount),
+          paymentMethod: p.paymentMethod,
+          paymentMethodLabel: PAYMENT_METHOD_LABEL[p.paymentMethod] || p.paymentMethod,
+          transactionNumber: p.transactionNumber,
+          paidAt: p.paidAt,
+          status: p.status || 'CONFIRMED',
+          isVoided: p.status === 'VOIDED',
+          voidedAt: p.voidedAt,
+          voidReason: p.voidReason,
+          verifyCode,
+          notes: p.notes,
+        };
+      }),
       issuedAt: new Date(),
     };
+  }
+
+  /**
+   * 获取指定单笔收款记录的收据凭证（支持作废状态呈现与防伪码）
+   */
+  async getPaymentReceipt(billId: string, paymentId: string, tenantId?: string) {
+    const payment = await this.prisma.paymentRecord.findUnique({
+      where: { id: paymentId },
+      include: {
+        bill: {
+          include: {
+            contract: {
+              include: {
+                tenant: true,
+                room: {
+                  include: {
+                    building: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!payment || payment.billId !== billId) {
+      throw new NotFoundException('收款记录不存在');
+    }
+
+    if (tenantId !== undefined && (!payment.bill.contract || payment.bill.contract.tenantId !== tenantId)) {
+      throw new NotFoundException('收据不存在');
+    }
+
+    const bill = payment.bill;
+    const receiptNumber = payment.receiptNumber || `RCP-${payment.id}`;
+    const amountAbs = Math.abs(payment.amount);
+    const verifyCode = this.computeVerifyCode(receiptNumber, payment.amount, payment.paidAt);
+    const verifyUrl = `/api/public/receipts/${encodeURIComponent(receiptNumber)}/verify?code=${verifyCode}`;
+
+    return {
+      receiptNumber,
+      paymentId: payment.id,
+      billId: bill.id,
+      billNumber: bill.billNumber,
+      status: payment.status,
+      isVoided: payment.status === 'VOIDED',
+      voidedAt: payment.voidedAt,
+      voidReason: payment.voidReason,
+      amount: amountAbs,
+      amountYuan: centsToYuanString(amountAbs),
+      amountInChinese: centsToChineseRMB(amountAbs),
+      paymentMethod: payment.paymentMethod,
+      paymentMethodLabel: PAYMENT_METHOD_LABEL[payment.paymentMethod] || payment.paymentMethod,
+      transactionNumber: payment.transactionNumber,
+      paidAt: payment.paidAt,
+      period: bill.period,
+      billType: bill.billType,
+      billTypeLabel: BILL_TYPE_LABEL[bill.billType] || bill.billType,
+      payerName: bill.contract?.tenant?.name || '租客',
+      payerPhone: bill.contract?.tenant?.phone || '',
+      buildingName: bill.contract?.room?.building?.name || '',
+      roomNumber: bill.contract?.room?.roomNumber || '',
+      verifyCode,
+      verifyUrl,
+      issuedAt: new Date(),
+    };
+  }
+
+  /**
+   * 公开收据验真查验（@Public()，脱敏展示，支持有效与作废状态查验）
+   */
+  async verifyReceipt(receiptNumber: string, code?: string) {
+    if (!receiptNumber || typeof receiptNumber !== 'string') {
+      throw new BadRequestException('收据编号不能为空');
+    }
+
+    const payment = await this.prisma.paymentRecord.findUnique({
+      where: { receiptNumber },
+      include: {
+        bill: {
+          include: {
+            contract: {
+              include: {
+                tenant: true,
+                room: {
+                  include: {
+                    building: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      return {
+        valid: false,
+        message: '收据编号不存在，请核实防伪单据号',
+      };
+    }
+
+    const expectedCode = this.computeVerifyCode(receiptNumber, payment.amount, payment.paidAt);
+
+    if (code && code.trim().toUpperCase() !== expectedCode) {
+      return {
+        valid: false,
+        message: '防伪校验码不匹配，谨防伪造单据',
+      };
+    }
+
+    const bill = payment.bill;
+    const amountAbs = Math.abs(payment.amount);
+    const isVoided = payment.status === 'VOIDED';
+
+    return {
+      valid: true,
+      receiptNumber: payment.receiptNumber,
+      status: payment.status,
+      isVoided,
+      voidedAt: payment.voidedAt,
+      voidReason: payment.voidReason,
+      message: isVoided ? `该收据已于 ${payment.voidedAt?.toISOString().slice(0, 10)} 作废` : '收据真实有效',
+      amount: amountAbs,
+      amountYuan: centsToYuanString(amountAbs),
+      amountInChinese: centsToChineseRMB(amountAbs),
+      billNumber: bill.billNumber,
+      billType: bill.billType,
+      billTypeLabel: BILL_TYPE_LABEL[bill.billType] || bill.billType,
+      paidAt: payment.paidAt,
+      paymentMethod: payment.paymentMethod,
+      paymentMethodLabel: PAYMENT_METHOD_LABEL[payment.paymentMethod] || payment.paymentMethod,
+      transactionNumber: payment.transactionNumber,
+      buildingName: bill.contract?.room?.building?.name || '',
+      roomNumber: bill.contract?.room?.roomNumber || '',
+      payerName: this.maskName(bill.contract?.tenant?.name),
+      payerPhone: this.maskPhone(bill.contract?.tenant?.phone),
+      verifyCode: expectedCode,
+      verifiedAt: new Date(),
+    };
+  }
+
+  /**
+   * 生成收据 PDF 二进制文档流
+   */
+  async generateReceiptPdf(billId: string, paymentId?: string, tenantId?: string): Promise<Buffer> {
+    let pdfData: ReceiptPdfData;
+
+    if (paymentId) {
+      const pReceipt = await this.getPaymentReceipt(billId, paymentId, tenantId);
+      pdfData = {
+        receiptNumber: pReceipt.receiptNumber,
+        billNumber: pReceipt.billNumber,
+        status: pReceipt.status === 'VOIDED' ? 'VOIDED' : 'CONFIRMED',
+        isVoided: pReceipt.isVoided,
+        voidedAt: pReceipt.voidedAt,
+        voidReason: pReceipt.voidReason,
+        issuedAt: pReceipt.issuedAt,
+        paidAt: pReceipt.paidAt,
+        payerName: pReceipt.payerName,
+        payerPhone: pReceipt.payerPhone,
+        buildingName: pReceipt.buildingName,
+        roomNumber: pReceipt.roomNumber,
+        billType: pReceipt.billType,
+        billTypeLabel: pReceipt.billTypeLabel,
+        period: pReceipt.period,
+        amount: pReceipt.amount,
+        amountYuan: pReceipt.amountYuan,
+        amountInChinese: pReceipt.amountInChinese,
+        paymentMethod: pReceipt.paymentMethod,
+        paymentMethodLabel: pReceipt.paymentMethodLabel,
+        transactionNumber: pReceipt.transactionNumber,
+        verifyCode: pReceipt.verifyCode,
+        verifyUrl: pReceipt.verifyUrl,
+      };
+    } else {
+      const gReceipt = await this.getReceipt(billId, tenantId);
+      const latestPayment = gReceipt.payments[0];
+      const isVoided = gReceipt.payments.length > 0 && gReceipt.payments.every((p) => p.isVoided);
+      const verifyCode = latestPayment?.receiptNumber
+        ? this.computeVerifyCode(latestPayment.receiptNumber, gReceipt.totalPaid, latestPayment.paidAt)
+        : this.computeVerifyCode(gReceipt.receiptNumber, gReceipt.totalPaid, new Date());
+
+      pdfData = {
+        receiptNumber: gReceipt.receiptNumber,
+        billNumber: gReceipt.billNumber,
+        status: isVoided ? 'VOIDED' : 'CONFIRMED',
+        isVoided,
+        voidedAt: latestPayment?.voidedAt,
+        voidReason: latestPayment?.voidReason,
+        issuedAt: gReceipt.issuedAt,
+        paidAt: latestPayment?.paidAt || new Date(),
+        payerName: gReceipt.payerName,
+        payerPhone: gReceipt.payerPhone,
+        buildingName: gReceipt.buildingName,
+        roomNumber: gReceipt.roomNumber,
+        billType: gReceipt.billType,
+        billTypeLabel: gReceipt.billTypeLabel,
+        period: gReceipt.period,
+        amount: gReceipt.totalPaid,
+        amountYuan: centsToYuanString(gReceipt.totalPaid),
+        amountInChinese: gReceipt.amountInChinese,
+        paymentMethod: latestPayment?.paymentMethod || 'MIXED',
+        paymentMethodLabel: latestPayment?.paymentMethodLabel || '综合收款',
+        transactionNumber: latestPayment?.transactionNumber,
+        verifyCode,
+        verifyUrl: `/api/public/receipts/${encodeURIComponent(gReceipt.receiptNumber)}/verify?code=${verifyCode}`,
+      };
+    }
+
+    return buildReceiptPdf(pdfData);
+  }
+
+  /**
+   * 公开下载已验真收据的 PDF 文档
+   */
+  async generatePublicReceiptPdf(receiptNumber: string): Promise<Buffer> {
+    const payment = await this.prisma.paymentRecord.findUnique({
+      where: { receiptNumber },
+      include: {
+        bill: {
+          include: {
+            contract: {
+              include: {
+                tenant: true,
+                room: { include: { building: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('收据不存在');
+    }
+
+    const bill = payment.bill;
+    const amountAbs = Math.abs(payment.amount);
+    const verifyCode = this.computeVerifyCode(receiptNumber, payment.amount, payment.paidAt);
+    const isVoided = payment.status === 'VOIDED';
+
+    const pdfData: ReceiptPdfData = {
+      receiptNumber: payment.receiptNumber || `RCP-${payment.id}`,
+      billNumber: bill.billNumber,
+      status: isVoided ? 'VOIDED' : 'CONFIRMED',
+      isVoided,
+      voidedAt: payment.voidedAt,
+      voidReason: payment.voidReason,
+      issuedAt: new Date(),
+      paidAt: payment.paidAt,
+      payerName: this.maskName(bill.contract?.tenant?.name),
+      payerPhone: this.maskPhone(bill.contract?.tenant?.phone),
+      buildingName: bill.contract?.room?.building?.name || '',
+      roomNumber: bill.contract?.room?.roomNumber || '',
+      billType: bill.billType,
+      billTypeLabel: BILL_TYPE_LABEL[bill.billType] || bill.billType,
+      period: bill.period,
+      amount: amountAbs,
+      amountYuan: centsToYuanString(amountAbs),
+      amountInChinese: centsToChineseRMB(amountAbs),
+      paymentMethod: payment.paymentMethod,
+      paymentMethodLabel: PAYMENT_METHOD_LABEL[payment.paymentMethod] || payment.paymentMethod,
+      transactionNumber: payment.transactionNumber,
+      verifyCode,
+      verifyUrl: `/api/public/receipts/${encodeURIComponent(receiptNumber)}/verify?code=${verifyCode}`,
+    };
+
+    return buildReceiptPdf(pdfData);
   }
 
   /**
@@ -174,7 +514,6 @@ export class BillReceiptService {
     const outstandingLateFees = unsettledFees.reduce((sum, f) => sum + this.lateFeeOutstanding(f), 0);
     const totalRemaining = unpaidAmount + outstandingLateFees;
 
-    // 金额比对：只认当前待收合计或未缴本金。原账单金额在已有收款后不再算匹配，避免旧单据被当成可全额入账。
     let amountMatchStatus = 'UNKNOWN'; // MATCHED | MISMATCH | UNKNOWN
     if (extractedAmountCents !== null) {
       if (extractedAmountCents === totalRemaining || extractedAmountCents === unpaidAmount) {

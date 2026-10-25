@@ -71,7 +71,10 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
         },
         { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
         { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },
-        { provide: BillReceiptService, useFactory: () => new BillReceiptService(prismaMock as never) },
+        {
+          provide: BillReceiptService,
+          useFactory: () => new BillReceiptService(prismaMock as never, new ConfigService({ JWT_SECRET: 'test' })),
+        },
         {
           provide: SettingsService,
           useValue: {

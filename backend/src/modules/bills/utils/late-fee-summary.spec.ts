@@ -138,7 +138,10 @@ describe('BillsService.findAll（T157 附滞纳金摘要，消除 N+1）', () =>
             ),
         },
         { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },
-        { provide: BillReceiptService, useFactory: () => new BillReceiptService(prismaMock as never) },
+        {
+          provide: BillReceiptService,
+          useFactory: () => new BillReceiptService(prismaMock as never, new ConfigService({ JWT_SECRET: 'test' })),
+        },
       ],
     }).compile();
     service = module.get<BillsService>(BillsService);

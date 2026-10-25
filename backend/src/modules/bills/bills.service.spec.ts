@@ -65,7 +65,10 @@ describe('BillsService', () => {
             ),
         },
         { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },
-        { provide: BillReceiptService, useFactory: () => new BillReceiptService(prismaMock as never) },
+        {
+          provide: BillReceiptService,
+          useFactory: () => new BillReceiptService(prismaMock as never, new ConfigService({ JWT_SECRET: 'test' })),
+        },
       ],
     }).compile();
 

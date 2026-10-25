@@ -92,6 +92,58 @@ export class BillsController {
     return this.billsService.getReceipt(id, tenantId);
   }
 
+  // 电子收款收据 PDF 导出
+  @Get(':id/receipt/pdf')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.bill.read')
+  async getReceiptPdf(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.role === 'TENANT' ? (user.tenantId ?? '') : undefined;
+    const pdfBuffer = await this.billsService.generateReceiptPdf(id, undefined, tenantId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="receipt-${id}.pdf"`);
+    res.end(pdfBuffer);
+  }
+
+  // 单笔收款收据凭单数据
+  @Get(':id/payments/:paymentId/receipt')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.bill.read')
+  getPaymentReceipt(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.role === 'TENANT' ? (user.tenantId ?? '') : undefined;
+    return this.billsService.getPaymentReceipt(id, paymentId, tenantId);
+  }
+
+  // 单笔收款收据 PDF 导出
+  @Get(':id/payments/:paymentId/receipt/pdf')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('ADMIN', 'TENANT')
+  @RequireCapability('tenant.bill.read')
+  async getPaymentReceiptPdf(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+    @Res() res: Response,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.role === 'TENANT' ? (user.tenantId ?? '') : undefined;
+    const pdfBuffer = await this.billsService.generateReceiptPdf(id, paymentId, tenantId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="receipt-${paymentId}.pdf"`);
+    res.end(pdfBuffer);
+  }
+
   @Get(':id')
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
