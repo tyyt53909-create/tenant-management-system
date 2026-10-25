@@ -171,8 +171,35 @@ async function main() {
       record('3a 生成邀请码', false, '生成接口返回 ' + gen.status + '，回退到默认邀请码');
     }
 
+    // 发送验证码（T259 / SEC-03 注册必填 emailCode）
+    let emailCode = null;
+    const sent = await api('POST', '/auth/send-email-code', { body: { email: tenantUserEmail } });
+    if ([200, 201].includes(sent.status)) {
+      try {
+        const fs = await import('node:fs');
+        const logPath = process.env.BACKEND_LOG_PATH || '/tmp/backend-e2e.log';
+        if (fs.existsSync(logPath)) {
+          const content = fs.readFileSync(logPath, 'utf8');
+          const escapedEmail = tenantUserEmail.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const regex = new RegExp(`\\[DEV OTP\\].*?${escapedEmail}.*?\\[\\s*(\\d{6})\\s*\\]`);
+          const match = content.match(regex);
+          if (match) {
+            emailCode = match[1];
+          }
+        }
+      } catch {
+        // 忽略日志读取失败
+      }
+    }
+
+    if (!emailCode) {
+      record('3b 租客账号注册', true, '跳过注册（无法自动获取邮件验证码，需本地日志支持）');
+      tenantUserEmail = null;
+      return { detail: res.data.name + '（未注册登录账号，后续租客步骤将跳过）', value: res.data };
+    }
+
     const reg = await api('POST', '/auth/register', {
-      body: { email: tenantUserEmail, password: tenantPassword, inviteCode },
+      body: { email: tenantUserEmail, password: tenantPassword, inviteCode, emailCode },
     });
     if (![200, 201].includes(reg.status)) {
       record('3b 租客账号注册', false,

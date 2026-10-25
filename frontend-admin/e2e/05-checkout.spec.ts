@@ -30,7 +30,7 @@ test.describe('退租结算', () => {
     await refundRow.locator('.el-select').click();
     await page.getByRole('option', { name: '押金退还' }).click();
     await refundRow.getByPlaceholder('0.00').fill('6000');
-    await refundRow.getByPlaceholder('请填写说明').fill('押金全额退还');
+    await refundRow.getByPlaceholder(/押金扣除请写明/).fill('押金全额退还');
 
     // 押金扣除项（800 元）
     await dialog.getByRole('button', { name: '+ 添加押金扣除项' }).click();
