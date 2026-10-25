@@ -4,6 +4,9 @@ import { RedisOtpStore } from './redis-otp.store.js';
 import type { OtpRecord } from '../modules/auth/otp-store.js';
 
 class FakeRedis implements RedisCommandClient {
+  async eval(): Promise<unknown> {
+    throw new Error('unused');
+  }
   readonly values = new Map<string, { value: string; expiresAt: number }>();
 
   async connect() {

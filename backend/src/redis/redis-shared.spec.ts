@@ -7,6 +7,9 @@ import { RedisService } from './redis.service.js';
 import { RedisThrottlerStorage } from './redis-throttler.storage.js';
 
 class SharedRedis implements RedisCommandClient {
+  async eval(): Promise<unknown> {
+    throw new Error('unused');
+  }
   readonly values = new Map<string, { value: string; expiresAt: number }>();
   readonly counters = new Map<string, { hits: number; expiresAt: number }>();
 

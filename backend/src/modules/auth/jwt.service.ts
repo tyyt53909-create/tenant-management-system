@@ -6,6 +6,7 @@ import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import {
   newSessionId,
   REFRESH_STORE,
+  SessionWriteRejectedError,
   type RefreshSessionStore,
 } from './refresh-session.store.js';
 
@@ -65,6 +66,7 @@ export class JwtAuthService {
         userId: payload.sub,
         familyId,
         expiresAt: Date.now() + this.refreshTtlMs(),
+        issuedAt: Date.now(),
         status: 'active',
       });
     }
@@ -144,13 +146,21 @@ export class JwtAuthService {
       throw new UnauthorizedException('刷新令牌已重复使用，所有会话已失效');
     }
 
-    await this.sessions.save({
-      jti: nextJti,
-      userId: current.userId,
-      familyId: current.familyId,
-      expiresAt: Date.now() + this.refreshTtlMs(),
-      status: 'active',
-    });
+    try {
+      await this.sessions.save({
+        jti: nextJti,
+        userId: current.userId,
+        familyId: current.familyId,
+        expiresAt: Date.now() + this.refreshTtlMs(),
+        issuedAt: current.issuedAt ?? 0,
+        status: 'active',
+      });
+    } catch (error) {
+      if (error instanceof SessionWriteRejectedError) {
+        throw new UnauthorizedException('登录会话已撤销，请重新登录');
+      }
+      throw error;
+    }
     return { accessToken, refreshToken: nextRefresh };
   }
 
