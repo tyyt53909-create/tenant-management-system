@@ -4,7 +4,12 @@
     "noEmit": true,
     "rootDir": "..",
     "incremental": false,
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "baseUrl": "..",
+    "paths": {
+      "vitest": ["backend/node_modules/vitest/dist/index.d.ts"],
+      "vitest/globals": ["backend/node_modules/vitest/globals.d.ts"]
+    }
   },
   "include": ["src/**/*", "test/**/*", "../shared/src/**/*.ts"],
   "exclude": ["node_modules", "dist", "dist-seed"]

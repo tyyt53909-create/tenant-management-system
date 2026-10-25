@@ -87,7 +87,7 @@ jobs:
         working-directory: backend
         run: |
           npm run build
-          PORT=$BACKEND_PORT nohup node dist/main > /tmp/backend-ui-e2e.log 2>&1 &
+          PORT=$BACKEND_PORT nohup node dist/backend/src/main > /tmp/backend-ui-e2e.log 2>&1 &
           echo $! > /tmp/backend-ui-e2e.pid
           for i in $(seq 1 30); do
             if curl -sf http://127.0.0.1:$BACKEND_PORT/api/health > /dev/null; then

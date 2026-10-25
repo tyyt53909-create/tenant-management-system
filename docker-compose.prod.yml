@@ -170,7 +170,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     profiles: ["seed"]
-    command: ["node", "dist-seed/seed.js"]
+    command: ["node", "dist-seed/prisma/seed.js"]
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${DB_USER:-tenant_user}:${DB_PASSWORD:?生产必须设置 DB_PASSWORD}@postgres:5432/${DB_NAME:-tenant_system}?schema=public
