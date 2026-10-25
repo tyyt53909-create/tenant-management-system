@@ -3,13 +3,15 @@
 #   builder -> prisma generate + nest build + 预编译 seed（tsc 编译，运行期不需要 TS 执行器）
 #   runner  -> 非 root 运行；app / migrate / seed 共用同一镜像
 #              （seed 为预编译 JS，运行时不需要 TS 执行器）
-# 构建：docker build -f backend/Dockerfile ./backend
+# 构建：docker build -f backend/Dockerfile .（仓库根为上下文）
+#   T289 起 shared/ 源码直引：docker build 上下文必须是仓库根，dockerfile 指向 backend/Dockerfile，
+#   prisma/seed 等路径在 -f 下不变；CI 与文档后续按此调整。
 # T253 / OPS-02：运行在 Node 24 LTS（CI 仍为 Node 20，统一由 OPS-08 处理）。
 
 FROM node:24-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json .npmrc ./
-COPY prisma/schema.prisma ./prisma/
+COPY backend/package.json backend/package-lock.json backend/.npmrc ./
+COPY backend/prisma/schema.prisma ./prisma/
 RUN npm ci
 
 FROM node:24-alpine AS builder
@@ -64,4 +66,4 @@ USER app
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-CMD ["node", "dist/main"]
+CMD ["node", "dist/backend/src/main"]

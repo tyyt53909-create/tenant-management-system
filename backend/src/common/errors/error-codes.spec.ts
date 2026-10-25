@@ -99,4 +99,20 @@ describe('codeForMessage 兜底', () => {
     expect(codeForMessage(400, '邀请码已过期')).toBe('AUTH_INVITE_CODE_EXPIRED');
     expect(codeForMessage(422, '不允许的房态流转：VACANT → OCCUPIED')).toBe('ROOM_NOT_AVAILABLE');
   });
+
+  it('按状态码兜底归码（T289 补齐分支覆盖）', () => {
+    expect(codeForMessage(401, '任何文案')).toBe('AUTH_TOKEN_INVALID');
+    expect(codeForMessage(403, '任何文案')).toBe('PERM_FORBIDDEN');
+    expect(codeForMessage(404, '任何文案')).toBe('COMMON_RESOURCE_NOT_FOUND');
+    expect(codeForMessage(409, '任何文案')).toBe('COMMON_CONFLICT');
+    expect(codeForMessage(429, '任何文案')).toBe('COMMON_RATE_LIMIT_EXCEEDED');
+    expect(codeForMessage(400, '字段；字段2')).toBe('COMMON_VALIDATION_ERROR');
+    expect(codeForMessage(400, '普通错误')).toBe('COMMON_BAD_REQUEST');
+    expect(codeForMessage(500, '未知错误')).toBe('COMMON_INTERNAL_ERROR');
+  });
+
+  it('消息关键词兜底（收款/缴清）', () => {
+    expect(codeForMessage(400, '收款金额不能超过应缴')).toBe('BILL_PAYMENT_EXCEEDS_AMOUNT');
+    expect(codeForMessage(422, '该账单已缴清')).toBe('BILL_ALREADY_PAID');
+  });
 });

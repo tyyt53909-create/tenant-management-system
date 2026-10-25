@@ -80,7 +80,7 @@ const COMMANDS = {
   },
   'backend-tsc': {
     cwd: 'backend',
-    command: 'npx tsc --noEmit',
+    command: 'npx tsc -p tsconfig.typecheck.json --noEmit',
   },
   'backend-unit': {
     cwd: 'backend',

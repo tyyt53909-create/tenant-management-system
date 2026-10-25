@@ -97,7 +97,7 @@ jobs:
       - name: 启动后端服务
         working-directory: backend
         run: |
-          nohup node dist/main > /tmp/backend-e2e.log 2>&1 &
+          nohup node dist/backend/src/main > /tmp/backend-e2e.log 2>&1 &
           echo $! > /tmp/backend-e2e.pid
           for i in $(seq 1 30); do
             if curl -sf http://127.0.0.1:3000/api/health > /dev/null; then

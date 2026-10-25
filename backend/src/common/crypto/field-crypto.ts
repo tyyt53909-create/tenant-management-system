@@ -114,10 +114,3 @@ export function maskStoredIdNumberWithKeys(stored: string, keys: Buffer[]): stri
     return '********';
   }
 }
-
-function requireKey(key: Buffer | null): Buffer {
-  if (!key) {
-    throw new FieldCryptoError('未配置 FIELD_ENCRYPTION_KEY');
-  }
-  return key;
-}

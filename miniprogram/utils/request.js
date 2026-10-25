@@ -1,4 +1,6 @@
 import { API_BASE_URL } from './api-config.js'
+// 错误码常量（QLT-04 / T289 三端共享）；小程序比较错误码时禁止手抄字符串
+import { ErrorCode } from '../../shared/src/error-codes.ts'
 
 /**
  * 带后端字段的请求错误（FE-02 / T287 类型化）。
@@ -46,7 +48,7 @@ function sleep(ms) {
  */
 function isRotationRace(error) {
   const code = error && /** @type {RequestError} */ (error).code
-  if (code === 'AUTH_REFRESH_ROTATING') return true
+  if (code === ErrorCode.AUTH_REFRESH_ROTATING) return true
   const message = error && error.message
   return typeof message === 'string' && message.includes('正在轮换中')
 }
@@ -173,25 +175,26 @@ const request = (options) => {
 function errorText(data) {
   if (!data) return '请求失败，请稍后重试'
   const code = data.code || ''
-  if (code === 'CAPABILITY_DENIED' || data.message === 'CAPABILITY_DENIED') return '当前账号的这项功能已暂停'
-  if (code === 'COMMON_RATE_LIMIT_EXCEEDED') return '请求过于频繁，请稍后再试'
-  if (code === 'COMMON_INTERNAL_ERROR') return '服务器内部错误，请稍后重试'
-  if (code === 'AUTH_INVALID_CREDENTIALS') return '账号或密码不正确'
-  if (code === 'AUTH_TOKEN_EXPIRED' || code === 'AUTH_TOKEN_INVALID') return '登录已失效，请重新登录'
-  if (code === 'AUTH_INVITE_CODE_INVALID') return '邀请码无效或已使用'
-  if (code === 'AUTH_INVITE_CODE_EXPIRED') return '邀请码已过期'
-  if (code === 'AUTH_EMAIL_ALREADY_EXISTS') return '该邮箱已被注册'
-  if (code === 'PERM_FORBIDDEN' || code === 'PERM_INSUFFICIENT_ROLE') return '您没有权限执行此操作'
-  if (code === 'PERM_BUILDING_ACCESS_DENIED') return '无权访问该楼栋数据'
-  if (code === 'ROOM_VERSION_CONFLICT') return '房态信息已被他人更新，请刷新重试'
-  if (code === 'ROOM_NOT_AVAILABLE') return '房源当前状态不允许此操作'
-  if (code === 'BILL_ALREADY_PAID') return '该账单已完成缴费，无需重复操作'
-  if (code === 'BILL_PAYMENT_EXCEEDS_AMOUNT') return '支付金额不能超过账单待缴金额'
-  if (code === 'PREPAY_INSUFFICIENT_BALANCE') return '预付账户余额不足，请先充值'
-  if (code === 'PREPAY_INVALID_AMOUNT') return '操作金额不正确'
-  if (code === 'COMMON_CONFLICT') return '数据已存在或已被修改，请刷新后重试'
-  if (code === 'COMMON_RESOURCE_NOT_FOUND') return '请求的资源不存在'
-  if (code === 'COMMON_VALIDATION_ERROR' && Array.isArray(data.details)) return data.details.join('；')
+  // 错误码常量来自共享包（QLT-04 / T289）；文案仍归小程序展示层
+  if (code === ErrorCode.CAPABILITY_DENIED || data.message === ErrorCode.CAPABILITY_DENIED) return '当前账号的这项功能已暂停'
+  if (code === ErrorCode.COMMON_RATE_LIMIT_EXCEEDED) return '请求过于频繁，请稍后再试'
+  if (code === ErrorCode.COMMON_INTERNAL_ERROR) return '服务器内部错误，请稍后重试'
+  if (code === ErrorCode.AUTH_INVALID_CREDENTIALS) return '账号或密码不正确'
+  if (code === ErrorCode.AUTH_TOKEN_EXPIRED || code === ErrorCode.AUTH_TOKEN_INVALID) return '登录已失效，请重新登录'
+  if (code === ErrorCode.AUTH_INVITE_CODE_INVALID) return '邀请码无效或已使用'
+  if (code === ErrorCode.AUTH_INVITE_CODE_EXPIRED) return '邀请码已过期'
+  if (code === ErrorCode.AUTH_EMAIL_ALREADY_EXISTS) return '该邮箱已被注册'
+  if (code === ErrorCode.PERM_FORBIDDEN || code === ErrorCode.PERM_INSUFFICIENT_ROLE) return '您没有权限执行此操作'
+  if (code === ErrorCode.PERM_BUILDING_ACCESS_DENIED) return '无权访问该楼栋数据'
+  if (code === ErrorCode.ROOM_VERSION_CONFLICT) return '房态信息已被他人更新，请刷新重试'
+  if (code === ErrorCode.ROOM_NOT_AVAILABLE) return '房源当前状态不允许此操作'
+  if (code === ErrorCode.BILL_ALREADY_PAID) return '该账单已完成缴费，无需重复操作'
+  if (code === ErrorCode.BILL_PAYMENT_EXCEEDS_AMOUNT) return '支付金额不能超过账单待缴金额'
+  if (code === ErrorCode.PREPAY_INSUFFICIENT_BALANCE) return '预付账户余额不足，请先充值'
+  if (code === ErrorCode.PREPAY_INVALID_AMOUNT) return '操作金额不正确'
+  if (code === ErrorCode.COMMON_CONFLICT) return '数据已存在或已被修改，请刷新后重试'
+  if (code === ErrorCode.COMMON_RESOURCE_NOT_FOUND) return '请求的资源不存在'
+  if (code === ErrorCode.COMMON_VALIDATION_ERROR && Array.isArray(data.details)) return data.details.join('；')
   if (Array.isArray(data.message)) return data.message.join('；')
   return (typeof data.message === 'string' && data.message) ? data.message : '请求失败'
 }
