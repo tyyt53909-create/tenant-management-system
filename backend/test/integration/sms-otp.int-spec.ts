@@ -181,7 +181,6 @@ describe('短信通道与短信 OTP 整合测试（T292 / WX-03）', () => {
       title: '系统紧急维护提醒',
       body: '服务器将于今晚 23:00 进行短暂维护',
       priority: 'URGENT' as any,
-      channels: ['sms', 'in-app'],
     })) as any;
 
     expect(notification).toBeTruthy();
