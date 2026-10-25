@@ -191,6 +191,7 @@ import { getTenants, createTenant, updateTenant, deleteTenant } from '@/api/tena
 import { getTags, type Tag } from '@/api/tags';
 import type { Tenant } from '@/types';
 import { formatMoney, formatDateOnly } from '@/utils/table';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const route=useRoute();
@@ -332,7 +333,7 @@ const handleDelete = async (row: Tenant) => {
     fetchData();
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败');
+      notifyApiError(error, '删除失败');
     }
   }
 };
@@ -376,7 +377,7 @@ const handleSubmit = async () => {
       dialogVisible.value = false;
       fetchData();
     } catch (error) {
-      ElMessage.error('操作失败');
+      notifyApiError(error, '操作失败');
     } finally {
       submitLoading.value = false;
     }

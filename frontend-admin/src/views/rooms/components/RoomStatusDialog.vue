@@ -41,6 +41,7 @@ import { ElMessage } from 'element-plus';
 import type { Room, RoomStatus, CleanStatus } from '@/types';
 import { roomStatusLabel, cleanStatusLabel } from '@/utils/roomStatus';
 import { updateRoomStatus } from '@/api/rooms';
+import { parseApiError } from '@/utils/apiError';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -82,11 +83,11 @@ const handleSubmit = async () => {
     emit('update:modelValue', false);
     emit('success');
   } catch (err: any) {
-    if (err?.response?.status === 409) {
-      ElMessage.error('房态已被其他人更新，请刷新重试');
-    } else {
-      ElMessage.error(err?.response?.data?.message || '状态更新失败');
-    }
+    // 409 = 乐观锁版本冲突（ROOM_VERSION_CONFLICT），按错误码识别而不是状态码猜测
+    const parsed = parseApiError(err, '状态更新失败');
+    ElMessage.error(
+      parsed.code === 'ROOM_VERSION_CONFLICT' ? '房态已被其他人更新，请刷新重试' : parsed.message,
+    );
   } finally {
     submitting.value = false;
   }

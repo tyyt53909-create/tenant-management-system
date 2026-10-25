@@ -55,6 +55,7 @@ import EntitySelect from '@/components/common/EntitySelect.vue';
 import { createMeter, updateMeter } from '@/api/meters';
 import type { Meter } from '@/types';
 import { centsToYuan } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -145,8 +146,8 @@ const handleSubmit = async () => {
       }
       emit('update:modelValue', false);
       emit('success');
-    } catch {
-      ElMessage.error('操作失败');
+    } catch (error) {
+      notifyApiError(error, '操作失败');
     } finally {
       submitLoading.value = false;
     }

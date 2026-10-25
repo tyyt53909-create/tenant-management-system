@@ -177,6 +177,7 @@ import { downloadCsvFromServer } from '@/utils/csv';
 import { getBills, deleteBill } from '@/api/bills';
 import type { Bill, LateFee } from '@/types';
 import { usePagedTable } from '@/composables';
+import { notifyApiError } from '@/utils/notify';
 
 const detailVisible = ref(false);
 const detailId = ref('');
@@ -457,7 +458,7 @@ const handleDelete = async (row: Bill) => {
     ElMessage.success('删除成功');
     fetchData();
   } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error('删除失败');
+    if (error !== 'cancel') notifyApiError(error, '删除失败');
   }
 };
 

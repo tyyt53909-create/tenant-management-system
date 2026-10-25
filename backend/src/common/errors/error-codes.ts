@@ -20,6 +20,10 @@ export const ERROR_CATALOG = {
   AUTH_INVALID_CREDENTIALS: { status: HttpStatus.UNAUTHORIZED, description: '邮箱/手机号或密码错误' },
   AUTH_TOKEN_EXPIRED: { status: HttpStatus.UNAUTHORIZED, description: '登录已过期，请重新登录' },
   AUTH_TOKEN_INVALID: { status: HttpStatus.UNAUTHORIZED, description: 'Token 无效或已过期' },
+  AUTH_REFRESH_ROTATING: {
+    status: HttpStatus.UNAUTHORIZED,
+    description: '刷新令牌正在轮换中，请稍后重试',
+  },
   AUTH_INVITE_CODE_INVALID: { status: HttpStatus.BAD_REQUEST, description: '邀请码无效' },
   AUTH_INVITE_CODE_EXPIRED: { status: HttpStatus.BAD_REQUEST, description: '邀请码已过期' },
   AUTH_INVITE_CODE_CONFLICT: { status: HttpStatus.CONFLICT, description: '邀请码已被使用，请重新获取' },
@@ -94,6 +98,7 @@ const EXACT_MESSAGE_CODES: Record<string, ErrorCodeName> = {
   '邮箱/手机号或密码错误': ErrorCode.AUTH_INVALID_CREDENTIALS,
   '该账号未设置密码，请使用 Google 第三方登录': ErrorCode.AUTH_INVALID_CREDENTIALS,
   'Token 无效或已过期': ErrorCode.AUTH_TOKEN_INVALID,
+  '刷新令牌正在轮换中，请稍后重试': ErrorCode.AUTH_REFRESH_ROTATING,
   'Token 用途不匹配，请提供 Refresh Token': ErrorCode.AUTH_TOKEN_INVALID,
   '无效的 Refresh Token，禁止用于刷新': ErrorCode.AUTH_TOKEN_INVALID,
   '登录会话不可用': ErrorCode.AUTH_TOKEN_INVALID,

@@ -117,9 +117,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
 import { formatMoney } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -162,7 +162,7 @@ async function fetchReceipt() {
     const data = await request.get(`/bills/${props.billId}/receipt`);
     receipt.value = data;
   } catch (err: any) {
-    ElMessage.error(err?.message || '获取电子收据详情失败');
+    notifyApiError(err, '获取电子收据详情失败');
   } finally {
     loading.value = false;
   }

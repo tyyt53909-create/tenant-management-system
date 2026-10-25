@@ -1,6 +1,8 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { ElMessage } from 'element-plus';
+import { isRefreshRotationRace, parseApiError } from './apiError';
+import { markApiErrorNotified } from './notify';
 
 declare module 'axios' {
   interface AxiosRequestConfig { silentError?: boolean }
@@ -41,30 +43,15 @@ function expireSession() {
   }
 }
 
-function errorText(data: { code?: string; message?: unknown; details?: unknown } | undefined): string {
-  if (data?.code === 'CAPABILITY_DENIED') return '当前账号的这项功能已暂停';
-  if (data?.code === 'COMMON_RATE_LIMIT_EXCEEDED') return '请求过于频繁，请稍后再试';
-  if (data?.code === 'COMMON_INTERNAL_ERROR') return '服务器内部错误，请稍后重试';
-  if (data?.code === 'COMMON_VALIDATION_ERROR' && Array.isArray(data.details)) {
-    return data.details.map(String).join('；');
-  }
-  if (Array.isArray(data?.message)) return data.message.join('；');
-  if (typeof data?.message === 'string' && data.message) return data.message;
-  return '请求失败';
-}
-
 /**
- * 后端判定「该 refresh token 正被另一个并发请求轮换」时返回的错误。
+ * 并发刷新竞态（T208 / COM-05）：
+ * 多标签页同时带同一份旧 cookie 刷新，只有一个能赢；输的那个在宽限窗口内会拿到
+ * `AUTH_REFRESH_ROTATING`。服务端没有撤销会话，赢家已把新 cookie 写回浏览器，
+ * 本标签页短暂等待后用新 cookie 重试一次即可成功。
  *
- * 多标签页（或前后端同源的多个窗口）会同时带着同一份旧 cookie 发刷新请求：
- * 只有一个能赢，输的那个在宽限窗口内会拿到这条消息（T208）。此时服务端**没有**
- * 撤销会话家族，赢家也已经把新的 refresh cookie 写回浏览器 —— 只是本标签页这次
- * 请求发出的还是旧 cookie。短暂等待后用新 cookie 重试一次即可成功。
+ * 判断依据是错误码而不是中文文案：改文案不会让重试逻辑失效。
+ * 见 `utils/apiError.ts` 的 `isRefreshRotationRace`。
  */
-function isRotationRace(error: unknown): boolean {
-  const message = (error as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
-  return typeof message === 'string' && message.includes('正在轮换中');
-}
 
 const ROTATION_RETRY_DELAY_MS = 300;
 
@@ -91,7 +78,7 @@ export function refreshAccessToken(): Promise<string> {
         token = await postRefresh();
       } catch (error) {
         // 只对「并发轮换」这一种失败重试；其它错误（cookie 过期、被撤销）照旧抛出去
-        if (!isRotationRace(error)) throw error;
+        if (!isRefreshRotationRace(error)) throw error;
         await delay(ROTATION_RETRY_DELAY_MS);
         token = await postRefresh();
       }
@@ -146,7 +133,7 @@ request.interceptors.response.use(
   },
   async (error) => {
     if (error.response) {
-      const { status, data } = error.response;
+      const { status } = error.response;
 
       // Token 过期，尝试刷新
       if (status === 401) {
@@ -166,12 +153,23 @@ request.interceptors.response.use(
             return Promise.reject(refreshError);
           }
         }
+        // 刷新后仍 401：会话确实失效，提示并回登录页
+        if (!error.config?.silentError) {
+          ElMessage.error(parseApiError(error).message);
+          markApiErrorNotified(error);
+        }
         expireSession();
       } else {
-        if (!error.config?.silentError) ElMessage.error(errorText(data));
+        if (!error.config?.silentError) {
+          ElMessage.error(parseApiError(error).message);
+          markApiErrorNotified(error);
+        }
       }
     } else {
-      if (!error.config?.silentError) ElMessage.error('网络错误，请检查网络连接');
+      if (!error.config?.silentError) {
+        ElMessage.error(parseApiError(error).message);
+        markApiErrorNotified(error);
+      }
     }
 
     return Promise.reject(error);

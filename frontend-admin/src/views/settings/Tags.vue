@@ -62,6 +62,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getTags, createTag, updateTag, deleteTag, type Tag } from '@/api/tags';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const creating = ref(false);
@@ -148,8 +149,8 @@ const handleDelete = async (row: Tag) => {
     await deleteTag(row.id);
     ElMessage.success('标签已删除');
     await fetchData();
-  } catch {
-    ElMessage.error('删除失败');
+  } catch (error) {
+    notifyApiError(error, '删除失败');
   }
 };
 

@@ -127,11 +127,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
 import { getAuditLogs } from '@/api/audit';
 import type { AuditLog } from '@/api/audit';
 import { formatDateTime } from '@/utils/table';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const tableData = ref<AuditLog[]>([]);
@@ -211,7 +211,7 @@ const fetchData = async () => {
     tableData.value = res.data;
     pagination.total = res.meta.total;
   } catch (error) {
-    ElMessage.error('获取审计日志失败');
+    notifyApiError(error, '获取审计日志失败');
   } finally {
     loading.value = false;
   }

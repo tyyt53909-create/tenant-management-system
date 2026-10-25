@@ -132,6 +132,8 @@ import {
 } from '@/api/bills';
 import ReceiptModal from '@/components/common/ReceiptModal.vue';
 import VoucherMatchCard from './voucher/VoucherMatchCard.vue';
+import { notifyApiError } from '@/utils/notify';
+import { apiErrorMessage } from '@/utils/apiError';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -256,7 +258,7 @@ async function triggerRecognize() {
       ElMessage.success('成功识别单据，已匹配对应账单！');
     }
   } catch (err: any) {
-    errorMessage.value = err?.message || '未能识别到账单编号或有效核销码';
+    errorMessage.value = apiErrorMessage(err, '未能识别到账单编号或有效核销码');
   } finally {
     loading.value = false;
   }
@@ -289,7 +291,7 @@ async function handleConfirmPayment() {
     paymentSuccess.value = true;
     emit('settled', { billId: result.value.billId, amount: amountCents });
   } catch (err: any) {
-    ElMessage.error(err?.message || '收款入账失败，请检查后重试');
+    notifyApiError(err, '收款入账失败，请检查后重试');
   } finally {
     submitting.value = false;
   }

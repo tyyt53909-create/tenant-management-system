@@ -108,6 +108,7 @@ import {
 } from '@/api/statistics';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import { formatMoneyPlain } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const data = ref<StatisticsOverview | null>(null);
@@ -152,7 +153,7 @@ const fetchData = async () => {
       endDate: query.period === 'CUSTOM' ? customRange.value?.[1] : undefined,
     });
   } catch (error) {
-    ElMessage.error('获取统计数据失败');
+    notifyApiError(error, '获取统计数据失败');
   } finally {
     loading.value = false;
   }

@@ -76,6 +76,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
 import { useUserStore } from '@/stores/user';
 import { getGoogleClientId } from '@/api/auth';
+import { apiErrorMessage } from '@/utils/apiError';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -110,7 +111,7 @@ const handleLogin = async () => {
       ElMessage.success('登录成功');
       router.push('/dashboard');
     } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || '登录失败');
+      ElMessage.error(apiErrorMessage(error, '登录失败'));
     } finally {
       loading.value = false;
     }
@@ -124,7 +125,7 @@ const handleGoogleCredential = async (idToken: string) => {
     ElMessage.success('Google 登录成功');
     router.push('/dashboard');
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || 'Google 登录失败');
+    ElMessage.error(apiErrorMessage(error, 'Google 登录失败'));
   } finally {
     googleLoading.value = false;
   }

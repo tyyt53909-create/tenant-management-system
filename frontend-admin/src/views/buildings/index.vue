@@ -109,6 +109,7 @@ import { getBuildings, createBuilding, updateBuilding, deleteBuilding } from '@/
 import type { Building } from '@/types';
 import { usePagedTable } from '@/composables';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import { notifyApiError } from '@/utils/notify';
 
 const router = useRouter();
 const { loading, loadError, tableData, pagination, fetchData } = usePagedTable<Building>({
@@ -183,7 +184,7 @@ const handleDelete = async (row: Building) => {
     ElMessage.success('删除成功');
     fetchData();
   } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error('删除失败');
+    if (error !== 'cancel') notifyApiError(error, '删除失败');
   }
 };
 
@@ -217,7 +218,7 @@ const handleSubmit = async () => {
       dialogVisible.value = false;
       fetchData();
     } catch (error) {
-      ElMessage.error('操作失败');
+      notifyApiError(error, '操作失败');
     } finally {
       submitLoading.value = false;
     }

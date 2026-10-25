@@ -102,6 +102,7 @@ import ResourceDrawer from '@/components/common/ResourceDrawer.vue';
 import ProtectedImage from '@/components/common/ProtectedImage.vue';
 import { addMaintenanceMessage, getMaintenanceList, getMaintenanceMessages, updateMaintenance, deleteMaintenance } from '@/api/maintenance';
 import type { Maintenance } from '@/types';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const route=useRoute();
@@ -234,7 +235,7 @@ const handleDelete = async (row: Maintenance) => {
     ElMessage.success('删除成功');
     fetchData();
   } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error('删除失败');
+    if (error !== 'cancel') notifyApiError(error, '删除失败');
   }
 };
 
@@ -247,7 +248,7 @@ const handleSubmit = async () => {
     dialogVisible.value = false;
     fetchData();
   } catch (error) {
-    ElMessage.error('操作失败');
+    notifyApiError(error, '操作失败');
   } finally {
     submitLoading.value = false;
   }
