@@ -1,6 +1,6 @@
 # 项目状态跟踪
 
-> 分支: `feature/T316-int-harness-guard`
+> 分支: `feature/T317-tenant-claim`
 > 集成基準: `origin/develop` @ `071f08a`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
@@ -15,20 +15,20 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | 188 warnings / 0 errors |
+| 後端 lint | ✅ pass | 沿用 develop 证据，本提交未重跑全量 lint |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 131 files / 1227 tests |
-| 後端 e2e | ✅ pass | 3 files / 63 tests |
-| 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
-| 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
-| 管理後台 build | ✅ pass | exit 0 |
-| 小程序單元測試 | ✅ pass | 125 tests |
-| 小程序 build | ✅ pass | exit 0 |
-| OpenAPI 生成物 | ✅ pass | exit 0 |
-| 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 12 files / 35 tests |
-| 安全掃描 | ⏸ not-run | 尚無 CI artifact |
-| 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
+| 後端單元測試 | ✅ pass | 本提交只重跑认证相关 94 项 |
+| 後端 e2e | ✅ pass | 沿用 develop 证据 |
+| 管理後台 lint | ✅ pass | 沿用 develop 证据 |
+| 管理後台單元測試 | ✅ pass | 沿用 develop 证据 |
+| 管理後台 build | ✅ pass | 沿用 develop 证据 |
+| 小程序單元測試 | ✅ pass | 沿用 develop 证据 |
+| 小程序 build | ✅ pass | 沿用 develop 证据 |
+| OpenAPI 生成物 | ✅ pass | 沿用 develop 证据 |
+| 文檔檢查 | ✅ pass | 沿用 develop 证据 |
+| 整合測試 | ✅ pass | claim-invite + journeys 6 passed |
+| 安全掃描 | ⏸ not-run | 尚无 CI artifact |
+| 人工 UAT | ⏸ not-run | 尚无验收纪录 |
 
 ---
 
@@ -42,7 +42,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 2 |
+| 進行中 | 3 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -51,6 +51,7 @@
 ### 進行中
 - **T315 修复基准与问题清单（R00 / QLT-05）**（active，plan QLT-05，`feature/T315-repair-baseline`）
 - **T316 整合测试环境保护（R01 / QLT-05）**（active，plan QLT-05，`feature/T316-int-harness-guard`）
+- **T317 租客身份认领（R02 / SEC-04）**（active，plan SEC-04，`feature/T317-tenant-claim`）
 
 ### 阻擋發布
 - 無
@@ -82,7 +83,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 62 | 46 | 39 | 2 | 14 |
+| 未分類 | 63 | 46 | 39 | 3 | 14 |
 
 ---
 
@@ -103,16 +104,16 @@
 
 - 資料模型：**41** 張表
 - OpenAPI 路由：**177** 條
-- 後端程式碼：**23685** 行
-- 管理後台程式碼：**31496** 行
+- 後端程式碼：**23845** 行
+- 管理後台程式碼：**31512** 行
 - 小程序程式碼：**6842** 行
 - 文件：**174** 份
 
 ### 測試
-- 後端單元：131 files / 1227 tests
-- 後端 e2e：3 files / 63 tests
-- 管理後台單元：22 files / 112 tests
-- 小程序單元：125 tests
+- 後端單元：本提交只重跑认证相关 94 项
+- 後端 e2e：沿用 develop 证据
+- 管理後台單元：沿用 develop 证据
+- 小程序單元：沿用 develop 证据
 
 ---
 
