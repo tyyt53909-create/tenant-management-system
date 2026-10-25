@@ -52,11 +52,8 @@ export class BillPaymentService {
 
       const bill = await tx.bill.findUnique({ where: { id: billId } });
       if (!bill) throw new NotFoundException('账单不存在');
-      if (bill.status === 'PAID' || bill.status === 'CANCELLED') {
-        throw new BadRequestException(`账单为 ${bill.status} 状态，不可收款`);
-      }
 
-      // 幂等键：同键同账单同金额直接返回原收款
+      // 重放必须先于「已缴/已取消不可收款」，否则全额收款后的同键重试会得到 400。
       if (dto.idempotencyKey) {
         const existing = await tx.paymentRecord.findUnique({
           where: { idempotencyKey: dto.idempotencyKey },
@@ -65,12 +62,17 @@ export class BillPaymentService {
           const sameRequest =
             existing.billId === billId &&
             existing.amount === dto.amount &&
+            existing.paymentMethod === dto.paymentMethod &&
             existing.status === 'CONFIRMED';
           if (!sameRequest) {
             throw new ConflictException('幂等键已用于其他收款请求');
           }
           return { payment: existing, bill, lateFees: [], idempotent: true };
         }
+      }
+
+      if (bill.status === 'PAID' || bill.status === 'CANCELLED') {
+        throw new BadRequestException(`账单为 ${bill.status} 状态，不可收款`);
       }
 
       const unsettledFees = await tx.lateFee.findMany({

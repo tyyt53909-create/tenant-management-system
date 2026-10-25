@@ -1074,26 +1074,13 @@ describe('BillsService', () => {
       await expect(service.findOne(billId)).resolves.toBe(bill);
     });
 
-    it('update：更新金额、已付金额及所有可选字段', async () => {
-      prisma.bill.findUnique.mockResolvedValue({ id: billId });
-      prisma.bill.update.mockResolvedValue({ id: billId });
+    it('update：不能用 PATCH 伪造实收或直接标成已缴', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId, amount: 10000, paidAmount: 0 });
 
-      await service.update(billId, {
-        amount: 12000,
-        paidAmount: 3000,
-        status: 'PARTIAL',
-        dueDate: '2026-12-15',
-      } as any);
-
-      expect(prisma.bill.update).toHaveBeenCalledWith({
-        where: { id: billId },
-        data: {
-          amount: 12000,
-          paidAmount: 3000,
-          status: 'PARTIAL',
-          dueDate: new Date('2026-12-15'),
-        },
-      });
+      await expect(
+        service.update(billId, { paidAmount: 3000, status: 'PAID' } as any),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(prisma.bill.update).not.toHaveBeenCalled();
     });
 
     it('findByTenant：未传筛选时按租客过滤，缺失租客直接返回空页', async () => {

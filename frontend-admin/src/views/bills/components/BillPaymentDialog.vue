@@ -122,6 +122,7 @@ const submitLoading = ref(false);
 const paymentRecords = ref<PaymentRecordItem[]>([]);
 const lateFeeRecords = ref<LateFee[]>([]);
 const currentBill = ref<Bill | null>(null);
+const idempotencyKey = ref('');
 
 const paymentMethodMap: Record<string, string> = {
   CASH: '现金',
@@ -185,6 +186,7 @@ watch(
       }
 
       form.amount = totalReceivableYuan.value > 0 ? totalReceivableYuan.value : 0;
+      idempotencyKey.value = crypto.randomUUID();
       await loadPayments();
     }
   },
@@ -217,6 +219,7 @@ async function handleSubmit() {
         transactionNumber: form.transactionNumber || undefined,
         paidAt: form.paidAt || undefined,
         notes: form.notes || undefined,
+        idempotencyKey: idempotencyKey.value,
       });
       ElMessage.success('收款登记成功');
       emit('success');

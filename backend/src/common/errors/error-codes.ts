@@ -57,6 +57,8 @@ export const ERROR_CATALOG = {
   BILL_ALREADY_PAID: { status: HttpStatus.UNPROCESSABLE_ENTITY, description: '账单已缴清' },
   BILL_PAYMENT_EXCEEDS_AMOUNT: { status: HttpStatus.BAD_REQUEST, description: '收款金额超过应缴金额' },
   BILL_CANNOT_CANCEL: { status: HttpStatus.UNPROCESSABLE_ENTITY, description: '账单当前状态不可取消' },
+  BILL_DERIVED_FIELD: { status: HttpStatus.CONFLICT, description: '实收和结清状态只能由收款、滞纳金和冲正计算' },
+  BILL_AMOUNT_LOCKED: { status: HttpStatus.CONFLICT, description: '已有收款的账单不能直接改额' },
 
   PREPAY_INSUFFICIENT_BALANCE: { status: HttpStatus.UNPROCESSABLE_ENTITY, description: '余额不足' },
   PREPAY_INVALID_AMOUNT: { status: HttpStatus.BAD_REQUEST, description: '金额无效（必须为正数）' },
