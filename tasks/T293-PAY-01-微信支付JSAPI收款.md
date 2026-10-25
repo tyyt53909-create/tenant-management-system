@@ -1,16 +1,19 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T293
 plan_ref: PAY-01
 stage: M3
 priority: P1
 model_tier: 强
 branch: feature/T293-wechat-pay
+merge_commit: 99bf531
 start_time: 2026-10-25
+completed_time: 2026-10-25
 blocked_by:
 depends_on: DEC-04, WX-01, FIN-03, FIN-05, OPS-05
 acceptance_evidence: tasks/evidence/T293.md
+handoff: docs/handoff/2026-10-25-T293-微信支付JSAPI收款.md
 ---
 
 # T293：微信支付 JSAPI 收款（PAY-01）
