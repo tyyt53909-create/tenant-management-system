@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: active
+status: completed
+execution_status: completed
 task_id: T295
 plan_ref: PAY-03
 stage: M3
@@ -8,9 +8,12 @@ priority: P1
 model_tier: 强
 branch: feature/T295-receipt-pdf-verify
 start_time: 2026-10-25
+complete_time: 2026-10-25
+merge_commit: d633496
 blocked_by:
 depends_on: FIN-05, DEC-09, SEC-07
 acceptance_evidence: tasks/evidence/T295.md
+handoff: docs/handoff/2026-10-25-T295-收款收据与防伪验真.md
 ---
 
 # T295：收据：连续编号、PDF、验真、作废（PAY-03）
