@@ -195,6 +195,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { getInviteCodes, generateInviteCode, revokeInviteCode } from '@/api/auth';
 import type { InviteCode } from '@/types';
 import { usePagedTable } from '@/composables';
+import { apiErrorMessage } from '@/utils/apiError';
 
 const generating = ref(false);
 
@@ -260,7 +261,7 @@ const submitGenerate = async () => {
     resultDialogVisible.value = true;
     fetchData();
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '生成邀请码失败');
+    ElMessage.error(apiErrorMessage(error, '生成邀请码失败'));
   } finally {
     generating.value = false;
   }

@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import type { FormInstance } from 'element-plus';
 import { ElMessage } from 'element-plus';
+import { apiErrorMessage } from '@/utils/apiError';
 
 export interface UseDialogFormOptions<T> {
   defaultData?: () => T;
@@ -54,7 +55,7 @@ export function useDialogForm<T extends Record<string, any>>(options: UseDialogF
       options.onSuccess?.(res);
       return res;
     } catch (error: any) {
-      ElMessage.error(error?.response?.data?.message || '操作失败');
+      ElMessage.error(apiErrorMessage(error, '操作失败'));
       throw error;
     } finally {
       submitting.value = false;

@@ -1,6 +1,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import type { Ref } from 'vue';
 import { ElMessage } from 'element-plus';
+import { apiErrorMessage } from '@/utils/apiError';
 
 export interface UsePagedTableOptions<T, Q extends Record<string, any> = Record<string, any>> {
   fetchApi: (params: Q & { page: number; limit: number }) => Promise<any>;
@@ -39,7 +40,7 @@ export function usePagedTable<T, Q extends Record<string, any> = Record<string, 
       pagination.total = res?.meta?.total ?? res?.total ?? (Array.isArray(res) ? res.length : 0);
       options.onSuccess?.(tableData.value, res);
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.message || '获取数据失败';
+      const msg = apiErrorMessage(error, '获取数据失败');
       loadError.value = msg;
       if (options.onError) {
         options.onError(error);

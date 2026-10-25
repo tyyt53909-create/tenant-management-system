@@ -240,6 +240,7 @@ import {
 } from '@/api/contracts';
 import type { Contract } from '@/types';
 import { centsToYuan, formatMoney } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const loadError=ref('');const detailVisible=ref(false);const detailId=ref('');
@@ -378,7 +379,7 @@ const handleDelete = async (row: Contract) => {
     ElMessage.success('删除成功');
     fetchData();
   } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error('删除失败');
+    if (error !== 'cancel') notifyApiError(error, '删除失败');
   }
 };
 
@@ -411,7 +412,7 @@ const handleSubmit = async () => {
       fetchData();
       void detailPanel.value?.reload();
     } catch (error) {
-      ElMessage.error('操作失败');
+      notifyApiError(error, '操作失败');
     } finally {
       submitLoading.value = false;
     }

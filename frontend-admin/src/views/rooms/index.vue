@@ -228,6 +228,7 @@ import {
   roomStatusLabel,
   roomStatusTagType,
 } from '@/utils/roomStatus';
+import { notifyApiError } from '@/utils/notify';
 
 const router = useRouter();
 const route = useRoute();
@@ -467,7 +468,7 @@ const handleDelete = async (row: Room) => {
     fetchData();
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败');
+      notifyApiError(error, '删除失败');
     }
   }
 };
@@ -501,7 +502,7 @@ const handleSubmit = async () => {
       fetchData();
       void detailPanel.value?.reload();
     } catch (error) {
-      ElMessage.error('操作失败');
+      notifyApiError(error, '操作失败');
     } finally {
       submitLoading.value = false;
     }

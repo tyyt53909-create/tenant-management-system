@@ -127,6 +127,7 @@ import {
   type SettingItem,
 } from '@/api/settings';
 import { centsToYuan, formatMoney, yuanToCents } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const savingLateFee = ref(false);
@@ -184,7 +185,7 @@ async function load() {
       editDate: item.effectiveDate?.slice(0, 10) ?? today(),
     }));
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '加载设置失败');
+    notifyApiError(error, '加载设置失败');
   } finally {
     loading.value = false;
   }
@@ -204,7 +205,7 @@ async function saveLateFee() {
     fillLateFee(saved.value);
     ElMessage.success('默认滞纳金规则已保存');
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存失败');
+    notifyApiError(error, '保存失败');
   } finally {
     savingLateFee.value = false;
   }
@@ -219,7 +220,7 @@ async function saveThreshold() {
     thresholdYuan.value = String(centsToYuan(saved.value));
     ElMessage.success('预警阈值已保存');
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存失败');
+    notifyApiError(error, '保存失败');
   } finally {
     savingThreshold.value = false;
   }
@@ -245,7 +246,7 @@ async function saveMeterPrice(row: MeterPriceRow) {
     ElMessage.success(`${meterTypeLabel(row.meterType)}默认价已保存`);
     await load();
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存失败');
+    notifyApiError(error, '保存失败');
   } finally {
     row.saving = false;
   }

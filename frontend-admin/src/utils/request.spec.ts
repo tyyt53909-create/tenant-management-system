@@ -67,7 +67,7 @@ describe('请求认证恢复', () => {
     const rotationRace = new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', undefined, undefined, {
       status: 401,
       statusText: 'Unauthorized',
-      data: { message: '刷新令牌正在轮换中，请稍后重试' },
+      data: { code: 'AUTH_REFRESH_ROTATING', message: '刷新令牌正在轮换中，请稍后重试' },
       headers: new AxiosHeaders(),
       config: undefined as unknown as InternalAxiosRequestConfig,
     });

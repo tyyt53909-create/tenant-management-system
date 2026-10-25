@@ -135,6 +135,7 @@ import {
   roomStatusLabel,
   roomStatusTagType,
 } from '@/utils/roomStatus';
+import { notifyApiError } from '@/utils/notify';
 
 /** 清洁状态筛选：空 = 全部；NEEDS_CLEANING = 待清洁 + 清洁中 */
 type CleanFilter = '' | 'NEEDS_CLEANING' | CleanStatus;
@@ -194,7 +195,7 @@ const fetchData = async () => {
     allRooms.value = result.data;
     truncated.value = result.truncated;
   } catch (error) {
-    ElMessage.error('获取保洁数据失败');
+    notifyApiError(error, '获取保洁数据失败');
   } finally {
     loading.value = false;
   }

@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional, UnauthorizedException } from '@nestjs/com
 import { ConfigService } from '@nestjs/config';
 import { JwtService as NestJwtService } from '@nestjs/jwt';
 import { durationMsOr } from '../../common/utils/duration.js';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import {
   newSessionId,
   REFRESH_STORE,
@@ -134,8 +135,9 @@ export class JwtAuthService {
       const withinGrace =
         rotation.rotatedAt > 0 && Date.now() - rotation.rotatedAt <= ROTATION_RACE_GRACE_MS;
       if (withinGrace) {
-        // 刚刚被别的请求轮换过：并发竞态，不销毁会话家族，让客户端重试
-        throw new UnauthorizedException('刷新令牌正在轮换中，请稍后重试');
+        // 刚刚被别的请求轮换过：并发竞态，不销毁会话家族，让客户端按错误码重试一次
+        // （COM-05 / T285：客户端只认 code，不再匹配中文 message）
+        throw apiError(ErrorCode.AUTH_REFRESH_ROTATING);
       }
       // 超出宽限窗口仍在使用已轮换的令牌 → 视为重放（令牌可能已泄露）
       await this.sessions.revokeUser(current.userId);

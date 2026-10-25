@@ -135,9 +135,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
 import { formatMoney } from '@/utils/money';
+import { notifyApiError } from '@/utils/notify';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -178,7 +178,7 @@ async function fetchVoucher() {
     const data = await request.get(`/checkout/${props.checkoutId}/voucher`);
     voucher.value = data;
   } catch (err: any) {
-    ElMessage.error(err?.message || '获取退租结算凭单失败');
+    notifyApiError(err, '获取退租结算凭单失败');
   } finally {
     loading.value = false;
   }

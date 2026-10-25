@@ -148,6 +148,7 @@ import type {
 } from '@/api/tenants';
 import { formatDateTime } from '@/utils/table';
 import CapabilityGroupCard from './capabilities/CapabilityGroupCard.vue';
+import { apiErrorMessage } from '@/utils/apiError';
 
 const props = defineProps<{
   tenantId: string;
@@ -253,7 +254,7 @@ async function fetchData() {
     capabilities.value = capData;
     resetToCurrent();
   } catch (err: any) {
-    error.value = err?.response?.data?.message || '获取租客账号与权限状态失败，请重试';
+    error.value = apiErrorMessage(err, '获取租客账号与权限状态失败，请重试');
   } finally {
     loading.value = false;
   }
@@ -270,7 +271,7 @@ async function toggleAccountLogin() {
     account.value.isActive = targetState;
     ElMessage.success(targetState ? '已恢复租客登录权限' : '已禁用租客登录账号');
   } catch (err: any) {
-    ElMessage.error(err?.response?.data?.message || '变更登录状态失败，请重试');
+    ElMessage.error(apiErrorMessage(err, '变更登录状态失败，请重试'));
   } finally {
     accountActionLoading.value = false;
   }
@@ -298,7 +299,7 @@ async function handleSaveCapabilities() {
     resetToCurrent();
     ElMessage.success('租客功能权限配置已保存');
   } catch (err: any) {
-    saveError.value = err?.response?.data?.message || '保存失败，请检查网络或配置后重试';
+    saveError.value = apiErrorMessage(err, '保存失败，请检查网络或配置后重试');
   } finally {
     savingLoading.value = false;
   }

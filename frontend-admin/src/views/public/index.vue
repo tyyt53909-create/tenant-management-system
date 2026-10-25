@@ -114,11 +114,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
 import { getPublicBuildings, getPublicRooms, getPublicBuildingSpace } from '@/api/public';
 import type { PublicBuilding, PublicRoom } from '@/api/public';
 import type { SpaceModelContract } from '@/types/space';
 import SpacePlan2DContract from '@/components/space/SpacePlan2DContract.vue';
+import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
 const buildings = ref<PublicBuilding[]>([]);
@@ -166,7 +166,7 @@ const fetchData = async () => {
     tableData.value = res.data;
     pagination.total = res.meta.total;
   } catch (error) {
-    ElMessage.error('获取房源失败');
+    notifyApiError(error, '获取房源失败');
   } finally {
     loading.value = false;
   }
