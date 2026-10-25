@@ -9,6 +9,11 @@ export class DepositAmountDto {
   @IsNotEmpty({ message: '原因不能为空' })
   @MaxLength(200)
   reason: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  idempotencyKey?: string;
 }
 
 export class TransferDepositDto {
@@ -20,4 +25,9 @@ export class TransferDepositDto {
   @IsString()
   @MaxLength(200)
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  idempotencyKey?: string;
 }

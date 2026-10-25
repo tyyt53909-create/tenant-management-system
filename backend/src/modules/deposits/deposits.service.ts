@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 export interface DepositView {
@@ -46,31 +47,56 @@ export class DepositsService {
   }
 
   /** 扣除押金（结算/损坏赔偿）；余额不足 400。 */
-  async deduct(contractId: string, amount: number, reason: string, operatorId: string) {
-    return this.changeBalance(contractId, amount, 'DEDUCT', reason, operatorId);
+  async deduct(contractId: string, amount: number, reason: string, operatorId: string, idempotencyKey?: string) {
+    return this.changeBalance(contractId, amount, 'DEDUCT', reason, operatorId, idempotencyKey);
   }
 
   /** 退还押金；余额不足 400。 */
-  async refund(contractId: string, amount: number, reason: string, operatorId: string) {
-    return this.changeBalance(contractId, amount, 'REFUND', reason, operatorId);
+  async refund(contractId: string, amount: number, reason: string, operatorId: string, idempotencyKey?: string) {
+    return this.changeBalance(contractId, amount, 'REFUND', reason, operatorId, idempotencyKey);
   }
 
   /** 押金转移到新合同（续签，DEC-09）。 */
-  async transfer(fromContractId: string, toContractId: string, operatorId: string) {
+  async transfer(fromContractId: string, toContractId: string, operatorId: string, idempotencyKey?: string) {
     if (fromContractId === toContractId) {
       throw new BadRequestException('不能转移到同一合同');
     }
 
     return this.prisma.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const replay = await tx.depositTransaction.findUnique({ where: { idempotencyKey } });
+        if (replay) {
+          if (replay.type !== 'TRANSFER' || replay.relatedId !== toContractId) {
+            throw new ConflictException('幂等键已用于其他押金操作');
+          }
+          return { from: replay.ledgerId, to: toContractId, moved: Math.abs(replay.amount), targetBalance: replay.balanceAfter, idempotent: true };
+        }
+      }
+
+      const [firstId, secondId] = [fromContractId, toContractId].sort();
+      await lockLedger(tx, firstId);
+      await lockLedger(tx, secondId);
+
+      const sourceContract = await tx.contract.findUnique({
+        where: { id: fromContractId },
+        select: { id: true, tenantId: true, roomId: true },
+      });
+      const targetContract = await tx.contract.findUnique({
+        where: { id: toContractId },
+        select: { id: true, tenantId: true, roomId: true, depositAmount: true, renewedFromId: true },
+      });
+      if (!sourceContract) throw new NotFoundException('源合同不存在');
+      if (!targetContract) throw new NotFoundException('目标合同不存在');
+      if (targetContract.renewedFromId !== fromContractId) {
+        throw new BadRequestException('只能把押金转移到由该合同续签出来的新合同');
+      }
+      if (sourceContract.tenantId !== targetContract.tenantId) {
+        throw new BadRequestException('不能跨租客转移押金');
+      }
+
       const source = await tx.depositLedger.findUnique({ where: { contractId: fromContractId } });
       if (!source) throw new NotFoundException('源合同暂无押金台账');
       if (source.balance <= 0) throw new BadRequestException('源合同押金余额为 0');
-
-      const targetContract = await tx.contract.findUnique({
-        where: { id: toContractId },
-        select: { id: true, tenantId: true, roomId: true, depositAmount: true },
-      });
-      if (!targetContract) throw new NotFoundException('目标合同不存在');
 
       const moved = source.balance;
       const target = await tx.depositLedger.upsert({
@@ -109,6 +135,7 @@ export class DepositsService {
           relatedId: toContractId,
           operatorId,
           notes: '押金转入续签合同',
+          idempotencyKey,
         },
       });
       await tx.depositTransaction.create({
@@ -134,10 +161,21 @@ export class DepositsService {
     type: 'DEDUCT' | 'REFUND',
     reason: string,
     operatorId: string,
+    idempotencyKey?: string,
   ) {
     if (amount <= 0) throw new BadRequestException('金额必须大于 0');
 
     return this.prisma.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const replay = await tx.depositTransaction.findUnique({ where: { idempotencyKey } });
+        if (replay) {
+          if (replay.type !== type || replay.amount !== -amount) {
+            throw new ConflictException('幂等键已用于其他押金操作');
+          }
+          return { ledgerId: replay.ledgerId, balance: replay.balanceAfter, idempotent: true };
+        }
+      }
+      await lockLedger(tx, contractId);
       const ledger = await tx.depositLedger.findUnique({ where: { contractId } });
       if (!ledger) throw new NotFoundException('该合同暂无押金台账');
       if (amount > ledger.balance) {
@@ -161,10 +199,15 @@ export class DepositsService {
           balanceAfter: balance,
           operatorId,
           notes: reason,
+          idempotencyKey,
         },
       });
 
       return { ledger: updated, balance };
     });
   }
+}
+
+async function lockLedger(tx: Prisma.TransactionClient, contractId: string): Promise<void> {
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM deposit_ledgers WHERE "contractId" = ${contractId} FOR UPDATE`);
 }

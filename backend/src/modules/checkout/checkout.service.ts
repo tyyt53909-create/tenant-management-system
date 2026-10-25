@@ -35,13 +35,16 @@ export class CheckoutService {
 
     if (!contract) throw new BadRequestException('合同不存在');
     if (!room) throw new BadRequestException('房源不存在');
+    if (dto.roomId !== contract.roomId) {
+      throw new BadRequestException('退租房间必须与合同房间一致');
+    }
 
     // 结算明细与主记录必须同时落库，避免出现「有退租记录但无扣款依据」的中间态
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.checkoutRecord.create({
         data: {
           contractId: dto.contractId,
-          roomId: dto.roomId,
+          roomId: contract.roomId,
           checkoutDate: new Date(dto.checkoutDate),
           totalRefund: dto.totalRefund,
           processedBy: dto.processedBy,
@@ -168,6 +171,12 @@ export class CheckoutService {
 
       // 完成是终态；重复完成幂等返回，避免重复结算押金
       if (record.status === 'COMPLETED' && dto.status === 'COMPLETED') return record;
+      if (
+        (record.status === 'COMPLETED' || record.status === 'CANCELLED') &&
+        (dto.totalRefund !== undefined || dto.items !== undefined || dto.checkoutDate !== undefined)
+      ) {
+        throw new ConflictException('已完成或已取消的退租单不能改财务字段');
+      }
 
       if (dto.status && dto.status !== record.status) {
         const allowed: Record<string, readonly string[]> = {
@@ -243,7 +252,10 @@ export class CheckoutService {
         const depositRefundGross = items
           .filter((item) => item.itemType === 'DEPOSIT_REFUND')
           .reduce((sum, item) => sum + item.amount, 0);
-        const depositRefund = Math.max(0, depositRefundGross - depositDeduction);
+        if (depositRefundGross < depositDeduction) {
+          throw new BadRequestException('押金退还小于押金扣除，不能把差额夹成 0');
+        }
+        const depositRefund = depositRefundGross - depositDeduction;
         try {
           await settleDepositOnCheckout(tx, {
             contractId: record.contractId,
@@ -257,19 +269,30 @@ export class CheckoutService {
         }
 
         // 合同终止 + 房间退出占用（与合同状态机共用规则）
-        if (record.contract.status === 'ACTIVE') {
+        if (record.contract.status === 'ACTIVE' || record.contract.status === 'EXPIRED') {
+          const fromStatus = record.contract.status;
           await tx.contract.update({
             where: { id: record.contractId },
             data: { status: 'TERMINATED' },
           });
-          const room = await tx.room.findUnique({
-            where: { id: record.roomId },
-            select: { status: true },
+          const successor = await tx.contract.findFirst({
+            where: {
+              roomId: record.contract.roomId,
+              id: { not: record.contractId },
+              status: 'ACTIVE',
+            },
+            select: { id: true },
           });
-          if (room) {
-            const roomUpdate = roomUpdateForContractTransition(room, 'ACTIVE', 'TERMINATED');
-            if (roomUpdate) {
-              await tx.room.update({ where: { id: record.roomId }, data: roomUpdate });
+          if (!successor) {
+            const room = await tx.room.findUnique({
+              where: { id: record.contract.roomId },
+              select: { status: true },
+            });
+            if (room) {
+              const roomUpdate = roomUpdateForContractTransition(room, fromStatus, 'TERMINATED');
+              if (roomUpdate) {
+                await tx.room.update({ where: { id: record.contract.roomId }, data: roomUpdate });
+              }
             }
           }
         } else if (record.contract.status !== 'TERMINATED') {

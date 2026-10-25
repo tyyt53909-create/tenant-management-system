@@ -629,6 +629,9 @@ model DepositTransaction {
   operatorId String
   notes      String? @db.Text
 
+  /// 退款、扣款、转移的操作幂等键。空值表示历史流水。
+  idempotencyKey String? @unique
+
   createdAt DateTime @default(now())
 
   @@index([ledgerId, createdAt])

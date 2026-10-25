@@ -32,7 +32,7 @@ export class DepositsController {
     @Body() dto: DepositAmountDto,
   ) {
     const user = resolveAuthUser(userParam);
-    return this.depositsService.deduct(contractId, dto.amount, dto.reason, user.userId);
+    return this.depositsService.deduct(contractId, dto.amount, dto.reason, user.userId, dto.idempotencyKey);
   }
 
   @Post(':contractId/refund')
@@ -44,7 +44,7 @@ export class DepositsController {
     @Body() dto: DepositAmountDto,
   ) {
     const user = resolveAuthUser(userParam);
-    return this.depositsService.refund(contractId, dto.amount, dto.reason, user.userId);
+    return this.depositsService.refund(contractId, dto.amount, dto.reason, user.userId, dto.idempotencyKey);
   }
 
   @Post(':contractId/transfer')
@@ -56,6 +56,6 @@ export class DepositsController {
     @Body() dto: TransferDepositDto,
   ) {
     const user = resolveAuthUser(userParam);
-    return this.depositsService.transfer(contractId, dto.toContractId, user.userId);
+    return this.depositsService.transfer(contractId, dto.toContractId, user.userId, dto.idempotencyKey);
   }
 }
