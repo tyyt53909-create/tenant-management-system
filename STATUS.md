@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `develop`
-> 集成基準: `origin/develop` @ `c10b33b`
+> 集成基準: `origin/develop` @ `af610a9`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | 186 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 127 files / 1185 tests |
+| 後端單元測試 | ✅ pass | 128 files / 1207 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 18 files / 84 tests |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 11 files / 29 tests |
+| 整合測試 | ✅ pass | 12 files / 35 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -42,14 +42,14 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 0 |
+| 進行中 | 1 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- 無
+- **T284 公告与定向消息（COM-04）**（active，plan COM-04，`feature/T284-com-04-announcements`）
 
 ### 阻擋發布
 - 無
@@ -81,12 +81,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 55 | 41 | 34 | 0 | 14 |
+| 未分類 | 56 | 41 | 34 | 1 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T284 公告与定向消息（COM-04）](docs/handoff/2026-10-25-T284-公告与定向消息.md)
 - [交接记录：T283 报修工单时间线（COM-03）](docs/handoff/2026-10-25-T283-报修时间线.md)
 - [交接记录：T282 实时推送（COM-02）](docs/handoff/2026-10-25-T282-实时推送.md)
 - [交接记录：T281 性能基准与 SLO（OPS-09）](docs/handoff/2026-10-25-T281-SLO与性能基准.md)
@@ -94,21 +95,20 @@
 - [交接记录：T279 无状态化与多实例验证（OPS-06）](docs/handoff/2026-10-25-T279-多实例无状态.md)
 - [交接记录：T278 后台任务队列（OPS-05）](docs/handoff/2026-10-25-T278-后台任务队列.md)
 - [交接记录：T277 可观测性与告警（OPS-04）](docs/handoff/2026-10-25-T277-可观测性与告警.md)
-- [交接记录：T272 账单状态拆分、滞纳金按日、催缴节点（FIN-04）](docs/handoff/2026-10-25-T272-账单状态与滞纳金.md)
 
 ---
 
 ## 統計
 
-- 資料模型：**40** 張表
-- OpenAPI 路由：**170** 條
-- 後端程式碼：**23061** 行
-- 管理後台程式碼：**29899** 行
+- 資料模型：**41** 張表
+- OpenAPI 路由：**177** 條
+- 後端程式碼：**23533** 行
+- 管理後台程式碼：**30749** 行
 - 小程序程式碼：**6643** 行
-- 文件：**164** 份
+- 文件：**166** 份
 
 ### 測試
-- 後端單元：127 files / 1185 tests
+- 後端單元：128 files / 1207 tests
 - 後端 e2e：3 files / 63 tests
 - 管理後台單元：18 files / 84 tests
 - 小程序單元：112 tests
