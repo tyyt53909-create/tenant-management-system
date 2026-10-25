@@ -1,6 +1,6 @@
 # 项目状态跟踪
 
-> 分支: `feature/T315-repair-baseline`
+> 分支: `feature/T316-int-harness-guard`
 > 集成基準: `origin/develop` @ `071f08a`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
@@ -42,7 +42,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 1 |
+| 進行中 | 2 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -50,6 +50,7 @@
 
 ### 進行中
 - **T315 修复基准与问题清单（R00 / QLT-05）**（active，plan QLT-05，`feature/T315-repair-baseline`）
+- **T316 整合测试环境保护（R01 / QLT-05）**（active，plan QLT-05，`feature/T316-int-harness-guard`）
 
 ### 阻擋發布
 - 無
@@ -81,7 +82,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 61 | 46 | 39 | 1 | 14 |
+| 未分類 | 62 | 46 | 39 | 2 | 14 |
 
 ---
 
