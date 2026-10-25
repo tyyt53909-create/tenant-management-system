@@ -5,17 +5,25 @@ import * as bcrypt from 'bcrypt';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
+import {
+  UnsafeIntegrationTargetError,
+  assertIntegrationEnvironment,
+  resetMarkedIntegrationDatabase,
+} from './guard.js';
 
 /**
- * QLT-01 / T255：真实 PostgreSQL 的集成测试夹具。
+ * QLT-01 / T255，清空保护见 T316 / R01。
  *
  * 约定：
- * - 只允许连接 `DATABASE_URL` 指向的独立测试库（CI service / 本地 test_db）；
- * - 每个用例前 `resetDatabase()`，避免跨用例污染；
+ * - 只连接 `INTEGRATION_DATABASE_URL`。缺少时失败，不回退到 `DATABASE_URL`；
+ * - `resetDatabase()` 在标记、非超级用户和破坏性开关都通过之后才 TRUNCATE；
  * - 通过真实 HTTP + 真实 Prisma 验证，不使用 Prisma mock。
  */
 
-export const prisma = new PrismaClient();
+const integrationTarget = assertIntegrationEnvironment(process.env);
+export const prisma = new PrismaClient({
+  datasources: { db: { url: integrationTarget.databaseUrl } },
+});
 
 export interface SeedBase {
   buildingId: string;
@@ -31,13 +39,23 @@ export const ADMIN_PASSWORD = 'Integration@123';
 export const CLEANER_PASSWORD = 'Cleaner@123';
 
 export async function resetDatabase(): Promise<void> {
-  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
-    SELECT tablename FROM pg_tables
-    WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'
-  `;
-  if (tables.length === 0) return;
-  const list = tables.map((table) => `"${table.tablename}"`).join(', ');
-  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
+  await resetMarkedIntegrationDatabase(process.env, {
+    readMarker: () =>
+      prisma.$queryRawUnsafe<Array<{ token: string; rolsuper: boolean }>>(
+        `SELECT m.token, r.rolsuper
+         FROM integration_guard.marker m
+         CROSS JOIN pg_roles r
+         WHERE m.id = 1 AND r.rolname = current_user`,
+      ),
+    listPublicTables: async () => {
+      const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+        SELECT tablename FROM pg_tables
+        WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'
+      `;
+      return tables.map((table) => table.tablename);
+    },
+    truncate: (sql) => prisma.$executeRawUnsafe(sql).then(() => undefined),
+  });
 }
 
 export async function seedBase(): Promise<SeedBase> {
@@ -79,6 +97,12 @@ export async function seedBase(): Promise<SeedBase> {
 }
 
 export async function createApp(): Promise<INestApplication> {
+  const target = assertIntegrationEnvironment(process.env);
+  if (process.env.DATABASE_URL !== target.databaseUrl) {
+    throw new UnsafeIntegrationTargetError(
+      '应用 DATABASE_URL 与 INTEGRATION_DATABASE_URL 不一致，拒绝启动。不会回退到开发库',
+    );
+  }
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
   }).compile();

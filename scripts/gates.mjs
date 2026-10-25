@@ -92,6 +92,7 @@ const COMMANDS = {
     command: 'npm run test:e2e',
     parse: parseVitest,
   },
+  // T316：test:int 不再读取 DATABASE_URL。缺少标记或 ALLOW_INTEGRATION_RESET 时失败，不得改成跳过。
   integration: {
     cwd: 'backend',
     command: 'npm run test:int',

@@ -511,7 +511,8 @@ npm test
 # 运行端到端测试（vitest + supertest）
 npm run test:e2e
 
-# 真实 PostgreSQL 集成测试（QLT-01，会清空 DATABASE_URL 指向的库）
+# 真实 PostgreSQL 集成测试（T316）。不会读取 DATABASE_URL。
+# 缺少 ALLOW_INTEGRATION_RESET、库标记或 INTEGRATION_DATABASE_URL 时，在 TRUNCATE 前失败。
 npm run test:int
 
 # 生成覆盖率报告（@vitest/coverage-v8）
