@@ -62,6 +62,7 @@ describe('BillsService', () => {
               new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
               { recordEvent: vi.fn(), log: vi.fn() } as never,
+              { triggerLowBalanceAlertIfNeeded: vi.fn().mockResolvedValue(true) } as never,
             ),
         },
         { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },

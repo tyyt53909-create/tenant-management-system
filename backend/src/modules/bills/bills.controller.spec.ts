@@ -41,12 +41,16 @@ describe('BillsController (T293 / T294 / PAY-01 / PAY-02)', () => {
       createRefund: vi.fn().mockResolvedValue({ refund: { id: 'ref-1' } }),
       getBillRefunds: vi.fn().mockResolvedValue([{ id: 'ref-1' }]),
     };
+    const billPaymentService = {
+      payWithPrepay: vi.fn().mockResolvedValue({ id: 'pmt-1', amount: 5000 }),
+    };
 
     controller = new BillsController(
       billsService as BillsService,
       clock as BusinessClock,
       wechatPaymentService as WechatPaymentService,
       paymentRefundService as PaymentRefundService,
+      billPaymentService as any,
     );
   });
 
@@ -60,6 +64,12 @@ describe('BillsController (T293 / T294 / PAY-01 / PAY-02)', () => {
       'TENANT',
       { amount: 20000 },
     );
+  });
+
+  it('payWithPrepay 委托 BillPaymentService 预付抵扣', async () => {
+    const userParam = { user: { id: 'user-1', role: 'TENANT', tenantId: 't-1' } } as any;
+    const res = await controller.payWithPrepay(userParam, 'b1', { amount: 5000 });
+    expect(res).toEqual({ id: 'pmt-1', amount: 5000 });
   });
 
   it('queryWechatPayment 委托 WechatPaymentService 查单补单', async () => {

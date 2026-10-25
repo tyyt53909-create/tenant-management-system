@@ -4,11 +4,14 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  forwardRef,
 } from '@nestjs/common';
 import { Prisma, type PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
+import { PrepayPayBillDto } from './dto/prepay-pay-bill.dto.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
 import {
   applyDepositCollection,
@@ -16,6 +19,9 @@ import {
 } from '../deposits/deposit-ledger.util.js';
 import { computeOverdue, derivePaymentStatus } from './bill-overdue.util.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { PrepayService } from '../prepay/prepay.service.js';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
+import { randomHex } from '../../common/utils/secure-random.js';
 
 interface RawClient {
   $queryRaw?: (query: Prisma.Sql) => Promise<unknown>;
@@ -38,6 +44,8 @@ export class BillPaymentService {
     @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
     private readonly clock: BusinessClock,
     private readonly auditLog: AuditLogService,
+    @Inject(forwardRef(() => PrepayService))
+    private readonly prepayService: PrepayService,
   ) {}
 
   /**
@@ -500,5 +508,138 @@ export class BillPaymentService {
       where: { billId },
       orderBy: { paidAt: 'desc' },
     });
+  }
+
+  /**
+   * 使用预付账户余额抵扣账单（租客/管理员）
+   */
+  async payWithPrepay(
+    billId: string,
+    dto: PrepayPayBillDto,
+    user: { userId: string; role: string; tenantId?: string },
+  ) {
+    const bill = await this.prisma.bill.findUnique({
+      where: { id: billId },
+      include: {
+        contract: {
+          select: {
+            id: true,
+            tenantId: true,
+            roomId: true,
+            tenant: { select: { id: true, userId: true } },
+          },
+        },
+      },
+    });
+
+    if (!bill) {
+      throw new NotFoundException('账单不存在');
+    }
+
+    // 租客防越权校验
+    if (user.role === 'TENANT') {
+      const userTenant = await this.prisma.tenant.findUnique({
+        where: { userId: user.userId },
+        select: { id: true },
+      });
+      if (!userTenant || bill.contract.tenantId !== userTenant.id) {
+        throw new ForbiddenException('您无权操作非本人的账单');
+      }
+    }
+
+    if (bill.status === 'PAID' || bill.status === 'CANCELLED') {
+      throw new BadRequestException(`账单当前为 ${bill.status} 状态，无需支付`);
+    }
+
+    // 计算未付金额（本金 + 确认的滞纳金）
+    const unsettledFees = await this.prisma.lateFee.findMany({
+      where: { billId, confirmedAmount: { not: null } },
+    });
+    const outstandingFees = unsettledFees.reduce((sum, fee) => {
+      const confirmed = fee.confirmedAmount ?? 0;
+      const settled = fee.settledAmount ?? 0;
+      return sum + Math.max(0, confirmed - settled);
+    }, 0);
+
+    const remaining = bill.amount - bill.paidAmount + outstandingFees;
+    if (remaining <= 0) {
+      throw new BadRequestException('账单已无待缴金额');
+    }
+
+    // 查找租客的预付账户
+    const prepayAccount = await this.prisma.prepayAccount.findUnique({
+      where: {
+        tenantId_roomId: {
+          tenantId: bill.contract.tenantId,
+          roomId: bill.contract.roomId,
+        },
+      },
+    });
+
+    if (!prepayAccount || prepayAccount.balanceCache <= 0) {
+      throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '预付账户余额不足');
+    }
+
+    const maxDeductible = Math.min(prepayAccount.balanceCache, remaining);
+    const deductAmount = dto.amount ? Math.min(dto.amount, maxDeductible) : maxDeductible;
+
+    if (deductAmount <= 0) {
+      throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '预付账户余额不足');
+    }
+
+    const idempotencyKey =
+      dto.idempotencyKey || `prepay_bill_${bill.id}_${Date.now()}_${randomHex(4)}`;
+    const transactionNumber = `PREPAY_DEDUCT_${Date.now()}_${randomHex(4)}`;
+
+    // 事务内原子扣减预付账户余额与记录流水
+    await this.prisma.$transaction(async (tx) => {
+      const result = await tx.prepayAccount.updateMany({
+        where: { id: prepayAccount.id, balanceCache: { gte: deductAmount } },
+        data: { balanceCache: { decrement: deductAmount } },
+      });
+
+      if (result.count === 0) {
+        throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '预付账户余额不足');
+      }
+
+      const updatedAccount = await tx.prepayAccount.findUniqueOrThrow({
+        where: { id: prepayAccount.id },
+      });
+
+      await tx.prepayTransaction.create({
+        data: {
+          accountId: prepayAccount.id,
+          type: 'DEDUCTION',
+          amount: -deductAmount,
+          balanceAfter: updatedAccount.balanceCache,
+          relatedId: bill.id,
+          relatedType: 'BILL_DEDUCTION',
+          description: `预付余额抵扣账单(${bill.billNumber})`,
+          operatorId: user.userId,
+        },
+      });
+    });
+
+    // 登记账单收款并结转滞纳金与收据
+    const payment = await this.addPayment(
+      billId,
+      {
+        amount: deductAmount,
+        paymentMethod: 'PREPAY' as any,
+        transactionNumber,
+        idempotencyKey,
+        notes: `预付账户余额抵扣 (账户: ${prepayAccount.id})`,
+      },
+      user.userId,
+    );
+
+    // 检测低余额预警并触发通知（带每日频控）
+    try {
+      await this.prepayService.triggerLowBalanceAlertIfNeeded(prepayAccount.id);
+    } catch {
+      // 提醒失败不阻断已成功的账单抵扣流程
+    }
+
+    return payment;
   }
 }

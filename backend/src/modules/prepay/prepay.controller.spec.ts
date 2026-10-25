@@ -49,4 +49,47 @@ describe('预付流水 HTTP 分页转换', () => {
     await request(app.getHttpServer()).get('/prepay-accounts/transactions?tenantId=other').expect(400);
     expect(service.findTransactionsByTenant).not.toHaveBeenCalled();
   });
+
+  it('租客发起微信充值下单参数校验与服务调用', async () => {
+    (service as any).createJsapiRechargeOrder = vi.fn().mockResolvedValue({
+      appId: 'wx-app',
+      outTradeNo: 'PREPAY_1',
+      orderId: 'order-1',
+    });
+
+    const res = await request(app.getHttpServer())
+      .post('/prepay-accounts/my/recharge/wechat-jsapi')
+      .send({ amount: 10000 })
+      .expect(201);
+
+    expect(res.body).toEqual({
+      appId: 'wx-app',
+      outTradeNo: 'PREPAY_1',
+      orderId: 'order-1',
+    });
+    expect((service as any).createJsapiRechargeOrder).toHaveBeenCalledWith(
+      { amount: 10000 },
+      expect.objectContaining({ role: 'TENANT', tenantId: 'authenticated-tenant' }),
+    );
+  });
+
+  it('充值主动查单校验与服务调用', async () => {
+    (service as any).queryAndSyncRechargeOrder = vi.fn().mockResolvedValue({
+      orderId: 'order-1',
+      outTradeNo: 'PREPAY_1',
+      status: 'SUCCESS',
+      amount: 10000,
+    });
+
+    const res = await request(app.getHttpServer())
+      .post('/prepay-accounts/my/recharge/wechat-query')
+      .send({ outTradeNo: 'PREPAY_1' })
+      .expect(201);
+
+    expect(res.body.status).toBe('SUCCESS');
+    expect((service as any).queryAndSyncRechargeOrder).toHaveBeenCalledWith(
+      { outTradeNo: 'PREPAY_1' },
+      expect.objectContaining({ role: 'TENANT', tenantId: 'authenticated-tenant' }),
+    );
+  });
 });

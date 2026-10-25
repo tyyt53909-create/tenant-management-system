@@ -12,7 +12,7 @@ export interface PaymentOrder {
 }
 
 export interface JsapiOrderRequest {
-  billId: string;
+  billId?: string;
   amount: number; // 单位：分
   description: string;
   openid: string;
@@ -87,10 +87,20 @@ export interface TradeBillItem {
   refundStatus?: string;
 }
 
+export interface QueryOrderResult {
+  orderId: string;
+  status: string;
+  amount?: number;
+  transactionId?: string;
+  tradeState?: string;
+  openid?: string;
+  attach?: string;
+}
+
 export interface PaymentProvider {
   readonly name: string;
   createOrder(request: PaymentOrderRequest): Promise<PaymentOrder>;
-  queryOrder(orderId: string): Promise<{ orderId: string; status: string; amount?: number; transactionId?: string } | null>;
+  queryOrder(orderId: string): Promise<QueryOrderResult | null>;
   refund(orderId: string, amount: number): Promise<{ orderId: string; amount: number; status: 'RECORDED' }>;
   createJsapiOrder?(request: JsapiOrderRequest): Promise<JsapiPaymentParams>;
   verifyAndParseNotify?(headers: Record<string, string | string[] | undefined>, body: any): Promise<WechatPaymentNotifyResource>;

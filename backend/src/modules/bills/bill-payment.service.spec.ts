@@ -9,6 +9,7 @@ import { PAYMENT_PROVIDER } from './payment/payment-provider.js';
 import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { PrepayService } from '../prepay/prepay.service.js';
 
 describe('BillPaymentService', () => {
   let service: BillPaymentService;
@@ -26,6 +27,17 @@ describe('BillPaymentService', () => {
         create: vi.fn(),
         update: vi.fn(),
       },
+      prepayAccount: {
+        findUnique: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      prepayTransaction: {
+        create: vi.fn(),
+      },
+      tenant: {
+        findUnique: vi.fn(),
+      },
       $transaction: vi.fn(),
     };
     prisma.$transaction.mockImplementation((cb: any) => cb(prisma));
@@ -40,6 +52,10 @@ describe('BillPaymentService', () => {
         { provide: PAYMENT_PROVIDER, useValue: new OfflinePaymentProvider() },
         { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })) },
         { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
+        {
+          provide: PrepayService,
+          useValue: { triggerLowBalanceAlertIfNeeded: vi.fn().mockResolvedValue(true) },
+        },
       ],
     }).compile();
     service = module.get(BillPaymentService);
@@ -799,5 +815,79 @@ describe('BillPaymentService', () => {
     await expect(service.findPayments('b1')).rejects.toThrow(NotFoundException);
     prisma.paymentRecord.findMany.mockResolvedValue([]);
     expect(await service.findPayments('b1')).toEqual([]);
+  });
+
+  describe('payWithPrepay (T296 / PAY-04)', () => {
+    it('预付账户余额不足时抛出 PREPAY_INSUFFICIENT_BALANCE', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: 'b1',
+        amount: 1000,
+        paidAmount: 0,
+        status: 'PENDING',
+        contract: { id: 'c1', tenantId: 't1', roomId: 'r1', tenant: { id: 't1' } },
+      });
+      prisma.prepayAccount.findUnique.mockResolvedValue({
+        id: 'pa1',
+        balanceCache: 0,
+      });
+
+      await expect(
+        service.payWithPrepay('b1', {}, { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow();
+    });
+
+    it('预付账户余额充足时扣减预付、记流水与收款记录', async () => {
+      prisma.bill.findUnique.mockResolvedValue({
+        id: 'b1',
+        billNumber: 'B20261026001',
+        amount: 1000,
+        paidAmount: 0,
+        status: 'PENDING',
+        contract: { id: 'c1', tenantId: 't1', roomId: 'r1', tenant: { id: 't1' } },
+      });
+      prisma.prepayAccount.findUnique.mockResolvedValue({
+        id: 'pa1',
+        balanceCache: 2000,
+        lowBalanceThreshold: 500,
+      });
+      prisma.prepayAccount.updateMany.mockResolvedValue({ count: 1 });
+      prisma.prepayAccount.findUniqueOrThrow.mockResolvedValue({
+        id: 'pa1',
+        balanceCache: 1000,
+      });
+      prisma.prepayTransaction.create.mockResolvedValue({ id: 'pt1' });
+
+      // 模拟收款入账
+      prisma.$queryRaw = vi.fn().mockResolvedValue([{ nextval: 101 }]);
+      prisma.paymentRecord.findFirst.mockResolvedValue(null);
+      prisma.paymentRecord.create.mockResolvedValue({
+        id: 'pmt-prepay-1',
+        billId: 'b1',
+        amount: 1000,
+        paymentMethod: 'PREPAY',
+        receiptNumber: 'R20261026000101',
+      });
+      prisma.bill.update.mockResolvedValue({ id: 'b1', status: 'PAID', paidAmount: 1000 });
+
+      const res = await service.payWithPrepay('b1', {}, { userId: 'admin', role: 'ADMIN' });
+
+      expect(res.payment.id).toBe('pmt-prepay-1');
+      expect(prisma.prepayAccount.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pa1', balanceCache: { gte: 1000 } },
+          data: { balanceCache: { decrement: 1000 } },
+        }),
+      );
+      expect(prisma.prepayTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            accountId: 'pa1',
+            type: 'DEDUCTION',
+            amount: -1000,
+            relatedType: 'BILL_DEDUCTION',
+          }),
+        }),
+      );
+    });
   });
 });

@@ -13,6 +13,7 @@ import { BillPaymentService } from './bills/bill-payment.service.js';
 import { BillLateFeeService } from './bills/bill-late-fee.service.js';
 import { BillReceiptService } from './bills/bill-receipt.service.js';
 import { OfflinePaymentProvider } from './bills/payment/offline-payment.provider.js';
+import { PAYMENT_PROVIDER } from './bills/payment/payment-provider.js';
 import { BusinessClock } from '../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
 import { NotificationDispatcher } from './notifications/channels/notification-dispatcher.js';
@@ -67,6 +68,7 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
               new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
               { recordEvent: vi.fn(), log: vi.fn() } as never,
+              { triggerLowBalanceAlertIfNeeded: vi.fn().mockResolvedValue(true) } as never,
             ),
         },
         { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
@@ -82,6 +84,18 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
               key === 'billing.defaultLateFeeRule' ? {} : 10000,
             ),
           },
+        },
+        {
+          provide: BusinessClock,
+          useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
+        },
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({ NODE_ENV: 'test', WECHAT_PAY_MOCK: 'true' }),
+        },
+        {
+          provide: PAYMENT_PROVIDER,
+          useValue: new OfflinePaymentProvider(),
         },
       ],
     }).compile();

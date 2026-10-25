@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BillsService } from './bills.service.js';
 import { BillPaymentService } from './bill-payment.service.js';
@@ -7,6 +7,7 @@ import { BillReceiptService } from './bill-receipt.service.js';
 import { BillsController } from './bills.controller.js';
 import { PaymentsController } from './payments.controller.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { PrepayModule } from '../prepay/prepay.module.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
 import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 import { MockPaymentProvider } from './payment/mock-payment.provider.js';
@@ -16,7 +17,7 @@ import { PaymentRefundService } from './payment/payment-refund.service.js';
 import { PaymentReconciliationService } from './payment/payment-reconciliation.service.js';
 
 @Module({
-  imports: [PrismaModule, ConfigModule],
+  imports: [PrismaModule, ConfigModule, forwardRef(() => PrepayModule)],
   controllers: [BillsController, PaymentsController],
   providers: [
     BillsService,

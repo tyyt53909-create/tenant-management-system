@@ -3,6 +3,10 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { PrepayService } from './prepay.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { ConfigService } from '@nestjs/config';
+import { PAYMENT_PROVIDER } from '../bills/payment/payment-provider.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 describe('PrepayService', () => {
   let service: PrepayService;
@@ -30,6 +34,13 @@ describe('PrepayService', () => {
         findMany: vi.fn(),
         count: vi.fn(),
       },
+      prepayRechargeOrder: {
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
+        update: vi.fn(),
+      },
+      userIdentity: { findFirst: vi.fn() },
       tenant: { findUnique: vi.fn() },
       room: { findMany: vi.fn(), findUnique: vi.fn() },
       $transaction: vi.fn(),
@@ -43,6 +54,31 @@ describe('PrepayService', () => {
         {
           provide: SettingsService,
           useValue: { getValue: vi.fn().mockResolvedValue(10000) },
+        },
+        {
+          provide: BusinessClock,
+          useValue: {
+            formatDate: vi.fn().mockReturnValue('2026-10-26'),
+            todayUtc: vi.fn().mockReturnValue(new Date('2026-10-26T00:00:00.000Z')),
+          },
+        },
+        {
+          provide: PAYMENT_PROVIDER,
+          useValue: {
+            name: 'wechat-mock',
+            createOrder: vi.fn(),
+            queryOrder: vi.fn(),
+            refund: vi.fn(),
+            createJsapiOrder: vi.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({ NODE_ENV: 'test', WECHAT_PAY_MOCK: 'true' }),
+        },
+        {
+          provide: NotificationsService,
+          useValue: { create: vi.fn().mockResolvedValue({ id: 'notif-1' }) },
         },
       ],
     }).compile();
@@ -582,6 +618,143 @@ describe('PrepayService', () => {
         expect.objectContaining({ where: { createdAt: { gte: new Date('2026-01-01') } } }),
       );
       expect(prisma.room.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('线上充值与低余额提醒 (PAY-04)', () => {
+    it('createJsapiRechargeOrder：租客发起微信充值下单生成待付订单并调起支付', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        tenant: { id: 't-1', userId: 'u-1', name: '张三' },
+      });
+      prisma.userIdentity.findFirst.mockResolvedValue({ providerUserId: 'wx_openid_1' });
+      prisma.prepayRechargeOrder.create.mockResolvedValue({ id: 'order-1' });
+
+      const paymentProvider = (service as any).paymentProvider;
+      paymentProvider.createJsapiOrder.mockResolvedValue({
+        appId: 'wx1',
+        timeStamp: '123',
+        nonceStr: 'abc',
+        package: 'prepay_id=xxx',
+        signType: 'RSA',
+        paySign: 'sign',
+        outTradeNo: 'PREPAY_1',
+      });
+
+      const res = await service.createJsapiRechargeOrder(
+        { amount: 5000 },
+        { userId: 'u-1', role: 'TENANT', tenantId: 't-1' },
+      );
+
+      expect(res.orderId).toBe('order-1');
+      expect(prisma.prepayRechargeOrder.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            accountId: 'acc-1',
+            tenantId: 't-1',
+            amount: 5000,
+            status: 'PENDING',
+          }),
+        }),
+      );
+    });
+
+    it('handleRechargeNotify：微信回调入账，更新余额与流水并生成收据', async () => {
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValue({
+        id: 'order-1',
+        accountId: 'acc-1',
+        tenantId: 't-1',
+        status: 'PENDING',
+        account: { id: 'acc-1', balanceCache: 2000 },
+        tenant: { id: 't-1', userId: 'u-1', name: '张三' },
+      });
+      prisma.prepayAccount.update.mockResolvedValue({ id: 'acc-1', balanceCache: 7000 });
+      prisma.prepayRechargeOrder.update.mockResolvedValue({ id: 'order-1', status: 'SUCCESS' });
+      prisma.prepayTransaction.create.mockResolvedValue({ id: 'tx-1' });
+
+      await service.handleRechargeNotify({
+        outTradeNo: 'PREPAY_1',
+        transactionId: 'wx_tx_1',
+        tradeState: 'SUCCESS',
+        amount: 5000,
+        openid: 'wx_openid_1',
+      });
+
+      expect(prisma.prepayAccount.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'acc-1' },
+          data: { balanceCache: { increment: 5000 } },
+        }),
+      );
+      expect(prisma.prepayTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            accountId: 'acc-1',
+            type: 'RECHARGE',
+            amount: 5000,
+            relatedType: 'ONLINE_RECHARGE',
+          }),
+        }),
+      );
+      expect((service as any).notificationsService.create).toHaveBeenCalled();
+    });
+
+    it('handleRechargeNotify：重复回调幂等跳过，不重复增加入账', async () => {
+      prisma.prepayRechargeOrder.findUnique.mockResolvedValue({
+        id: 'order-1',
+        status: 'SUCCESS',
+      });
+
+      await service.handleRechargeNotify({
+        outTradeNo: 'PREPAY_1',
+        transactionId: 'wx_tx_1',
+        tradeState: 'SUCCESS',
+        amount: 5000,
+        openid: 'wx_openid_1',
+      });
+
+      expect(prisma.prepayAccount.update).not.toHaveBeenCalled();
+    });
+
+    it('triggerLowBalanceAlertIfNeeded：余额低于阈值且今日未提醒时触发通知并更新时间', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({
+        id: 'acc-1',
+        balanceCache: 3000,
+        lowBalanceThreshold: 10000,
+        lastNotifiedAt: null,
+        tenant: { id: 't-1', userId: 'u-1', name: '张三' },
+      });
+      prisma.prepayAccount.update.mockResolvedValue({ id: 'acc-1' });
+
+      const triggered = await service.triggerLowBalanceAlertIfNeeded('acc-1');
+
+      expect(triggered).toBe(true);
+      expect((service as any).notificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'u-1',
+          data: expect.objectContaining({ type: 'PREPAY_LOW_BALANCE', balance: 3000 }),
+        }),
+      );
+      expect(prisma.prepayAccount.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'acc-1' },
+          data: { lastNotifiedAt: expect.any(Date) },
+        }),
+      );
+    });
+
+    it('triggerLowBalanceAlertIfNeeded：今日已提醒过则防骚扰跳过', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({
+        id: 'acc-1',
+        balanceCache: 3000,
+        lowBalanceThreshold: 10000,
+        lastNotifiedAt: new Date('2026-10-26T08:00:00.000Z'),
+        tenant: { id: 't-1', userId: 'u-1', name: '张三' },
+      });
+
+      const triggered = await service.triggerLowBalanceAlertIfNeeded('acc-1');
+      expect(triggered).toBe(false);
+      expect(prisma.prepayAccount.update).not.toHaveBeenCalled();
     });
   });
 });

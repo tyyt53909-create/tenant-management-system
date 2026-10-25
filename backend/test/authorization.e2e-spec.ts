@@ -16,6 +16,7 @@ import { BillsController } from '../src/modules/bills/bills.controller.js';
 import { WechatPaymentService } from '../src/modules/bills/payment/wechat-payment.service.js';
 import { PaymentRefundService } from '../src/modules/bills/payment/payment-refund.service.js';
 import { BillsService } from '../src/modules/bills/bills.service.js';
+import { BillPaymentService } from '../src/modules/bills/bill-payment.service.js';
 import { BuildingsController } from '../src/modules/buildings/buildings.controller.js';
 import { BuildingsService } from '../src/modules/buildings/buildings.service.js';
 import { CheckoutController } from '../src/modules/checkout/checkout.controller.js';
@@ -172,6 +173,14 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         { provide: ImportsService, useValue: importsService },
         { provide: TagsService, useValue: tagsService },
         { provide: BillsService, useValue: billsService },
+        {
+          provide: BillPaymentService,
+          useValue: {
+            payWithPrepay: vi.fn(),
+            addPayment: vi.fn(),
+            findPayments: vi.fn(),
+          },
+        },
         {
           provide: WechatPaymentService,
           useValue: {
