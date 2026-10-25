@@ -314,13 +314,4 @@ describe('AnnouncementsService（T284）', () => {
       await expect(service.archive('nope')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
-
-  describe('通知服务缺失', () => {
-    it('没有注入通知服务时拒绝发布，而不是静默成功', async () => {
-      const bare = new AnnouncementsService(prisma as never);
-      prisma.announcement.findUnique.mockResolvedValue(draft);
-      await expect(bare.publish('a1')).rejects.toBeInstanceOf(ConflictException);
-      expect(prisma.announcement.update).not.toHaveBeenCalled();
-    });
-  });
 });

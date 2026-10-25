@@ -1,5 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import type { Prisma, MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
@@ -20,17 +19,12 @@ export interface ExportMeterReadingsQuery {
 
 @Injectable()
 export class MeterUsageQueryService {
-  private readonly clock: BusinessClock;
-  private readonly priceService: MeterPriceService;
-
+  /** 时钟与计价必填（QLT-02 / T288）：导出与报表必须与结算同口径。 */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() clock?: BusinessClock,
-    @Optional() priceService?: MeterPriceService,
-  ) {
-    this.clock = clock ?? new BusinessClock(new ConfigService());
-    this.priceService = priceService ?? new MeterPriceService(prisma, this.clock);
-  }
+    private readonly clock: BusinessClock,
+    private readonly priceService: MeterPriceService,
+  ) {}
 
   async exportReadings(query: ExportMeterReadingsQuery) {
     const where: Prisma.MeterReadingWhereInput = {};

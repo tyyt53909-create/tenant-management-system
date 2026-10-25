@@ -2,6 +2,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MetersService } from './meters.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { METER_ADAPTER } from './adapters/meter-adapter.js';
+import { ManualMeterAdapter } from './adapters/manual-meter.adapter.js';
+import { MeterService } from './meter.service.js';
+import { MeterPriceService } from './meter-price.service.js';
+import { MeterReadingService } from './meter-reading.service.js';
+import { MeterBatchReadingService } from './meter-batch-reading.service.js';
+import { MeterBillingService } from './meter-billing.service.js';
+import { MeterUsageQueryService } from './meter-usage-query.service.js';
+import { testClock, testPriceService } from './meter-test.providers.js';
 
 describe('MetersService', () => {
   let service: MetersService;
@@ -61,7 +71,40 @@ describe('MetersService', () => {
     prismaMock.$queryRaw.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [MetersService, { provide: PrismaService, useValue: prismaMock }],
+      // QLT-02 / T288：MetersService 的全部子依赖改为必填，这里用真实实现 + mock prisma 装配，
+      // 断言仍然是底层 prisma 调用（与改动前一致）。
+      providers: [
+        MetersService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: BusinessClock, useValue: testClock() },
+        { provide: MeterPriceService, useValue: testPriceService(prismaMock) },
+        { provide: METER_ADAPTER, useValue: new ManualMeterAdapter(prismaMock as never) },
+        {
+          provide: MeterService,
+          useFactory: (prisma: any, adapter: any, price: any) => new MeterService(prisma, adapter, price),
+          inject: [PrismaService, METER_ADAPTER, MeterPriceService],
+        },
+        {
+          provide: MeterBillingService,
+          useFactory: (prisma: any) => new MeterBillingService(prisma, testClock(), testPriceService(prisma)),
+          inject: [PrismaService],
+        },
+        {
+          provide: MeterReadingService,
+          useFactory: (prisma: any, billing: any, price: any) => new MeterReadingService(prisma, billing, price),
+          inject: [PrismaService, MeterBillingService, MeterPriceService],
+        },
+        {
+          provide: MeterBatchReadingService,
+          useFactory: (prisma: any, billing: any, price: any) => new MeterBatchReadingService(prisma, billing, price),
+          inject: [PrismaService, MeterBillingService, MeterPriceService],
+        },
+        {
+          provide: MeterUsageQueryService,
+          useFactory: (prisma: any, price: any) => new MeterUsageQueryService(prisma, testClock(), price),
+          inject: [PrismaService, MeterPriceService],
+        },
+      ],
     }).compile();
 
     service = module.get<MetersService>(MetersService);

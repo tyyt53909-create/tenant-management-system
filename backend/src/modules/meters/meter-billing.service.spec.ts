@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MeterBillingService } from './meter-billing.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { MeterPriceService } from './meter-price.service.js';
+import { testClock, testPriceService } from './meter-test.providers.js';
 
 describe('MeterBillingService', () => {
   let service: MeterBillingService;
@@ -28,7 +31,13 @@ describe('MeterBillingService', () => {
     mock.meterReading.findMany.mockResolvedValue([]);
     mock.$queryRaw.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
-      providers: [MeterBillingService, { provide: PrismaService, useValue: mock }],
+      providers: [
+        MeterBillingService,
+        { provide: PrismaService, useValue: mock },
+        // QLT-02 / T288：时钟与计价必填
+        { provide: BusinessClock, useValue: testClock() },
+        { provide: MeterPriceService, useValue: testPriceService(mock) },
+      ],
     }).compile();
     service = module.get(MeterBillingService);
     prisma = mock;

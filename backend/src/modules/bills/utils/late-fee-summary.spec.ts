@@ -1,6 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BillsService, summarizeLateFees } from '../bills.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { BillPaymentService } from '../bill-payment.service.js';
+import { BillLateFeeService } from '../bill-late-fee.service.js';
+import { BillReceiptService } from '../bill-receipt.service.js';
+import { OfflinePaymentProvider } from '../payment/offline-payment.provider.js';
+import { BusinessClock } from '../../../common/business-clock/business-clock.service.js';
+import { ConfigService } from '@nestjs/config';
 
 describe('summarizeLateFees（列表滞纳金摘要，T157）', () => {
   it('无记录 → none / amount 为 null', () => {
@@ -117,7 +123,22 @@ describe('BillsService.findAll（T157 附滞纳金摘要，消除 N+1）', () =>
       bill: { findMany: vi.fn(), count: vi.fn() },
     };
     const module: TestingModule = await Test.createTestingModule({
-      providers: [BillsService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        BillsService,
+        { provide: PrismaService, useValue: prismaMock },
+        // QLT-02 / T288：依赖必填后显式提供（本用例只测列表摘要，子服务不参与断言）
+        {
+          provide: BillPaymentService,
+          useFactory: () =>
+            new BillPaymentService(
+              prismaMock as never,
+              new OfflinePaymentProvider(),
+              new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
+            ),
+        },
+        { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },
+        { provide: BillReceiptService, useFactory: () => new BillReceiptService(prismaMock as never) },
+      ],
     }).compile();
     service = module.get<BillsService>(BillsService);
     prisma = prismaMock;

@@ -19,6 +19,7 @@ import {
   LOGIN_ATTEMPT_STORE,
   MemoryLoginAttemptStore,
 } from './login-attempt.store.js';
+import { FederatedAuthService } from './federated-auth.service.js';
 
 const WRONG_PASSWORD = 'wrong-password';
 const CORRECT_PASSWORD = 'correct-password';
@@ -111,6 +112,11 @@ async function createService(
         }),
       },
       { provide: LOGIN_ATTEMPT_STORE, useValue: store },
+      // QLT-02 / T288：FederatedAuthService 由容器提供（改动前是 AuthService 内部 new）
+      {
+        provide: FederatedAuthService,
+        useValue: { googleAuth: vi.fn(), sendEmailCode: vi.fn(), loginWithEmailCode: vi.fn(), bindInviteCode: vi.fn() },
+      },
     ],
   }).compile();
 

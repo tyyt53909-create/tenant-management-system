@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
@@ -11,7 +11,6 @@ import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
 import { SetMeterDefaultPriceDto } from './dto/set-meter-default-price.dto.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
-import { ManualMeterAdapter } from './adapters/manual-meter.adapter.js';
 import { METER_TYPE_LABEL } from './meter-types.constants.js';
 import { MeterService } from './meter.service.js';
 import { MeterPriceService } from './meter-price.service.js';
@@ -24,32 +23,23 @@ export { METER_TYPE_LABEL };
 
 @Injectable()
 export class MetersService {
-  private readonly meterService: MeterService;
-  private readonly priceService: MeterPriceService;
-  private readonly readingService: MeterReadingService;
-  private readonly batchReadingService: MeterBatchReadingService;
-  private readonly billingService: MeterBillingService;
-  private readonly usageQueryService: MeterUsageQueryService;
-
+  /**
+   * 全部子服务由容器注入（QLT-02 / T288）。
+   *
+   * 此前 8 个参数都是 `@Optional()` + `?? new X()`：容器漏注册时不会报错，
+   * 而是现场 new 一套「没有适配器 / 没有时钟」的实例，读数与结算口径可能与
+   * 其它入口不一致。现在缺失即启动失败，`MetersModule` 是唯一装配点。
+   */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() meterService?: MeterService,
-    @Optional() readingService?: MeterReadingService,
-    @Optional() batchReadingService?: MeterBatchReadingService,
-    @Optional() billingService?: MeterBillingService,
-    @Optional() usageQueryService?: MeterUsageQueryService,
-    @Optional() @Inject(METER_ADAPTER) meterAdapter?: MeterAdapter,
-    @Optional() priceService?: MeterPriceService,
-  ) {
-    const adapter = meterAdapter ?? new ManualMeterAdapter(prisma);
-    this.priceService = priceService ?? new MeterPriceService(prisma);
-    this.meterService = meterService ?? new MeterService(prisma, adapter, this.priceService);
-    this.billingService = billingService ?? new MeterBillingService(prisma, undefined, this.priceService);
-    this.readingService = readingService ?? new MeterReadingService(prisma, this.billingService, this.priceService);
-    this.batchReadingService =
-      batchReadingService ?? new MeterBatchReadingService(prisma, this.billingService, this.priceService);
-    this.usageQueryService = usageQueryService ?? new MeterUsageQueryService(prisma, undefined, this.priceService);
-  }
+    private readonly meterService: MeterService,
+    private readonly readingService: MeterReadingService,
+    private readonly batchReadingService: MeterBatchReadingService,
+    private readonly billingService: MeterBillingService,
+    private readonly usageQueryService: MeterUsageQueryService,
+    @Inject(METER_ADAPTER) private readonly meterAdapter: MeterAdapter,
+    private readonly priceService: MeterPriceService,
+  ) {}
 
   /** 按当前适配器取最新读数 */
   fetchReading(meterId: string) {

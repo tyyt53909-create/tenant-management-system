@@ -1,5 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
@@ -11,18 +10,12 @@ import { isSettledReading } from './meter-dedup.util.js';
 
 @Injectable()
 export class MeterBillingService {
-  private readonly clock: BusinessClock;
-  private readonly priceService: MeterPriceService;
-
+  /** 时钟与计价服务必填（QLT-02 / T288），缺失即启动失败而不是静默降级。 */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() clock?: BusinessClock,
-    @Optional() priceService?: MeterPriceService,
-  ) {
-    this.clock = clock ?? new BusinessClock(new ConfigService());
-    this.priceService =
-      priceService ?? new MeterPriceService(prisma, this.clock);
-  }
+    private readonly clock: BusinessClock,
+    private readonly priceService: MeterPriceService,
+  ) {}
 
   /**
    * 讀數扣費：用量 × 生效單價

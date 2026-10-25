@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { NotificationsService } from './notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { NotificationDispatcher } from './channels/notification-dispatcher.js';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
@@ -11,6 +12,12 @@ describe('NotificationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
+        // QLT-02 / T288：dispatcher 改为必填，用真实默认渠道（站内信写 notification 表）
+        {
+          provide: NotificationDispatcher,
+          inject: [PrismaService],
+          useFactory: (prisma: PrismaService) => NotificationDispatcher.createDefault(prisma),
+        },
         {
           provide: PrismaService,
           useValue: {

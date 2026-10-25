@@ -4,15 +4,12 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
-  Optional,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Prisma, type PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
-import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 import {
   applyDepositCollection,
   reverseDepositCollection,
@@ -30,17 +27,16 @@ interface FeeAllocation {
 
 @Injectable()
 export class BillPaymentService {
-  private readonly payments: PaymentProvider;
-  private readonly clock: BusinessClock;
-
+  /**
+   * 支付通道与业务时钟都由容器注入（QLT-02 / T288）。
+   * 之前 `?? new OfflinePaymentProvider()` 会让「生产漏配支付通道」变成静默走线下，
+   * `?? new BusinessClock(new ConfigService())` 则绕过了统一时区配置。
+   */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() @Inject(PAYMENT_PROVIDER) payments?: PaymentProvider,
-    @Optional() clock?: BusinessClock,
-  ) {
-    this.payments = payments ?? new OfflinePaymentProvider();
-    this.clock = clock ?? new BusinessClock(new ConfigService());
-  }
+    @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
+    private readonly clock: BusinessClock,
+  ) {}
 
   /**
    * 登记收款（FIN-05 / T264）

@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MeterReconciliationService } from './meter-reconciliation.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MeterPriceService } from './meter-price.service.js';
+import { testPriceService } from './meter-test.providers.js';
 
 describe('MeterReconciliationService', () => {
   let service: MeterReconciliationService;
@@ -16,7 +18,11 @@ describe('MeterReconciliationService', () => {
       $queryRaw: vi.fn().mockResolvedValue([{ total: 0n }]),
     };
     const moduleRef = await Test.createTestingModule({
-      providers: [MeterReconciliationService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        MeterReconciliationService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: MeterPriceService, useValue: testPriceService(prisma) },
+      ],
     }).compile();
     service = moduleRef.get(MeterReconciliationService);
   });

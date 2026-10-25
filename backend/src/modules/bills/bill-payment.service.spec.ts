@@ -3,6 +3,10 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { BillPaymentService } from './bill-payment.service.js';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { ConfigService } from '@nestjs/config';
+import { PAYMENT_PROVIDER } from './payment/payment-provider.js';
+import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 
 describe('BillPaymentService', () => {
   let service: BillPaymentService;
@@ -26,7 +30,15 @@ describe('BillPaymentService', () => {
     prisma.lateFee.findMany.mockResolvedValue([]);
     prisma.paymentRecord.create.mockResolvedValue({ id: 'p1' });
     prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
-    const module = await Test.createTestingModule({ providers: [BillPaymentService, { provide: PrismaService, useValue: prisma }] }).compile();
+    const module = await Test.createTestingModule({
+      providers: [
+        BillPaymentService,
+        { provide: PrismaService, useValue: prisma },
+        // QLT-02 / T288：依赖改为必填后，测试显式提供支付通道与业务时钟
+        { provide: PAYMENT_PROVIDER, useValue: new OfflinePaymentProvider() },
+        { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })) },
+      ],
+    }).compile();
     service = module.get(BillPaymentService);
   });
 

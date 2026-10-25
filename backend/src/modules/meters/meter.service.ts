@@ -1,5 +1,4 @@
-import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import type { Prisma, MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
@@ -8,24 +7,16 @@ import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
 import { SetMeterDefaultPriceDto } from './dto/set-meter-default-price.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
-import { ManualMeterAdapter } from './adapters/manual-meter.adapter.js';
 import { MeterPriceService } from './meter-price.service.js';
-import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 @Injectable()
 export class MeterService {
-  private readonly meterAdapter: MeterAdapter;
-  private readonly priceService: MeterPriceService;
-
+  /** 适配器与计价服务必填（QLT-02 / T288）：适配器决定读数来源，不能静默退回手工模式。 */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() @Inject(METER_ADAPTER) meterAdapter?: MeterAdapter,
-    @Optional() priceService?: MeterPriceService,
-  ) {
-    this.meterAdapter = meterAdapter ?? new ManualMeterAdapter(prisma);
-    this.priceService =
-      priceService ?? new MeterPriceService(prisma, new BusinessClock(new ConfigService()));
-  }
+    @Inject(METER_ADAPTER) private readonly meterAdapter: MeterAdapter,
+    private readonly priceService: MeterPriceService,
+  ) {}
 
   /** 按当前适配器取最新读数。结算仍直接查库，因为要和事务锁放在一起。 */
   fetchReading(meterId: string) {

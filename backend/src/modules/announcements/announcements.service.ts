@@ -4,7 +4,6 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import type { Announcement, AnnouncementAudience, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -39,9 +38,14 @@ export interface PublishResult {
 export class AnnouncementsService {
   private readonly logger = new Logger(AnnouncementsService.name);
 
+  /**
+   * 通知服务必填（QLT-02 / T288）：公告的唯一投递路径就是通知中心。
+   * 之前允许缺省再在 publish 时抛 409「通知服务不可用」——那是装配错误，
+   * 应该在启动时就暴露，而不是等到管理员点发布。
+   */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly notifications?: NotificationsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(dto: CreateAnnouncementDto, actorId: string): Promise<Announcement | PublishResult> {
@@ -136,9 +140,6 @@ export class AnnouncementsService {
     if (!announcement) throw new NotFoundException('公告不存在');
     if (announcement.status === 'ARCHIVED') {
       throw new ConflictException('已归档公告不能发布');
-    }
-    if (!this.notifications) {
-      throw new ConflictException('通知服务不可用，无法发布公告');
     }
 
     const recipients = await this.resolveRecipients(

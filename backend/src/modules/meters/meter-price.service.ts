@@ -1,5 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import type { MeterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
@@ -35,14 +34,11 @@ type PriceDb = Pick<PrismaService, 'meterPriceHistory'> | Prisma.TransactionClie
  */
 @Injectable()
 export class MeterPriceService {
-  private readonly clock: BusinessClock;
-
+  /** 业务时钟必填（QLT-02 / T288）：`?? new BusinessClock(new ConfigService())` 会绕过统一时区配置。 */
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() clock?: BusinessClock,
-  ) {
-    this.clock = clock ?? new BusinessClock(new ConfigService());
-  }
+    private readonly clock: BusinessClock,
+  ) {}
 
   /** 表类型默认价（meterId 为空）；没有配置时返回 null，由调用方决定报错还是兜底。 */
   async resolveTypeDefault(

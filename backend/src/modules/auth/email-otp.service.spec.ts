@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { Logger, BadRequestException } from '@nestjs/common';
 import { EmailOtpService } from './email-otp.service.js';
-import { OTP_MAX_FAILED_ATTEMPTS, type OtpStore } from './otp-store.js';
+import { MemoryOtpStore, OTP_MAX_FAILED_ATTEMPTS, type OtpStore } from './otp-store.js';
 
 function storeOf(service: EmailOtpService): OtpStore {
   return (service as unknown as { otpStore: OtpStore }).otpStore;
@@ -18,7 +18,7 @@ describe('EmailOtpService', () => {
 
   beforeEach(() => {
     configService = new ConfigService({});
-    service = new EmailOtpService(configService);
+    service = new EmailOtpService(configService, new MemoryOtpStore());
   });
 
   afterEach(() => {
@@ -103,7 +103,7 @@ describe('EmailOtpService', () => {
     const previousBypass = process.env.OTP_DEV_BYPASS;
     delete process.env.NODE_ENV;
     delete process.env.OTP_DEV_BYPASS;
-    const isolated = new EmailOtpService(new ConfigService({}));
+    const isolated = new EmailOtpService(new ConfigService({}), new MemoryOtpStore());
 
     expect(await isolated.verifyCode('anyuser@example.com', '123456')).toBe(false);
 
@@ -112,25 +112,19 @@ describe('EmailOtpService', () => {
   });
 
   it('NODE_ENV 不是 development 时，即使打开 OTP_DEV_BYPASS，万能码也失败', async () => {
-    const isolated = new EmailOtpService(
-      new ConfigService({ NODE_ENV: 'production', OTP_DEV_BYPASS: 'true' }),
-    );
+    const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'production', OTP_DEV_BYPASS: 'true' }), new MemoryOtpStore());
 
     expect(await isolated.verifyCode('anyuser@example.com', '123456')).toBe(false);
   });
 
   it('NODE_ENV=development 但未打开 OTP_DEV_BYPASS 时，万能码失败', async () => {
-    const isolated = new EmailOtpService(
-      new ConfigService({ NODE_ENV: 'development', OTP_DEV_BYPASS: 'false' }),
-    );
+    const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'development', OTP_DEV_BYPASS: 'false' }), new MemoryOtpStore());
 
     expect(await isolated.verifyCode('anyuser@example.com', '123456')).toBe(false);
   });
 
   it('仅当 NODE_ENV=development 且 OTP_DEV_BYPASS=true 时，万能码通过', async () => {
-    const isolated = new EmailOtpService(
-      new ConfigService({ NODE_ENV: 'development', OTP_DEV_BYPASS: 'true' }),
-    );
+    const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'development', OTP_DEV_BYPASS: 'true' }), new MemoryOtpStore());
 
     expect(await isolated.verifyCode('anyuser@example.com', '123456')).toBe(true);
   });
@@ -213,7 +207,7 @@ describe('EmailOtpService', () => {
 
     it('未配置 SMTP 时拒绝发送，且日志中没有 6 位验证码', async () => {
       const entries = captureLogs();
-      const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'production' }));
+      const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'production' }), new MemoryOtpStore());
 
       await expect(isolated.sendCode('tenant@example.com')).rejects.toThrow(BadRequestException);
       expect(entries.join('\n')).not.toMatch(/\b\d{6}\b/);
@@ -221,7 +215,7 @@ describe('EmailOtpService', () => {
 
     it('发信失败时日志搜不到本次验证码，且该验证码不能再使用', async () => {
       const entries = captureLogs();
-      const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'production' }));
+      const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'production' }), new MemoryOtpStore());
       pinCode(isolated, '550000');
       (isolated as unknown as { transporter: { sendMail: () => Promise<never> } }).transporter = {
         sendMail: () => Promise.reject(new Error('smtp down body 550000')),
