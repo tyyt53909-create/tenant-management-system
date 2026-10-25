@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `develop`
-> 集成基準: `origin/develop` @ `06f3be9`
+> 集成基準: `origin/develop` @ `63a4a42`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -20,7 +20,7 @@
 | 後端單元測試 | ✅ pass | 128 files / 1207 tests |
 | 後端 e2e | ✅ pass | 3 files / 63 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
-| 管理後台單元測試 | ✅ pass | 20 files / 96 tests |
+| 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
 | 管理後台 build | ✅ pass | exit 0 |
 | 小程序單元測試 | ✅ pass | 112 tests |
 | 小程序 build | ✅ pass | exit 0 |
@@ -42,7 +42,7 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 2 |
+| 進行中 | 3 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -51,6 +51,7 @@
 ### 進行中
 - **T284 公告与定向消息（COM-04）**（active，plan COM-04，`feature/T284-com-04-announcements`）
 - **T285 前端请求层一致性（COM-05）**（active，plan COM-05，`feature/T285-com-05-errors`）
+- **T286 管理后台角色路由、型别化 API、拆分大组件（FE-01）**（active，plan FE-01，`feature/T286-fe-01-rbac`）
 
 ### 阻擋發布
 - 無
@@ -82,12 +83,13 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 57 | 41 | 34 | 2 | 14 |
+| 未分類 | 58 | 41 | 34 | 3 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T286 角色路由与组件拆分（FE-01）](docs/handoff/2026-10-25-T286-角色路由与组件拆分.md)
 - [交接记录：T285 前端请求层一致性（COM-05）](docs/handoff/2026-10-25-T285-前端请求层一致性.md)
 - [交接记录：T284 公告与定向消息（COM-04）](docs/handoff/2026-10-25-T284-公告与定向消息.md)
 - [交接记录：T283 报修工单时间线（COM-03）](docs/handoff/2026-10-25-T283-报修时间线.md)
@@ -95,7 +97,6 @@
 - [交接记录：T281 性能基准与 SLO（OPS-09）](docs/handoff/2026-10-25-T281-SLO与性能基准.md)
 - [交接记录：T280 备份、PITR 与恢复演练（OPS-07）](docs/handoff/2026-10-25-T280-备份与恢复.md)
 - [交接记录：T279 无状态化与多实例验证（OPS-06）](docs/handoff/2026-10-25-T279-多实例无状态.md)
-- [交接记录：T278 后台任务队列（OPS-05）](docs/handoff/2026-10-25-T278-后台任务队列.md)
 
 ---
 
@@ -104,14 +105,14 @@
 - 資料模型：**41** 張表
 - OpenAPI 路由：**177** 條
 - 後端程式碼：**23540** 行
-- 管理後台程式碼：**31082** 行
+- 管理後台程式碼：**31496** 行
 - 小程序程式碼：**6643** 行
-- 文件：**168** 份
+- 文件：**170** 份
 
 ### 測試
 - 後端單元：128 files / 1207 tests
 - 後端 e2e：3 files / 63 tests
-- 管理後台單元：20 files / 96 tests
+- 管理後台單元：22 files / 112 tests
 - 小程序單元：112 tests
 
 ---
