@@ -656,6 +656,24 @@
   },
   {
     "method": "GET",
+    "path": "/api/maintenance/:id/messages",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/maintenance/:id/messages",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/maintenance/my",
     "public": false,
     "roles": [

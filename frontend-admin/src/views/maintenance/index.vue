@@ -67,6 +67,19 @@
           <el-input v-model="formData.resolution" type="textarea" :rows="4" placeholder="请输入解决方案" />
         </el-form-item>
       </el-form>
+      <div class="timeline">
+        <h4>沟通记录</h4>
+        <div v-if="messages.length === 0" class="timeline-empty">暂无留言</div>
+        <div v-for="message in messages" :key="message.id" :class="['timeline-item', message.type === 'SYSTEM' ? 'system' : 'human']">
+          <span class="timeline-meta">{{ message.type === 'SYSTEM' ? '系统' : message.authorRole === 'TENANT' ? '租客' : '管理' }} · {{ String(message.createdAt).replace('T', ' ').slice(0, 16) }}</span>
+          <p>{{ message.body }}</p>
+        </div>
+        <div class="timeline-input">
+          <el-input v-model="messageDraft" type="textarea" :rows="2" maxlength="2000" placeholder="回复租客，或记录处理情况" />
+          <el-button type="primary" :loading="sendingMessage" @click="sendMessage">发送</el-button>
+        </div>
+      </div>
+
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
@@ -87,7 +100,7 @@ import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
 import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import ResourceDrawer from '@/components/common/ResourceDrawer.vue';
 import ProtectedImage from '@/components/common/ProtectedImage.vue';
-import { getMaintenanceList, updateMaintenance, deleteMaintenance } from '@/api/maintenance';
+import { addMaintenanceMessage, getMaintenanceList, getMaintenanceMessages, updateMaintenance, deleteMaintenance } from '@/api/maintenance';
 import type { Maintenance } from '@/types';
 
 const loading = ref(false);
@@ -96,6 +109,29 @@ const userStore=useUserStore();const loadError=ref('');const detailVisible=ref(f
 function openDetail(row:Maintenance){detailId.value=row.id;detailVisible.value=true;}
 const submitLoading = ref(false);
 const dialogVisible = ref(false);
+const messages = ref<Array<{ id: string; type: 'MESSAGE' | 'SYSTEM'; body: string; authorRole: string | null; createdAt: string }>>([]);
+const messageDraft = ref('');
+const sendingMessage = ref(false);
+async function loadMessages(id: string) {
+  try {
+    const res = await getMaintenanceMessages(id);
+    messages.value = res.data ?? [];
+  } catch {
+    messages.value = [];
+  }
+}
+async function sendMessage() {
+  const body = messageDraft.value.trim();
+  if (!body || !currentEditId.value) return;
+  sendingMessage.value = true;
+  try {
+    const created = await addMaintenanceMessage(currentEditId.value, body);
+    messages.value.push(created);
+    messageDraft.value = '';
+  } finally {
+    sendingMessage.value = false;
+  }
+}
 const tableData = ref<Maintenance[]>([]);
 const currentEditId = ref('');
 
@@ -179,10 +215,12 @@ const handleReset = () => {
 
 const handleEdit = (row: Maintenance) => {
   currentEditId.value = row.id;
+  void loadMessages(row.id);
   formData.status = row.status;
   formData.assignedTo = row.assignedTo || '';
   formData.resolution = row.resolution || '';
   dialogVisible.value = true;
+  messageDraft.value = '';
 };
 
 const handleDelete = async (row: Maintenance) => {
@@ -221,4 +259,14 @@ watch(()=>route.query.detail,id=>{if(typeof id==='string'){detailId.value=id;det
 
 <style scoped>
 .maintenance-page { padding: 0; }
+</style>
+<style scoped>
+.timeline { margin-top: 16px; border-top: 1px solid var(--q-border, #e4e7ed); padding-top: 12px; }
+.timeline h4 { margin: 0 0 8px; font-size: 14px; }
+.timeline-empty { color: var(--q-text-muted, #6b7280); font-size: 13px; padding: 8px 0; }
+.timeline-item { padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; background: #f7f8fa; }
+.timeline-item.system { background: #f2f6ff; color: #4b5563; font-size: 12px; }
+.timeline-meta { display: block; font-size: 12px; color: var(--q-text-muted, #6b7280); margin-bottom: 2px; }
+.timeline-item p { margin: 0; white-space: pre-wrap; }
+.timeline-input { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
 </style>

@@ -31,6 +31,10 @@ describe('MaintenanceService', () => {
       tenant: { findUnique: vi.fn() },
       contract: { findFirst: vi.fn() },
       maintenancePhoto: { createMany: vi.fn() },
+      maintenanceMessage: {
+        create: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     };
     // create() 现为事务写入（工单 + 照片同事务）。
     // 把 prismaMock 自身作为事务客户端传入，使既有断言（prisma.maintenanceRequest.create）
@@ -313,6 +317,59 @@ describe('MaintenanceService', () => {
       const data = prisma.maintenanceRequest.update.mock.calls[0][0].data;
       expect(data.resolution).toBe('备件已到');
       expect(data.resolvedAt).toBeUndefined();
+    });
+  });
+
+  describe('工单时间线与双向沟通（T283）', () => {
+    it('租客只能看自己的工单；他人工单按 404', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({ tenantId: 'tenant-1' });
+      await expect(
+        service.findMessages('mr-1', { userId: 'u1', role: 'TENANT', tenantId: 'tenant-2' }),
+      ).rejects.toThrow(NotFoundException);
+
+      prisma.maintenanceMessage.findMany.mockResolvedValue([{ id: 'm1', body: 'hi' }]);
+      const result = await service.findMessages('mr-1', { userId: 'u1', role: 'TENANT', tenantId: 'tenant-1' });
+      expect(result.data).toHaveLength(1);
+      expect(prisma.maintenanceMessage.findMany).toHaveBeenCalledWith({
+        where: { requestId: 'mr-1' },
+        orderBy: { createdAt: 'asc' },
+      });
+    });
+
+    it('留言写入类型 MESSAGE 并记录作者', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({ tenantId: 'tenant-1' });
+      await service.addMessage(
+        'mr-1',
+        { body: '  师傅什么时候到？  ' },
+        { userId: 'u1', role: 'TENANT', tenantId: 'tenant-1' },
+      );
+      expect(prisma.maintenanceMessage.create).toHaveBeenCalledWith({
+        data: {
+          requestId: 'mr-1',
+          type: 'MESSAGE',
+          authorId: 'u1',
+          authorRole: 'TENANT',
+          body: '师傅什么时候到？',
+        },
+      });
+    });
+
+    it('状态变更写 SYSTEM 时间线；无变更不写', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({ id: 'mr-1', status: 'SUBMITTED', assignedTo: null });
+      prisma.maintenanceRequest.update.mockResolvedValue({ id: 'mr-1', status: 'ACKNOWLEDGED' });
+      await service.update('mr-1', { status: 'ACKNOWLEDGED' } as never);
+      expect(prisma.maintenanceMessage.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          requestId: 'mr-1',
+          type: 'SYSTEM',
+          body: expect.stringContaining('状态 SUBMITTED → ACKNOWLEDGED'),
+        }),
+      });
+
+      prisma.maintenanceMessage.create.mockClear();
+      prisma.maintenanceRequest.update.mockResolvedValue({ id: 'mr-1', status: 'ACKNOWLEDGED' });
+      await service.update('mr-1', {} as never);
+      expect(prisma.maintenanceMessage.create).not.toHaveBeenCalled();
     });
   });
 });
