@@ -15,7 +15,7 @@ import type {
 
 export interface MockStoredOrder {
   outTradeNo: string;
-  billId: string;
+  billId?: string;
   amount: number;
   openid: string;
   description: string;
@@ -56,7 +56,7 @@ export class MockPaymentProvider implements PaymentProvider {
   async createJsapiOrder(request: JsapiOrderRequest): Promise<JsapiPaymentParams> {
     const outTradeNo =
       request.outTradeNo ||
-      `WXP_${request.billId.slice(-6)}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      `WXP_${(request.billId || 'GENERAL').slice(-6)}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const prepayId = `mock_prepay_${randomUUID().replace(/-/g, '')}`;
     const timeStamp = String(Math.floor(Date.now() / 1000));
     const nonceStr = `mock_nonce_${randomUUID().slice(0, 16)}`;
@@ -134,7 +134,11 @@ export class MockPaymentProvider implements PaymentProvider {
       }
     }
 
-    if (body?.out_trade_no) {
+    if (body?.resource?.out_trade_no || body?.resource?.outTradeNo) {
+      return this.handleNotifySuccess(body.resource);
+    }
+
+    if (body?.out_trade_no || body?.outTradeNo) {
       return this.handleNotifySuccess(body);
     }
 

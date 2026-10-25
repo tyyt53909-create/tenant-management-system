@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -17,6 +18,7 @@ import {
 import { WechatJsapiPayDto, WechatPayQueryDto } from '../dto/wechat-pay.dto.js';
 import { PaymentMethod } from '../dto/create-payment.dto.js';
 import { randomHex } from '../../../common/utils/secure-random.js';
+import { PrepayService } from '../../prepay/prepay.service.js';
 
 @Injectable()
 export class WechatPaymentService {
@@ -27,6 +29,8 @@ export class WechatPaymentService {
     private readonly billPaymentService: BillPaymentService,
     @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => PrepayService))
+    private readonly prepayService: PrepayService,
   ) {}
 
   /**
@@ -140,6 +144,18 @@ export class WechatPaymentService {
     const resource = await this.paymentProvider.verifyAndParseNotify(headers, body);
 
     if (resource.tradeState === 'SUCCESS') {
+      // 优先处理预付充值订单
+      if (
+        resource.outTradeNo.startsWith('PREPAY_') ||
+        resource.attach?.includes('PREPAY_RECHARGE')
+      ) {
+        await this.prepayService.handleRechargeNotify(resource);
+        return {
+          code: 'SUCCESS',
+          message: '成功',
+        };
+      }
+
       let billId: string | undefined;
 
       if (resource.attach) {

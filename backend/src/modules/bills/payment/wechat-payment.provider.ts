@@ -49,7 +49,7 @@ export class WechatPaymentProvider implements PaymentProvider {
   async createJsapiOrder(request: JsapiOrderRequest): Promise<JsapiPaymentParams> {
     const outTradeNo =
       request.outTradeNo ||
-      `WXP_${request.billId.slice(-6)}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      `WXP_${(request.billId || 'GENERAL').slice(-6)}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
     const url = '/v3/pay/transactions/jsapi';
     const notifyUrl = this.config.notifyUrl || 'https://api.example.com/api/payments/wechat/notify';

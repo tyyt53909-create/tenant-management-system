@@ -7,6 +7,7 @@ import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
 import { QueryPrepayAccountsDto } from './dto/query-prepay-accounts.dto.js';
 import { CreatePrepayTransactionDto } from './dto/create-prepay-transaction.dto.js';
 import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.js';
+import { PrepayJsapiRechargeDto, PrepayQueryRechargeDto } from './dto/wechat-prepay-recharge.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -96,6 +97,61 @@ export class PrepayController {
   ) {
     const user = resolveAuthUser(userParam);
     return this.prepayService.recordTransaction(id, dto, user.userId);
+  }
+
+  // 租客发起预付账户微信充值下单
+  @Post('my/recharge/wechat-jsapi')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.prepay.read')
+  rechargeMyPrepay(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Body() dto: PrepayJsapiRechargeDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.prepayService.createJsapiRechargeOrder(dto, {
+      userId: user.userId,
+      role: user.role,
+      tenantId: user.tenantId,
+    });
+  }
+
+  // 管理者为指定账户发起微信充值下单
+  @Post(':id/recharge/wechat-jsapi')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  rechargeAccount(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto: PrepayJsapiRechargeDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.prepayService.createJsapiRechargeOrder(
+      dto,
+      {
+        userId: user.userId,
+        role: user.role,
+        tenantId: user.tenantId,
+      },
+      id,
+    );
+  }
+
+  // 微信支付充值主动查单
+  @Post('my/recharge/wechat-query')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.prepay.read')
+  queryMyRecharge(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Body() dto: PrepayQueryRechargeDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.prepayService.queryAndSyncRechargeOrder(dto, {
+      userId: user.userId,
+      role: user.role,
+      tenantId: user.tenantId,
+    });
   }
 
   @Get(':id')

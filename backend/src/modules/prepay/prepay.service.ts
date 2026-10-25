@@ -1,23 +1,49 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import type { Prisma, PrepayTransactionType, RelatedType } from '@prisma/client';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Logger,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import type { PrepayTransactionType, RelatedType } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreatePrepayAccountDto } from './dto/create-prepay-account.dto.js';
 import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
 import { QueryPrepayAccountsDto } from './dto/query-prepay-accounts.dto.js';
 import { CreatePrepayTransactionDto } from './dto/create-prepay-transaction.dto.js';
 import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.js';
+import { PrepayJsapiRechargeDto, PrepayQueryRechargeDto } from './dto/wechat-prepay-recharge.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { formatBusinessDateTime } from '../../common/business-clock/business-clock.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import { SettingsService } from '../settings/settings.service.js';
+import {
+  PAYMENT_PROVIDER,
+  type PaymentProvider,
+  type JsapiPaymentParams,
+  type WechatPaymentNotifyResource,
+} from '../bills/payment/payment-provider.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { randomHex } from '../../common/utils/secure-random.js';
 
 @Injectable()
 export class PrepayService {
+  private readonly logger = new Logger(PrepayService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
+    private readonly clock: BusinessClock,
+    @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
+    private readonly configService: ConfigService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreatePrepayAccountDto) {
@@ -367,5 +393,343 @@ export class PrepayService {
     ];
 
     return generateCsv(columns, transactions);
+  }
+
+  /**
+   * 微信支付 JSAPI 预付充值下单
+   */
+  async createJsapiRechargeOrder(
+    dto: PrepayJsapiRechargeDto,
+    user: { userId: string; role: string; tenantId?: string },
+    targetAccountId?: string,
+  ): Promise<JsapiPaymentParams & { orderId: string }> {
+    if (dto.amount <= 0) {
+      throw new BadRequestException('充值金额必须大于 0');
+    }
+
+    let account;
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId ?? '';
+      account = await this.prisma.prepayAccount.findFirst({
+        where: scopedWhere(tenantId),
+        include: { tenant: { select: { id: true, userId: true, name: true } } },
+      });
+      if (!account) {
+        throw new NotFoundException('当前租客未找到对应的预付账户');
+      }
+    } else {
+      if (!targetAccountId) {
+        throw new BadRequestException('请指定需要充值的预付账户 ID');
+      }
+      account = await this.prisma.prepayAccount.findUnique({
+        where: { id: targetAccountId },
+        include: { tenant: { select: { id: true, userId: true, name: true } } },
+      });
+      if (!account) {
+        throw new NotFoundException('预付账户不存在');
+      }
+    }
+
+    const tenantUserId = account.tenant.userId ?? user.userId;
+
+    // 获取租客微信 openid
+    const identity = await this.prisma.userIdentity.findFirst({
+      where: { userId: tenantUserId, provider: 'WECHAT_MP' },
+      select: { providerUserId: true },
+    });
+
+    let openid = identity?.providerUserId;
+    if (!openid) {
+      const isMock =
+        this.paymentProvider.name === 'wechat-mock' ||
+        this.configService.get('WECHAT_PAY_MOCK') === 'true' ||
+        this.configService.get('NODE_ENV') !== 'production';
+      if (isMock) {
+        openid = `mock_openid_${tenantUserId}`;
+      } else {
+        throw new BadRequestException('未检测到绑定的微信身份，请先在小程序中授权登录');
+      }
+    }
+
+    const outTradeNo = `PREPAY_${Date.now()}_${randomHex(4)}`;
+    const attach = JSON.stringify({
+      type: 'PREPAY_RECHARGE',
+      accountId: account.id,
+      tenantId: account.tenant.id,
+      userId: tenantUserId,
+    });
+
+    // 数据库创建 PrepayRechargeOrder（PENDING）
+    const order = await this.prisma.prepayRechargeOrder.create({
+      data: {
+        accountId: account.id,
+        tenantId: account.tenant.id,
+        amount: dto.amount,
+        outTradeNo,
+        status: 'PENDING',
+        channel: 'WECHAT',
+        operatorId: user.userId,
+      },
+    });
+
+    if (!this.paymentProvider.createJsapiOrder) {
+      throw new BadRequestException('当前支付通道不支持微信 JSAPI 线上支付');
+    }
+
+    const params = await this.paymentProvider.createJsapiOrder({
+      amount: dto.amount,
+      description: `栖居生活-预付充值(¥${(dto.amount / 100).toFixed(2)})`,
+      openid,
+      outTradeNo,
+      attach,
+    });
+
+    return {
+      ...params,
+      orderId: order.id,
+      outTradeNo,
+    };
+  }
+
+  /**
+   * 微信支付充值异步通知入账（原子与幂等）
+   */
+  async handleRechargeNotify(resource: WechatPaymentNotifyResource) {
+    const { outTradeNo, transactionId, amount } = resource;
+
+    const order = await this.prisma.prepayRechargeOrder.findUnique({
+      where: { outTradeNo },
+      include: {
+        account: true,
+        tenant: { select: { id: true, userId: true, name: true } },
+      },
+    });
+
+    if (!order) {
+      this.logger.warn(`未找到预付充值订单: outTradeNo=${outTradeNo}`);
+      return;
+    }
+
+    if (order.status === 'SUCCESS') {
+      this.logger.log(`预付充值订单 ${outTradeNo} 已处理，幂等跳过`);
+      return;
+    }
+
+    const paidAt = resource.successTime ? new Date(resource.successTime) : new Date();
+
+    // 事务内原子入账
+    await this.prisma.$transaction(async (tx) => {
+      // 1. 分配连续收据号
+      const receiptNumber = await this.nextReceiptNumber(tx);
+
+      // 2. 更新订单状态为 SUCCESS
+      await tx.prepayRechargeOrder.update({
+        where: { id: order.id },
+        data: {
+          status: 'SUCCESS',
+          transactionId,
+          paidAt,
+          receiptNumber,
+          rawResponse: resource as any,
+        },
+      });
+
+      // 3. 更新预付账户余额
+      const updatedAccount = await tx.prepayAccount.update({
+        where: { id: order.accountId },
+        data: {
+          balanceCache: { increment: amount },
+        },
+      });
+
+      // 4. 插入预付交易流水
+      await tx.prepayTransaction.create({
+        data: {
+          accountId: order.accountId,
+          type: 'RECHARGE',
+          amount,
+          balanceAfter: updatedAccount.balanceCache,
+          relatedId: order.id,
+          relatedType: 'ONLINE_RECHARGE',
+          description: `微信线上充值 (单号: ${outTradeNo})`,
+          operatorId: 'SYSTEM_WECHAT_PAY',
+          createdAt: paidAt,
+        },
+      });
+    });
+
+    this.logger.log(`预付充值入账成功: 订单=${order.id}, 单号=${outTradeNo}, 金额=${amount}分`);
+
+    // 充值成功通知
+    if (order.tenant?.userId) {
+      const balanceYuan = ((order.account.balanceCache + amount) / 100).toFixed(2);
+      const amountYuan = (amount / 100).toFixed(2);
+      await this.notificationsService.create({
+        userId: order.tenant.userId,
+        title: '预付充值成功',
+        body: `您已成功充值 ¥${amountYuan}，当前预付账户可用余额为 ¥${balanceYuan}`,
+        priority: 'NORMAL' as any,
+        data: {
+          type: 'PREPAY_RECHARGE',
+          orderId: order.id,
+          amount,
+          outTradeNo,
+        },
+      }).catch((err) => {
+        this.logger.error(`下发充值成功通知失败: ${err.message}`);
+      });
+    }
+  }
+
+  /**
+   * 微信支付主动查单补入账
+   */
+  async queryAndSyncRechargeOrder(
+    dto: PrepayQueryRechargeDto,
+    user: { userId: string; role: string; tenantId?: string },
+  ) {
+    const order = await this.prisma.prepayRechargeOrder.findUnique({
+      where: { outTradeNo: dto.outTradeNo },
+      include: {
+        account: true,
+        tenant: { select: { id: true, userId: true, name: true } },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('充值订单不存在');
+    }
+
+    if (user.role === 'TENANT') {
+      if (user.tenantId && order.tenantId !== user.tenantId) {
+        throw new ForbiddenException('您无权查询他人的充值订单');
+      }
+    }
+
+    if (order.status === 'SUCCESS') {
+      return {
+        orderId: order.id,
+        outTradeNo: order.outTradeNo,
+        status: order.status,
+        amount: order.amount,
+        paidAt: order.paidAt,
+        receiptNumber: order.receiptNumber,
+      };
+    }
+
+    // 调微信查单
+    if (!this.paymentProvider.queryOrder) {
+      throw new BadRequestException('当前支付通道不支持微信查单');
+    }
+
+    const queried = await this.paymentProvider.queryOrder(dto.outTradeNo);
+    if (!queried) {
+      return {
+        orderId: order.id,
+        outTradeNo: order.outTradeNo,
+        status: order.status,
+        amount: order.amount,
+      };
+    }
+
+    const isSuccess = queried.status === 'SUCCESS' || queried.tradeState === 'SUCCESS';
+    if (isSuccess && (queried.amount ?? order.amount)) {
+      await this.handleRechargeNotify({
+        outTradeNo: dto.outTradeNo,
+        transactionId: queried.transactionId || `mock_tx_${Date.now()}`,
+        tradeState: 'SUCCESS',
+        amount: queried.amount ?? order.amount,
+        openid: queried.openid || '',
+        attach: queried.attach,
+      });
+
+      const updated = await this.prisma.prepayRechargeOrder.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+
+      return {
+        orderId: updated.id,
+        outTradeNo: updated.outTradeNo,
+        status: updated.status,
+        amount: updated.amount,
+        paidAt: updated.paidAt,
+        receiptNumber: updated.receiptNumber,
+      };
+    }
+
+    return {
+      orderId: order.id,
+      outTradeNo: order.outTradeNo,
+      status: queried.tradeState || queried.status || order.status,
+      amount: order.amount,
+    };
+  }
+
+  /**
+   * 低余额多渠道预警检测与下发（带每日频控）
+   */
+  async triggerLowBalanceAlertIfNeeded(accountId: string): Promise<boolean> {
+    const account = await this.prisma.prepayAccount.findUnique({
+      where: { id: accountId },
+      include: { tenant: { select: { id: true, name: true, phone: true, userId: true } } },
+    });
+    if (!account || !account.tenant?.userId) return false;
+    if (account.balanceCache >= account.lowBalanceThreshold) return false;
+
+    // 每日频控：今天已发过则跳过
+    const today = this.clock.todayUtc();
+    if (account.lastNotifiedAt && account.lastNotifiedAt >= today) {
+      return false;
+    }
+
+    const userId = account.tenant.userId;
+    const balanceYuan = (account.balanceCache / 100).toFixed(2);
+    const thresholdYuan = (account.lowBalanceThreshold / 100).toFixed(2);
+    const dateStr = this.clock.formatDate();
+
+    await this.notificationsService.create({
+      userId,
+      title: '预付余额不足提醒',
+      body: `您的预付账户余额 ¥${balanceYuan} 已低于提醒阈值 ¥${thresholdYuan}，请及时充值`,
+      priority: 'NORMAL' as any,
+      data: {
+        type: 'PREPAY_LOW_BALANCE',
+        prepayAccountId: account.id,
+        balance: account.balanceCache,
+        threshold: account.lowBalanceThreshold,
+        page: '/packageA/bill-detail/bill-detail',
+        templateData: {
+          thing1: { value: '预付账户余额不足' },
+          amount2: { value: `¥${balanceYuan}` },
+          time3: { value: dateStr },
+          thing4: { value: '请及时充值以免影响水电正常使用' },
+        },
+      },
+      dedupKey: `LOW_BALANCE:${userId}:${account.id}:${dateStr}`,
+    }).catch((err) => {
+      this.logger.error(`下发低余额提醒失败: ${err.message}`);
+    });
+
+    await this.prisma.prepayAccount.update({
+      where: { id: account.id },
+      data: { lastNotifiedAt: new Date() },
+    });
+
+    return true;
+  }
+
+  /** 收据号：R{业务日}{6 位序号}；序列由数据库原子分配。 */
+  private async nextReceiptNumber(tx: Prisma.TransactionClient): Promise<string | null> {
+    const raw = tx as unknown as { $queryRaw: Function };
+    if (typeof raw.$queryRaw !== 'function') return null;
+    try {
+      const rows = await raw.$queryRaw(Prisma.sql`SELECT nextval('payment_receipt_seq') AS nextval`);
+      const row = Array.isArray(rows) ? (rows[0] as { nextval?: bigint | number } | undefined) : undefined;
+      const sequence = Number(row?.nextval ?? 0);
+      if (!sequence) return null;
+      return `R${this.clock.formatDate().replace(/-/g, '')}${String(sequence).padStart(6, '0')}`;
+    } catch {
+      return null;
+    }
   }
 }

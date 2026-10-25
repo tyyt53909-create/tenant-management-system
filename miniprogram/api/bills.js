@@ -64,6 +64,15 @@ export const queryWechatPaymentStatus = (billId, data) => {
 }
 
 /**
+ * 使用预付账户余额抵扣账单
+ * @param {string} billId - 账单 ID
+ * @param {{ amount?: number, idempotencyKey?: string }} [data]
+ */
+export const payBillWithPrepay = (billId, data) => {
+  return request.post(`/bills/${billId}/pay/prepay`, data || {})
+}
+
+/**
  * 获取整张账单的电子收款收据
  * @param {string} billId - 账单 ID
  */

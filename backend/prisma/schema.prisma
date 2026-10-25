@@ -141,6 +141,7 @@ enum PaymentMethod {
   BANK_TRANSFER // 银行转账
   WECHAT // 微信
   ALIPAY // 支付宝
+  PREPAY // 预付余额抵扣
   OTHER // 其他
 }
 
@@ -152,11 +153,21 @@ enum PrepayTransactionType {
   ADJUSTMENT // 调整（管理员手动）
 }
 
+// 预付线上充值订单状态
+enum PrepayOrderStatus {
+  PENDING // 待支付
+  SUCCESS // 支付成功已入账
+  FAILED // 支付失败
+  CANCELLED // 已取消/超时
+}
+
 // 关联类型
 enum RelatedType {
   METER_READING // 关联读数
   CHECKOUT // 关联退租
   MANUAL_ADJUSTMENT // 手动调整
+  ONLINE_RECHARGE // 线上充值
+  BILL_DEDUCTION // 账单抵扣
 }
 
 // 水电表类型
@@ -426,6 +437,7 @@ model Tenant {
 
   contracts           Contract[]
   prepayAccounts      PrepayAccount[]
+  prepayRechargeOrders PrepayRechargeOrder[]
   maintenanceRequests MaintenanceRequest[]
   registration        TenantRegistration?
   tags                TenantTag[]
@@ -770,7 +782,8 @@ model PrepayAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  transactions PrepayTransaction[]
+  transactions   PrepayTransaction[]
+  rechargeOrders PrepayRechargeOrder[]
 
   @@unique([tenantId, roomId])
   @@index([tenantId])
@@ -799,6 +812,33 @@ model PrepayTransaction {
   @@index([accountId, createdAt])
   @@index([relatedId, relatedType])
   @@map("prepay_transactions")
+}
+
+// 12.1 PrepayRechargeOrder（预付线上充值单）
+model PrepayRechargeOrder {
+  id        String        @id @default(cuid())
+  accountId String
+  account   PrepayAccount @relation(fields: [accountId], references: [id])
+  tenantId  String
+  tenant    Tenant        @relation(fields: [tenantId], references: [id])
+
+  amount        Int
+  outTradeNo    String            @unique
+  transactionId String?
+  status        PrepayOrderStatus @default(PENDING)
+  channel       String            @default("WECHAT")
+  paidAt        DateTime?
+  receiptNumber String?           @unique
+
+  operatorId  String
+  rawResponse Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId, createdAt])
+  @@index([tenantId, status])
+  @@map("prepay_recharge_orders")
 }
 
 // 13. Meter（水电表）

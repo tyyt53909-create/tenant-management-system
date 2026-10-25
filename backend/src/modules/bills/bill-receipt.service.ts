@@ -20,6 +20,7 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   ALIPAY: '支付宝',
   BANK_TRANSFER: '银行转账',
   CASH: '现金',
+  PREPAY: '预付抵扣',
   OTHER: '其他',
 };
 

@@ -46,6 +46,7 @@ describe('WechatPaymentService (T293 / PAY-01)', () => {
       billPaymentService,
       paymentProvider,
       configService,
+      { handleRechargeNotify: vi.fn() } as never,
     );
   });
 

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res, Headers } from '@nestjs/common';
 import type { Response } from 'express';
 import { BillsService } from './bills.service.js';
+import { BillPaymentService } from './bill-payment.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
@@ -9,6 +10,7 @@ import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { VoidPaymentDto } from './dto/void-payment.dto.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { CreateRefundDto } from './dto/create-refund.dto.js';
+import { PrepayPayBillDto } from './dto/prepay-pay-bill.dto.js';
 import { WechatJsapiPayDto, WechatPayQueryDto } from './dto/wechat-pay.dto.js';
 import { WechatPaymentService } from './payment/wechat-payment.service.js';
 import { PaymentRefundService } from './payment/payment-refund.service.js';
@@ -27,6 +29,7 @@ export class BillsController {
     private readonly clock: BusinessClock,
     private readonly wechatPaymentService: WechatPaymentService,
     private readonly paymentRefundService: PaymentRefundService,
+    private readonly billPaymentService: BillPaymentService,
   ) {}
 
   @Post()
@@ -264,6 +267,23 @@ export class BillsController {
   ) {
     const user = resolveAuthUser(userParam);
     return this.wechatPaymentService.queryAndSyncPayment(id, user.userId, user.role, dto);
+  }
+
+  // 预付余额抵扣账单（租客/管理者）
+  @Post(':id/pay/prepay')
+  @UseGuards(RolesGuard)
+  @Roles('TENANT', 'ADMIN')
+  payWithPrepay(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto?: PrepayPayBillDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.billPaymentService.payWithPrepay(id, dto ?? {}, {
+      userId: user.userId,
+      role: user.role,
+      tenantId: user.tenantId,
+    });
   }
 
   // 申请原路退款（仅管理者）

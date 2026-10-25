@@ -272,6 +272,15 @@
   },
   {
     "method": "POST",
+    "path": "/api/bills/:id/pay/prepay",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
     "path": "/api/bills/:id/pay/wechat-jsapi",
     "public": false,
     "roles": [
@@ -1143,6 +1152,14 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/api/prepay-accounts/:id/recharge/wechat-jsapi",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/api/prepay-accounts/:id/transactions",
     "public": false,
@@ -1161,6 +1178,24 @@
   {
     "method": "GET",
     "path": "/api/prepay-accounts/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/prepay-accounts/my/recharge/wechat-jsapi",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/prepay-accounts/my/recharge/wechat-query",
     "public": false,
     "roles": [
       "TENANT",
