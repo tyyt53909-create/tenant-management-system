@@ -161,7 +161,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { formatMoney, formatDateOnly } from '@/utils/table';
+import { formatMoney } from '@/utils/table';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Wallet, Ticket, ArrowDown } from '@element-plus/icons-vue';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
@@ -178,6 +178,23 @@ import { getBills, deleteBill } from '@/api/bills';
 import type { Bill, LateFee } from '@/types';
 import { usePagedTable } from '@/composables';
 import { notifyApiError } from '@/utils/notify';
+import {
+  BILL_STATUS_LABEL as statusMap,
+  BILL_STATUS_TAG as statusTypeMap,
+  BILL_TYPE_LABEL as billTypeMap,
+  canReceive,
+  formatMonthDay,
+  lateFeeDisabledReason,
+  isLateFeeConfirmed,
+  lateFeeDisplayAmount,
+  lateFeeStateOf,
+  overdueDaysOf,
+  paymentSummary,
+  paymentTitle,
+  showOverdue,
+  summaryToLateFee,
+  unpaidOf,
+} from '@/utils/billRow';
 
 const detailVisible = ref(false);
 const detailId = ref('');
@@ -200,104 +217,11 @@ const lateFeeDialogVisible = ref(false);
 const lateFeeBill = ref<Bill | null>(null);
 const lateFeeMap = ref<Record<string, LateFee[]>>({});
 
-const billTypeMap: Record<string, string> = {
-  RENT: '租金',
-  UTILITY: '水电费',
-  OTHER: '其他',
-};
-
-const statusMap: Record<string, string> = {
-  PENDING: '待支付',
-  PARTIAL: '部分支付',
-  PAID: '已支付',
-  OVERDUE: '已逾期',
-  CANCELLED: '已取消',
-};
-
-const statusTypeMap: Record<string, any> = {
-  PENDING: 'warning',
-  PARTIAL: 'info',
-  PAID: 'success',
-  OVERDUE: 'danger',
-  CANCELLED: 'info',
-};
-
-const isLateFeeConfirmed = (fee: LateFee | null): boolean =>
-  !!fee && fee.confirmedAmount !== null && fee.confirmedAmount !== undefined;
-
-const outstandingOf = (fee: LateFee | null) => {
-  if (!fee || fee.confirmedAmount === null || fee.confirmedAmount === undefined) return 0;
-  return Math.max(0, fee.confirmedAmount - (fee.settledAmount ?? 0));
-};
-
 const lateFeeOf = (bill: Bill): LateFee | null => lateFeeMap.value[bill.id]?.[0] ?? null;
-
-const lateFeeDisplayAmount = (fee: LateFee | null) =>
-  fee ? (fee.confirmedAmount ?? fee.suggestedAmount) : 0;
-
-const overdueDaysOf = (bill: Bill) => {
-  const due = new Date(bill.dueDate);
-  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.max(0, Math.floor((today - dueDay) / 86400000));
-};
+const canManageLateFee = (bill: Bill | null) => lateFeeDisabledReason(bill) === '';
+const canOpenLateFee = (bill: Bill) => !!lateFeeOf(bill) || canManageLateFee(bill);
 
 const isOverdueByDate = (bill: Bill) => overdueDaysOf(bill) > 0;
-
-const unpaidOf = (bill: Bill) => Math.max(0, bill.amount - bill.paidAmount);
-
-const showOverdue = (bill: Bill) =>
-  bill.isOverdue === true ||
-  (['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status) && isOverdueByDate(bill));
-
-const formatMonthDay = (value: unknown) => {
-  const date = formatDateOnly(value);
-  return date === '—' ? date : date.slice(5);
-};
-
-const paymentSummary = (bill: Bill) => {
-  const unpaid = unpaidOf(bill);
-  if (unpaid <= 0) return '已结清';
-  if (bill.paidAmount <= 0) return `未付 ${formatMoney(unpaid)}`;
-  return `已付 ${formatMoney(bill.paidAmount)} / 未付 ${formatMoney(unpaid)}`;
-};
-
-const paymentTitle = (bill: Bill) =>
-  `已付 ${formatMoney(bill.paidAmount)} / 未付 ${formatMoney(unpaidOf(bill))}`;
-
-const lateFeeDisabledReason = (bill: Bill | null): string => {
-  if (!bill) return '';
-  if (bill.status === 'PAID') return '账单已缴清，不可新增滞纳金';
-  if (bill.status === 'CANCELLED') return '账单已取消，不可新增滞纳金';
-  if (!isOverdueByDate(bill)) return '账单尚未逾期，无需计算滞纳金';
-  if (bill.amount - bill.paidAmount <= 0) return '账单已缴清，无需计算滞纳金';
-  return '';
-};
-
-const canManageLateFee = (bill: Bill | null) => !!bill && lateFeeDisabledReason(bill) === '';
-const canOpenLateFee = (bill: Bill) => !!lateFeeOf(bill) || canManageLateFee(bill);
-const canReceive = (bill: Bill | null) =>
-  !!bill && ['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status);
-
-const lateFeeStateOf = (fee: LateFee | null): { text: string; type: 'info' | 'warning' | 'success'; tip: string } => {
-  if (!fee) return { text: '—', type: 'info', tip: '暂无滞纳金' };
-  if (!isLateFeeConfirmed(fee)) {
-    return { text: '未确认', type: 'info', tip: '系统建议值，尚未入账；管理者确认后才计入应收' };
-  }
-  if (fee.confirmedAmount === 0) {
-    return { text: '已减免', type: 'info', tip: '管理者已确认减免，滞纳金不入账' };
-  }
-  if (outstandingOf(fee) <= 0) {
-    return { text: '已核销', type: 'success', tip: '已确认 ' + formatMoney(fee.confirmedAmount) + '，收款时已全额核销' };
-  }
-  return {
-    text: '已确认',
-    type: 'warning',
-    tip: '已确认入账 ' + formatMoney(fee.confirmedAmount) + '，未核销 ' + formatMoney(outstandingOf(fee)),
-  };
-};
-
 const showLateFee = (bill: Bill) =>
   !!lateFeeOf(bill) || (isOverdueByDate(bill) && canManageLateFee(bill));
 
@@ -321,27 +245,6 @@ const lateFeeTextOf = (bill: Bill) => {
 const lateFeeTitleOf = (bill: Bill) => {
   const fee = lateFeeOf(bill);
   return fee ? lateFeeStateOf(fee).tip : '逾期账单：点击计算滞纳金';
-};
-
-const summaryToLateFee = (bill: Bill): LateFee | null => {
-  const s = bill.lateFeeSummary;
-  if (!s || s.status === 'none') return null;
-  const confirmed = s.status !== 'suggested';
-  return {
-    id: 'summary-' + bill.id,
-    billId: bill.id,
-    suggestedAmount: s.suggestedAmount,
-    confirmedAmount: confirmed ? s.amount : null,
-    overdueDays: s.overdueDays,
-    calculation: null,
-    notes: null,
-    confirmedAt: null,
-    confirmedBy: null,
-    settledAmount: s.settledAmount,
-    settledAt: null,
-    settledBy: null,
-    createdAt: '',
-  } as unknown as LateFee;
 };
 
 const applySummaries = (bills: Bill[]) => {
