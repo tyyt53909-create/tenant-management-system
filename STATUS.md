@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `develop`
-> 集成基準: `origin/develop` @ `3523b29`
+> 集成基準: `origin/develop` @ `99dd755`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -36,24 +36,20 @@
 
 | 狀態 | 數量 |
 |---|---|
-| 已驗證完成 | 35 |
+| 已驗證完成 | 40 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 5 |
+| 進行中 | 0 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- **T284 公告与定向消息（COM-04）**（active，plan COM-04，`feature/T284-com-04-announcements`）
-- **T285 前端请求层一致性（COM-05）**（active，plan COM-05，`feature/T285-com-05-errors`）
-- **T286 管理后台角色路由、型别化 API、拆分大组件（FE-01）**（active，plan FE-01，`feature/T286-fe-01-rbac`）
-- **T287 小程序工程化：分包、隐私、型别、页面测试（FE-02）**（active，plan FE-02，`feature/T287-fe-02-miniprogram`）
-- **T288 依赖注入清理与大服务拆分（QLT-02）**（active，plan QLT-02，`feature/T288-qlt-02-di`）
+- 無
 
 ### 阻擋發布
 - 無
@@ -85,7 +81,7 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 60 | 41 | 34 | 5 | 14 |
+| 未分類 | 60 | 46 | 39 | 0 | 14 |
 
 ---
 
