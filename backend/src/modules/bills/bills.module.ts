@@ -1,27 +1,64 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BillsService } from './bills.service.js';
 import { BillPaymentService } from './bill-payment.service.js';
 import { BillLateFeeService } from './bill-late-fee.service.js';
 import { BillReceiptService } from './bill-receipt.service.js';
 import { BillsController } from './bills.controller.js';
+import { PaymentsController } from './payments.controller.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
 import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
+import { MockPaymentProvider } from './payment/mock-payment.provider.js';
+import { WechatPaymentProvider } from './payment/wechat-payment.provider.js';
+import { WechatPaymentService } from './payment/wechat-payment.service.js';
 
 @Module({
-  imports: [PrismaModule],
-  controllers: [BillsController],
+  imports: [PrismaModule, ConfigModule],
+  controllers: [BillsController, PaymentsController],
   providers: [
     BillsService,
     BillPaymentService,
     BillLateFeeService,
     BillReceiptService,
+    WechatPaymentService,
     {
-      // 当前只有线下收款通道；接入微信支付时在这里换实现，调用方无需改动。
+      // 微信支付直连商户（DEC-04）/ 模拟器通道
       provide: PAYMENT_PROVIDER,
-      useFactory: (): PaymentProvider => new OfflinePaymentProvider(),
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): PaymentProvider => {
+        const isMock =
+          config.get<string>('WECHAT_PAY_MOCK') === 'true' ||
+          (config.get<string>('NODE_ENV') !== 'production' &&
+            !config.get<string>('WECHAT_PAY_MCH_ID'));
+
+        if (isMock) {
+          return new MockPaymentProvider();
+        }
+
+        const mchId = config.get<string>('WECHAT_PAY_MCH_ID');
+        if (mchId) {
+          return new WechatPaymentProvider({
+            appId: config.get<string>('WECHAT_APPID') || '',
+            mchId,
+            serialNo: config.get<string>('WECHAT_PAY_SERIAL_NO'),
+            privateKey: config.get<string>('WECHAT_PAY_PRIVATE_KEY'),
+            apiV3Key: config.get<string>('WECHAT_PAY_API_V3_KEY'),
+            notifyUrl: config.get<string>('WECHAT_PAY_NOTIFY_URL'),
+          });
+        }
+
+        return new OfflinePaymentProvider();
+      },
     },
   ],
-  exports: [BillsService, BillPaymentService, BillLateFeeService, BillReceiptService],
+  exports: [
+    BillsService,
+    BillPaymentService,
+    BillLateFeeService,
+    BillReceiptService,
+    WechatPaymentService,
+    PAYMENT_PROVIDER,
+  ],
 })
 export class BillsModule {}

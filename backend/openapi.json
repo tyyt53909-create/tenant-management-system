@@ -7144,6 +7144,154 @@
         ]
       }
     },
+    "/api/bills/{id}/pay/wechat-jsapi": {
+      "post": {
+        "operationId": "BillsController_payWithWechatJsapi",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WechatJsapiPayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Bills"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/bills/{id}/pay/wechat-query": {
+      "post": {
+        "operationId": "BillsController_queryWechatPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WechatPayQueryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Bills"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/payments/wechat/notify": {
+      "post": {
+        "operationId": "PaymentsController_handleWechatNotify",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "微信支付结果通知回调 (API v3)",
+        "tags": [
+          "Payments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/jobs/stats": {
       "get": {
         "operationId": "JobsController_stats",
@@ -11468,6 +11616,28 @@
             "type": "string"
           }
         }
+      },
+      "WechatJsapiPayDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "支付金额（单位：分，可选；不传则默认为该账单当前待缴金额）",
+            "minimum": 1
+          }
+        }
+      },
+      "WechatPayQueryDto": {
+        "type": "object",
+        "properties": {
+          "outTradeNo": {
+            "type": "string",
+            "description": "商户订单号 (out_trade_no)"
+          }
+        },
+        "required": [
+          "outTradeNo"
+        ]
       },
       "DepositAmountDto": {
         "type": "object",

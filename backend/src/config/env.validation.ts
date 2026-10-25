@@ -80,6 +80,7 @@ export function checkEnvironment(env: Record<string, unknown>): EnvCheck {
     'FEATURE_METER_SIMULATOR',
     'WECHAT_AUTH_MOCK',
     'SMS_MOCK',
+    'WECHAT_PAY_MOCK',
   ] as const) {
     if (productionLike && read(env, key) === 'true') {
       errors.push(`生产/预发环境禁止 ${key}=true`);
