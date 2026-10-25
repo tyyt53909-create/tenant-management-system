@@ -39,6 +39,33 @@ export const loginWithEmailCode = (data) => {
 }
 
 /**
+ * 发送手机短信验证码 (OTP)
+ * @param {{ phone: string }} data
+ * @returns {Promise<{ message: string, cooldown?: number }>}
+ */
+export const sendSmsCode = (data) => {
+  return request.post('/auth/send-sms-code', data)
+}
+
+/**
+ * 手机短信验证码登录（首次登录必须携带邀请码，DEC-03 不再自动注册）
+ * @param {{ phone: string, code: string, inviteCode?: string }} data
+ * @returns {Promise<LoginResponse & { isNewUser: boolean }>}
+ */
+export const loginWithSmsCode = (data) => {
+  return request.post('/auth/login-sms-code', data)
+}
+
+/**
+ * 登录用户绑定手机号
+ * @param {{ phone: string, code: string }} data
+ * @returns {Promise<{ success: boolean, message: string, phone: string }>}
+ */
+export const bindPhoneSms = (data) => {
+  return request.post('/auth/bind-phone-sms', data)
+}
+
+/**
  * 绑定/兑换房源邀请码
  * @param {{ inviteCode: string }} data
  * @returns {Promise<{ message: string, tenantId?: string, roomId?: string }>}

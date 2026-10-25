@@ -1,15 +1,22 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import type { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { EmailOtpService } from './email-otp.service.js';
+import { SmsOtpService } from './sms-otp.service.js';
 import { JwtAuthService } from './jwt.service.js';
 import { InviteCodeService } from './invite-code.service.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
+import { SendSmsCodeDto, LoginSmsCodeDto, BindPhoneSmsDto } from './dto/sms-otp.dto.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import { claimPreCreatedTenant } from './pre-created-tenant.js';
-import { decideInviteClaim } from './claim-invite.js';
+import { decideInviteClaim, decidePhoneInviteClaim } from './claim-invite.js';
 
 interface AuthenticatedUser {
   id: string;
@@ -27,6 +34,7 @@ export class FederatedAuthService {
     private readonly emailOtpService: EmailOtpService,
     private readonly jwtService: JwtAuthService,
     private readonly inviteCodeService: InviteCodeService,
+    private readonly smsOtpService: SmsOtpService,
   ) {}
 
   getGoogleClientId() {
@@ -254,6 +262,162 @@ export class FederatedAuthService {
     };
   }
 
+  async sendSmsCode(dto: SendSmsCodeDto) {
+    if (!this.smsOtpService) {
+      throw new BadRequestException('短信服务暂未启用');
+    }
+    const result = await this.smsOtpService.sendCode(dto.phone);
+    return {
+      message: '验证码已发送至您的手机，5分钟内有效',
+      cooldown: result.cooldown,
+    };
+  }
+
+  async loginWithSmsCode(dto: LoginSmsCodeDto) {
+    if (!this.smsOtpService) {
+      throw new BadRequestException('短信服务暂未启用');
+    }
+    const isValid = await this.smsOtpService.verifyCode(dto.phone, dto.code);
+    if (!isValid) {
+      throw new BadRequestException('验证码错误或已过期');
+    }
+
+    const phone = dto.phone.trim();
+
+    // 查询用户
+    const user = await this.prisma.user.findFirst({
+      where: { phone },
+      include: { tenant: true },
+    });
+
+    let authenticatedUser: AuthenticatedUser;
+    let isNewUser = false;
+
+    if (user) {
+      if (!user.isActive) {
+        throw new ForbiddenException('账号已被禁用');
+      }
+
+      authenticatedUser = await this.prisma.$transaction(async (tx) => {
+        await this.upsertIdentity(tx, {
+          userId: user.id,
+          provider: 'PHONE',
+          providerUserId: phone,
+        });
+        return tx.user.update({
+          where: { id: user.id },
+          data: {
+            lastLoginAt: new Date(),
+          },
+        });
+      });
+    } else {
+      if (!dto.inviteCode) {
+        throw apiError(ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED);
+      }
+      const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
+      if (!validation.valid) {
+        throw apiError(ErrorCode.AUTH_INVITE_CODE_INVALID);
+      }
+      const tenant = validation.tenantId
+        ? await this.prisma.tenant.findUnique({
+            where: { id: validation.tenantId },
+            select: { id: true, email: true, phone: true, userId: true },
+          })
+        : null;
+      const claim = decidePhoneInviteClaim({
+        invite: validation,
+        verifiedPhone: phone,
+        tenant,
+      });
+
+      authenticatedUser = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            phone,
+            role: claim.kind === 'staff' ? claim.role : 'TENANT',
+            invitedBy: validation.invitedBy ?? null,
+            isActive: true,
+            lastLoginAt: new Date(),
+          },
+        });
+
+        await tx.userIdentity.create({
+          data: {
+            userId: created.id,
+            provider: 'PHONE',
+            providerUserId: phone,
+            lastUsedAt: new Date(),
+          },
+        });
+
+        if (claim.kind === 'tenant') {
+          await claimPreCreatedTenant(tx, claim.tenantId, created.id);
+        }
+
+        await this.inviteCodeService.consumeInviteCode(dto.inviteCode!, created.id, tx);
+        return created;
+      });
+      isNewUser = true;
+    }
+
+    const tokens = await this.jwtService.generateTokens({
+      sub: authenticatedUser.id,
+      role: authenticatedUser.role,
+    });
+
+    return {
+      ...tokens,
+      user: {
+        id: authenticatedUser.id,
+        email: authenticatedUser.email,
+        phone: authenticatedUser.phone,
+        role: authenticatedUser.role,
+        avatarUrl: authenticatedUser.avatarUrl,
+      },
+      isNewUser,
+    };
+  }
+
+  async bindPhoneSms(userId: string, dto: BindPhoneSmsDto) {
+    if (!this.smsOtpService) {
+      throw new BadRequestException('短信服务暂未启用');
+    }
+    const isValid = await this.smsOtpService.verifyCode(dto.phone, dto.code);
+    if (!isValid) {
+      throw new BadRequestException('验证码错误或已过期');
+    }
+
+    const phone = dto.phone.trim();
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        phone,
+        NOT: { id: userId },
+      },
+    });
+    if (existing) {
+      throw new ConflictException('该手机号已被其他账号绑定');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { phone },
+      });
+      await this.upsertIdentity(tx, {
+        userId,
+        provider: 'PHONE',
+        providerUserId: phone,
+      });
+    });
+
+    return {
+      success: true,
+      message: '手机号绑定成功！',
+      phone,
+    };
+  }
+
   async bindInviteCode(userId: string, dto: BindInviteCodeDto) {
     const validation = await this.inviteCodeService.validateInviteCode(dto.inviteCode);
     if (!validation.valid) {
@@ -323,34 +487,34 @@ export class FederatedAuthService {
     });
   }
 
-  /** 补建/刷新外部身份；EMAIL 与 GOOGLE 都走同一张表。 */
+  /** 补建/刷新外部身份；EMAIL、GOOGLE、PHONE 都走同一张表。 */
   private async upsertIdentity(
     tx: Prisma.TransactionClient,
     params: {
       userId: string;
-      provider: 'GOOGLE' | 'EMAIL';
+      provider: 'GOOGLE' | 'EMAIL' | 'PHONE' | 'WECHAT_MP';
       providerUserId: string;
-      email: string;
+      email?: string;
     },
   ): Promise<void> {
     await tx.userIdentity.upsert({
       where: {
         provider_providerUserId: {
-          provider: params.provider,
+          provider: params.provider as any,
           providerUserId: params.providerUserId,
         },
       },
       create: {
         userId: params.userId,
-        provider: params.provider,
+        provider: params.provider as any,
         providerUserId: params.providerUserId,
         email: params.email,
-        emailVerifiedAt: new Date(),
+        emailVerifiedAt: params.email ? new Date() : null,
         lastUsedAt: new Date(),
       },
       update: {
         email: params.email,
-        emailVerifiedAt: new Date(),
+        emailVerifiedAt: params.email ? new Date() : undefined,
         lastUsedAt: new Date(),
       },
     });

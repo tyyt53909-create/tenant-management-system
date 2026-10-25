@@ -47,6 +47,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { FloorPlansModule } from './modules/floor-plans/floor-plans.module.js';
 import { SpaceModule } from './modules/space/space.module.js';
 import { StaffModule } from './modules/staff/staff.module.js';
+import { SmsModule } from './modules/sms/sms.module.js';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { StaffModule } from './modules/staff/staff.module.js';
     BusinessClockModule,
     HealthModule,
     TenantCapabilitiesModule,
+    SmsModule,
     AuthModule,
     StaffModule,
     RoomsModule,

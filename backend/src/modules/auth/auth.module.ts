@@ -23,6 +23,8 @@ import { AuthService } from './auth.service.js';
 import { FederatedAuthService } from './federated-auth.service.js';
 import { WechatApiService } from './wechat-api.service.js';
 import { WechatAuthService } from './wechat-auth.service.js';
+import { SmsOtpService } from './sms-otp.service.js';
+import { SmsModule } from '../sms/sms.module.js';
 
 @Module({
   imports: [
@@ -40,6 +42,7 @@ import { WechatAuthService } from './wechat-auth.service.js';
     }),
     PrismaModule,
     RedisModule,
+    SmsModule,
     forwardRef(() => TenantCapabilitiesModule),
   ],
   controllers: [AuthController],
@@ -51,6 +54,7 @@ import { WechatAuthService } from './wechat-auth.service.js';
     InviteCodeService,
     GoogleAuthService,
     EmailOtpService,
+    SmsOtpService,
     WechatApiService,
     WechatAuthService,
     {
@@ -82,6 +86,6 @@ import { WechatAuthService } from './wechat-auth.service.js';
       },
     },
   ],
-  exports: [AuthService, FederatedAuthService, JwtAuthService, InviteCodeService, GoogleAuthService, EmailOtpService, WechatApiService, WechatAuthService, PassportModule],
+  exports: [AuthService, FederatedAuthService, JwtAuthService, InviteCodeService, GoogleAuthService, EmailOtpService, SmsOtpService, WechatApiService, WechatAuthService, PassportModule],
 })
 export class AuthModule {}

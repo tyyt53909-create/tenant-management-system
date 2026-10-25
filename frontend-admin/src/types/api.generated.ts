@@ -375,6 +375,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/send-sms-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 发送手机短信验证码 (OTP) */
+        post: operations["AuthController_sendSmsCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login-email-code": {
         parameters: {
             query?: never;
@@ -386,6 +403,40 @@ export interface paths {
         put?: never;
         /** 邮箱验证码免密登录 / 自动注册 */
         post: operations["AuthController_loginWithEmailCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/login-sms-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手机短信验证码免密登录 / 自动注册 */
+        post: operations["AuthController_loginWithSmsCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/bind-phone-sms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 登录用户通过短信验证码绑定手机号 */
+        post: operations["AuthController_bindPhoneSms"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2306,12 +2357,25 @@ export interface components {
             /** Format: email */
             email: string;
         };
+        SendSmsCodeDto: {
+            phone: string;
+        };
         LoginEmailCodeDto: {
             /** Format: email */
             email: string;
             code: string;
             /** @description 首次登录必须携带邀请码（DEC-03：禁止自动成为租客）。 */
             inviteCode?: string;
+        };
+        LoginSmsCodeDto: {
+            phone: string;
+            code: string;
+            /** @description 首次登录必须携带邀请码（DEC-03：禁止自动成为租客）。 */
+            inviteCode?: string;
+        };
+        BindPhoneSmsDto: {
+            phone: string;
+            code: string;
         };
         BindInviteCodeDto: {
             inviteCode: string;
@@ -3616,6 +3680,47 @@ export interface operations {
             };
         };
     };
+    AuthController_sendSmsCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendSmsCodeDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     AuthController_loginWithEmailCode: {
         parameters: {
             query?: never;
@@ -3626,6 +3731,88 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LoginEmailCodeDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    AuthController_loginWithSmsCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginSmsCodeDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    AuthController_bindPhoneSms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindPhoneSmsDto"];
             };
         };
         responses: {

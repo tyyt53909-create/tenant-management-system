@@ -62,3 +62,40 @@ export function decideInviteClaim(input: {
 
   return { kind: 'tenant', tenantId: tenant.id };
 }
+
+/**
+ * 手机号验证场景下的邀请码选档认领（WX-03 / T292）。
+ * 验证手机号必须严格命中预建档案的手机号。
+ */
+export function decidePhoneInviteClaim(input: {
+  invite: InviteClaimSource;
+  verifiedPhone: string;
+  tenant: ClaimTenantRecord | null;
+}): InviteClaimDecision {
+  const role = input.invite.role ?? 'TENANT';
+  if (role !== 'TENANT') {
+    if (input.invite.tenantId) {
+      throw apiError(ErrorCode.AUTH_INVITE_TARGET_MISMATCH, '职员邀请不能绑定租客档案');
+    }
+    return { kind: 'staff', role };
+  }
+
+  if (!input.invite.tenantId) {
+    throw apiError(ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED, '租客邀请必须指定预建档案');
+  }
+  const tenant = input.tenant;
+  if (!tenant || tenant.id !== input.invite.tenantId) {
+    throw apiError(ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED, '邀请指向的预建档案不存在');
+  }
+  if (tenant.userId) {
+    throw apiError(ErrorCode.AUTH_PROFILE_ALREADY_BOUND);
+  }
+
+  const verified = normalizePhone(input.verifiedPhone);
+  const tenantPhone = normalizePhone(tenant.phone);
+  if (!verified || !tenantPhone || verified !== tenantPhone) {
+    throw apiError(ErrorCode.AUTH_INVITE_TARGET_MISMATCH, '验证手机号与邀请档案不一致');
+  }
+
+  return { kind: 'tenant', tenantId: tenant.id };
+}

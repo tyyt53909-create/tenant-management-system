@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideInviteClaim } from './claim-invite.js';
+import { decideInviteClaim, decidePhoneInviteClaim } from './claim-invite.js';
 
 const tenant = {
   id: 'tenant-a',
@@ -59,5 +59,37 @@ describe('decideInviteClaim', () => {
         tenant,
       }),
     ).toEqual({ kind: 'tenant', tenantId: 'tenant-a' });
+  });
+
+  describe('decidePhoneInviteClaim', () => {
+    it('手机号与预建档案不一致时拒绝', () => {
+      expect(() =>
+        decidePhoneInviteClaim({
+          invite: { role: 'TENANT', tenantId: 'tenant-a' },
+          verifiedPhone: '13800000099',
+          tenant,
+        }),
+      ).toThrow(/不一致/);
+    });
+
+    it('手机号匹配且预建档案有效时允许认领', () => {
+      expect(
+        decidePhoneInviteClaim({
+          invite: { role: 'TENANT', tenantId: 'tenant-a' },
+          verifiedPhone: '13800000001',
+          tenant,
+        }),
+      ).toEqual({ kind: 'tenant', tenantId: 'tenant-a' });
+    });
+
+    it('档案已被认领过时拒绝', () => {
+      expect(() =>
+        decidePhoneInviteClaim({
+          invite: { role: 'TENANT', tenantId: 'tenant-a' },
+          verifiedPhone: '13800000001',
+          tenant: { ...tenant, userId: 'other-user' },
+        }),
+      ).toThrow();
+    });
   });
 });

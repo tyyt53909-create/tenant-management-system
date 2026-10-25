@@ -10,6 +10,7 @@ import { LoginDto } from './dto/login.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { GoogleAuthService } from './google-auth.service.js';
 import { EmailOtpService } from './email-otp.service.js';
+import { SmsOtpService } from './sms-otp.service.js';
 import { TenantCapabilityService } from '../tenant-capabilities/tenant-capability.service.js';
 import { AuthService } from './auth.service.js';
 import * as bcrypt from 'bcrypt';
@@ -24,6 +25,7 @@ describe('AuthController', () => {
   let jwtService: JwtAuthService;
   let googleAuthService: GoogleAuthService;
   let emailOtpService: EmailOtpService;
+  let smsOtpService: SmsOtpService;
   let tenantCapabilityService: TenantCapabilityService;
   let prisma: PrismaService;
   let wechatAuthService: WechatAuthService;
@@ -71,6 +73,13 @@ describe('AuthController', () => {
           },
         },
         {
+          provide: SmsOtpService,
+          useValue: {
+            sendCode: vi.fn(),
+            verifyCode: vi.fn(),
+          },
+        },
+        {
           provide: TenantCapabilityService,
           useValue: {
             getEffectiveCapabilities: vi.fn().mockResolvedValue(['tenant.contract.read', 'tenant.bill.read']),
@@ -111,8 +120,9 @@ describe('AuthController', () => {
             otp: EmailOtpService,
             jwt: JwtAuthService,
             invite: InviteCodeService,
-          ) => new FederatedAuthService(prisma, google, otp, jwt, invite),
-          inject: [PrismaService, GoogleAuthService, EmailOtpService, JwtAuthService, InviteCodeService],
+            smsOtp: SmsOtpService,
+          ) => new FederatedAuthService(prisma, google, otp, jwt, invite, smsOtp),
+          inject: [PrismaService, GoogleAuthService, EmailOtpService, JwtAuthService, InviteCodeService, SmsOtpService],
         },
         // Cookie 的 Secure 标志由 ConfigService 决定（生产环境 true）
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'development' }) },
@@ -133,6 +143,7 @@ describe('AuthController', () => {
     jwtService = module.get<JwtAuthService>(JwtAuthService);
     googleAuthService = module.get<GoogleAuthService>(GoogleAuthService);
     emailOtpService = module.get<EmailOtpService>(EmailOtpService);
+    smsOtpService = module.get<SmsOtpService>(SmsOtpService);
     tenantCapabilityService = module.get<TenantCapabilityService>(TenantCapabilityService);
     prisma = module.get<PrismaService>(PrismaService);
     wechatAuthService = module.get<WechatAuthService>(WechatAuthService);
@@ -1023,6 +1034,70 @@ describe('AuthController', () => {
           where: { id: 'tenant-user-1' },
           data: { invitedBy: 'admin-inviter' },
         });
+      });
+    });
+
+    describe('sendSmsCode (WX-03 / T292)', () => {
+      it('成功调用 smsOtpService.sendCode 并返回冷却时间', async () => {
+        vi.spyOn(smsOtpService, 'sendCode').mockResolvedValue({ cooldown: 60 });
+
+        const res = await controller.sendSmsCode({ phone: '13800000001' });
+        expect(res.cooldown).toBe(60);
+        expect(res.message).toContain('验证码已发送');
+        expect(smsOtpService.sendCode).toHaveBeenCalledWith('13800000001');
+      });
+    });
+
+    describe('loginWithSmsCode (WX-03 / T292)', () => {
+      it('验证码错误应抛出 BadRequestException', async () => {
+        vi.spyOn(smsOtpService, 'verifyCode').mockResolvedValue(false);
+
+        await expect(
+          controller.loginWithSmsCode({ phone: '13800000001', code: '000000' }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('已有正常用户验证码登录成功', async () => {
+        vi.spyOn(smsOtpService, 'verifyCode').mockResolvedValue(true);
+        const mockUser = {
+          id: 'user-sms-exist',
+          phone: '13800000001',
+          email: null,
+          role: 'TENANT',
+          isActive: true,
+          avatarUrl: null,
+        };
+        vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
+        stubOtpTransaction(mockUser);
+
+        const res = await controller.loginWithSmsCode({
+          phone: '13800000001',
+          code: '123456',
+        });
+
+        expect(res.accessToken).toBe('otp-access-token');
+        expect(res.isNewUser).toBe(false);
+      });
+    });
+
+    describe('bindPhoneSms (WX-03 / T292)', () => {
+      it('绑定手机号成功', async () => {
+        vi.spyOn(smsOtpService, 'verifyCode').mockResolvedValue(true);
+        vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+        vi.spyOn(prisma, '$transaction').mockImplementation(async (callback: any) =>
+          callback({
+            user: { update: vi.fn().mockResolvedValue({}) },
+            userIdentity: { upsert: vi.fn().mockResolvedValue({}) },
+          }),
+        );
+
+        const res = await controller.bindPhoneSms(
+          { user: { userId: 'u1' } },
+          { phone: '13988888888', code: '123456' },
+        );
+
+        expect(res.success).toBe(true);
+        expect(res.phone).toBe('13988888888');
       });
     });
   });

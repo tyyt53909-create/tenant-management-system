@@ -213,6 +213,7 @@ enum IdentityProvider {
   GOOGLE
   EMAIL
   WECHAT_MP
+  PHONE
 }
 
 // 邀请码状态
