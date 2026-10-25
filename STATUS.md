@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
 > 分支: `feature/T323-financial-audit`
-> 集成基準: `origin/develop` @ `51fd04d`
+> 集成基準: `origin/develop` @ `0b56a62`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -36,29 +36,20 @@
 
 | 狀態 | 數量 |
 |---|---|
-| 已驗證完成 | 40 |
+| 已驗證完成 | 50 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 10 |
+| 進行中 | 0 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
-- **T289 共享套件——API client、错误码、标签、金额工具（QLT-04）**（active，plan QLT-04，`feature/T289-qlt-04-shared-kit`）
-- **T315 修复基准与问题清单（R00 / QLT-05）**（active，plan QLT-05，`feature/T315-repair-baseline`）
-- **T316 整合测试环境保护（R01 / QLT-05）**（active，plan QLT-05，`feature/T316-int-harness-guard`）
-- **T317 租客身份认领（R02 / SEC-04）**（active，plan SEC-04，`feature/T317-tenant-claim`）
-- **T318 账单写入与收款幂等（R05 / FIN-05）**（active，plan FIN-05，`feature/T318-bill-write-guard`）
-- **T319 租金计费与首期补账（R06 / FIN-02）**（active，plan FIN-02，`feature/T319-rent-charge`）
-- **T320 押金冲正与退租闭环（R07 / R08）**（active，plan FIN-03，`feature/T320-deposit-checkout`）
-- **T321 会话撤销原子化（R03 / SEC-02）**（active，plan SEC-02，`feature/T321-session-atomic`）
-- **T322 WebSocket 身份与连线生命周期（R04 / COM-02）**（active，plan COM-02，`feature/T322-websocket-lifecycle`）
-- **T323 真实财务与业务审计日志（R09 / SEC-06）**（active，plan SEC-06，`feature/T323-financial-audit`）
+- 無
 
 ### 阻擋發布
 - 無
@@ -90,20 +81,20 @@
 | 階段 2 | 10 | 9 | 0 | 1 | 0 |
 | 階段 5 | 10 | 10 | 1 | 0 | 0 |
 | 優化計畫 | 33 | 33 | 0 | 0 | 0 |
-| 未分類 | 70 | 46 | 39 | 10 | 14 |
+| 未分類 | 70 | 56 | 49 | 0 | 14 |
 
 ---
 
 ## 近期交接
 
+- [交接记录：T315–T323 生产化第二轮修复批次（R00–R09）](docs/handoff/2026-10-25-T315-T323-生产化第二轮修复批次.md)
+- [交接记录：T289 共享套件（QLT-04）](docs/handoff/2026-10-25-T289-三端共享套件.md)
 - [交接记录：T288 依赖注入清理与大服务拆分（QLT-02）](docs/handoff/2026-10-25-T288-依赖注入与大服务拆分.md)
 - [交接记录：T287 小程序工程化（FE-02）](docs/handoff/2026-10-25-T287-小程序工程化.md)
 - [交接记录：T286 角色路由与组件拆分（FE-01）](docs/handoff/2026-10-25-T286-角色路由与组件拆分.md)
 - [交接记录：T285 前端请求层一致性（COM-05）](docs/handoff/2026-10-25-T285-前端请求层一致性.md)
 - [交接记录：T284 公告与定向消息（COM-04）](docs/handoff/2026-10-25-T284-公告与定向消息.md)
 - [交接记录：T283 报修工单时间线（COM-03）](docs/handoff/2026-10-25-T283-报修时间线.md)
-- [交接记录：T282 实时推送（COM-02）](docs/handoff/2026-10-25-T282-实时推送.md)
-- [交接记录：T281 性能基准与 SLO（OPS-09）](docs/handoff/2026-10-25-T281-SLO与性能基准.md)
 
 ---
 
@@ -114,7 +105,7 @@
 - 後端程式碼：**24496** 行
 - 管理後台程式碼：**31476** 行
 - 小程序程式碼：**6847** 行
-- 文件：**174** 份
+- 文件：**176** 份
 
 ### 測試
 - 後端單元：137 files / 1281 tests
