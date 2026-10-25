@@ -601,6 +601,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications/wechat/subscribe-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationsController_reportSubscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/wechat/subscribe-quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NotificationsController_getSubscribeQuota"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications/read-all": {
         parameters: {
             query?: never;
@@ -2382,6 +2414,11 @@ export interface components {
             /** @description 同一用户、同一业务事件的去重键。不传则允许重复。 */
             dedupKey?: string;
         };
+        SubscribeReportDto: {
+            templateId: string;
+            /** @enum {string} */
+            action: "accept" | "reject" | "ban";
+        };
         CreateTenantDto: {
             name: string;
             phone: string;
@@ -2407,7 +2444,7 @@ export interface components {
             idType: "OTHER" | "ID_CARD" | "PASSPORT";
             idNumber?: string;
             /** @enum {string} */
-            status?: "REGISTERED" | "PENDING" | "NOT_REGISTERED" | "REJECTED";
+            status?: "REGISTERED" | "REJECTED" | "PENDING" | "NOT_REGISTERED";
             notes?: string;
         };
         UpdateTenantDto: {
@@ -4266,6 +4303,80 @@ export interface operations {
     NotificationsController_unreadCount: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    NotificationsController_reportSubscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscribeReportDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    NotificationsController_getSubscribeQuota: {
+        parameters: {
+            query?: {
+                templateId?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

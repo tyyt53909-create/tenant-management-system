@@ -960,6 +960,18 @@
   },
   {
     "method": "GET",
+    "path": "/api/notifications/wechat/subscribe-quota",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/wechat/subscribe-report",
+    "public": false,
+    "roles": []
+  },
+  {
+    "method": "GET",
     "path": "/api/prepay-accounts",
     "public": false,
     "roles": [

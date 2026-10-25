@@ -61,6 +61,25 @@ describe('WechatApiService', () => {
       const phone = await service.getPhoneNumber('mock-wechat-phone:13912345678');
       expect(phone).toBe('13912345678');
     });
+
+    it('sendSubscribeMessage mock 模式下正常返回 ok', async () => {
+      const res = await service.sendSubscribeMessage({
+        touser: 'mock-openid-1',
+        templateId: 'tmpl-1',
+        data: { thing1: { value: 'test' } },
+      });
+      expect(res.errcode).toBe(0);
+    });
+
+    it('sendSubscribeMessage mock 模式遇到 mock-quota-exhausted 抛出 43101', async () => {
+      await expect(
+        service.sendSubscribeMessage({
+          touser: 'mock-quota-exhausted',
+          templateId: 'tmpl-1',
+          data: { thing1: { value: 'test' } },
+        }),
+      ).rejects.toMatchObject({ errcode: 43101 });
+    });
   });
 
   describe('真实网络请求模式', () => {
@@ -212,6 +231,73 @@ describe('WechatApiService', () => {
       // 第二次获取 token 应命中进程内存缓存
       const token = await service.getStableAccessToken();
       expect(token).toBe('mem_cached_token');
+    });
+
+    it('sendSubscribeMessage 参数不完整抛出 BadRequestException', async () => {
+      await expect(
+        service.sendSubscribeMessage({ touser: '', templateId: 't', data: {} } as any),
+      ).rejects.toThrow('订阅消息参数不完整');
+    });
+
+    it('sendSubscribeMessage 发送成功返回 errcode 0', async () => {
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('stable_token')) {
+          return {
+            json: async () => ({ access_token: 'msg_token', expires_in: 7200 }),
+          };
+        }
+        return {
+          json: async () => ({ errcode: 0, errmsg: 'ok' }),
+        };
+      });
+
+      const res = await service.sendSubscribeMessage({
+        touser: 'real_openid',
+        templateId: 'tmpl_1',
+        data: { thing1: { value: 'test' } },
+      });
+      expect(res.errcode).toBe(0);
+    });
+
+    it('sendSubscribeMessage 微信返回 40001 时强制刷新 token 并重试一次', async () => {
+      let sendCount = 0;
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('stable_token')) {
+          return {
+            json: async () => ({ access_token: 'refreshed_token', expires_in: 7200 }),
+          };
+        }
+        sendCount += 1;
+        if (sendCount === 1) {
+          return { json: async () => ({ errcode: 40001, errmsg: 'access_token expired' }) };
+        }
+        return { json: async () => ({ errcode: 0, errmsg: 'ok' }) };
+      });
+
+      const res = await service.sendSubscribeMessage({
+        touser: 'real_openid',
+        templateId: 'tmpl_1',
+        data: { thing1: { value: 'test' } },
+      });
+      expect(res.errcode).toBe(0);
+      expect(sendCount).toBe(2);
+    });
+
+    it('sendSubscribeMessage 网络异常抛出 ServiceUnavailableException', async () => {
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('stable_token')) {
+          return { json: async () => ({ access_token: 't', expires_in: 7200 }) };
+        }
+        throw new Error('connection timeout');
+      });
+
+      await expect(
+        service.sendSubscribeMessage({
+          touser: 'real_openid',
+          templateId: 'tmpl_1',
+          data: { thing1: { value: 'test' } },
+        }),
+      ).rejects.toThrow(/无法连接微信订阅消息服务/);
     });
   });
 });

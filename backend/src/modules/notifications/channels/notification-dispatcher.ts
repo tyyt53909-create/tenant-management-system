@@ -13,7 +13,7 @@ export class NotificationDispatcher {
     return new NotificationDispatcher([new InAppChannel(prisma), new EmailChannel()]);
   }
 
-  /** 显式点名渠道；否则普通通知只走站内，紧急通知再加邮件。 */
+  /** 显式点名渠道；否则普通通知只走站内，紧急通知再加邮件与微信。 */
   select(message: NotificationMessage): NotificationChannel[] {
     if (message.channels?.length) {
       const chosen = this.channels.filter((channel) => message.channels!.includes(channel.name));
@@ -22,8 +22,11 @@ export class NotificationDispatcher {
       }
       return chosen;
     }
-    return this.channels.filter((channel) =>
-      channel.name === 'in-app' || (message.priority === 'URGENT' && channel.name === 'email'),
+    return this.channels.filter(
+      (channel) =>
+        channel.name === 'in-app' ||
+        (message.priority === 'URGENT' &&
+          (channel.name === 'email' || channel.name === 'wechat')),
     );
   }
 

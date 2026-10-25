@@ -2,9 +2,11 @@ import { Injectable, NotFoundException, ForbiddenException, Optional } from '@ne
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateNotificationDto } from './dto/create-notification.dto.js';
 import { QueryNotificationsDto } from './dto/query-notifications.dto.js';
+import { SubscribeReportDto } from './dto/subscribe-report.dto.js';
 import { NotificationDispatcher } from './channels/notification-dispatcher.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { NotificationsGateway } from './notifications.gateway.js';
+import { WechatSubscribeQuotaService } from './wechat-subscribe-quota.service.js';
 
 @Injectable()
 export class NotificationsService {
@@ -18,6 +20,7 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly dispatcher: NotificationDispatcher,
     @Optional() private readonly gateway?: NotificationsGateway,
+    @Optional() private readonly quotaService?: WechatSubscribeQuotaService,
   ) {}
 
   async create(dto: CreateNotificationDto) {
@@ -107,5 +110,22 @@ export class NotificationsService {
   /** 中止指定用户的全部实时 WebSocket 连接（用户停用/撤销会话/登出）。 */
   disconnectUser(userId: string): void {
     this.gateway?.disconnectUser(userId);
+  }
+
+  /** 上报微信小程序订阅消息授权结果，管理可用额度 */
+  async reportSubscribe(userId: string, dto: SubscribeReportDto) {
+    if (!this.quotaService) {
+      return { templateId: dto.templateId, quota: 0, status: dto.action.toUpperCase() };
+    }
+    return this.quotaService.recordReport(userId, dto.templateId, dto.action);
+  }
+
+  /** 查询微信小程序订阅消息可用额度 */
+  async getSubscribeQuota(userId: string, templateId?: string) {
+    if (!this.quotaService || !templateId) {
+      return { templateId: templateId || '', quota: 0 };
+    }
+    const quota = await this.quotaService.getQuota(userId, templateId);
+    return { templateId, quota };
   }
 }

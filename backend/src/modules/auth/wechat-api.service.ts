@@ -14,6 +14,19 @@ export interface WechatSessionResult {
   unionid?: string;
 }
 
+export interface SendSubscribeMessageOptions {
+  touser: string;
+  templateId: string;
+  page?: string;
+  data: Record<string, { value: string }>;
+  miniprogramState?: 'developer' | 'trial' | 'formal';
+}
+
+export interface SendSubscribeMessageResult {
+  errcode: number;
+  errmsg: string;
+}
+
 const WECHAT_SESSION_TTL_SECONDS = 1800; // 30 分钟
 
 @Injectable()
@@ -187,6 +200,79 @@ export class WechatApiService {
     }
 
     return String(phone).trim();
+  }
+
+  /**
+   * 发送微信小程序订阅消息
+   */
+  async sendSubscribeMessage(
+    options: SendSubscribeMessageOptions,
+  ): Promise<SendSubscribeMessageResult> {
+    const { touser, templateId, page, data, miniprogramState = 'formal' } = options;
+    if (!touser || !templateId || !data) {
+      throw new BadRequestException('订阅消息参数不完整（缺少 touser、templateId 或 data）');
+    }
+
+    if (this.isMockEnabled() && (!this.appId || touser.startsWith('mock-'))) {
+      this.logger.log(`[MOCK] 发送微信订阅消息: touser=${touser}, templateId=${templateId}`);
+      if (touser === 'mock-quota-exhausted' || templateId === 'mock-quota-exhausted') {
+        const error: any = new Error('用户未授权订阅该消息或额度已用完');
+        error.errcode = 43101;
+        throw error;
+      }
+      return { errcode: 0, errmsg: 'ok' };
+    }
+
+    let token = await this.getStableAccessToken();
+    let result = await this.doSendSubscribeMessage(token, {
+      touser,
+      template_id: templateId,
+      page,
+      data,
+      miniprogram_state: miniprogramState,
+    });
+
+    // 40001 / 42001: access_token 异常，强制刷新一次并重试
+    if (result.errcode === 40001 || result.errcode === 42001) {
+      this.logger.warn('微信 access_token 失效，强制刷新后重试发送订阅消息');
+      token = await this.getStableAccessToken(true);
+      result = await this.doSendSubscribeMessage(token, {
+        touser,
+        template_id: templateId,
+        page,
+        data,
+        miniprogram_state: miniprogramState,
+      });
+    }
+
+    if (result.errcode && result.errcode !== 0) {
+      this.logger.warn(
+        `发送微信订阅消息失败: errcode=${result.errcode}, errmsg=${result.errmsg}`,
+      );
+      const error: any = new Error(
+        `微信订阅消息发送失败: [${result.errcode}] ${result.errmsg || '未知错误'}`,
+      );
+      error.errcode = result.errcode;
+      error.errmsg = result.errmsg;
+      throw error;
+    }
+
+    return { errcode: 0, errmsg: result.errmsg || 'ok' };
+  }
+
+  private async doSendSubscribeMessage(accessToken: string, body: any): Promise<any> {
+    const url = `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${encodeURIComponent(accessToken)}`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return await res.json();
+    } catch (error: any) {
+      this.logger.error(`微信 subscribe.send 网络异常: ${error.message}`);
+      throw new ServiceUnavailableException('无法连接微信订阅消息服务，请稍后重试');
+    }
   }
 
   private async doGetPhoneNumber(accessToken: string, code: string): Promise<any> {

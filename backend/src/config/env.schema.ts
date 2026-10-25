@@ -263,6 +263,9 @@ export const ENV_FIELDS: readonly EnvFieldSpec[] = [
     description: '微信模拟登录开关；生产必须为 false',
     validate: oneOf(...BOOLEAN_VALUES),
   },
+  { key: 'WECHAT_SUBSCRIBE_TEMPLATE_BILL', description: '微信订阅消息-账单通知模板ID（可选）' },
+  { key: 'WECHAT_SUBSCRIBE_TEMPLATE_MAINTENANCE', description: '微信订阅消息-报修工单模板ID（可选）' },
+  { key: 'WECHAT_SUBSCRIBE_TEMPLATE_CONTRACT', description: '微信订阅消息-合同通知模板ID（可选）' },
   {
     key: 'OTP_DEV_BYPASS',
     description: '万能验证码开关；生产必须为 false',
