@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-10-25
-> 文档总数: 169 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 113、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 181 份（含本索引与归档）
-> 任务书: 134 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 文档总数: 171 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 115、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 183 份（含本索引与归档）
+> 任务书: 135 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -51,6 +51,7 @@
 | [29-公告与定向消息.md](./29-公告与定向消息.md) | 公告与定向消息 | 事实来源类 | active | strong | backend/src/modules/announcements/**、frontend-admin/src/views/announcements/**、frontend-admin/src/api/announcements.ts | 2026-10-25 | T284：announcements 表、受众解析、幂等重发、生命周期与权限 |
 | [30-前端请求层一致性.md](./30-前端请求层一致性.md) | 前端请求层一致性 | 事实来源类 | active | strong | frontend-admin/src/utils/request.ts、frontend-admin/src/utils/apiError.ts、frontend-admin/src/utils/notify.ts | 2026-10-25 | T285：错误码驱动、统一解析、提示去重、刷新竞态按码识别 |
 | [31-管理后台角色路由与组件拆分.md](./31-管理后台角色路由与组件拆分.md) | 管理后台角色路由与组件拆分 | 事实来源类 | active | strong | frontend-admin/src/router/index.ts、frontend-admin/src/utils/access.ts、frontend-admin/src/utils/billRow.ts | 2026-10-25 | T286：meta.roles 守卫、导航过滤、型别化结算 API、账单行纯函数 |
+| [32-小程序工程化.md](./32-小程序工程化.md) | 小程序工程化：分包、隐私、类型与页面测试 | 事实来源类 | active | strong | miniprogram/pages.json、miniprogram/packageA/**、miniprogram/utils/privacy.js | 2026-10-25 | T287：主包/分包划分、预下载、隐私授权、typecheck 与页面测试 |
 
 ---
 
@@ -66,6 +67,7 @@
 
 ## 3. 任务与交接
 
+- [T287-FE-02-小程序工程化.md](../tasks/T287-FE-02-小程序工程化.md)：FE-02，小程序分包、隐私授权、类型检查与页面测试。
 - [T286-FE-01-角色路由与组件拆分.md](../tasks/T286-FE-01-角色路由与组件拆分.md)：FE-01，角色路由守卫、导航过滤、型别化 API 与账单规则抽取。
 - [T285-COM-05-前端请求层一致性.md](../tasks/T285-COM-05-前端请求层一致性.md)：COM-05，错误码驱动的前端请求层与提示去重。
 - [T284-COM-04-公告与定向消息.md](../tasks/T284-COM-04-公告与定向消息.md)：COM-04，公告表、定向受众、幂等发布与管理页面。
@@ -113,6 +115,7 @@
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-10-25-T287-小程序工程化.md](./handoff/2026-10-25-T287-小程序工程化.md)：T287，小程序分包与隐私授权。
 - [2026-10-25-T286-角色路由与组件拆分.md](./handoff/2026-10-25-T286-角色路由与组件拆分.md)：T286，角色路由与组件拆分。
 - [2026-10-25-T285-前端请求层一致性.md](./handoff/2026-10-25-T285-前端请求层一致性.md)：T285，错误码驱动与提示去重。
 - [2026-10-25-T284-公告与定向消息.md](./handoff/2026-10-25-T284-公告与定向消息.md)：T284，公告与定向消息。

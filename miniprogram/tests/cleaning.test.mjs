@@ -4,10 +4,13 @@ import { readFile } from 'node:fs/promises'
 import request from '../utils/request.js'
 import { startCleaning, completeCleaning } from '../api/index.js'
 import { ensureTenantSession, openHome, clearSession } from '../utils/session.js'
+import { resolvePageUrl } from './_page-loader.mjs'
 
 // 测试实际 Options API 脚本，使用 uni mock，不复制业务逻辑。
 async function loadPage(path) {
-  const url = new URL(path, import.meta.url)
+  // FE-02 / T287：分包页在 packageA/，主包页在 pages/；测试按逻辑名查找
+  const logical = path.replace(/^\.\.\/(?:pages|packageA)\//, '').replace(/\.vue$/, '')
+  const url = await resolvePageUrl(logical)
   const source = await readFile(url, 'utf8')
   const script = source.match(/<script>([\s\S]*?)<\/script>/)[1]
     // 业务脚本测试只替换展示组件；组件模板由 H5/微信构建校验。

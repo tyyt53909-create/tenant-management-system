@@ -1,5 +1,29 @@
 import { API_BASE_URL } from './api-config.js'
 
+/**
+ * 带后端字段的请求错误（FE-02 / T287 类型化）。
+ * 之前直接给 `Error` 挂 `statusCode` / `code` / `isNetworkError`，checkJs 无法识别。
+ * @typedef {Error & { statusCode?: number, code?: string, isNetworkError?: boolean }} RequestError
+ */
+
+/**
+ * @param {string} message
+ * @returns {RequestError}
+ */
+function requestError(message) {
+  return new Error(message)
+}
+
+/**
+ * `uni.request` 的 `res.data` 类型是 string | AnyObject | ArrayBuffer；
+ * 后端始终返回 JSON，这里统一收敛成对象，避免每个调用点各自断言。
+ * @param {unknown} data
+ * @returns {Record<string, any>}
+ */
+function asObject(data) {
+  return data && typeof data === 'object' && !Array.isArray(data) ? data : {}
+}
+
 // 并发 401 共用同一次刷新（T208）：首屏多个请求同时 401 时各自发一次刷新，会互相把对方的
 // refresh token 轮换掉。后端对同一 token 只让一个赢，输的那个若直接清空存储，会把赢家刚
 // 写入的新令牌一并清掉 → 用户被强制登出。这里让同一运行时的并发刷新共用一次请求。
@@ -21,6 +45,8 @@ function sleep(ms) {
  * 「刷新令牌正在轮换中」——这是并发竞态，不是令牌失效（T208）。
  */
 function isRotationRace(error) {
+  const code = error && /** @type {RequestError} */ (error).code
+  if (code === 'AUTH_REFRESH_ROTATING') return true
   const message = error && error.message
   return typeof message === 'string' && message.includes('正在轮换中')
 }
@@ -41,13 +67,14 @@ function refreshTokens() {
         data: { refreshToken },
         header: { 'Content-Type': 'application/json' },
         success: (res) => {
-          if (res.statusCode >= 200 && res.statusCode < 300 && res.data && res.data.accessToken) {
-            uni.setStorageSync('access_token', res.data.accessToken)
-            if (res.data.refreshToken) uni.setStorageSync('refresh_token', res.data.refreshToken)
-            resolve(res.data.accessToken)
+          const body = asObject(res.data)
+          if (res.statusCode >= 200 && res.statusCode < 300 && body.accessToken) {
+            uni.setStorageSync('access_token', body.accessToken)
+            if (body.refreshToken) uni.setStorageSync('refresh_token', body.refreshToken)
+            resolve(body.accessToken)
             return
           }
-          const error = new Error((res.data && res.data.message) || '登录已过期')
+          const error = /** @type {RequestError} */ (requestError(body.message || '登录已过期'))
           error.statusCode = res.statusCode
           reject(error)
         },
@@ -77,11 +104,12 @@ const request = (options) => {
         'Authorization': token ? `Bearer ${token}` : ''
       },
       success: (res) => {
+        const body = asObject(res.data)
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data)
         } else if (res.statusCode === 401) {
           if (options.url === '/auth/login') {
-            const message = res.data?.message || '账号或密码不正确'
+            const message = body.message || '账号或密码不正确'
             uni.showToast({ title: message, icon: 'none' })
             reject(new Error(message))
             return
@@ -111,14 +139,14 @@ const request = (options) => {
               reject(new Error('登录已过期'))
             })
         } else {
-          const message = errorText(res.data)
+          const message = errorText(body)
           uni.showToast({
             title: message,
             icon: 'none'
           })
-          const error = new Error(message)
+          const error = /** @type {RequestError} */ (requestError(message))
           error.statusCode = res.statusCode
-          error.code = errorCode(res.data)
+          error.code = errorCode(body)
           reject(error)
         }
       },
@@ -130,7 +158,7 @@ const request = (options) => {
           icon: 'none',
           duration: 2500,
         })
-        const error = new Error(message)
+        const error = /** @type {RequestError} */ (requestError(message))
         error.isNetworkError = true
         reject(error)
       }
@@ -138,6 +166,10 @@ const request = (options) => {
   })
 }
 
+/**
+ * @param {Record<string, any>} data
+ * @returns {string}
+ */
 function errorText(data) {
   if (!data) return '请求失败，请稍后重试'
   const code = data.code || ''
@@ -164,9 +196,17 @@ function errorText(data) {
   return (typeof data.message === 'string' && data.message) ? data.message : '请求失败'
 }
 
-function errorCode(data) {
-  if (data?.code) return data.code
-  if (data?.message === 'CAPABILITY_DENIED') return 'CAPABILITY_DENIED'
+/**
+ * @param {Record<string, any>} data
+ * @returns {string}
+ */
+/**
+ * @param {Record<string, any>} body
+ * @returns {string}
+ */
+function errorCode(body) {
+  if (body?.code) return body.code
+  if (body?.message === 'CAPABILITY_DENIED') return 'CAPABILITY_DENIED'
   return ''
 }
 

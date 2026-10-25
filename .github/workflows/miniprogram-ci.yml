@@ -26,6 +26,9 @@ jobs:
       - name: Test request, role routing and cleaning workflow
         working-directory: miniprogram
         run: npm test
+      - name: Type check api and utils
+        working-directory: miniprogram
+        run: npm run typecheck
       - name: Build Weixin miniprogram
         working-directory: miniprogram
         env:

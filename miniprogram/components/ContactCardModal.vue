@@ -118,7 +118,7 @@ export default {
     },
     goToContract() {
       this.close()
-      uni.navigateTo({ url: '/pages/contract/contract' })
+      uni.navigateTo({ url: '/packageA/contract/contract' })
     }
   }
 }

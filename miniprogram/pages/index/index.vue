@@ -48,7 +48,7 @@ export default {
   components: { QIcon, QCalendar, ContactCardModal, SpaceMiniMap },
   data() {
     const d = new Date()
-    return { today: `${d.getMonth() + 1}月${d.getDate()}日 · ${['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][d.getDay()]}`, greeting: d.getHours() < 12 ? '早上好' : d.getHours() < 18 ? '下午好' : '晚上好', userName: '', roomInfo: '', myRoomPosition: null, pendingBillsCount: 0, recentBills: [], repairs: [], notices: [], unreadCount: 0, loading: true, error: '', showContactModal: false, landlordContact: getLandlordContact({}, []), capabilities: uni.getStorageSync('user_capabilities') || [], services: [{ name: '账单', icon: 'bill', path: '/pages/bills/bills', tab: true }, { name: '合同', icon: 'contract', path: '/pages/contract/contract' }, { name: '报修', icon: 'repair', path: '/pages/maintenance/maintenance', tab: true }, { name: '余额', icon: 'wallet', path: '/pages/account/account' }] }
+    return { today: `${d.getMonth() + 1}月${d.getDate()}日 · ${['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][d.getDay()]}`, greeting: d.getHours() < 12 ? '早上好' : d.getHours() < 18 ? '下午好' : '晚上好', userName: '', roomInfo: '', myRoomPosition: null, pendingBillsCount: 0, recentBills: [], repairs: [], notices: [], unreadCount: 0, loading: true, error: '', showContactModal: false, landlordContact: getLandlordContact({}, []), capabilities: uni.getStorageSync('user_capabilities') || [], services: [{ name: '账单', icon: 'bill', path: '/pages/bills/bills', tab: true }, { name: '合同', icon: 'contract', path: '/packageA/contract/contract' }, { name: '报修', icon: 'repair', path: '/pages/maintenance/maintenance', tab: true }, { name: '余额', icon: 'wallet', path: '/packageA/account/account' }] }
   },
   computed: {
     calendarEvents() { return homeEvents(this.recentBills, this.repairs) },
@@ -113,9 +113,9 @@ export default {
     openContact() { this.showContactModal = true },
     copyWechat() { copyToClipboard(this.landlordContact.wechat, '微信号') },
     openService(path, tab) { if (tab) uni.switchTab({ url: path }); else uni.navigateTo({ url: path }) },
-    openEvent(event) { if (event.type === 'bill') uni.navigateTo({ url: `/pages/bill-detail/bill-detail?id=${encodeURIComponent(event.recordId)}` }); else this.openRepair(event.recordId) },
-    openRepair(id) { uni.navigateTo({ url: `/pages/maintenance/detail?id=${encodeURIComponent(id)}` }) },
-    goToContract() { uni.navigateTo({ url: '/pages/contract/contract' }) }, goToBills() { uni.switchTab({ url: '/pages/bills/bills' }) }, goToMaintenance() { uni.switchTab({ url: '/pages/maintenance/maintenance' }) }, goToNotifications() { uni.navigateTo({ url: '/pages/notifications/notifications' }) },
+    openEvent(event) { if (event.type === 'bill') uni.navigateTo({ url: `/packageA/bill-detail/bill-detail?id=${encodeURIComponent(event.recordId)}` }); else this.openRepair(event.recordId) },
+    openRepair(id) { uni.navigateTo({ url: `/packageA/maintenance/detail?id=${encodeURIComponent(id)}` }) },
+    goToContract() { uni.navigateTo({ url: '/packageA/contract/contract' }) }, goToBills() { uni.switchTab({ url: '/pages/bills/bills' }) }, goToMaintenance() { uni.switchTab({ url: '/pages/maintenance/maintenance' }) }, goToNotifications() { uni.navigateTo({ url: '/packageA/notifications/notifications' }) },
   }
 }
 </script>

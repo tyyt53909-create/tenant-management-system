@@ -96,7 +96,7 @@ export default {
       }
     },
     goToNotifications() {
-      uni.navigateTo({ url: '/pages/notifications/notifications' })
+      uni.navigateTo({ url: '/packageA/notifications/notifications' })
     },
     focusTask(id) {
       this.focusedRoomId = id

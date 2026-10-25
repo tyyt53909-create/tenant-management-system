@@ -39,8 +39,12 @@ export default {
         if (!grouped.has(groupKey)) grouped.set(groupKey, { floor, buildingName, rooms: [] })
         grouped.get(groupKey).rooms.push(room)
       })
+      // 楼栋排序必须与运行环境的 ICU 数据无关：localeCompare('zh') 在部分 Node/浏览器
+      // 版本下把「二」排在「一」前面，导致本地与 CI 的用例结论不一致（FE-02 / T287）。
+      // 这里用码位比较，顺序稳定且可重复。
+      const byCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
       return [...grouped.entries()]
-        .sort(([, a], [, b]) => a.buildingName.localeCompare(b.buildingName) || a.floor - b.floor)
+        .sort(([, a], [, b]) => byCodePoint(a.buildingName, b.buildingName) || a.floor - b.floor)
         .map(([key, group]) => ({
           key,
           ...group,
