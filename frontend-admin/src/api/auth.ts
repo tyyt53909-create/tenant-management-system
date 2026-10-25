@@ -49,6 +49,7 @@ export const generateInviteCode = (data: {
   expiryDays?: number;
   notes?: string;
   role?: 'ADMIN' | 'TENANT';
+  tenantId?: string;
 }) => {
   return request.post('/auth/invite-codes', data);
 };

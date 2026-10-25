@@ -3,6 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { BillsService } from './bills/bills.service.js';
 import { CheckoutService } from './checkout/checkout.service.js';
 import { ContractsService } from './contracts/contracts.service.js';
+import { SchedulerMonthlyBillsService } from './scheduler/scheduler-monthly-bills.service.js';
 import { MaintenanceService } from './maintenance/maintenance.service.js';
 import { NotificationsService } from './notifications/notifications.service.js';
 import { PrepayService } from './prepay/prepay.service.js';
@@ -15,6 +16,7 @@ import { OfflinePaymentProvider } from './bills/payment/offline-payment.provider
 import { BusinessClock } from '../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
 import { NotificationDispatcher } from './notifications/channels/notification-dispatcher.js';
+import { AuditLogService } from './audit/audit-log.service.js';
 
 /**
  * 租客范围查询在 tenantId / userId 缺失时必须 403。
@@ -50,6 +52,7 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
         CheckoutService,
         NotificationsService,
         { provide: PrismaService, useValue: prismaMock },
+        { provide: SchedulerMonthlyBillsService, useValue: { issueDueRentBills: vi.fn() } },
         // QLT-02 / T288：NotificationsService 的 dispatcher 改为必填
         {
           provide: NotificationDispatcher,
@@ -63,8 +66,10 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
               prismaMock as never,
               new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
+              { recordEvent: vi.fn(), log: vi.fn() } as never,
             ),
         },
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
         { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },
         { provide: BillReceiptService, useFactory: () => new BillReceiptService(prismaMock as never) },
         {

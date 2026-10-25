@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CheckoutService } from './checkout.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 describe('CheckoutService', () => {
   let service: CheckoutService;
@@ -21,7 +22,7 @@ describe('CheckoutService', () => {
         delete: vi.fn(),
       },
       checkoutItem: { createMany: vi.fn(), deleteMany: vi.fn() },
-      contract: { findUnique: vi.fn(), update: vi.fn() },
+      contract: { findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null), update: vi.fn() },
       room: { findUnique: vi.fn(), update: vi.fn() },
       depositLedger: { findUnique: vi.fn().mockResolvedValue(null), update: vi.fn() },
       depositTransaction: { create: vi.fn() },
@@ -35,7 +36,11 @@ describe('CheckoutService', () => {
     }));
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CheckoutService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        CheckoutService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
+      ],
     }).compile();
 
     service = module.get<CheckoutService>(CheckoutService);
@@ -53,7 +58,7 @@ describe('CheckoutService', () => {
     } as any;
 
     it('合同与房源存在 → 事务内创建退租记录（无明细时不写明细）', async () => {
-      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1', roomId: 'room-1' });
       prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
       prisma.checkoutRecord.create.mockResolvedValue({ id: recordId });
       prisma.checkoutRecord.findUniqueOrThrow.mockResolvedValue({ id: recordId, items: [] });
@@ -78,7 +83,7 @@ describe('CheckoutService', () => {
     });
 
     it('带结算明细 → 主记录与明细在同一事务内落库（押金扣除项含类别/金额/说明）', async () => {
-      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1', roomId: 'room-1' });
       prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
       prisma.checkoutRecord.create.mockResolvedValue({ id: recordId });
       prisma.checkoutItem.createMany.mockResolvedValue({ count: 3 });
@@ -129,7 +134,7 @@ describe('CheckoutService', () => {
     });
 
     it('房源不存在 → BadRequestException', async () => {
-      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1', roomId: 'room-1' });
       prisma.room.findUnique.mockResolvedValue(null);
 
       await expect(service.create(dto)).rejects.toThrow(BadRequestException);
@@ -235,6 +240,7 @@ describe('CheckoutService', () => {
         contract: { id: 'contract-1', status: 'ACTIVE', roomId: 'room-1' },
         room: { id: 'room-1', status: 'OCCUPIED' },
       });
+      prisma.depositLedger.findUnique.mockResolvedValue({ id: 'ledger-1', balance: 0 });
       prisma.checkoutRecord.update.mockResolvedValue({ id: recordId, status: 'COMPLETED' });
       prisma.contract.update.mockResolvedValue({});
       prisma.room.findUnique.mockResolvedValue({ status: 'OCCUPIED' });

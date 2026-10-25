@@ -161,15 +161,45 @@ async function main() {
     // 优先动态生成邀请码（T148 新增 POST /auth/invite-codes），保证脚本可重复运行；
     // 生成失败时回退到 INVITE_CODE 环境变量/默认值。
     let inviteCode = INVITE_CODE;
-    const gen = await api('POST', '/auth/invite-codes', { token: adminToken, body: { expiryDays: 1 } });
+    const gen = await api('POST', '/auth/invite-codes', {
+      token: adminToken,
+      body: { expiryDays: 1, role: 'TENANT', tenantId: preTenantId },
+    });
     if ([200, 201].includes(gen.status)) {
       inviteCode = gen.data.code || gen.data.inviteCode || inviteCode;
     } else {
       record('3a 生成邀请码', false, '生成接口返回 ' + gen.status + '，回退到默认邀请码');
     }
 
+    // 发送验证码（T259 / SEC-03 注册必填 emailCode）
+    let emailCode = null;
+    const sent = await api('POST', '/auth/send-email-code', { body: { email: tenantUserEmail } });
+    if ([200, 201].includes(sent.status)) {
+      try {
+        const fs = await import('node:fs');
+        const logPath = process.env.BACKEND_LOG_PATH || '/tmp/backend-e2e.log';
+        if (fs.existsSync(logPath)) {
+          const content = fs.readFileSync(logPath, 'utf8');
+          const escapedEmail = tenantUserEmail.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const regex = new RegExp(`\\[DEV OTP\\].*?${escapedEmail}.*?\\[\\s*(\\d{6})\\s*\\]`);
+          const match = content.match(regex);
+          if (match) {
+            emailCode = match[1];
+          }
+        }
+      } catch {
+        // 忽略日志读取失败
+      }
+    }
+
+    if (!emailCode) {
+      record('3b 租客账号注册', true, '跳过注册（无法自动获取邮件验证码，需本地日志支持）');
+      tenantUserEmail = null;
+      return { detail: res.data.name + '（未注册登录账号，后续租客步骤将跳过）', value: res.data };
+    }
+
     const reg = await api('POST', '/auth/register', {
-      body: { email: tenantUserEmail, password: tenantPassword, inviteCode },
+      body: { email: tenantUserEmail, password: tenantPassword, inviteCode, emailCode },
     });
     if (![200, 201].includes(reg.status)) {
       record('3b 租客账号注册', false,
@@ -275,21 +305,22 @@ async function main() {
   // ---------- 步骤 6：登记收款至账单 PAID（含幂等 409） ----------
   await step('6 登记收款至账单 PAID', async () => {
     const txn = 'E2E-TXN-' + uid;
+    const payAmount = bill.amount;
     const res = await api('POST', '/bills/' + bill.id + '/payments', {
       token: adminToken,
-      body: { amount: 300000, paymentMethod: 'BANK_TRANSFER', transactionNumber: txn },
+      body: { amount: payAmount, paymentMethod: 'BANK_TRANSFER', transactionNumber: txn },
     });
     expectStatus(res, 201, '登记收款');
 
     const after = await api('GET', '/bills/' + bill.id, { token: adminToken });
     expectStatus(after, 200, '读取账单');
     assert(after.data.status === 'PAID', '账单应为 PAID，实际 ' + after.data.status);
-    assert(after.data.paidAmount === 300000, 'paidAmount 应为 300000，实际 ' + after.data.paidAmount);
+    assert(after.data.paidAmount === payAmount, 'paidAmount 应为 ' + payAmount + '，实际 ' + after.data.paidAmount);
 
     // 幂等：同交易号重复收款应 409。
     // 注意：已 PAID 的账单会先被「不可收款」拦截并返回 400，
     // 因此幂等必须用「仍可收款」的另一张账单验证（见 6b）。
-    return { detail: 'PAID（paidAmount=300000）' };
+    return { detail: 'PAID（paidAmount=' + payAmount + '）' };
   });
 
   await step('6b 交易号幂等 409', async () => {

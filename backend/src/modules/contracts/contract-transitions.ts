@@ -9,7 +9,7 @@ import type { CleanStatus, ContractStatus, RoomStatus } from '@prisma/client';
 export const CONTRACT_TRANSITIONS: Record<ContractStatus, readonly ContractStatus[]> = {
   DRAFT: ['ACTIVE'],
   ACTIVE: ['EXPIRED', 'TERMINATED', 'RENEWED'],
-  EXPIRED: ['RENEWED'],
+  EXPIRED: ['RENEWED', 'TERMINATED'],
   // 终态：不可逆（docs/04 §2.4）
   TERMINATED: [],
   RENEWED: [],
@@ -31,6 +31,7 @@ const ROOM_EFFECTS: Record<string, RoomEffect> = {
   'DRAFT->ACTIVE': { status: 'OCCUPIED', requiresRoomStatus: 'RESERVED' },
   // ACTIVE → TERMINATED：提前退租 → 房间退出占用并进入待清洁
   'ACTIVE->TERMINATED': { status: 'VACANT', cleanStatus: 'PENDING_CLEAN', requiresRoomStatus: 'OCCUPIED' },
+  'EXPIRED->TERMINATED': { status: 'VACANT', cleanStatus: 'PENDING_CLEAN', requiresRoomStatus: 'OCCUPIED' },
 };
 
 /** 该流转对房间的副作用；没有副作用返回 null。 */

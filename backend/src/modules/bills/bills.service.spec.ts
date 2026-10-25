@@ -61,6 +61,7 @@ describe('BillsService', () => {
               prismaMock as never,
               new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
+              { recordEvent: vi.fn(), log: vi.fn() } as never,
             ),
         },
         { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },
@@ -743,6 +744,37 @@ describe('BillsService', () => {
       });
     });
 
+    it('create：非唯一键异常应直接抛出', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.bill.create.mockRejectedValue(new Error('db connection error'));
+
+      await expect(
+        service.create({
+          contractId: 'contract-1',
+          billType: 'RENT',
+          period: '2026-11',
+          amount: 100000,
+          dueDate: '2026-11-05',
+        } as any),
+      ).rejects.toThrow('db connection error');
+    });
+
+    it('create：唯一键冲突但未查到已有记录时抛出异常', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
+      prisma.bill.create.mockRejectedValue({ code: 'P2002' });
+      prisma.bill.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create({
+          contractId: 'contract-1',
+          billType: 'RENT',
+          period: '2026-11',
+          amount: 100000,
+          dueDate: '2026-11-05',
+        } as any),
+      ).rejects.toBeDefined();
+    });
+
     it('findAll：buildingId 与账期区间同样生效（T209：此前这三个参数被静默忽略）', async () => {
       prisma.bill.findMany.mockResolvedValue([]);
       prisma.bill.count.mockResolvedValue(0);
@@ -785,6 +817,34 @@ describe('BillsService', () => {
       expect(result.meta).toEqual({ page: 2, limit: 10, total: 0, totalPages: 0 });
     });
 
+    it('findAll：支持 overdue 标识与 status=OVERDUE 兼容映射', async () => {
+      prisma.bill.findMany.mockResolvedValue([]);
+      prisma.bill.count.mockResolvedValue(0);
+
+      await service.findAll({ overdue: true } as any);
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { isOverdue: true, status: { in: ['PENDING', 'PARTIAL'] } },
+        }),
+      );
+
+      await service.findAll({ status: 'OVERDUE' as any });
+      expect(prisma.bill.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { isOverdue: true, status: { in: ['PENDING', 'PARTIAL'] } },
+        }),
+      );
+    });
+
+    it('voidPayment 代理到 paymentService', async () => {
+      const mockResult = { id: 'p1', isVoided: true };
+      vi.spyOn((service as any).paymentService, 'voidPayment').mockResolvedValue(mockResult as any);
+
+      const res = await service.voidPayment('b1', 'p1', 'op1', '误收款冲正');
+      expect(res).toBe(mockResult);
+      expect((service as any).paymentService.voidPayment).toHaveBeenCalledWith('b1', 'p1', 'op1', '误收款冲正');
+    });
+
     it('findOne：不存在 → 404', async () => {
       prisma.bill.findUnique.mockResolvedValue(null);
 
@@ -801,6 +861,17 @@ describe('BillsService', () => {
         where: { id: billId },
         data: { status: 'CANCELLED', dueDate: expect.any(Date) },
       });
+    });
+
+    it('update：已有收款的账单不可取消或改金额', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId, amount: 1000, paidAmount: 500, status: 'PARTIAL' });
+      await expect(service.update(billId, { status: 'CANCELLED' } as any)).rejects.toThrow();
+      await expect(service.update(billId, { amount: 2000 } as any)).rejects.toThrow();
+    });
+
+    it('update：非 CANCELLED 状态不可通过 PATCH 伪造', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId, amount: 1000, paidAmount: 0, status: 'PENDING' });
+      await expect(service.update(billId, { status: 'PAID' } as any)).rejects.toThrow();
     });
 
     it('update：不存在 → 404', async () => {
@@ -1074,26 +1145,13 @@ describe('BillsService', () => {
       await expect(service.findOne(billId)).resolves.toBe(bill);
     });
 
-    it('update：更新金额、已付金额及所有可选字段', async () => {
-      prisma.bill.findUnique.mockResolvedValue({ id: billId });
-      prisma.bill.update.mockResolvedValue({ id: billId });
+    it('update：不能用 PATCH 伪造实收或直接标成已缴', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId, amount: 10000, paidAmount: 0 });
 
-      await service.update(billId, {
-        amount: 12000,
-        paidAmount: 3000,
-        status: 'PARTIAL',
-        dueDate: '2026-12-15',
-      } as any);
-
-      expect(prisma.bill.update).toHaveBeenCalledWith({
-        where: { id: billId },
-        data: {
-          amount: 12000,
-          paidAmount: 3000,
-          status: 'PARTIAL',
-          dueDate: new Date('2026-12-15'),
-        },
-      });
+      await expect(
+        service.update(billId, { paidAmount: 3000, status: 'PAID' } as any),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(prisma.bill.update).not.toHaveBeenCalled();
     });
 
     it('findByTenant：未传筛选时按租客过滤，缺失租客直接返回空页', async () => {

@@ -4,6 +4,9 @@ import { loginAttemptKey } from '../modules/auth/login-attempt.store.js';
 import { RedisLoginAttemptStore } from './redis-login-attempt.store.js';
 
 class FakeRedis implements RedisCommandClient {
+  async eval(): Promise<unknown> {
+    throw new Error('unused');
+  }
   readonly values = new Map<string, { value: string; expiresAt: number }>();
 
   async connect() {

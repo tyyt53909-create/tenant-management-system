@@ -34,6 +34,12 @@ export const ERROR_CATALOG = {
   AUTH_PROFILE_ALREADY_BOUND: { status: 409, description: '预建租客档案已被绑定，请联系管理员' },
   AUTH_GOOGLE_EMAIL_UNVERIFIED: { status: 401, description: 'Google 邮箱未验证，无法登录' },
   AUTH_IDENTITY_ROLE_CONFLICT: { status: 409, description: '邀请码角色与当前账号角色不匹配' },
+  AUTH_EMAIL_UNVERIFIED: { status: 400, description: '认领前必须完成邮箱验证' },
+  AUTH_INVITE_TARGET_MISMATCH: { status: 403, description: '验证身份与邀请档案不一致' },
+  AUTH_CLAIM_REVERIFY: {
+    status: 409,
+    description: '认领未完成，验证码已失效，请重新验证后再试',
+  },
 
   PERM_FORBIDDEN: { status: 403, description: '无权限访问' },
   PERM_INSUFFICIENT_ROLE: { status: 403, description: '权限不足' },
@@ -53,6 +59,8 @@ export const ERROR_CATALOG = {
   BILL_ALREADY_PAID: { status: 422, description: '账单已缴清' },
   BILL_PAYMENT_EXCEEDS_AMOUNT: { status: 400, description: '收款金额超过应缴金额' },
   BILL_CANNOT_CANCEL: { status: 422, description: '账单当前状态不可取消' },
+  BILL_DERIVED_FIELD: { status: 409, description: '实收和结清状态只能由收款、滞纳金和冲正计算' },
+  BILL_AMOUNT_LOCKED: { status: 409, description: '已有收款的账单不能直接改额' },
 
   PREPAY_INSUFFICIENT_BALANCE: { status: 422, description: '余额不足' },
   PREPAY_INVALID_AMOUNT: { status: 400, description: '金额无效（必须为正数）' },

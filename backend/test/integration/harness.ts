@@ -1,21 +1,41 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
+import { EmailOtpService } from '../../src/modules/auth/email-otp.service.js';
+import RedisImport from 'ioredis';
+import {
+  UnsafeIntegrationTargetError,
+  assertIntegrationEnvironment,
+  resetMarkedIntegrationDatabase,
+} from './guard.js';
 
 /**
- * QLT-01 / T255：真实 PostgreSQL 的集成测试夹具。
+ * QLT-01 / T255，清空保护见 T316 / R01。
  *
  * 约定：
- * - 只允许连接 `DATABASE_URL` 指向的独立测试库（CI service / 本地 test_db）；
- * - 每个用例前 `resetDatabase()`，避免跨用例污染；
+ * - 只连接 `INTEGRATION_DATABASE_URL`。缺少时失败，不回退到 `DATABASE_URL`；
+ * - `resetDatabase()` 在标记、非超级用户和破坏性开关都通过之后才 TRUNCATE；
  * - 通过真实 HTTP + 真实 Prisma 验证，不使用 Prisma mock。
  */
 
-export const prisma = new PrismaClient();
+const integrationTarget = assertIntegrationEnvironment(process.env);
+export const prisma = new PrismaClient({
+  datasources: { db: { url: integrationTarget.databaseUrl } },
+});
+export const redis = new (RedisImport as any)(integrationTarget.redisUrl);
+
+// 集成测试共用单例 prisma。单个测试文件 afterAll 中的 $disconnect() 不提前掐断全局连接池，由进程退出时统一回收。
+const realDisconnect = prisma.$disconnect.bind(prisma);
+prisma.$disconnect = async () => {};
+process.on('beforeExit', () => {
+  void realDisconnect();
+  void redis.quit();
+});
 
 export interface SeedBase {
   buildingId: string;
@@ -31,13 +51,24 @@ export const ADMIN_PASSWORD = 'Integration@123';
 export const CLEANER_PASSWORD = 'Cleaner@123';
 
 export async function resetDatabase(): Promise<void> {
-  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
-    SELECT tablename FROM pg_tables
-    WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'
-  `;
-  if (tables.length === 0) return;
-  const list = tables.map((table) => `"${table.tablename}"`).join(', ');
-  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
+  await resetMarkedIntegrationDatabase(process.env, {
+    readMarker: () =>
+      prisma.$queryRawUnsafe<Array<{ token: string; rolsuper: boolean }>>(
+        `SELECT m.token, r.rolsuper
+         FROM integration_guard.marker m
+         CROSS JOIN pg_roles r
+         WHERE m.id = 1 AND r.rolname = current_user`,
+      ),
+    listPublicTables: async () => {
+      const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+        SELECT tablename FROM pg_tables
+        WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'
+      `;
+      return tables.map((table) => table.tablename);
+    },
+    truncate: (sql) => prisma.$executeRawUnsafe(sql).then(() => undefined),
+  });
+  await redis.flushdb();
 }
 
 export async function seedBase(): Promise<SeedBase> {
@@ -79,11 +110,18 @@ export async function seedBase(): Promise<SeedBase> {
 }
 
 export async function createApp(): Promise<INestApplication> {
+  const target = assertIntegrationEnvironment(process.env);
+  if (process.env.DATABASE_URL !== target.databaseUrl) {
+    throw new UnsafeIntegrationTargetError(
+      '应用 DATABASE_URL 与 INTEGRATION_DATABASE_URL 不一致，拒绝启动。不会回退到开发库',
+    );
+  }
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
   }).compile();
 
   const app = moduleRef.createNestApplication();
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
@@ -120,21 +158,24 @@ export interface Tenancy {
   adminToken: string;
 }
 
+let tenancySeq = 0;
+
 /** J1 的最小前置：预建租客 → 邀请码注册 → 房源 RESERVED → 合同 ACTIVE。 */
 export async function setupTenancy(app: INestApplication, base: SeedBase): Promise<Tenancy> {
+  const seq = ++tenancySeq;
   const adminToken = await login(app, base.adminEmail, base.adminPassword);
 
   const roomResponse = await http(app)
     .post('/rooms')
     .set(auth(adminToken))
-    .send({ buildingId: base.buildingId, roomNumber: `IT-${Date.now()}`, floor: 1, roomType: 'SINGLE', area: 25 });
+    .send({ buildingId: base.buildingId, roomNumber: `IT-${Date.now()}-${seq}`, floor: 1, roomType: 'SINGLE', area: 25 });
   if (roomResponse.status !== 201) {
     throw new Error(`创建房源失败: ${roomResponse.status} ${JSON.stringify(roomResponse.body)}`);
   }
   const roomId = roomResponse.body.id as string;
 
-  const phone = `139${String(Date.now()).slice(-8)}`;
-  const tenantEmail = `tenant-${Date.now()}@example.com`;
+  const phone = `139${String(Date.now() + seq).slice(-8)}`;
+  const tenantEmail = `tenant-${Date.now()}-${seq}@example.com`;
   const tenantResponse = await http(app)
     .post('/tenants')
     .set(auth(adminToken))
@@ -147,15 +188,17 @@ export async function setupTenancy(app: INestApplication, base: SeedBase): Promi
   const inviteResponse = await http(app)
     .post('/auth/invite-codes')
     .set(auth(adminToken))
-    .send({ expiryDays: 1 });
+    .send({ expiryDays: 1, role: 'TENANT', tenantId });
   const inviteCode = (inviteResponse.body.inviteCode ?? inviteResponse.body.code) as string;
   if (!inviteCode) {
     throw new Error(`生成邀请码失败: ${JSON.stringify(inviteResponse.body)}`);
   }
 
+  const emailCode = '654321';
+  await app.get(EmailOtpService).seedCodeForTests(tenantEmail, emailCode);
   const registerResponse = await http(app)
     .post('/auth/register')
-    .send({ email: tenantEmail, password: 'Tenant@123', inviteCode });
+    .send({ email: tenantEmail, password: 'Tenant@123', inviteCode, emailCode });
   if (registerResponse.status !== 201 && registerResponse.status !== 200) {
     throw new Error(`注册失败: ${registerResponse.status} ${JSON.stringify(registerResponse.body)}`);
   }

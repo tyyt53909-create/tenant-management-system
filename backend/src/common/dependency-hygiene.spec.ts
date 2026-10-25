@@ -27,6 +27,7 @@ const ALLOWED_OPTIONAL: Record<string, string> = {
   'modules/scheduler/scheduler.service.ts':
     '指标/告警/队列开关：未配置时定时任务仍同步执行，属于可选观测与部署模式',
   'modules/notifications/notifications.service.ts': 'WebSocket 网关：Worker 进程没有 WS server',
+  'modules/notifications/notifications.gateway.ts': 'PrismaService 供握手与连线核验，单测直接构造时允许缺省',
   'modules/tenant-capabilities/tenant-capability.service.ts': 'JwtAuthService 仅用于主动吊销会话，缺省不影响能力判定',
   'modules/auth/jwt.service.ts': 'REFRESH_STORE 由 AuthModule 工厂注入，单测可直接构造内存实现',
   'modules/meters/meters-simulator.service.ts': '异常模拟 runner 为可选调试入口，仅在模拟器开启时使用',

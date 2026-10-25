@@ -15,6 +15,7 @@ import {
   reverseDepositCollection,
 } from '../deposits/deposit-ledger.util.js';
 import { computeOverdue, derivePaymentStatus } from './bill-overdue.util.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 interface RawClient {
   $queryRaw?: (query: Prisma.Sql) => Promise<unknown>;
@@ -36,6 +37,7 @@ export class BillPaymentService {
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
     private readonly clock: BusinessClock,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   /**
@@ -52,11 +54,8 @@ export class BillPaymentService {
 
       const bill = await tx.bill.findUnique({ where: { id: billId } });
       if (!bill) throw new NotFoundException('账单不存在');
-      if (bill.status === 'PAID' || bill.status === 'CANCELLED') {
-        throw new BadRequestException(`账单为 ${bill.status} 状态，不可收款`);
-      }
 
-      // 幂等键：同键同账单同金额直接返回原收款
+      // 重放必须先于「已缴/已取消不可收款」，否则全额收款后的同键重试会得到 400。
       if (dto.idempotencyKey) {
         const existing = await tx.paymentRecord.findUnique({
           where: { idempotencyKey: dto.idempotencyKey },
@@ -65,12 +64,17 @@ export class BillPaymentService {
           const sameRequest =
             existing.billId === billId &&
             existing.amount === dto.amount &&
+            existing.paymentMethod === dto.paymentMethod &&
             existing.status === 'CONFIRMED';
           if (!sameRequest) {
             throw new ConflictException('幂等键已用于其他收款请求');
           }
           return { payment: existing, bill, lateFees: [], idempotent: true };
         }
+      }
+
+      if (bill.status === 'PAID' || bill.status === 'CANCELLED') {
+        throw new BadRequestException(`账单为 ${bill.status} 状态，不可收款`);
       }
 
       const unsettledFees = await tx.lateFee.findMany({
@@ -188,6 +192,26 @@ export class BillPaymentService {
         operatorId,
       });
 
+      // R09：业务交易内记录真实财务审计前后值
+      await this.auditLog?.recordEvent({
+        tx,
+        action: 'BILL_PAYMENT',
+        entityType: 'Bill',
+        entityId: billId,
+        actorId: operatorId,
+        before: { paidAmount: bill.paidAmount, status: bill.status },
+        after: { paidAmount: newPaidAmount, status: newStatus },
+        reason: dto.notes ?? dto.paymentMethod,
+        context: {
+          paymentRecordId: payment.id,
+          amount: dto.amount,
+          billPortion,
+          lateFeePortion: dto.amount - billPortion,
+          paymentMethod: dto.paymentMethod,
+          idempotencyKey: dto.idempotencyKey,
+        },
+      });
+
       return { payment, bill: updatedBill, lateFees: settledFees, idempotent: false };
     });
   }
@@ -281,6 +305,31 @@ export class BillPaymentService {
         bill: updatedBill,
         amount: payment.billPortion,
         operatorId,
+      });
+
+      // R09：业务交易内记录真实财务冲正审计前后值
+      await this.auditLog?.recordEvent({
+        tx,
+        action: 'PAYMENT_REVERSAL',
+        entityType: 'PaymentRecord',
+        entityId: payment.id,
+        actorId: operatorId,
+        before: {
+          paymentStatus: payment.status,
+          billPaidAmount: bill.paidAmount,
+          billStatus: bill.status,
+        },
+        after: {
+          paymentStatus: 'VOIDED',
+          billPaidAmount: newPaid,
+          billStatus: newStatus,
+        },
+        reason,
+        context: {
+          billId,
+          reversalRecordId: reversal.id,
+          reversalAmount: reversal.amount,
+        },
       });
 
       return { payment: voided, bill: updatedBill, reversal, idempotent: false };

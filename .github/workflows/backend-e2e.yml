@@ -113,8 +113,26 @@ jobs:
       - name: 运行 e2e-mvp 验收脚本
         run: node scripts/e2e-mvp/run.mjs
 
+      - name: 准备已标记的整合测试库（T316）
+        env:
+          ALLOW_INTEGRATION_RESET: "true"
+          # psql 不认识 Prisma 专属的 ?schema= 参数，psql 用的 URL 不能带。
+          INTEGRATION_ADMIN_DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          INTEGRATION_DATABASE_MARKER: ci-integration-marker-t316
+          INTEGRATION_TESTER_PASSWORD: integration_tester_password
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          bash backend/scripts/prepare-integration-db.sh
+
       - name: 真实 PostgreSQL 集成测试（QLT-01）
         working-directory: backend
+        env:
+          NODE_ENV: test
+          ALLOW_INTEGRATION_RESET: "true"
+          INTEGRATION_DATABASE_URL: postgresql://integration_tester:integration_tester_password@localhost:5432/test_db
+          INTEGRATION_DATABASE_MARKER: ci-integration-marker-t316
+          INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/1
         run: npm run test:int
 
       - name: 停止后端服务

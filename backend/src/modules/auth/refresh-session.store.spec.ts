@@ -34,6 +34,46 @@ class FakeRedis implements RedisCommandClient {
     if (!entry) return -2;
     return Math.max(entry.expiresAt - Date.now(), 0);
   }
+  private readonly sets = new Map<string, Set<string>>();
+  async eval(script: string, numKeys: number, ...rest: string[]) {
+    const keys = rest.slice(0, numKeys);
+    const args = rest.slice(numKeys);
+    if (script.includes('SMEMBERS') && script.includes('refresh:fence') === false && script.includes('familyId')) {
+      const members = [...(this.sets.get(keys[0]!) ?? [])];
+      for (const jti of members) {
+        const raw = await this.get(`${args[1]}refresh:jti:${jti}`);
+        if (!raw || raw.includes(`"familyId":"${args[0]}"`)) {
+          this.values.delete(`${args[1]}refresh:jti:${jti}`);
+          this.values.delete(`${args[1]}refresh:rotated:${jti}`);
+          this.sets.get(keys[0]!)?.delete(jti);
+        }
+      }
+      return 1;
+    }
+    if (script.includes('SMEMBERS')) {
+      const members = [...(this.sets.get(keys[0]!) ?? [])];
+      for (const jti of members) {
+        this.values.delete(`${args[2]}refresh:jti:${jti}`);
+        this.values.delete(`${args[2]}refresh:rotated:${jti}`);
+      }
+      this.sets.delete(keys[0]!);
+      this.values.delete(keys[0]!);
+      this.values.set(keys[1]!, { value: args[0]!, expiresAt: Date.now() + Number(args[1]) });
+      return members.length;
+    }
+    const fence = await this.get(keys[2]!);
+    const issued = Number(args[3] ?? 0);
+    if (fence && ((issued > 0 && Number(fence) >= issued) || issued === 0)) return 0;
+    await this.set(keys[0]!, args[0]!, 'PX', Number(args[1]));
+    const owned = this.sets.get(keys[1]!) ?? new Set<string>();
+    owned.add(args[2]!);
+    this.sets.set(keys[1]!, owned);
+    const current = await this.pttl(keys[1]!);
+    if (current < Number(args[1])) {
+      this.values.set(keys[1]!, { value: 'set', expiresAt: Date.now() + Number(args[1]) });
+    }
+    return 1;
+  }
   expiresAt(key: string) {
     return this.values.get(key)?.expiresAt;
   }
@@ -79,6 +119,17 @@ describe('RedisRefreshSessionStore', () => {
     await store.revokeUser('user-1');
     expect(await store.get('new')).toBeUndefined();
     expect(await store.get('old')).toBeUndefined();
+  });
+
+  it('撤销之后不能把撤销前的会话血统写回', async () => {
+    const redis = new FakeRedis();
+    const store = new RedisRefreshSessionStore(redis);
+    await store.save(activeSession({ issuedAt: 1_000 }));
+    await store.revokeUser('user-1');
+    await expect(store.save(activeSession({ jti: 'later', issuedAt: 1_000 }))).rejects.toThrow(/SESSION_REVOKED/);
+    expect(await store.get('later')).toBeUndefined();
+    await store.save(activeSession({ jti: 'fresh-login', issuedAt: Date.now() + 1_000 }));
+    expect((await store.get('fresh-login'))?.jti).toBe('fresh-login');
   });
 
   it('rotate：同一 jti 只有第一次成功，且会记下 rotatedAt（T208 并发防重）', async () => {

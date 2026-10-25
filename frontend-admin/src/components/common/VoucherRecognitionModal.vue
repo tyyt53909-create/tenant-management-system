@@ -167,6 +167,7 @@ const paymentForm = reactive({
   paymentMethod: 'WECHAT' as PaymentMethod,
   transactionNumber: '',
   notes: '微信缴费单据核销入账',
+  idempotencyKey: '',
 });
 
 // 监听打开并支持传入初始文本
@@ -277,6 +278,7 @@ async function handleConfirmPayment() {
 
   const amountCents = Math.round(paymentForm.amount * 100);
   submitting.value = true;
+  if (!paymentForm.idempotencyKey) paymentForm.idempotencyKey = crypto.randomUUID();
 
   try {
     await addPayment(result.value.billId, {
@@ -284,6 +286,7 @@ async function handleConfirmPayment() {
       paymentMethod: paymentForm.paymentMethod,
       transactionNumber: paymentForm.transactionNumber || undefined,
       notes: paymentForm.notes || undefined,
+      idempotencyKey: paymentForm.idempotencyKey,
     });
 
     ElMessage.success('收款入账成功！');

@@ -15,6 +15,7 @@ import { AuthService } from './auth.service.js';
 import * as bcrypt from 'bcrypt';
 import { LOGIN_ATTEMPT_STORE, MemoryLoginAttemptStore } from './login-attempt.store.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -90,6 +91,7 @@ describe('AuthController', () => {
             tenant: {
               create: vi.fn(),
               findFirst: vi.fn(),
+              findUnique: vi.fn(),
               update: vi.fn(),
             },
             $transaction: vi.fn(),
@@ -112,6 +114,7 @@ describe('AuthController', () => {
         },
         // Cookie 的 Secure 标志由 ConfigService 决定（生产环境 true）
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'development' }) },
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
       ],
     }).compile();
 
@@ -160,10 +163,17 @@ describe('AuthController', () => {
       email: 'test@example.com',
       password: 'password123',
       inviteCode: 'INVITE-123',
+      emailCode: '654321',
     };
 
     beforeEach(() => {
-      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue({ id: 'tenant-pre' } as any);
+      vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({
+        id: 'tenant-pre',
+        email: 'test@example.com',
+        phone: null,
+        userId: null,
+      } as any);
     });
 
     function stubRegisterSuccess(userId = 'user-123', role = 'TENANT') {
@@ -186,6 +196,7 @@ describe('AuthController', () => {
         valid: true,
         invitedBy: 'admin-123',
         role: 'TENANT',
+        tenantId: 'tenant-pre',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
       const tx = stubRegisterSuccess();
@@ -239,7 +250,7 @@ describe('AuthController', () => {
         valid: false,
       });
 
-      await expect(controller.register(dto)).rejects.toThrow(BadRequestException);
+      await expect(controller.register(dto)).rejects.toMatchObject({ status: 409 });
     });
 
     it('应该拒绝已注册的邮箱', async () => {
@@ -275,6 +286,7 @@ describe('AuthController', () => {
         valid: true,
         invitedBy: 'admin-123',
         role: 'TENANT',
+        tenantId: 'tenant-pre',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
       stubRegisterSuccess('user-invite');
@@ -290,6 +302,7 @@ describe('AuthController', () => {
         valid: true,
         invitedBy: 'admin-123',
         role: 'TENANT',
+        tenantId: 'tenant-pre',
       });
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
       stubRegisterSuccess('user-d');
@@ -315,7 +328,7 @@ describe('AuthController', () => {
       expect(result.expiryDays).toBe(30);
       expect(result.invitedBy).toBe('admin-1');
       expect(result.expiresAt).toBeInstanceOf(Date);
-      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 30, undefined, 'TENANT');
+      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 30, undefined, 'TENANT', undefined);
     });
 
     it('未指定有效期时默认 365 天', async () => {
@@ -324,16 +337,24 @@ describe('AuthController', () => {
       const result = await controller.generateInviteCode(adminReq, {} as any);
 
       expect(result.expiryDays).toBe(365);
-      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 365, undefined, 'TENANT');
+      expect(inviteCodeService.generateInviteCode).toHaveBeenCalledWith('admin-1', 365, undefined, 'TENANT', undefined);
     });
 
     it('生成的邀请码可直接用于注册', async () => {
       vi.spyOn(inviteCodeService, 'generateInviteCode').mockResolvedValue('INVITE-new');
       vi.spyOn(inviteCodeService, 'validateInviteCode').mockImplementation(async (code: string) =>
-        code === 'INVITE-new' ? { valid: true, invitedBy: 'admin-1' } : { valid: false },
+        code === 'INVITE-new'
+          ? { valid: true, invitedBy: 'admin-1', role: 'TENANT' as const, tenantId: 'tenant-pre' }
+          : { valid: false },
       );
+      vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
       vi.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
-      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue({ id: 'tenant-pre' } as any);
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({
+        id: 'tenant-pre',
+        email: 'invited@example.com',
+        phone: null,
+        userId: null,
+      } as any);
       vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
@@ -345,6 +366,7 @@ describe('AuthController', () => {
         email: 'invited@example.com',
         password: 'password123',
         inviteCode: generated.inviteCode!,
+        emailCode: '654321',
       });
 
       expect(registered.accessToken).toBe('access-token');
@@ -360,7 +382,14 @@ describe('AuthController', () => {
       expect(result.count).toBe(3);
       expect(result.expiryDays).toBe(90);
       expect(result.invitedBy).toBe('admin-1');
-      expect(inviteCodeService.generateBatchInviteCodes).toHaveBeenCalledWith('admin-1', 3, 90, '批量3个', 'TENANT');
+      expect(inviteCodeService.generateBatchInviteCodes).toHaveBeenCalledWith(
+        'admin-1',
+        3,
+        90,
+        '批量3个',
+        'TENANT',
+        undefined,
+      );
     });
 
     it('管理员查询邀请码列表：调用 inviteCodeService.findAll', async () => {
@@ -753,8 +782,14 @@ describe('AuthController', () => {
         valid: true,
         invitedBy: 'admin-id',
         role: 'TENANT',
+        tenantId: 'tenant-pre',
       });
-      vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue({ id: 'tenant-pre' } as any);
+      vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({
+        id: 'tenant-pre',
+        email: 'newuser@gmail.com',
+        phone: null,
+        userId: null,
+      } as any);
       const consumeSpy = vi
         .spyOn(inviteCodeService, 'consumeInviteCode')
         .mockResolvedValue(undefined as any);
@@ -901,8 +936,14 @@ describe('AuthController', () => {
           valid: true,
           invitedBy: 'admin-id',
           role: 'TENANT',
+          tenantId: 'tenant-pre',
         });
-        vi.spyOn(prisma.tenant, 'findFirst').mockResolvedValue({ id: 'tenant-pre' } as any);
+        vi.spyOn(prisma.tenant, 'findUnique').mockResolvedValue({
+          id: 'tenant-pre',
+          email: 'newotp@example.com',
+          phone: null,
+          userId: null,
+        } as any);
         const consumeSpy = vi
           .spyOn(inviteCodeService, 'consumeInviteCode')
           .mockResolvedValue(undefined as any);
@@ -945,6 +986,7 @@ describe('AuthController', () => {
           email: 'tenant@example.com',
           phone: '13800138000',
           role: 'TENANT',
+          emailVerifiedAt: new Date(),
           tenant: { id: 'tenant-1' },
         } as any);
         const consumeSpy = vi
@@ -968,7 +1010,7 @@ describe('AuthController', () => {
         expect(consumeSpy).toHaveBeenCalledWith('GOODCODE', 'tenant-user-1', expect.anything());
         expect(userUpdate).toHaveBeenCalledWith({
           where: { id: 'tenant-user-1' },
-          data: { invitedBy: 'admin-inviter', role: 'CLEANER' },
+          data: { invitedBy: 'admin-inviter' },
         });
       });
     });

@@ -34,6 +34,8 @@ export interface PaymentPayload {
   /** 收款时间（ISO 字符串，缺省为当前时间） */
   paidAt?: string;
   notes?: string;
+  /** 同一次逻辑收款的稳定键。超时重试必须沿用，不能每次重生成。 */
+  idempotencyKey?: string;
 }
 
 export interface PaymentRecordItem {

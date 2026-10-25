@@ -20,6 +20,7 @@ import {
   MemoryLoginAttemptStore,
 } from './login-attempt.store.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 const WRONG_PASSWORD = 'wrong-password';
 const CORRECT_PASSWORD = 'correct-password';
@@ -119,6 +120,7 @@ async function createService(
         provide: FederatedAuthService,
         useValue: { googleAuth: vi.fn(), sendEmailCode: vi.fn(), loginWithEmailCode: vi.fn(), bindInviteCode: vi.fn() },
       },
+      { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
     ],
   }).compile();
 
@@ -263,15 +265,22 @@ describe('AuthService 登录防护', () => {
 
 describe('AuthService 注册策略（DEC-03）', () => {
   it('新注册使用 BCRYPT_ROUNDS 配置的 cost，并绑定预建租客', async () => {
-    const { service, prisma, invite } = await createService({ BCRYPT_ROUNDS: '12' });
+    const { service, prisma, invite, otp } = await createService({ BCRYPT_ROUNDS: '12' });
+    otp.verifyCode.mockResolvedValue(true);
     invite.validateInviteCode.mockResolvedValue({
       valid: true,
       invitedBy: 'admin-1',
       role: 'TENANT',
+      tenantId: 'tenant-pre',
     });
 
     prisma.user.findUnique.mockResolvedValue(null);
-    prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
+    prisma.tenant.findUnique.mockResolvedValue({
+      id: 'tenant-pre',
+      email: 'new@example.com',
+      phone: '13800000000',
+      userId: null,
+    });
     prisma.user.create.mockResolvedValue({
       id: 'user-new',
       email: 'new@example.com',
@@ -282,6 +291,7 @@ describe('AuthService 注册策略（DEC-03）', () => {
       email: 'new@example.com',
       password: CORRECT_PASSWORD,
       inviteCode: 'INVITE-1',
+      emailCode: '654321',
     });
 
     const created = prisma.user.create.mock.calls[0]?.[0] as {
@@ -299,15 +309,16 @@ describe('AuthService 注册策略（DEC-03）', () => {
     });
   });
 
-  it('邀请码 role 生效', async () => {
-    const { service, prisma, invite } = await createService({ BCRYPT_ROUNDS: '10' });
+  it('职员邀请只建职员账号，不认领租客', async () => {
+    const { service, prisma, invite, otp } = await createService({ BCRYPT_ROUNDS: '10' });
+    otp.verifyCode.mockResolvedValue(true);
     invite.validateInviteCode.mockResolvedValue({
       valid: true,
       invitedBy: 'admin-1',
       role: 'CLEANER',
+      tenantId: null,
     });
     prisma.user.findUnique.mockResolvedValue(null);
-    prisma.tenant.findFirst.mockResolvedValue({ id: 'tenant-pre' });
     prisma.user.create.mockResolvedValue({
       id: 'user-cleaner',
       email: 'cleaner@example.com',
@@ -318,27 +329,31 @@ describe('AuthService 注册策略（DEC-03）', () => {
       email: 'cleaner@example.com',
       password: CORRECT_PASSWORD,
       inviteCode: 'INVITE-CLEANER',
+      emailCode: '654321',
     });
 
     expect(prisma.user.create.mock.calls[0][0].data.role).toBe('CLEANER');
+    expect(prisma.tenant.updateMany).not.toHaveBeenCalled();
     expect(result.user.role).toBe('CLEANER');
   });
 
-  it('没有预建租客档案时拒绝注册（403），不创建任何人', async () => {
-    const { service, prisma, invite } = await createService();
+  it('没有绑定预建档案的租客邀请拒绝注册，不创建任何人', async () => {
+    const { service, prisma, invite, otp } = await createService();
+    otp.verifyCode.mockResolvedValue(true);
     invite.validateInviteCode.mockResolvedValue({
       valid: true,
       invitedBy: 'admin-1',
       role: 'TENANT',
+      tenantId: null,
     });
     prisma.user.findUnique.mockResolvedValue(null);
-    prisma.tenant.findFirst.mockResolvedValue(null);
 
     await expect(
       service.register({
         email: 'new@example.com',
         password: CORRECT_PASSWORD,
         inviteCode: 'INVITE-1',
+        emailCode: '654321',
       }),
     ).rejects.toMatchObject({ status: 403 });
     expect(prisma.user.create).not.toHaveBeenCalled();

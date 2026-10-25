@@ -8,6 +8,8 @@ import { ConfigService } from '@nestjs/config';
 import { PAYMENT_PROVIDER } from './payment/payment-provider.js';
 import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 
+import { AuditLogService } from '../audit/audit-log.service.js';
+
 describe('BillPaymentService', () => {
   let service: BillPaymentService;
   let prisma: any;
@@ -37,6 +39,7 @@ describe('BillPaymentService', () => {
         // QLT-02 / T288：依赖改为必填后，测试显式提供支付通道与业务时钟
         { provide: PAYMENT_PROVIDER, useValue: new OfflinePaymentProvider() },
         { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })) },
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
       ],
     }).compile();
     service = module.get(BillPaymentService);
@@ -81,6 +84,7 @@ describe('BillPaymentService', () => {
         id: 'p-existing',
         billId: 'b1',
         amount: 100,
+        paymentMethod: 'CASH',
         status: 'CONFIRMED',
       });
 
@@ -95,12 +99,52 @@ describe('BillPaymentService', () => {
       expect(prisma.paymentRecord.create).not.toHaveBeenCalled();
     });
 
+    it('已缴账单的同键重放返回原收款，不是 400', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill({ status: 'PAID', paidAmount: 1000, amount: 1000 }));
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p-paid',
+        billId: 'b1',
+        amount: 1000,
+        paymentMethod: 'WECHAT',
+        status: 'CONFIRMED',
+      });
+
+      const result = await service.addPayment(
+        'b1',
+        { amount: 1000, paymentMethod: 'WECHAT', idempotencyKey: 'idem-paid' } as any,
+        'op',
+      );
+
+      expect(result.idempotent).toBe(true);
+      expect(prisma.paymentRecord.create).not.toHaveBeenCalled();
+    });
+
+    it('同一幂等键改变支付方式 → 409', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill());
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p-method',
+        billId: 'b1',
+        amount: 100,
+        paymentMethod: 'CASH',
+        status: 'CONFIRMED',
+      });
+
+      await expect(
+        service.addPayment(
+          'b1',
+          { amount: 100, paymentMethod: 'WECHAT', idempotencyKey: 'idem-method' } as any,
+          'op',
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
     it('同一幂等键用于不同金额 → 409', async () => {
       prisma.bill.findUnique.mockResolvedValue(bill());
       prisma.paymentRecord.findUnique.mockResolvedValue({
         id: 'p-existing',
         billId: 'b1',
         amount: 50,
+        paymentMethod: 'CASH',
         status: 'CONFIRMED',
       });
 

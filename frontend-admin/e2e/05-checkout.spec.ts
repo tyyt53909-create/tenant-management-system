@@ -1,11 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { setupActiveContract, loginAsAdmin } from './fixtures';
+import { setupActiveContract, setupDepositLedger, loginAsAdmin } from './fixtures';
 
 /** 流程5：退租结算（含押金扣除项） */
 test.describe('退租结算', () => {
   test('新增退租记录并确认为已完成', async ({ page }) => {
     await loginAsAdmin(page);
     const seed = await setupActiveContract('UI5');
+    // 退租结算完成强依赖押金台账已入账且等式成立（FIN-03 / FIN-07）
+    await setupDepositLedger(seed.contract.id, 600000);
 
     await page.goto('/checkout');
     await page.getByRole('button', { name: '新增退租记录' }).first().click();
@@ -22,9 +24,17 @@ test.describe('退租结算', () => {
 
     await dialog.locator('.el-form-item:has(label:text-is("退款金额(元)")) input').fill('5200');
 
-    // 押金扣除项
+    // 押金退还明细（6000 元）
+    await dialog.getByRole('button', { name: '+ 添加明细行' }).click();
+    const refundRow = dialog.locator('.el-table__row').last();
+    await refundRow.locator('.el-select').click();
+    await page.getByRole('option', { name: '押金退还' }).click();
+    await refundRow.getByPlaceholder('0.00').fill('6000');
+    await refundRow.getByPlaceholder(/押金扣除请写明/).fill('押金全额退还');
+
+    // 押金扣除项（800 元）
     await dialog.getByRole('button', { name: '+ 添加押金扣除项' }).click();
-    const itemRow = dialog.locator('tr', { hasText: '押金扣除' }).last();
+    const itemRow = dialog.locator('.el-table__row', { hasText: '押金扣除' }).last();
     await itemRow.getByPlaceholder('0.00').fill('800');
     await itemRow.getByPlaceholder(/押金扣除请写明/).fill('墙面破损修补');
 

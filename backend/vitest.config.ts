@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     root: './',
-    include: ['src/**/*.spec.ts', '../shared/src/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', '../shared/src/**/*.spec.ts', 'test/integration/guard.spec.ts'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',

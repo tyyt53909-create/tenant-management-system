@@ -5,6 +5,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { NotificationPriority } from '../notifications/dto/create-notification.dto.js';
 import { BillType } from '../bills/dto/create-bill.dto.js';
 import { getBusinessDateParts, formatDate, formatAmount } from './scheduler.util.js';
+import { CYCLE_MONTHS, RENT_ROUNDING, dueAnchorMonths, quoteRentCycle } from './rent-charge.js';
 
 export interface MonthlyBillSummary {
   period: string;
@@ -24,7 +25,12 @@ export class SchedulerMonthlyBillsService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async generateMonthlyBills(now: Date = new Date()): Promise<MonthlyBillSummary> {
+  /** 合同生效时补出已到期账期，包括首期。重跑由账期幂等键跳过。 */
+  async issueDueRentBills(contractId: string, now: Date = new Date()): Promise<MonthlyBillSummary> {
+    return this.generateMonthlyBills(now, contractId);
+  }
+
+  async generateMonthlyBills(now: Date = new Date(), onlyContractId?: string): Promise<MonthlyBillSummary> {
     const { year, month } = getBusinessDateParts(now);
     const currentMonthStart = new Date(Date.UTC(year, month - 1, 1));
     const currentPeriod = `${year}-${String(month).padStart(2, '0')}`;
@@ -35,39 +41,34 @@ export class SchedulerMonthlyBillsService {
       where: {
         status: 'ACTIVE',
         endDate: { gte: currentMonthStart },
+        ...(onlyContractId ? { id: onlyContractId } : {}),
       },
       include: { tenant: { select: { userId: true } } },
     });
 
     for (const contract of contracts) {
-        const cycleMonths = ({ MONTHLY: 1, QUARTERLY: 3, SEMI_ANNUAL: 6, ANNUAL: 12 } as Record<string, number>)[contract.paymentCycle];
+        const cycleMonths = CYCLE_MONTHS[contract.paymentCycle];
         if (!cycleMonths) continue;
-
-        const contractStart = new Date(contract.startDate);
-        const contractEnd = new Date(contract.endDate);
-        const startParts = getBusinessDateParts(contractStart);
-        const startIndex = startParts.year * 12 + (startParts.month - 1);
-        const currentIndex = year * 12 + (month - 1);
-        const elapsedMonths = currentIndex - startIndex;
-        // 以「合同起始月」为锚点，每 cycleMonths 个月出一次账；
-        // 不能按自然年 1/4/7/10 月，否则 2 月起的季付合同会错过首期。
-        if (elapsedMonths < 0 || elapsedMonths % cycleMonths !== 0) continue;
-
-        const periodStart = new Date(Date.UTC(year, month - 1, 1));
-        const periodEnd = new Date(Date.UTC(year, month - 1 + cycleMonths, 0));
-        const period = `${year}-${String(month).padStart(2, '0')}`;
-
-        // 首期从合同起始日开始，末期截到合同结束日，按实际在租天数折算。
-        const activeStart = contractStart > periodStart ? contractStart : periodStart;
-        const activeEnd = contractEnd < periodEnd ? contractEnd : periodEnd;
-        const cycleDays = Math.round((periodEnd.getTime() - periodStart.getTime()) / 86_400_000) + 1;
-        const proratedDays = Math.floor((activeEnd.getTime() - activeStart.getTime()) / 86_400_000) + 1;
-        if (proratedDays <= 0 || proratedDays > cycleDays) continue;
-        const amount = proratedDays === cycleDays
-          ? contract.rentAmount
-          : Math.round((contract.rentAmount * proratedDays) / cycleDays);
-        // 逐个合同隔离：任何一个失败都不应中止其余合同的出账（T208）。
-        // 原先整个迴圈共用一个 try/catch，第 N 个合同出错就再也发不出后面所有账单。
+        const contractStart = getBusinessDateParts(new Date(contract.startDate));
+        const contractEnd = getBusinessDateParts(new Date(contract.endDate));
+        const anchors = dueAnchorMonths({
+          contractStart,
+          contractEnd,
+          cycleMonths,
+          asOf: { year, month, day: 1 },
+        });
+        for (const anchor of anchors) {
+        const quote = quoteRentCycle({
+          monthlyRent: contract.rentAmount,
+          contractStart,
+          contractEnd,
+          anchorYear: anchor.year,
+          anchorMonth: anchor.month,
+          cycleMonths,
+        });
+        if (!quote) continue;
+        const { amount, period, periodStart, periodEnd } = quote;
+        // 逐个合同、逐个账期隔离。已有账单只跳过，不改已入账金额。
         try {
           // 幂等：同一合同同一账期已有租金账单则跳过
           const existing = await this.prisma.bill.findFirst({
@@ -79,7 +80,7 @@ export class SchedulerMonthlyBillsService {
             continue;
           }
 
-          const dueDate = new Date(Date.UTC(year, month - 1, Math.min(contract.paymentDay, 28)));
+          const dueDate = new Date(Date.UTC(anchor.year, anchor.month - 1, Math.min(contract.paymentDay, 28)));
 
           const bill = await this.billsService.create({
             contractId: contract.id,
@@ -90,9 +91,10 @@ export class SchedulerMonthlyBillsService {
             snapshot: {
               rentAmount: contract.rentAmount,
               cycle: contract.paymentCycle,
-              periodStart: periodStart.toISOString().slice(0, 10),
-              periodEnd: periodEnd.toISOString().slice(0, 10),
-              proratedDays,
+              periodStart,
+              periodEnd,
+              rounding: RENT_ROUNDING,
+              months: quote.months,
               paymentDay: contract.paymentDay,
               contractNumber: contract.contractNumber,
             },
@@ -118,6 +120,7 @@ export class SchedulerMonthlyBillsService {
           const detail = `合同 ${contract.contractNumber ?? contract.id}：${(error as Error).message}`;
           summary.errors.push(detail);
           this.logger.error(`月度账单生成失败：${detail}`);
+        }
         }
       }
     this.logger.log(`月度账单生成完成：${JSON.stringify(summary)}`);

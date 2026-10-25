@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService as NestJwtService } from '@nestjs/jwt';
 import { durationMsOr } from '../../common/utils/duration.js';
@@ -6,6 +6,7 @@ import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import {
   newSessionId,
   REFRESH_STORE,
+  SessionWriteRejectedError,
   type RefreshSessionStore,
 } from './refresh-session.store.js';
 
@@ -28,6 +29,8 @@ export interface JwtPayload {
   tokenType?: 'ACCESS' | 'REFRESH'; // 明确区分 Token 用途（防止混用绕过有效期）
   jti?: string;
   familyId?: string;
+  exp?: number;
+  iat?: number;
 }
 
 export interface TokenPair {
@@ -35,13 +38,28 @@ export interface TokenPair {
   refreshToken: string;
 }
 
+export type RevocationListener = (userId: string) => void | Promise<void>;
+
 @Injectable()
 export class JwtAuthService {
+  private readonly logger = new Logger(JwtAuthService.name);
+  private readonly revocationListeners = new Set<RevocationListener>();
+
   constructor(
     private readonly jwtService: NestJwtService,
     private readonly configService: ConfigService,
     @Optional() @Inject(REFRESH_STORE) private readonly sessions?: RefreshSessionStore,
   ) {}
+
+  /**
+   * 注册用户会话撤销监听器（例如实时通知通道中止连线、长连线撤销）。
+   */
+  onUserRevoked(listener: RevocationListener): () => void {
+    this.revocationListeners.add(listener);
+    return () => {
+      this.revocationListeners.delete(listener);
+    };
+  }
 
   /**
    * 生成 Access Token 和 Refresh Token（严格嵌入 tokenType）
@@ -65,6 +83,7 @@ export class JwtAuthService {
         userId: payload.sub,
         familyId,
         expiresAt: Date.now() + this.refreshTtlMs(),
+        issuedAt: Date.now(),
         status: 'active',
       });
     }
@@ -144,13 +163,21 @@ export class JwtAuthService {
       throw new UnauthorizedException('刷新令牌已重复使用，所有会话已失效');
     }
 
-    await this.sessions.save({
-      jti: nextJti,
-      userId: current.userId,
-      familyId: current.familyId,
-      expiresAt: Date.now() + this.refreshTtlMs(),
-      status: 'active',
-    });
+    try {
+      await this.sessions.save({
+        jti: nextJti,
+        userId: current.userId,
+        familyId: current.familyId,
+        expiresAt: Date.now() + this.refreshTtlMs(),
+        issuedAt: current.issuedAt ?? 0,
+        status: 'active',
+      });
+    } catch (error) {
+      if (error instanceof SessionWriteRejectedError) {
+        throw new UnauthorizedException('登录会话已撤销，请重新登录');
+      }
+      throw error;
+    }
     return { accessToken, refreshToken: nextRefresh };
   }
 
@@ -176,6 +203,13 @@ export class JwtAuthService {
 
   async revokeUserSessions(userId: string): Promise<void> {
     await this.sessions?.revokeUser(userId);
+    for (const listener of this.revocationListeners) {
+      try {
+        await listener(userId);
+      } catch (error) {
+        this.logger.error(`执行会话撤销监听器失败 user=${userId}: ${String(error)}`);
+      }
+    }
   }
 
   private signAccess(payload: JwtPayload): Promise<string> {

@@ -16,6 +16,7 @@ import {
 } from '../../common/business-clock/business-clock.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
 import { isUniqueConstraintError } from '../../common/utils/prisma-error.js';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import { rentBillDedupKey } from '../../common/utils/duplicate-keys.js';
 import { BillPaymentService } from './bill-payment.service.js';
 import { BillLateFeeService } from './bill-late-fee.service.js';
@@ -237,17 +238,35 @@ export class BillsService {
     if (!bill) {
       throw new NotFoundException('账单不存在');
     }
+    if (dto.status && dto.status !== 'CANCELLED') {
+      throw apiError(ErrorCode.BILL_DERIVED_FIELD);
+    }
+
+    const confirmedPayments = await this.confirmedPaymentCount(id);
+    if (dto.status === 'CANCELLED' && (bill.paidAmount > 0 || confirmedPayments > 0)) {
+      throw apiError(ErrorCode.BILL_CANNOT_CANCEL, '已有收款的账单必须先冲正，不能直接取消');
+    }
+    if (dto.amount !== undefined && dto.amount !== bill.amount && (bill.paidAmount > 0 || confirmedPayments > 0)) {
+      throw apiError(ErrorCode.BILL_AMOUNT_LOCKED);
+    }
 
     const updateData: Prisma.BillUpdateInput = {};
     if (dto.amount !== undefined) updateData.amount = dto.amount;
-    if (dto.paidAmount !== undefined) updateData.paidAmount = dto.paidAmount;
-    if (dto.status) updateData.status = dto.status;
+    if (dto.status === 'CANCELLED') updateData.status = 'CANCELLED';
     if (dto.dueDate) updateData.dueDate = new Date(dto.dueDate);
 
     return this.prisma.bill.update({
       where: { id },
       data: updateData,
     });
+  }
+
+  private async confirmedPaymentCount(billId: string): Promise<number> {
+    const payments = await this.prisma.paymentRecord.findMany({
+      where: { billId, status: 'CONFIRMED', voidedAt: null, reversalOfId: null },
+      select: { id: true },
+    });
+    return Array.isArray(payments) ? payments.length : 0;
   }
 
   async remove(id: string) {

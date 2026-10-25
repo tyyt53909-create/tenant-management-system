@@ -103,4 +103,9 @@ export class NotificationsService {
     await this.prisma.notification.delete({ where: { id } });
     return { message: '通知已删除' };
   }
+
+  /** 中止指定用户的全部实时 WebSocket 连接（用户停用/撤销会话/登出）。 */
+  disconnectUser(userId: string): void {
+    this.gateway?.disconnectUser(userId);
+  }
 }

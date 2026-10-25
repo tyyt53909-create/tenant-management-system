@@ -23,6 +23,9 @@ describe('InviteCodeService', () => {
               updateMany: vi.fn(),
               count: vi.fn(),
             },
+            tenant: {
+              findUnique: vi.fn().mockResolvedValue({ id: 'tenant-1', userId: null }),
+            },
           },
         },
       ],
@@ -43,7 +46,7 @@ describe('InviteCodeService', () => {
 
       vi.spyOn(prisma.inviteCode, 'create').mockResolvedValue({} as any);
 
-      const code = await service.generateInviteCode(adminUserId, expiryDays, '测试备注', 'TENANT');
+      const code = await service.generateInviteCode(adminUserId, expiryDays, '测试备注', 'TENANT', 'tenant-1');
 
       expect(code).toMatch(/^INVITE-\d+-[A-Z0-9]{6}$/);
       expect(prisma.inviteCode.create).toHaveBeenCalledWith({
@@ -54,6 +57,7 @@ describe('InviteCodeService', () => {
           notes: '测试备注',
           creatorId: adminUserId,
           expiresAt: expect.any(Date),
+          tenantId: 'tenant-1',
         },
       });
     });
@@ -66,7 +70,7 @@ describe('InviteCodeService', () => {
 
       vi.spyOn(prisma.inviteCode, 'createMany').mockResolvedValue({ count: 5 });
 
-      const codes = await service.generateBatchInviteCodes(adminUserId, count, 365, '批量生成');
+      const codes = await service.generateBatchInviteCodes(adminUserId, count, 365, '批量生成', 'TENANT', 'tenant-1');
 
       expect(codes).toHaveLength(5);
       const uniqueCodes = new Set(codes);

@@ -8,7 +8,8 @@ import { InviteCodeService } from './invite-code.service.js';
 import { GoogleAuthDto, GoogleAuthResponseDto } from './dto/google-auth.dto.js';
 import { SendEmailCodeDto, LoginEmailCodeDto, BindInviteCodeDto } from './dto/email-otp.dto.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
-import { claimPreCreatedTenant, findPreCreatedTenant } from './pre-created-tenant.js';
+import { claimPreCreatedTenant } from './pre-created-tenant.js';
+import { decideInviteClaim } from './claim-invite.js';
 
 interface AuthenticatedUser {
   id: string;
@@ -90,21 +91,14 @@ export class FederatedAuthService {
       if (!validation.valid) {
         throw apiError(ErrorCode.AUTH_INVITE_CODE_INVALID);
       }
-      const preTenant = await findPreCreatedTenant(this.prisma, { email });
-      if (!preTenant) {
-        throw apiError(
-          ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED,
-          '该邮箱没有预建租客档案，请联系管理员先建档再邀请',
-        );
-      }
-
+      const claim = await this.claimFromInvite(validation, email);
       authenticatedUser = await this.prisma.$transaction(async (tx) => {
         const created = await tx.user.create({
           data: {
             email,
             googleId: googleUser.googleId,
             avatarUrl: googleUser.avatarUrl,
-            role: validation.role ?? 'TENANT',
+            role: claim.kind === 'staff' ? claim.role : 'TENANT',
             invitedBy: validation.invitedBy ?? null,
             isActive: true,
             lastLoginAt: new Date(),
@@ -123,7 +117,9 @@ export class FederatedAuthService {
           },
         });
 
-        await claimPreCreatedTenant(tx, preTenant.id, created.id);
+        if (claim.kind === 'tenant') {
+          await claimPreCreatedTenant(tx, claim.tenantId, created.id);
+        }
 
         await this.inviteCodeService.consumeInviteCode(dto.inviteCode!, created.id, tx);
         return created;
@@ -205,19 +201,12 @@ export class FederatedAuthService {
       if (!validation.valid) {
         throw apiError(ErrorCode.AUTH_INVITE_CODE_INVALID);
       }
-      const preTenant = await findPreCreatedTenant(this.prisma, { email });
-      if (!preTenant) {
-        throw apiError(
-          ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED,
-          '该邮箱没有预建租客档案，请联系管理员先建档再邀请',
-        );
-      }
-
+      const claim = await this.claimFromInvite(validation, email);
       authenticatedUser = await this.prisma.$transaction(async (tx) => {
         const created = await tx.user.create({
           data: {
             email,
-            role: validation.role ?? 'TENANT',
+            role: claim.kind === 'staff' ? claim.role : 'TENANT',
             invitedBy: validation.invitedBy ?? null,
             isActive: true,
             lastLoginAt: new Date(),
@@ -236,7 +225,9 @@ export class FederatedAuthService {
           },
         });
 
-        await claimPreCreatedTenant(tx, preTenant.id, created.id);
+        if (claim.kind === 'tenant') {
+          await claimPreCreatedTenant(tx, claim.tenantId, created.id);
+        }
 
         await this.inviteCodeService.consumeInviteCode(dto.inviteCode!, created.id, tx);
         return created;
@@ -282,21 +273,24 @@ export class FederatedAuthService {
       throw apiError(ErrorCode.AUTH_IDENTITY_ROLE_CONFLICT);
     }
 
-    const preTenant = user.tenant
+    if (!user.emailVerifiedAt && user.role === 'TENANT') {
+      throw apiError(ErrorCode.AUTH_EMAIL_UNVERIFIED);
+    }
+    const claim = user.tenant
       ? null
-      : await findPreCreatedTenant(this.prisma, { email: user.email, phone: user.phone });
+      : await this.claimFromInvite(validation, user.email ?? '');
+    if (claim?.kind === 'staff' && user.role === 'TENANT') {
+      throw apiError(ErrorCode.AUTH_IDENTITY_ROLE_CONFLICT, '租客认领不能产生管理角色');
+    }
 
     await this.prisma.$transaction(async (tx) => {
-      if (preTenant) {
-        await claimPreCreatedTenant(tx, preTenant.id, userId);
+      if (claim?.kind === 'tenant') {
+        await claimPreCreatedTenant(tx, claim.tenantId, userId);
       }
 
       const data: Prisma.UserUpdateInput = {};
       if (validation.invitedBy) {
         data.invitedBy = validation.invitedBy;
-      }
-      if (validation.role && user.role === 'TENANT') {
-        data.role = validation.role;
       }
       if (Object.keys(data).length > 0) {
         await tx.user.update({ where: { id: userId }, data });
@@ -310,6 +304,23 @@ export class FederatedAuthService {
       success: true,
       message: '邀请码兑换成功，房源身份已成功关联！',
     };
+  }
+
+  private async claimFromInvite(
+    validation: { role?: UserRole | null; tenantId?: string | null },
+    verifiedEmail: string,
+  ) {
+    const tenant = validation.tenantId
+      ? await this.prisma.tenant.findUnique({
+          where: { id: validation.tenantId },
+          select: { id: true, email: true, phone: true, userId: true },
+        })
+      : null;
+    return decideInviteClaim({
+      invite: validation,
+      verifiedEmail,
+      tenant,
+    });
   }
 
   /** 补建/刷新外部身份；EMAIL 与 GOOGLE 都走同一张表。 */

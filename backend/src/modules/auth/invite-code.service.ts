@@ -10,6 +10,7 @@ export interface ValidatedInviteCode {
   invitedBy?: string;
   inviteCodeId?: string;
   role?: UserRole;
+  tenantId?: string | null;
   reason?: string;
 }
 
@@ -25,7 +26,9 @@ export class InviteCodeService {
     expiryDays: number = 365,
     notes?: string,
     role: UserRole = 'TENANT',
+    tenantId?: string,
   ): Promise<string> {
+    const boundTenantId = await this.assertInviteTarget(role, tenantId);
     const inviteCode = `INVITE-${Date.now()}-${randomHex(3)}`;
     const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
@@ -37,6 +40,7 @@ export class InviteCodeService {
         notes: notes ?? null,
         creatorId: adminUserId,
         expiresAt,
+        tenantId: boundTenantId,
       },
     });
 
@@ -52,7 +56,9 @@ export class InviteCodeService {
     expiryDays: number = 365,
     notes?: string,
     role: UserRole = 'TENANT',
+    tenantId?: string,
   ): Promise<string[]> {
+    const boundTenantId = await this.assertInviteTarget(role, tenantId);
     const safeCount = Math.min(Math.max(1, count), 100);
     const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
     const codes: string[] = [];
@@ -69,6 +75,7 @@ export class InviteCodeService {
         notes: notes ?? null,
         creatorId: adminUserId,
         expiresAt,
+        tenantId: boundTenantId,
       });
     }
 
@@ -95,6 +102,7 @@ export class InviteCodeService {
         code: true,
         status: true,
         role: true,
+        tenantId: true,
         expiresAt: true,
         creatorId: true,
       },
@@ -121,6 +129,7 @@ export class InviteCodeService {
       invitedBy: record.creatorId ?? undefined,
       inviteCodeId: record.id,
       role: record.role,
+      tenantId: record.tenantId,
     };
   }
 
@@ -152,6 +161,29 @@ export class InviteCodeService {
     if (result.count === 0) {
       throw apiError(ErrorCode.AUTH_INVITE_CODE_CONFLICT);
     }
+  }
+
+  private async assertInviteTarget(role: UserRole, tenantId?: string): Promise<string | null> {
+    if (role !== 'TENANT') {
+      if (tenantId) {
+        throw apiError(ErrorCode.AUTH_INVITE_TARGET_MISMATCH, '职员邀请不能绑定租客档案');
+      }
+      return null;
+    }
+    if (!tenantId) {
+      throw apiError(ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED, '租客邀请必须指定预建档案');
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, userId: true },
+    });
+    if (!tenant) {
+      throw apiError(ErrorCode.AUTH_ACCOUNT_NOT_PROVISIONED, '预建租客档案不存在');
+    }
+    if (tenant.userId) {
+      throw apiError(ErrorCode.AUTH_PROFILE_ALREADY_BOUND, '该档案已绑定账号，不能再发认领邀请');
+    }
+    return tenant.id;
   }
 
   /**

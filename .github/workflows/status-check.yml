@@ -59,6 +59,13 @@ jobs:
       DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?schema=public
       REDIS_HOST: localhost
       REDIS_PORT: 6379
+      ALLOW_INTEGRATION_RESET: "true"
+      # psql 不认识 Prisma 专属的 ?schema= 参数，psql 用的 URL 不能带。
+      INTEGRATION_ADMIN_DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+      INTEGRATION_DATABASE_URL: postgresql://integration_tester:integration_tester_password@localhost:5432/test_db
+      INTEGRATION_DATABASE_MARKER: ci-integration-marker-t316
+      INTEGRATION_TESTER_PASSWORD: integration_tester_password
+      INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/1
       JWT_SECRET: test-jwt-secret
       ENCRYPTION_KEY: ci-test-encryption-key-32-bytes!
 
@@ -91,6 +98,12 @@ jobs:
       - name: Prepare test database
         working-directory: backend
         run: npx prisma migrate deploy
+
+      - name: Prepare marked integration database
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          bash backend/scripts/prepare-integration-db.sh
 
       - name: Install admin dependencies
         working-directory: frontend-admin

@@ -71,7 +71,12 @@ export async function reverseDepositCollection(
   const ledger = await tx.depositLedger.findUnique({ where: { contractId: bill.contractId } });
   if (!ledger) return null;
 
-  const balance = Math.max(0, ledger.balance - amount);
+  if (ledger.balance < amount) {
+    throw new Error(
+      `押金余额 ${ledger.balance} 分不足以冲正 ${amount} 分，不能把不足部分夹成 0`,
+    );
+  }
+  const balance = ledger.balance - amount;
   const updated = await tx.depositLedger.update({
     where: { id: ledger.id },
     data: { balance, status: statusFor(balance, ledger.amount) },
@@ -112,8 +117,7 @@ export async function settleDepositOnCheckout(
 
   const ledger = await tx.depositLedger.findUnique({ where: { contractId } });
   if (!ledger) {
-    // 历史合同可能没有押金台账；此时不阻断退租，押金项由人工核对。
-    return null;
+    throw new Error('缺少押金台账，不能自动按零押金或已缴全额完成退租');
   }
   if (deductions < 0 || refundAmount < 0) {
     throw new Error('押金扣减/退还金额不能为负');

@@ -119,6 +119,23 @@ export class EmailOtpService {
     return { cooldown: 60 };
   }
 
+  /** 只给测试夹具种入一次性验证码。生产路径必须走 sendCode。 */
+  async seedCodeForTests(email: string, code: string): Promise<void> {
+    if (this.readConfig('NODE_ENV') !== 'test') {
+      throw new Error('seedCodeForTests 只能在 NODE_ENV=test 使用');
+    }
+    const normalizedEmail = email.toLowerCase().trim();
+    const salt = randomBytes(16).toString('hex');
+    const now = Date.now();
+    await this.otpStore.resetFailedAttempts(normalizedEmail);
+    await this.otpStore.set(normalizedEmail, {
+      codeHash: this.hashCode(code, salt),
+      salt,
+      expiresAt: now + OTP_TTL_MS,
+      lastSentAt: now - OTP_SEND_COOLDOWN_MS,
+    });
+  }
+
   async verifyCode(email: string, code: string): Promise<boolean> {
     const normalizedEmail = email.toLowerCase().trim();
     const trimmedCode = (code || '').trim();

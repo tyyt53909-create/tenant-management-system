@@ -76,24 +76,16 @@ describe('押金台账写入', () => {
     });
   });
 
-  it('冲正扣减余额且不为负', async () => {
+  it('冲正金额大于余额时拒绝，不把余额夹成 0', async () => {
     const tx = txMock();
     tx.depositLedger.findUnique.mockResolvedValue({ id: 'l1', amount: 200000, balance: 30000 });
-    tx.depositLedger.update.mockResolvedValue({ id: 'l1', amount: 200000, balance: 0 });
 
-    const result = await reverseDepositCollection(tx as never, {
+    await expect(reverseDepositCollection(tx as never, {
       bill: { id: 'b1', contractId: 'c1', billType: 'DEPOSIT' },
       amount: 50000,
       operatorId: 'op',
-    });
-
-    expect(result).toEqual({ id: 'l1', balance: 0 });
-    expect(tx.depositLedger.update).toHaveBeenCalledWith({
-      where: { id: 'l1' },
-      data: { balance: 0, status: 'PARTIAL' },
-    });
-    expect(tx.depositTransaction.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ type: 'REVERSAL', amount: -50000 }),
-    });
+    })).rejects.toThrow(/不足以冲正/);
+    expect(tx.depositLedger.update).not.toHaveBeenCalled();
+    expect(tx.depositTransaction.create).not.toHaveBeenCalled();
   });
 });
