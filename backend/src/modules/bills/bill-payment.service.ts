@@ -4,7 +4,6 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
-  Optional,
 } from '@nestjs/common';
 import { Prisma, type PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -38,7 +37,7 @@ export class BillPaymentService {
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
     private readonly clock: BusinessClock,
-    @Optional() private readonly auditLog?: AuditLogService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   /**

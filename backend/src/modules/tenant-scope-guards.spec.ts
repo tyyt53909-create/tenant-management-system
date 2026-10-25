@@ -16,6 +16,7 @@ import { OfflinePaymentProvider } from './bills/payment/offline-payment.provider
 import { BusinessClock } from '../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
 import { NotificationDispatcher } from './notifications/channels/notification-dispatcher.js';
+import { AuditLogService } from './audit/audit-log.service.js';
 
 /**
  * 租客范围查询在 tenantId / userId 缺失时必须 403。
@@ -65,8 +66,10 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
               prismaMock as never,
               new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
+              { recordEvent: vi.fn(), log: vi.fn() } as never,
             ),
         },
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
         { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },
         { provide: BillReceiptService, useFactory: () => new BillReceiptService(prismaMock as never) },
         {

@@ -15,6 +15,7 @@ import { AuthService } from './auth.service.js';
 import * as bcrypt from 'bcrypt';
 import { LOGIN_ATTEMPT_STORE, MemoryLoginAttemptStore } from './login-attempt.store.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -113,6 +114,7 @@ describe('AuthController', () => {
         },
         // Cookie 的 Secure 标志由 ConfigService 决定（生产环境 true）
         { provide: ConfigService, useValue: new ConfigService({ NODE_ENV: 'development' }) },
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
       ],
     }).compile();
 

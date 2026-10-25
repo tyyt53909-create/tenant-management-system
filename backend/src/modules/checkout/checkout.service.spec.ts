@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CheckoutService } from './checkout.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 describe('CheckoutService', () => {
   let service: CheckoutService;
@@ -35,7 +36,11 @@ describe('CheckoutService', () => {
     }));
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CheckoutService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        CheckoutService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
+      ],
     }).compile();
 
     service = module.get<CheckoutService>(CheckoutService);

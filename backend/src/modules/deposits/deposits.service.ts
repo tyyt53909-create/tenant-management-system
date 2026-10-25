@@ -3,7 +3,6 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
-  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -34,7 +33,7 @@ export interface DepositView {
 export class DepositsService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly auditLog?: AuditLogService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   /** 管理端查看押金台账（含流水）。 */

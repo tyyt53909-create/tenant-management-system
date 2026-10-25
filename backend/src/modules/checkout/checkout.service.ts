@@ -3,7 +3,6 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
-  Optional,
 } from '@nestjs/common';
 import type { Prisma, CheckoutItemType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -33,7 +32,7 @@ const CHECKOUT_STATUS_LABEL: Record<string, string> = {
 export class CheckoutService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly auditLog?: AuditLogService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async create(dto: CreateCheckoutDto) {

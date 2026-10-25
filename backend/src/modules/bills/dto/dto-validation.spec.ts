@@ -42,12 +42,20 @@ describe('Bill DTO 校验（回归）', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('更新请求（status/paidAmount）应通过', async () => {
-    const dto = plainToInstance(UpdateBillDto, { status: 'PAID', paidAmount: 100000 });
+  it('更新请求（status 为 CANCELLED）应通过', async () => {
+    const dto = plainToInstance(UpdateBillDto, { status: 'CANCELLED' });
 
     const errors = await validateLikeGlobalPipe(dto);
 
     expect(errors).toHaveLength(0);
+  });
+
+  it('更新请求禁止传入未放行的 paidAmount', async () => {
+    const dto = plainToInstance(UpdateBillDto, { paidAmount: 100000 });
+
+    const errors = await validateLikeGlobalPipe(dto);
+
+    expect(errors.length).toBeGreaterThan(0);
   });
 });
 

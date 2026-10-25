@@ -8,6 +8,8 @@ import { ConfigService } from '@nestjs/config';
 import { PAYMENT_PROVIDER } from './payment/payment-provider.js';
 import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 
+import { AuditLogService } from '../audit/audit-log.service.js';
+
 describe('BillPaymentService', () => {
   let service: BillPaymentService;
   let prisma: any;
@@ -37,6 +39,7 @@ describe('BillPaymentService', () => {
         // QLT-02 / T288：依赖改为必填后，测试显式提供支付通道与业务时钟
         { provide: PAYMENT_PROVIDER, useValue: new OfflinePaymentProvider() },
         { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })) },
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
       ],
     }).compile();
     service = module.get(BillPaymentService);

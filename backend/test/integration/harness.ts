@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { EmailOtpService } from '../../src/modules/auth/email-otp.service.js';
+import RedisImport from 'ioredis';
 import {
   UnsafeIntegrationTargetError,
   assertIntegrationEnvironment,
@@ -25,6 +26,15 @@ import {
 const integrationTarget = assertIntegrationEnvironment(process.env);
 export const prisma = new PrismaClient({
   datasources: { db: { url: integrationTarget.databaseUrl } },
+});
+export const redis = new (RedisImport as any)(integrationTarget.redisUrl);
+
+// 集成测试共用单例 prisma。单个测试文件 afterAll 中的 $disconnect() 不提前掐断全局连接池，由进程退出时统一回收。
+const realDisconnect = prisma.$disconnect.bind(prisma);
+prisma.$disconnect = async () => {};
+process.on('beforeExit', () => {
+  void realDisconnect();
+  void redis.quit();
 });
 
 export interface SeedBase {
@@ -58,6 +68,7 @@ export async function resetDatabase(): Promise<void> {
     },
     truncate: (sql) => prisma.$executeRawUnsafe(sql).then(() => undefined),
   });
+  await redis.flushdb();
 }
 
 export async function seedBase(): Promise<SeedBase> {

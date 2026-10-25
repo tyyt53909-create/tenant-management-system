@@ -134,6 +134,7 @@ describe('BillsService.findAll（T157 附滞纳金摘要，消除 N+1）', () =>
               prismaMock as never,
               new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
+              { recordEvent: vi.fn(), log: vi.fn() } as never,
             ),
         },
         { provide: BillLateFeeService, useFactory: () => new BillLateFeeService(prismaMock as never) },

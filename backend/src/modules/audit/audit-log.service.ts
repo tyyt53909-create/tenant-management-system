@@ -48,9 +48,20 @@ export class AuditLogService {
       context: event.context,
     };
 
+    let userId: string | null = null;
+    if (event.actorId && event.actorId !== 'SYSTEM') {
+      const user = await client.user.findUnique({
+        where: { id: event.actorId },
+        select: { id: true },
+      });
+      if (user) {
+        userId = user.id;
+      }
+    }
+
     return client.auditLog.create({
       data: {
-        userId: event.actorId && event.actorId !== 'SYSTEM' ? event.actorId : null,
+        userId,
         action: event.action,
         entityType: event.entityType,
         entityId: event.entityId,

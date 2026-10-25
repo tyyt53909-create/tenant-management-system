@@ -20,6 +20,7 @@ import {
   MemoryLoginAttemptStore,
 } from './login-attempt.store.js';
 import { FederatedAuthService } from './federated-auth.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
 
 const WRONG_PASSWORD = 'wrong-password';
 const CORRECT_PASSWORD = 'correct-password';
@@ -119,6 +120,7 @@ async function createService(
         provide: FederatedAuthService,
         useValue: { googleAuth: vi.fn(), sendEmailCode: vi.fn(), loginWithEmailCode: vi.fn(), bindInviteCode: vi.fn() },
       },
+      { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
     ],
   }).compile();
 

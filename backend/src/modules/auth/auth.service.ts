@@ -7,7 +7,6 @@ import {
   HttpException,
   HttpStatus,
   Inject,
-  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
@@ -54,7 +53,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     @Inject(LOGIN_ATTEMPT_STORE) private readonly loginAttemptStore: LoginAttemptStore,
     private readonly federatedAuthService: FederatedAuthService,
-    @Optional() private readonly auditLog?: AuditLogService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {

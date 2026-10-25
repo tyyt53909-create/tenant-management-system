@@ -430,7 +430,7 @@ describe('SchedulerService（定时任务）', () => {
       rentAmount: 180000,
       paymentCycle: 'MONTHLY',
       paymentDay: 5,
-      startDate: new Date('2026-01-01T00:00:00.000Z'),
+      startDate: new Date('2026-10-01T00:00:00.000Z'),
       endDate: new Date('2027-12-31T00:00:00.000Z'),
       tenant: { userId: 'u-1' },
     };
