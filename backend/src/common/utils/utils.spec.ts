@@ -34,6 +34,29 @@ describe('csv.util', () => {
     expect(csv).toContain('"He said ""hello""",¥20');
     expect(csv).toContain('"line1\nline2",¥30');
   });
+
+  it('应当防御 CSV 公式注入（CWE-1236）并保留合法负数/正数', () => {
+    const columns = [
+      { header: '内容', key: 'val' as const },
+    ];
+    const rows = [
+      { val: '=1+1' },
+      { val: '@SUM(A1:A10)' },
+      { val: '+cmd|"/C calc"!A0' },
+      { val: '-cmd|"/C calc"!A0' },
+      { val: -100 },
+      { val: '+50' },
+      { val: '-12.50' },
+    ];
+    const csv = generateCsv(columns, rows);
+    expect(csv).toContain("'=1+1");
+    expect(csv).toContain("'@SUM(A1:A10)");
+    expect(csv).toContain("'+cmd");
+    expect(csv).toContain("'-cmd");
+    expect(csv).toContain('-100');
+    expect(csv).toContain('+50');
+    expect(csv).toContain('-12.50');
+  });
 });
 
 describe('currency.util', () => {
