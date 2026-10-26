@@ -7,6 +7,7 @@ import { ContractAttachmentsController } from './contract-attachments.controller
 import { ContractAttachmentsService } from './contract-attachments.service.js';
 import { ContractTemplatesController } from './contract-templates.controller.js';
 import { ContractTemplatesService } from './contract-templates.service.js';
+import { ContractRenewalsService } from './contract-renewals.service.js';
 import { SettingsModule } from '../settings/settings.module.js';
 import { SchedulerModule } from '../scheduler/scheduler.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
@@ -31,12 +32,13 @@ import { MockElectronicSignProvider } from './sign/mock-electronic-sign.provider
     ContractsService,
     ContractAttachmentsService,
     ContractTemplatesService,
+    ContractRenewalsService,
     CryptoService,
     {
       provide: ELECTRONIC_SIGN_PROVIDER,
       useClass: MockElectronicSignProvider,
     },
   ],
-  exports: [ContractsService, ContractTemplatesService, ELECTRONIC_SIGN_PROVIDER],
+  exports: [ContractsService, ContractTemplatesService, ContractRenewalsService, ELECTRONIC_SIGN_PROVIDER],
 })
 export class ContractsModule {}

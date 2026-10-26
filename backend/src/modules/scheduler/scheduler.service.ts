@@ -34,6 +34,7 @@ export type SchedulerJobName = (typeof SCHEDULER_JOBS)[number];
 export interface DailyJobSummary {
   contractsActivated: number;
   contractsExpired: number;
+  expiringContractsNotified: number;
   billsOverdue: number;
   lateFeesSuggested: number;
   remindersSent: number;
@@ -168,6 +169,7 @@ export class SchedulerService {
     const summary: DailyJobSummary = {
       contractsActivated: 0,
       contractsExpired: 0,
+      expiringContractsNotified: 0,
       billsOverdue: 0,
       lateFeesSuggested: 0,
       remindersSent: 0,
@@ -181,6 +183,10 @@ export class SchedulerService {
       const result = await this.autoTransitionContracts();
       summary.contractsActivated = result.activated;
       summary.contractsExpired = result.expired;
+    });
+
+    await this.runJob(summary.errors, '到期合同提醒', async () => {
+      summary.expiringContractsNotified = await this.sendExpiringContractReminders();
     });
 
     await this.runJob(summary.errors, '逾期检查', async () => {
@@ -224,6 +230,10 @@ export class SchedulerService {
 
   async sendBillReminders(): Promise<number> {
     return this.dailyJobsService.sendBillReminders();
+  }
+
+  async sendExpiringContractReminders(): Promise<number> {
+    return this.dailyJobsService.sendExpiringContractReminders();
   }
 
   async autoConfirmMaintenance(): Promise<number> {

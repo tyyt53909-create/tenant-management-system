@@ -794,6 +794,32 @@
     ]
   },
   {
+    "method": "GET",
+    "path": "/api/contracts/:id/renewal-intent",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/:id/renewal-intent",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/:id/renewal-offers",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "POST",
     "path": "/api/contracts/:id/sign/initiate",
     "public": false,
@@ -820,7 +846,65 @@
   },
   {
     "method": "GET",
+    "path": "/api/contracts/expiring",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/holdover",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/contracts/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/renewal-intents",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/renewal-offers",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/renewal-offers/:offerId/cancel",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/renewal-offers/:offerId/respond",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/renewal-offers/my",
     "public": false,
     "roles": [
       "TENANT",

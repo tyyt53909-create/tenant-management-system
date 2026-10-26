@@ -7,6 +7,10 @@ import {
   getContractPdfUrl,
   getDefaultContractTemplate,
   mockCompleteContractSign,
+  submitRenewalIntent,
+  getRenewalIntent,
+  getMyRenewalOffers,
+  respondRenewalOffer,
 } from '../api/index.js'
 
 let calls, replies
@@ -93,5 +97,53 @@ test('mockCompleteContractSign 请求 POST /contracts/:id/sign/mock-complete', a
   const res = await mockCompleteContractSign('c1')
   assert.equal(res.signStatus, 'SIGNED')
   assert.equal(calls[0].url.endsWith('/contracts/c1/sign/mock-complete'), true)
+  assert.equal(calls[0].method, 'POST')
+})
+
+test('submitRenewalIntent 请求 POST /contracts/:id/renewal-intent', async () => {
+  replies.push({
+    status: 200,
+    data: { id: 'ri-1', intent: 'RENEW' },
+  })
+
+  const payload = { intent: 'RENEW', expectedMonths: 12, expectedRent: 350000 }
+  const res = await submitRenewalIntent('c1', payload)
+  assert.equal(res.intent, 'RENEW')
+  assert.equal(calls[0].url.endsWith('/contracts/c1/renewal-intent'), true)
+  assert.equal(calls[0].method, 'POST')
+  assert.deepEqual(calls[0].data, payload)
+})
+
+test('getRenewalIntent 请求 GET /contracts/:id/renewal-intent', async () => {
+  replies.push({
+    status: 200,
+    data: { id: 'ri-1', intent: 'RENEW' },
+  })
+
+  const res = await getRenewalIntent('c1')
+  assert.equal(res.id, 'ri-1')
+  assert.equal(calls[0].url.endsWith('/contracts/c1/renewal-intent'), true)
+})
+
+test('getMyRenewalOffers 请求 GET /contracts/renewal-offers/my', async () => {
+  replies.push({
+    status: 200,
+    data: { data: [{ id: 'ro-1', offeredRent: 350000 }] },
+  })
+
+  const res = await getMyRenewalOffers({ page: 1, limit: 10 })
+  assert.equal(res.data.length, 1)
+  assert.equal(calls[0].url.includes('/contracts/renewal-offers/my'), true)
+})
+
+test('respondRenewalOffer 请求 POST /contracts/renewal-offers/:offerId/respond', async () => {
+  replies.push({
+    status: 200,
+    data: { id: 'ro-1', status: 'ACCEPTED' },
+  })
+
+  const res = await respondRenewalOffer('ro-1', { agree: true })
+  assert.equal(res.status, 'ACCEPTED')
+  assert.equal(calls[0].url.endsWith('/contracts/renewal-offers/ro-1/respond'), true)
   assert.equal(calls[0].method, 'POST')
 })

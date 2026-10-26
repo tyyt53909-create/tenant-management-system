@@ -358,6 +358,72 @@ describe('SchedulerService（定时任务）', () => {
     });
   });
 
+  describe('sendExpiringContractReminders', () => {
+    const expContract = (daysFromNow: number, over: Record<string, unknown> = {}) => ({
+      id: 'c-exp-1',
+      endDate: new Date(FIXED_NOW.getTime() + daysFromNow * 86_400_000),
+      tenant: { userId: 'u-tenant-1' },
+      room: { roomNumber: '101' },
+      ...over,
+    });
+
+    it('到期前 30天、15天、7天梯次触发提醒并附带 dedupKey', async () => {
+      prisma.contract.findMany.mockResolvedValue([
+        expContract(30, { id: 'c-30' }),
+        expContract(15, { id: 'c-15' }),
+        expContract(7, { id: 'c-7' }),
+        expContract(20, { id: 'c-20' }), // 非节点，不触发
+      ]);
+      prisma.notification.findFirst.mockResolvedValue(null);
+
+      const sent = await service.sendExpiringContractReminders();
+
+      expect(sent).toBe(3);
+      expect(notifications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'u-tenant-1',
+          title: '合同即将到期提醒',
+          body: expect.stringContaining('30 天后'),
+          dedupKey: 'CONTRACT_EXPIRING:u-tenant-1:c-30:expiring-d30',
+        }),
+      );
+      expect(notifications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'u-tenant-1',
+          dedupKey: 'CONTRACT_EXPIRING:u-tenant-1:c-15:expiring-d15',
+        }),
+      );
+      expect(notifications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'u-tenant-1',
+          dedupKey: 'CONTRACT_EXPIRING:u-tenant-1:c-7:expiring-d7',
+        }),
+      );
+    });
+
+    it('当天已发送过同标题提醒 → 去重跳过', async () => {
+      prisma.contract.findMany.mockResolvedValue([expContract(30)]);
+      prisma.notification.findFirst.mockResolvedValue({ id: 'existing-notif' });
+
+      const sent = await service.sendExpiringContractReminders();
+
+      expect(sent).toBe(0);
+      expect(notifications.create).not.toHaveBeenCalled();
+    });
+
+    it('租客未绑定用户账号 → 跳过发送', async () => {
+      prisma.contract.findMany.mockResolvedValue([
+        expContract(30, { tenant: { userId: null } }),
+      ]);
+      prisma.notification.findFirst.mockResolvedValue(null);
+
+      const sent = await service.sendExpiringContractReminders();
+
+      expect(sent).toBe(0);
+      expect(notifications.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('报修自动确认与升级', () => {
     it('PENDING_CONFIRM 超 3 天 → 自动确认 COMPLETED（含结论文案）', async () => {
       prisma.maintenanceRequest.updateMany.mockResolvedValue({ count: 2 });
@@ -520,7 +586,9 @@ describe('SchedulerService（定时任务）', () => {
 
   describe('runDaily（聚合）', () => {
     it('单项失败不阻断其他任务，并记入 errors', async () => {
-      prisma.contract.findMany.mockRejectedValue(new Error('db down'));
+      prisma.contract.findMany
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockResolvedValue([]);
       prisma.bill.findMany.mockResolvedValue([]);
       prisma.notification.findFirst.mockResolvedValue(null);
       prisma.maintenanceRequest.updateMany.mockResolvedValue({ count: 0 });
@@ -532,6 +600,7 @@ describe('SchedulerService（定时任务）', () => {
       expect(summary.errors[0]).toContain('合同自动流转失败');
       expect(summary.billsOverdue).toBe(0);
       expect(summary.remindersSent).toBe(0);
+      expect(summary.expiringContractsNotified).toBe(0);
     });
   });
 
