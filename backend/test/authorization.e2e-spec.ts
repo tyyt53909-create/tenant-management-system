@@ -52,6 +52,8 @@ import { LeadsController } from '../src/modules/leads/leads.controller.js';
 import { LeadsService } from '../src/modules/leads/leads.service.js';
 import { AppointmentsController } from '../src/modules/appointments/appointments.controller.js';
 import { AppointmentsService } from '../src/modules/appointments/appointments.service.js';
+import { ContractTemplatesController } from '../src/modules/contracts/contract-templates.controller.js';
+import { ContractTemplatesService } from '../src/modules/contracts/contract-templates.service.js';
 import { BusinessClock } from '../src/common/business-clock/business-clock.service.js';
 
 /**
@@ -169,6 +171,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         PrepayController,
         LeadsController,
         AppointmentsController,
+        ContractTemplatesController,
       ],
       providers: [
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
@@ -216,6 +219,24 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
               }
               return { id };
             }),
+            create: vi.fn(),
+            update: vi.fn(),
+            remove: vi.fn(),
+            generatePdf: vi.fn().mockResolvedValue(Buffer.from('%PDF-1.4 mock')),
+            addCoTenant: vi.fn().mockResolvedValue({ id: 'cot-1' }),
+            removeCoTenant: vi.fn().mockResolvedValue({ success: true }),
+            initiateSignFlow: vi.fn().mockResolvedValue({ flowId: 'f1', signUrl: 'https://sign' }),
+            getSignStatus: vi.fn().mockResolvedValue({ flowId: 'f1', status: 'SIGNING' }),
+            mockCompleteSign: vi.fn().mockResolvedValue({ id: 'c1', signStatus: 'SIGNED' }),
+            handleSignCallback: vi.fn().mockResolvedValue({ success: true }),
+          },
+        },
+        {
+          provide: ContractTemplatesService,
+          useValue: {
+            findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findDefault: vi.fn().mockResolvedValue({ id: 'tmpl-1', name: '默认' }),
+            findOne: vi.fn().mockResolvedValue({ id: 'tmpl-1' }),
             create: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
@@ -646,6 +667,37 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
       // 租客访问本人预约端点 /appointments/my
       await as(request(app.getHttpServer()).get('/appointments/my'), 'TENANT', 'tenant-self').expect(200);
+    });
+  });
+
+  describe('合同条款模板与电子签约（LSE-02 / T299）', () => {
+    it('合同模板：未登录 401，TENANT 仅能查看默认/详情，ADMIN 可管理列表与增删改', async () => {
+      await request(app.getHttpServer()).get('/contract-templates').expect(401);
+      await as(request(app.getHttpServer()).get('/contract-templates'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/contract-templates'), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).get('/contract-templates'), 'ADMIN').expect(200);
+
+      // 租客查看默认模板
+      await as(request(app.getHttpServer()).get('/contract-templates/default'), 'TENANT', 'tenant-self').expect(200);
+    });
+
+    it('合同 PDF 导出与签约状态：租客/ADMIN 允许，CLEANER 403', async () => {
+      await as(request(app.getHttpServer()).get('/contracts/c1/pdf'), 'ADMIN').expect(200);
+      await as(request(app.getHttpServer()).get('/contracts/c1/pdf'), 'TENANT', 'tenant-self').expect(200);
+      await as(request(app.getHttpServer()).get('/contracts/c1/pdf'), 'CLEANER').expect(403);
+
+      await as(request(app.getHttpServer()).get('/contracts/c1/sign/status'), 'ADMIN').expect(200);
+      await as(request(app.getHttpServer()).get('/contracts/c1/sign/status'), 'TENANT', 'tenant-self').expect(200);
+      await as(request(app.getHttpServer()).get('/contracts/c1/sign/status'), 'CLEANER').expect(403);
+    });
+
+    it('电子签约发起与共同承租人：仅 ADMIN 拥有操作权限', async () => {
+      await as(request(app.getHttpServer()).post('/contracts/c1/sign/initiate'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/contracts/c1/sign/initiate'), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).post('/contracts/c1/sign/initiate'), 'ADMIN').expect(201);
+
+      await as(request(app.getHttpServer()).post('/contracts/c1/co-tenants'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/contracts/c1/co-tenants'), 'ADMIN').expect(201);
     });
   });
 

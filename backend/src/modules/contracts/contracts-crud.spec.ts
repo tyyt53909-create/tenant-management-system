@@ -4,6 +4,11 @@ import { ContractsService } from './contracts.service.js';
 import { SchedulerMonthlyBillsService } from '../scheduler/scheduler-monthly-bills.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CryptoService } from '../../common/crypto/crypto.service.js';
+import { ContractTemplatesService } from './contract-templates.service.js';
+import { ELECTRONIC_SIGN_PROVIDER } from './sign/electronic-sign-provider.interface.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { ConfigService } from '@nestjs/config';
 
 /**
  * 合同 CRUD 覆盖（T157）：此前仅有租客隔离与续签测试，
@@ -58,6 +63,37 @@ describe('ContractsService CRUD（T157）', () => {
               key === 'billing.defaultLateFeeRule' ? {} : 10000,
             ),
           },
+        },
+        {
+          provide: CryptoService,
+          useValue: {
+            encrypt: vi.fn((s: string) => `enc:${s}`),
+            decrypt: vi.fn((s: string) => s.replace('enc:', '')),
+            maskStored: vi.fn(() => '1101********0001'),
+          },
+        },
+        {
+          provide: ContractTemplatesService,
+          useValue: {
+            findDefault: vi.fn().mockResolvedValue({ id: 'tmpl-1', content: '模板' }),
+            render: vi.fn((c: string) => c),
+          },
+        },
+        {
+          provide: ELECTRONIC_SIGN_PROVIDER,
+          useValue: {
+            createSignFlow: vi.fn().mockResolvedValue({ flowId: 'flow-1', signUrl: 'https://test/sign' }),
+            querySignStatus: vi.fn().mockResolvedValue({ flowId: 'flow-1', status: 'SIGNING', signers: [] }),
+            handleCallback: vi.fn().mockResolvedValue({ flowId: 'flow-1', status: 'SIGNED' }),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: { create: vi.fn().mockResolvedValue({ id: 'n1' }) },
+        },
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({ JWT_SECRET: 'test-secret-at-least-32-bytes-long' }),
         },
       ],
     }).compile();

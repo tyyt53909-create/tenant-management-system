@@ -1,4 +1,16 @@
-import { IsString, IsNotEmpty, IsInt, IsEnum, IsDateString, IsOptional, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsInt,
+  IsEnum,
+  IsDateString,
+  IsOptional,
+  Min,
+  Max,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { CreateCoTenantDto } from './co-tenant.dto.js';
 
 enum PaymentCycle {
   MONTHLY = 'MONTHLY',
@@ -44,4 +56,13 @@ export class CreateContractDto {
 
   @IsOptional()
   lateFeeRule?: Record<string, unknown>; // JSON
+
+  @IsString()
+  @IsOptional()
+  templateId?: string;
+
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CreateCoTenantDto)
+  coTenants?: CreateCoTenantDto[];
 }
