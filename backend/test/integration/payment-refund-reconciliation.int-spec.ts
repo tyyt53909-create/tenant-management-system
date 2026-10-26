@@ -5,6 +5,7 @@ import { PAYMENT_PROVIDER, type PaymentProvider } from '../../src/modules/bills/
 import { MockPaymentProvider } from '../../src/modules/bills/payment/mock-payment.provider.js';
 import { JwtAuthService } from '../../src/modules/auth/jwt.service.js';
 import { DiscrepancyResolveAction } from '../../src/modules/bills/dto/reconciliation.dto.js';
+import { BusinessClock } from '../../src/common/business-clock/business-clock.service.js';
 
 let app: INestApplication;
 let mockPaymentProvider: MockPaymentProvider;
@@ -308,7 +309,8 @@ describe('微信退款、对账与差异处理整合测试（T294 / PAY-02）', 
       openid: 'wx_openid_rec_3',
     });
 
-    const billDateStr = '2026-10-25';
+    const clock = app.get(BusinessClock);
+    const billDateStr = clock.formatDate();
 
     // 1. 设置对账单数据：
     //    第 1 笔：系统已正常入账的一致单据
