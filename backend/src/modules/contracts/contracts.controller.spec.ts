@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ContractsController } from './contracts.controller.js';
 import { ContractsService } from './contracts.service.js';
+import { ContractRenewalsService } from './contract-renewals.service.js';
 
 describe('ContractsController', () => {
   let controller: ContractsController;
   let service: any;
+  let renewalsService: any;
 
   beforeEach(async () => {
     service = {
@@ -25,9 +27,25 @@ describe('ContractsController', () => {
       handleSignCallback: vi.fn().mockResolvedValue({ success: true }),
     };
 
+    renewalsService = {
+      findExpiringContracts: vi.fn().mockResolvedValue([]),
+      findHoldoverContracts: vi.fn().mockResolvedValue([]),
+      findAllRenewalIntents: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+      findAllRenewalOffers: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+      findMyRenewalOffers: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+      respondRenewalOffer: vi.fn().mockResolvedValue({ id: 'ro1', status: 'ACCEPTED' }),
+      cancelRenewalOffer: vi.fn().mockResolvedValue({ id: 'ro1', status: 'CANCELLED' }),
+      submitRenewalIntent: vi.fn().mockResolvedValue({ id: 'ri1', intent: 'RENEW' }),
+      getRenewalIntent: vi.fn().mockResolvedValue({ id: 'ri1' }),
+      createRenewalOffer: vi.fn().mockResolvedValue({ id: 'ro1' }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ContractsController],
-      providers: [{ provide: ContractsService, useValue: service }],
+      providers: [
+        { provide: ContractsService, useValue: service },
+        { provide: ContractRenewalsService, useValue: renewalsService },
+      ],
     }).compile();
 
     controller = module.get<ContractsController>(ContractsController);
@@ -88,5 +106,37 @@ describe('ContractsController', () => {
     expect(await controller.getSignStatus('c1', { role: 'ADMIN' } as any)).toEqual({ signStatus: 'SIGNED' });
     expect(await controller.mockCompleteSign('c1')).toEqual({ id: 'c1', signStatus: 'SIGNED' });
     expect(await controller.handleSignCallback({ flowId: 'f1' })).toEqual({ success: true });
+  });
+
+  it('renewal endpoints delegate to renewalsService', async () => {
+    expect(await controller.findExpiring('45')).toEqual([]);
+    expect(renewalsService.findExpiringContracts).toHaveBeenCalledWith(45);
+
+    expect(await controller.findHoldover()).toEqual([]);
+    expect(renewalsService.findHoldoverContracts).toHaveBeenCalled();
+
+    expect(await controller.findAllRenewalIntents({})).toEqual({ data: [], meta: { total: 0 } });
+    expect(renewalsService.findAllRenewalIntents).toHaveBeenCalled();
+
+    expect(await controller.findAllRenewalOffers({})).toEqual({ data: [], meta: { total: 0 } });
+    expect(renewalsService.findAllRenewalOffers).toHaveBeenCalled();
+
+    expect(await controller.findMyRenewalOffers({ role: 'TENANT', tenantId: 't1' } as any, {})).toEqual({ data: [], meta: { total: 0 } });
+    expect(renewalsService.findMyRenewalOffers).toHaveBeenCalledWith('t1', {});
+
+    expect(await controller.respondRenewalOffer('ro1', { agree: true } as any, { role: 'TENANT', tenantId: 't1' } as any)).toEqual({ id: 'ro1', status: 'ACCEPTED' });
+    expect(renewalsService.respondRenewalOffer).toHaveBeenCalledWith('ro1', 't1', { agree: true });
+
+    expect(await controller.cancelRenewalOffer('ro1')).toEqual({ id: 'ro1', status: 'CANCELLED' });
+    expect(renewalsService.cancelRenewalOffer).toHaveBeenCalledWith('ro1');
+
+    expect(await controller.submitRenewalIntent('c1', { intent: 'RENEW' } as any, { role: 'TENANT', tenantId: 't1' } as any)).toEqual({ id: 'ri1', intent: 'RENEW' });
+    expect(renewalsService.submitRenewalIntent).toHaveBeenCalledWith('c1', 't1', { intent: 'RENEW' });
+
+    expect(await controller.getRenewalIntent('c1', { role: 'TENANT', tenantId: 't1' } as any)).toEqual({ id: 'ri1' });
+    expect(renewalsService.getRenewalIntent).toHaveBeenCalledWith('c1', 't1', true);
+
+    expect(await controller.createRenewalOffer('c1', { offeredRent: 300000 } as any, { role: 'ADMIN', userId: 'admin1' } as any)).toEqual({ id: 'ro1' });
+    expect(renewalsService.createRenewalOffer).toHaveBeenCalledWith('c1', 'admin1', { offeredRent: 300000 });
   });
 });

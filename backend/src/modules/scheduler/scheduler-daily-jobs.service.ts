@@ -331,6 +331,68 @@ export class SchedulerDailyJobsService {
     return sent;
   }
 
+  // ------------------------------------------------------------------
+  // 6. 合同到期梯次提醒（30天 / 15天 / 7天，LSE-04 / T301）
+  // ------------------------------------------------------------------
+
+  async sendExpiringContractReminders(): Promise<number> {
+    const today = startOfTodayUtc();
+    const maxDate = new Date(today.getTime() + 31 * MS_PER_DAY);
+
+    const contracts = await this.prisma.contract.findMany({
+      where: {
+        status: 'ACTIVE',
+        endDate: { gte: today, lte: maxDate },
+      },
+      include: {
+        tenant: { select: { userId: true } },
+        room: { select: { roomNumber: true } },
+      },
+    });
+
+    let sent = 0;
+
+    for (const contract of contracts) {
+      const userId = contract.tenant?.userId;
+      if (!userId) continue;
+
+      const daysUntilExpire = daysBetween(today, startOfTodayUtc(contract.endDate));
+      let title: string | null = null;
+      let body = '';
+      let nodeKey: string | null = null;
+
+      if ([30, 15, 7].includes(daysUntilExpire)) {
+        title = '合同即将到期提醒';
+        body = `您承租的房间 ${contract.room?.roomNumber || ''} 合同将于 ${daysUntilExpire} 天后（${formatDate(contract.endDate)}）到期，请及时在移动端提交续约意向。`;
+        nodeKey = `expiring-d${daysUntilExpire}`;
+      }
+
+      if (!title || !nodeKey) continue;
+
+      const existing = await this.prisma.notification.findFirst({
+        where: {
+          userId,
+          title,
+          createdAt: { gte: startOfUtcDay() },
+        },
+        select: { id: true },
+      });
+      if (existing) continue;
+
+      const delivered = await this.notify(
+        userId,
+        title,
+        body,
+        'NORMAL',
+        { contractId: contract.id, daysUntilExpire },
+        `CONTRACT_EXPIRING:${userId}:${contract.id}:${nodeKey}`,
+      );
+      if (delivered) sent++;
+    }
+
+    return sent;
+  }
+
   /** 通知发送（失败不阻断任务，仅记录日志） */
   /** 发送通知；返回是否真的发出（失败只记日志，供调用方决定是否计入统计，T208）。 */
   private async notify(

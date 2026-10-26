@@ -12,11 +12,21 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ContractsService } from './contracts.service.js';
+import { ContractRenewalsService } from './contract-renewals.service.js';
 import { CreateContractDto } from './dto/create-contract.dto.js';
 import { UpdateContractDto } from './dto/update-contract.dto.js';
 import { QueryContractsDto } from './dto/query-contracts.dto.js';
 import { RenewContractDto } from './dto/renew-contract.dto.js';
 import { AddCoTenantDto } from './dto/co-tenant.dto.js';
+import {
+  SubmitRenewalIntentDto,
+  QueryRenewalIntentsDto,
+} from './dto/submit-renewal-intent.dto.js';
+import {
+  CreateRenewalOfferDto,
+  RespondRenewalOfferDto,
+  QueryRenewalOffersDto,
+} from './dto/renewal-offer.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -32,7 +42,10 @@ import {
 @Controller('contracts')
 @UseGuards(JwtAuthGuard)
 export class ContractsController {
-  constructor(private readonly contractsService: ContractsService) {}
+  constructor(
+    private readonly contractsService: ContractsService,
+    private readonly renewalsService: ContractRenewalsService,
+  ) {}
 
   @Post()
   @UseGuards(RolesGuard)
@@ -60,6 +73,93 @@ export class ContractsController {
       return this.contractsService.findByTenant(tenantId, query);
     }
     return this.contractsService.findAll(query);
+  }
+
+  /**
+   * 查询即将到期的合同（LSE-04 / T301）
+   */
+  @Get('expiring')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findExpiring(@Query('days') days?: string) {
+    const daysAhead = days ? Math.max(1, Math.min(180, parseInt(days, 10))) : 30;
+    return this.renewalsService.findExpiringContracts(daysAhead);
+  }
+
+  /**
+   * 查询到期滞留（Holdover）未退租未续约合同（ISS-20 / T301）
+   */
+  @Get('holdover')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findHoldover() {
+    return this.renewalsService.findHoldoverContracts();
+  }
+
+  /**
+   * 管理员查询全部续约意向
+   */
+  @Get('renewal-intents')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findAllRenewalIntents(@Query() query: QueryRenewalIntentsDto) {
+    return this.renewalsService.findAllRenewalIntents(query);
+  }
+
+  /**
+   * 管理员查询全部续约报价
+   */
+  @Get('renewal-offers')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findAllRenewalOffers(@Query() query: QueryRenewalOffersDto) {
+    return this.renewalsService.findAllRenewalOffers(query);
+  }
+
+  /**
+   * 租客查询本人的续约报价
+   */
+  @Get('renewal-offers/my')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.contract.read')
+  findMyRenewalOffers(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Query() query: QueryRenewalOffersDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    if (user.role === 'TENANT') {
+      const tenantId = user.tenantId ?? '';
+      return this.renewalsService.findMyRenewalOffers(tenantId, query);
+    }
+    return this.renewalsService.findAllRenewalOffers(query);
+  }
+
+  /**
+   * 租客接受或拒绝续约报价方案
+   */
+  @Post('renewal-offers/:offerId/respond')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.contract.read')
+  respondRenewalOffer(
+    @Param('offerId') offerId: string,
+    @Body() dto: RespondRenewalOfferDto,
+    @CurrentUser() userParam: CurrentUserParam,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.tenantId ?? '';
+    return this.renewalsService.respondRenewalOffer(offerId, tenantId, dto);
+  }
+
+  /**
+   * 管理端撤回续约报价
+   */
+  @Post('renewal-offers/:offerId/cancel')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  cancelRenewalOffer(@Param('offerId') offerId: string) {
+    return this.renewalsService.cancelRenewalOffer(offerId);
   }
 
   /**
@@ -128,6 +228,54 @@ export class ContractsController {
   @Roles('ADMIN')
   remove(@Param('id') id: string) {
     return this.contractsService.remove(id);
+  }
+
+  /**
+   * 租客登记或更新本人的续约意向（LSE-04 / T301）
+   */
+  @Post(':id/renewal-intent')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.contract.read')
+  submitRenewalIntent(
+    @Param('id') id: string,
+    @Body() dto: SubmitRenewalIntentDto,
+    @CurrentUser() userParam: CurrentUserParam,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.tenantId ?? '';
+    return this.renewalsService.submitRenewalIntent(id, tenantId, dto);
+  }
+
+  /**
+   * 查询指定合同的续约意向
+   */
+  @Get(':id/renewal-intent')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.contract.read')
+  getRenewalIntent(
+    @Param('id') id: string,
+    @CurrentUser() userParam: CurrentUserParam,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const isTenant = user.role === 'TENANT';
+    return this.renewalsService.getRenewalIntent(id, user.tenantId, isTenant);
+  }
+
+  /**
+   * 管理员发起针对该合同的续约报价
+   */
+  @Post(':id/renewal-offers')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  createRenewalOffer(
+    @Param('id') id: string,
+    @Body() dto: CreateRenewalOfferDto,
+    @CurrentUser() userParam: CurrentUserParam,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.renewalsService.createRenewalOffer(id, user.userId, dto);
   }
 
   /**

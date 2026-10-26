@@ -54,6 +54,7 @@ import { AppointmentsController } from '../src/modules/appointments/appointments
 import { AppointmentsService } from '../src/modules/appointments/appointments.service.js';
 import { ContractTemplatesController } from '../src/modules/contracts/contract-templates.controller.js';
 import { ContractTemplatesService } from '../src/modules/contracts/contract-templates.service.js';
+import { ContractRenewalsService } from '../src/modules/contracts/contract-renewals.service.js';
 import { InspectionsController } from '../src/modules/inspections/inspections.controller.js';
 import { InspectionsService } from '../src/modules/inspections/inspections.service.js';
 import { CheckoutRequestsService } from '../src/modules/checkout/checkout-requests.service.js';
@@ -270,6 +271,26 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
             create: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
+          },
+        },
+        {
+          provide: ContractRenewalsService,
+          useValue: {
+            findExpiringContracts: vi.fn().mockResolvedValue([]),
+            findHoldoverContracts: vi.fn().mockResolvedValue([]),
+            findAllRenewalIntents: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findAllRenewalOffers: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findMyRenewalOffers: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            respondRenewalOffer: vi.fn().mockResolvedValue({ id: 'ro-1', status: 'ACCEPTED' }),
+            cancelRenewalOffer: vi.fn().mockResolvedValue({ id: 'ro-1', status: 'CANCELLED' }),
+            submitRenewalIntent: vi.fn().mockResolvedValue({ id: 'ri-1', intent: 'RENEW' }),
+            getRenewalIntent: vi.fn(async (id: string, tenantId?: string, isTenant = true) => {
+              if (isTenant && (!tenantId || tenantId !== 'tenant-self')) {
+                throw new NotFoundException('合同不存在');
+              }
+              return { id: 'ri-1', intent: 'RENEW' };
+            }),
+            createRenewalOffer: vi.fn().mockResolvedValue({ id: 'ro-1' }),
           },
         },
         {
@@ -528,6 +549,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
     const routes = [
       '/bills/my',
       '/contracts/my',
+      '/contracts/renewal-offers/my',
       '/maintenance/my',
       '/prepay-accounts/my',
       '/prepay-accounts/transactions',
@@ -765,6 +787,38 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       // 管理员审批
       await as(request(app.getHttpServer()).post('/checkout/requests/req-1/review').send({ approved: true }), 'TENANT').expect(403);
       await as(request(app.getHttpServer()).post('/checkout/requests/req-1/review').send({ approved: true }), 'ADMIN').expect(201);
+    });
+  });
+
+  describe('合同续约意向与报价（LSE-04 / T301）', () => {
+    it('续约意向与报价：全量与发起报价未登录 401，TENANT 仅能查看与答复本人报价及填报意向，ADMIN 可全量管理', async () => {
+      // 报价列表全量与到期/滞留监控
+      await request(app.getHttpServer()).get('/contracts/expiring').expect(401);
+      await as(request(app.getHttpServer()).get('/contracts/expiring'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/contracts/expiring'), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).get('/contracts/expiring'), 'ADMIN').expect(200);
+
+      await as(request(app.getHttpServer()).get('/contracts/holdover'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/contracts/holdover'), 'ADMIN').expect(200);
+
+      await as(request(app.getHttpServer()).get('/contracts/renewal-offers'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/contracts/renewal-offers'), 'ADMIN').expect(200);
+
+      // 发起报价仅管理员
+      await as(request(app.getHttpServer()).post('/contracts/c1/renewal-offers').send({ offeredRent: 300000, offeredDeposit: 300000, startDate: '2026-11-01', endDate: '2027-10-31' }), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/contracts/c1/renewal-offers').send({ offeredRent: 300000, offeredDeposit: 300000, startDate: '2026-11-01', endDate: '2027-10-31' }), 'ADMIN').expect(201);
+
+      // 租客本人端点 /contracts/renewal-offers/my 与 /contracts/renewal-offers/:id/respond 允许访问
+      await as(request(app.getHttpServer()).get('/contracts/renewal-offers/my'), 'TENANT', 'tenant-self').expect(200);
+      await as(request(app.getHttpServer()).post('/contracts/renewal-offers/ro-1/respond').send({ agree: true }), 'TENANT', 'tenant-self').expect(201);
+      await as(request(app.getHttpServer()).post('/contracts/renewal-offers/ro-1/respond').send({ agree: true }), 'CLEANER').expect(403);
+
+      // 租客填报续约意向
+      await as(request(app.getHttpServer()).post('/contracts/c1/renewal-intent').send({ intent: 'RENEW' }), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).post('/contracts/c1/renewal-intent').send({ intent: 'RENEW' }), 'TENANT', 'tenant-self').expect(201);
+      await as(request(app.getHttpServer()).get('/contracts/c1/renewal-intent'), 'TENANT', 'tenant-self').expect(200);
+      await as(request(app.getHttpServer()).get('/contracts/renewal-intents'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/contracts/renewal-intents'), 'ADMIN').expect(200);
     });
   });
 

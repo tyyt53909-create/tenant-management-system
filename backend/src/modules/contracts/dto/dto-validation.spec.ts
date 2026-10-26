@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { CreateContractDto } from './create-contract.dto.js';
+import { SubmitRenewalIntentDto } from './submit-renewal-intent.dto.js';
+import { CreateRenewalOfferDto, RespondRenewalOfferDto } from './renewal-offer.dto.js';
 
 /** 复刻全局 ValidationPipe 配置（main.ts）：whitelist + forbidNonWhitelisted */
 const validateLikeGlobalPipe = (dto: object) =>
@@ -42,5 +44,49 @@ describe('CreateContractDto 校验（回归）', () => {
 
       expect(errors.some((error) => error.property === 'paymentCycle')).toBe(true);
     }
+  });
+});
+
+describe('SubmitRenewalIntentDto 校验', () => {
+  it('合法的意向类型与参数通过校验', async () => {
+    const dto = plainToInstance(SubmitRenewalIntentDto, {
+      intent: 'RENEW',
+      expectedMonths: 12,
+      expectedRent: 350000,
+      notes: '希望原价续约',
+    });
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('非法的意向类型被拒绝', async () => {
+    const dto = plainToInstance(SubmitRenewalIntentDto, {
+      intent: 'INVALID_INTENT',
+    });
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors.some((e) => e.property === 'intent')).toBe(true);
+  });
+});
+
+describe('RenewalOfferDto 校验', () => {
+  it('合法的报价 DTO 通过校验', async () => {
+    const dto = plainToInstance(CreateRenewalOfferDto, {
+      offeredRent: 350000,
+      offeredDeposit: 350000,
+      startDate: '2026-11-01',
+      endDate: '2027-10-31',
+      discountNotes: '95折优惠',
+    });
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('合法的答复 DTO 通过校验', async () => {
+    const dto = plainToInstance(RespondRenewalOfferDto, {
+      agree: false,
+      rejectReason: '租金略高',
+    });
+    const errors = await validateLikeGlobalPipe(dto);
+    expect(errors).toHaveLength(0);
   });
 });

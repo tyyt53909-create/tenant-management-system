@@ -299,6 +299,22 @@ enum CheckoutReasonType {
   OTHER // 其他原因
 }
 
+// 续约意向类型（LSE-04 / T301）
+enum RenewalIntentType {
+  RENEW // 确认想续租
+  NOT_RENEW // 不再续租（到期退租）
+  CONSIDERING // 考虑中 / 需协商
+}
+
+// 续约报价状态（LSE-04 / T301）
+enum RenewalOfferStatus {
+  PENDING // 待租客确认
+  ACCEPTED // 租客已接受
+  REJECTED // 租客已拒绝
+  EXPIRED // 报价已过期
+  CANCELLED // 管理端已撤回
+}
+
 // 退租结算项类型
 enum CheckoutItemType {
   RENT_REFUND // 租金退还
@@ -437,6 +453,7 @@ model Room {
   appointments        ViewingAppointment[]
   inspections         RoomInspection[]
   checkoutRequests    CheckoutRequest[]
+  renewalOffers       RenewalOffer[]
 
   @@unique([buildingId, floor, roomNumber])
   @@index([buildingId, status])
@@ -534,6 +551,8 @@ model Tenant {
   inviteCodes         InviteCode[]
   inspections         RoomInspection[]
   checkoutRequests    CheckoutRequest[]
+  renewalIntents      RenewalIntent[]
+  renewalOffers       RenewalOffer[]
 
   @@index([isActive])
   @@index([phone])
@@ -656,6 +675,8 @@ model Contract {
   coTenants               ContractCoTenant[]
   inspections             RoomInspection[]
   checkoutRequests        CheckoutRequest[]
+  renewalIntents          RenewalIntent[]
+  renewalOffers           RenewalOffer[]
 
   @@index([buildingId, status])
   @@index([tenantId, status])
@@ -1832,4 +1853,62 @@ model CheckoutRequest {
   @@index([status])
   @@index([expectedCheckoutDate])
   @@map("checkout_requests")
+}
+
+// 53. RenewalIntent（租客续约意向调查与登记，LSE-04 / T301）
+model RenewalIntent {
+  id             String            @id @default(cuid())
+  contractId     String
+  contract       Contract          @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  tenantId       String
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  intent         RenewalIntentType
+  expectedMonths Int?              // 期望续租租期月数（如 3, 6, 12）
+  expectedRent   Int?              // 期望月租金（分）
+  notes          String?           @db.Text
+
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([contractId])
+  @@index([tenantId])
+  @@index([intent])
+  @@map("renewal_intents")
+}
+
+// 54. RenewalOffer（管家端发出的续约报价单，LSE-04 / T301）
+model RenewalOffer {
+  id                String             @id @default(cuid())
+  offerNumber       String             @unique
+
+  contractId        String
+  contract          Contract           @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  roomId            String
+  room              Room               @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  tenantId          String
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  offeredRent       Int                // 报价月租（分）
+  offeredDeposit    Int                // 报价押金（分）
+  startDate         DateTime           @db.Date
+  endDate           DateTime           @db.Date
+  discountNotes     String?            @db.Text
+  validUntil        DateTime?          // 报价有效截止时间
+
+  status            RenewalOfferStatus @default(PENDING)
+  rejectReason      String?            @db.Text
+
+  respondedAt       DateTime?
+  renewedContractId String?            // 租客接受后生成的续约合同草稿 ID
+
+  createdBy         String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([contractId])
+  @@index([tenantId])
+  @@index([roomId])
+  @@index([status])
+  @@map("renewal_offers")
 }
