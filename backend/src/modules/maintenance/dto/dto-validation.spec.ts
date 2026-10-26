@@ -4,6 +4,12 @@ import { plainToInstance } from 'class-transformer';
 import { CreateMaintenanceDto } from './create-maintenance.dto.js';
 import { QueryMaintenanceDto } from './query-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './update-maintenance.dto.js';
+import {
+  DispatchMaintenanceDto,
+  CompleteMaintenanceDto,
+  ConfirmMaintenanceDto,
+  TransferExpenseDto,
+} from './work-order-actions.dto.js';
 
 /** 复刻全局 ValidationPipe 配置（main.ts）：whitelist + forbidNonWhitelisted */
 const validateLikeGlobalPipe = (dto: object) =>
@@ -90,5 +96,48 @@ describe('CreateMaintenanceDto 校验（T138）', () => {
       plainToInstance(CreateMaintenanceDto, { ...base, description: '' }),
     );
     expect(noDescription.some((error) => error.property === 'description')).toBe(true);
+  });
+
+  it('DispatchMaintenanceDto 校验', async () => {
+    const valid = plainToInstance(DispatchMaintenanceDto, {
+      assignedMaintainerId: 'm-1',
+      assignedTo: '张师傅',
+      notes: '带梯子',
+    });
+    expect(await validateLikeGlobalPipe(valid)).toHaveLength(0);
+
+    const invalid = plainToInstance(DispatchMaintenanceDto, { assignedMaintainerId: '' });
+    expect((await validateLikeGlobalPipe(invalid)).length).toBeGreaterThan(0);
+  });
+
+  it('CompleteMaintenanceDto 校验', async () => {
+    const valid = plainToInstance(CompleteMaintenanceDto, {
+      resolution: '修好了',
+      laborCost: 2000,
+      materialCost: 3000,
+      tenantFault: true,
+      faultReason: '私拆电线',
+    });
+    expect(await validateLikeGlobalPipe(valid)).toHaveLength(0);
+
+    const invalid = plainToInstance(CompleteMaintenanceDto, { resolution: '', laborCost: -100 });
+    const errors = await validateLikeGlobalPipe(invalid);
+    expect(errors.some((e) => e.property === 'resolution')).toBe(true);
+    expect(errors.some((e) => e.property === 'laborCost')).toBe(true);
+  });
+
+  it('ConfirmMaintenanceDto 校验', async () => {
+    const valid = plainToInstance(ConfirmMaintenanceDto, { accepted: true, rating: 5 });
+    expect(await validateLikeGlobalPipe(valid)).toHaveLength(0);
+
+    const invalid = plainToInstance(ConfirmMaintenanceDto, { accepted: 'not-bool' as any, rating: 10 });
+    const errors = await validateLikeGlobalPipe(invalid);
+    expect(errors.some((e) => e.property === 'accepted')).toBe(true);
+    expect(errors.some((e) => e.property === 'rating')).toBe(true);
+  });
+
+  it('TransferExpenseDto 校验', async () => {
+    const valid = plainToInstance(TransferExpenseDto, { dueDate: '2026-11-01', notes: '扣费' });
+    expect(await validateLikeGlobalPipe(valid)).toHaveLength(0);
   });
 });

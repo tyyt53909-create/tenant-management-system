@@ -133,6 +133,7 @@ enum BillType {
   UTILITY // 水电费账单（预付账户不足时补缴）
   DEPOSIT // 押金账单
   OTHER // 其他费用
+  MAINTENANCE // 维修工单费用转嫁账单（WRK-02 / T303）
 }
 
 // 账单状态
@@ -598,6 +599,7 @@ model User {
 
   publishedAnnouncements Announcement[] @relation("AnnouncementCreator")
   buildingAssignments    StaffBuildingAssignment[]
+  assignedMaintenanceRequests MaintenanceRequest[] @relation("MaintainerAssignedRequests")
 
   @@index([email])
   @@index([phone])
@@ -743,6 +745,7 @@ model Bill {
   refundRecords   RefundRecord[]
   lateFees        LateFee[]
   lateFeeAccruals LateFeeAccrual[]
+  maintenanceRequest MaintenanceRequest? @relation("MaintenanceExpenseBill")
 
   @@index([contractId, status])
   @@index([status, dueDate])
@@ -1060,8 +1063,29 @@ model MaintenanceRequest {
 
   status MaintenanceStatus @default(SUBMITTED)
 
-  assignedTo String?
-  assignedAt DateTime?
+  assignedTo           String?
+  assignedAt           DateTime?
+  assignedMaintainerId String?
+  assignedMaintainer   User?     @relation("MaintainerAssignedRequests", fields: [assignedMaintainerId], references: [id], onDelete: SetNull)
+
+  // SLA 时限与跟踪（WRK-02 / T303）
+  responseDueAt    DateTime?
+  slaDueAt         DateTime?
+  firstRespondedAt DateTime?
+  isSlaBreached    Boolean   @default(false)
+  slaBreachedAt    DateTime?
+  slaBreachType    String?   // 'RESPONSE_OVERDUE' | 'RESOLUTION_OVERDUE'
+
+  // 维修用料成本与费用转嫁（WRK-02 / T303）
+  laborCost            Int       @default(0) // 工时费（分）
+  materialCost         Int       @default(0) // 材料费（分）
+  totalCost            Int       @default(0) // 总费用（分）
+  tenantFault          Boolean   @default(false) // 是否租客过失
+  faultReason          String?   @db.Text
+  expenseTransferred   Boolean   @default(false) // 是否已转嫁为账单
+  expenseBillId        String?   @unique
+  expenseBill          Bill?     @relation("MaintenanceExpenseBill", fields: [expenseBillId], references: [id], onDelete: SetNull)
+  expenseTransferredAt DateTime?
 
   resolvedAt DateTime?
   resolution String?   @db.Text
@@ -1075,6 +1099,8 @@ model MaintenanceRequest {
   @@index([roomId, status])
   @@index([tenantId, status])
   @@index([status, createdAt])
+  @@index([assignedMaintainerId])
+  @@index([isSlaBreached])
   @@map("maintenance_requests")
 }
 

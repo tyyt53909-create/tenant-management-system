@@ -1180,7 +1180,8 @@
     "path": "/api/maintenance",
     "public": false,
     "roles": [
-      "ADMIN"
+      "ADMIN",
+      "PROPERTY_MANAGER"
     ]
   },
   {
@@ -1189,7 +1190,8 @@
     "public": false,
     "roles": [
       "TENANT",
-      "ADMIN"
+      "ADMIN",
+      "PROPERTY_MANAGER"
     ]
   },
   {
@@ -1206,7 +1208,9 @@
     "public": false,
     "roles": [
       "TENANT",
-      "ADMIN"
+      "ADMIN",
+      "PROPERTY_MANAGER",
+      "MAINTAINER"
     ]
   },
   {
@@ -1214,7 +1218,37 @@
     "path": "/api/maintenance/:id",
     "public": false,
     "roles": [
-      "ADMIN"
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/maintenance/:id/complete",
+    "public": false,
+    "roles": [
+      "MAINTAINER",
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/maintenance/:id/confirm",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/maintenance/:id/dispatch",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
     ]
   },
   {
@@ -1223,7 +1257,9 @@
     "public": false,
     "roles": [
       "TENANT",
-      "ADMIN"
+      "ADMIN",
+      "PROPERTY_MANAGER",
+      "MAINTAINER"
     ]
   },
   {
@@ -1232,7 +1268,38 @@
     "public": false,
     "roles": [
       "TENANT",
-      "ADMIN"
+      "ADMIN",
+      "PROPERTY_MANAGER",
+      "MAINTAINER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/maintenance/:id/start",
+    "public": false,
+    "roles": [
+      "MAINTAINER",
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/maintenance/:id/transfer-expense",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/maintenance/assigned",
+    "public": false,
+    "roles": [
+      "MAINTAINER",
+      "ADMIN",
+      "PROPERTY_MANAGER"
     ]
   },
   {
@@ -1241,6 +1308,15 @@
     "public": false,
     "roles": [
       "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/maintenance/sla-alerts",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
     ]
   },
   {

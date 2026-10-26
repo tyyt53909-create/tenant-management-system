@@ -2606,6 +2606,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/maintenance/assigned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 维修师傅专属端：查看指派给本人的工单（WRK-02 / T303） */
+        get: operations["MaintenanceController_getAssigned"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/sla-alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SLA 超时与预警工单监控列表（WRK-02 / T303） */
+        get: operations["MaintenanceController_getSlaAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/maintenance/my": {
         parameters: {
             query?: never;
@@ -2613,6 +2647,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** 租客查看自己的报修（必须声明在 :id 之前） */
         get: operations["MaintenanceController_findMy"];
         put?: never;
         post?: never;
@@ -2648,6 +2683,91 @@ export interface paths {
         get: operations["MaintenanceController_findMessages"];
         put?: never;
         post: operations["MaintenanceController_addMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/{id}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 派工调度（WRK-02 / T303） */
+        post: operations["MaintenanceController_dispatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 维修师傅接单开工（WRK-02 / T303） */
+        post: operations["MaintenanceController_startWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 维修师傅提报完工说明与用料成本（WRK-02 / T303） */
+        post: operations["MaintenanceController_completeWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 租客/管理员验收确认（WRK-02 / T303） */
+        post: operations["MaintenanceController_confirmWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maintenance/{id}/transfer-expense": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 租客过失维修费用转嫁生成账单（WRK-02 / T303） */
+        post: operations["MaintenanceController_transferExpense"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3869,7 +3989,7 @@ export interface components {
         CreateBillDto: {
             contractId: string;
             /** @enum {string} */
-            billType: "RENT" | "UTILITY" | "DEPOSIT" | "OTHER";
+            billType: "RENT" | "UTILITY" | "DEPOSIT" | "OTHER" | "MAINTENANCE";
             period: string;
             amount: number;
             dueDate: string;
@@ -3983,11 +4103,44 @@ export interface components {
         CreateMaintenanceMessageDto: {
             body: string;
         };
+        DispatchMaintenanceDto: {
+            assignedMaintainerId: string;
+            assignedTo?: string;
+            notes?: string;
+        };
+        StartMaintenanceDto: {
+            notes?: string;
+        };
+        CompleteMaintenanceDto: {
+            resolution: string;
+            /** @default 0 */
+            laborCost: number;
+            /** @default 0 */
+            materialCost: number;
+            /** @default false */
+            tenantFault: boolean;
+            faultReason?: string;
+            photos?: string[];
+        };
+        ConfirmMaintenanceDto: {
+            accepted: boolean;
+            feedback?: string;
+            rating?: number;
+        };
+        TransferExpenseDto: {
+            dueDate?: string;
+            notes?: string;
+        };
         UpdateMaintenanceDto: {
             /** @enum {string} */
             status?: "SUBMITTED" | "ACKNOWLEDGED" | "ASSIGNED" | "IN_PROGRESS" | "PENDING_CONFIRM" | "COMPLETED" | "CANCELLED";
             assignedTo?: string;
+            assignedMaintainerId?: string;
             resolution?: string;
+            laborCost?: number;
+            materialCost?: number;
+            tenantFault?: boolean;
+            faultReason?: string;
         };
         CheckoutItemDto: {
             /** @enum {string} */
@@ -11254,6 +11407,9 @@ export interface operations {
                 status?: "SUBMITTED" | "ACKNOWLEDGED" | "ASSIGNED" | "IN_PROGRESS" | "PENDING_CONFIRM" | "COMPLETED" | "CANCELLED";
                 roomId?: string;
                 tenantId?: string;
+                buildingId?: string;
+                assignedMaintainerId?: string;
+                isSlaBreached?: boolean;
             };
             header?: never;
             path?: never;
@@ -11315,6 +11471,86 @@ export interface operations {
             };
         };
     };
+    MaintenanceController_getAssigned: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                status?: "SUBMITTED" | "ACKNOWLEDGED" | "ASSIGNED" | "IN_PROGRESS" | "PENDING_CONFIRM" | "COMPLETED" | "CANCELLED";
+                roomId?: string;
+                tenantId?: string;
+                buildingId?: string;
+                assignedMaintainerId?: string;
+                isSlaBreached?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MaintenanceController_getSlaAlerts: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                status?: "SUBMITTED" | "ACKNOWLEDGED" | "ASSIGNED" | "IN_PROGRESS" | "PENDING_CONFIRM" | "COMPLETED" | "CANCELLED";
+                roomId?: string;
+                tenantId?: string;
+                buildingId?: string;
+                assignedMaintainerId?: string;
+                isSlaBreached?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     MaintenanceController_findMy: {
         parameters: {
             query?: {
@@ -11323,6 +11559,9 @@ export interface operations {
                 status?: "SUBMITTED" | "ACKNOWLEDGED" | "ASSIGNED" | "IN_PROGRESS" | "PENDING_CONFIRM" | "COMPLETED" | "CANCELLED";
                 roomId?: string;
                 tenantId?: string;
+                buildingId?: string;
+                assignedMaintainerId?: string;
+                isSlaBreached?: boolean;
             };
             header?: never;
             path?: never;
@@ -11497,6 +11736,185 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateMaintenanceMessageDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MaintenanceController_dispatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchMaintenanceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MaintenanceController_startWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartMaintenanceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MaintenanceController_completeWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteMaintenanceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MaintenanceController_confirmWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMaintenanceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MaintenanceController_transferExpense: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferExpenseDto"];
             };
         };
         responses: {

@@ -12,7 +12,9 @@ export enum BillStatus {
 export enum BillType {
   RENT = 'RENT',
   UTILITY = 'UTILITY',
+  DEPOSIT = 'DEPOSIT',
   OTHER = 'OTHER',
+  MAINTENANCE = 'MAINTENANCE',
 }
 
 export class QueryBillsDto {

@@ -5,6 +5,7 @@ export enum BillType {
   UTILITY = 'UTILITY',
   DEPOSIT = 'DEPOSIT',
   OTHER = 'OTHER',
+  MAINTENANCE = 'MAINTENANCE',
 }
 export class CreateBillDto {
   @IsString()

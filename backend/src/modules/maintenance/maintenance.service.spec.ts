@@ -30,6 +30,9 @@ describe('MaintenanceService', () => {
       room: { findUnique: vi.fn() },
       tenant: { findUnique: vi.fn() },
       contract: { findFirst: vi.fn() },
+      user: { findUnique: vi.fn() },
+      bill: { create: vi.fn() },
+      staffBuildingAssignment: { findFirst: vi.fn(), findMany: vi.fn() },
       maintenancePhoto: { createMany: vi.fn() },
       maintenanceMessage: {
         create: vi.fn().mockResolvedValue({ id: 'msg-1' }),
@@ -245,7 +248,12 @@ describe('MaintenanceService', () => {
       const result = await service.findOneForTenant('mr-1', 'tenant-1');
 
       expect(result.id).toBe('mr-1');
-      expect(prisma.maintenanceRequest.findUnique).toHaveBeenCalledWith({where:{id:'mr-1'},include:{photos:true}});
+      expect(prisma.maintenanceRequest.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'mr-1' },
+          include: expect.objectContaining({ photos: true }),
+        }),
+      );
       expect(result.photos).toHaveLength(1);
     });
   });
@@ -370,6 +378,315 @@ describe('MaintenanceService', () => {
       prisma.maintenanceRequest.update.mockResolvedValue({ id: 'mr-1', status: 'ACKNOWLEDGED' });
       await service.update('mr-1', {} as never);
       expect(prisma.maintenanceMessage.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('WRK-02 / T303 派工、员工端、SLA与费用转嫁', () => {
+    it('dispatch: 成功指派维修师傅并记录系统消息', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        status: 'SUBMITTED',
+        priority: 'URGENT',
+        createdAt: new Date(),
+        room: { buildingId: 'b-1' },
+      });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'maintainer-1',
+        role: 'MAINTAINER',
+        email: 'fix@example.com',
+        phone: '13800000000',
+        isActive: true,
+      });
+      prisma.maintenanceRequest.update.mockResolvedValue({
+        id: 'mr-1',
+        status: 'ASSIGNED',
+        assignedMaintainerId: 'maintainer-1',
+        assignedTo: '张师傅',
+      });
+
+      const result = await service.dispatch(
+        'mr-1',
+        { assignedMaintainerId: 'maintainer-1', assignedTo: '张师傅', notes: '请携带工具' },
+        { userId: 'admin-1', role: 'ADMIN' },
+      );
+
+      expect(result.status).toBe('ASSIGNED');
+      expect(prisma.maintenanceRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'mr-1' },
+          data: expect.objectContaining({
+            status: 'ASSIGNED',
+            assignedMaintainerId: 'maintainer-1',
+            assignedTo: '张师傅',
+          }),
+        }),
+      );
+      expect(prisma.maintenanceMessage.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'SYSTEM',
+            body: expect.stringContaining('派单给维修师傅 张师傅'),
+          }),
+        }),
+      );
+    });
+
+    it('dispatch: 指派非维修人员或停用账号报错', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        status: 'SUBMITTED',
+        priority: 'NORMAL',
+        room: { buildingId: 'b-1' },
+      });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'tenant-1',
+        role: 'TENANT',
+        isActive: true,
+      });
+
+      await expect(
+        service.dispatch(
+          'mr-1',
+          { assignedMaintainerId: 'tenant-1' },
+          { userId: 'admin-1', role: 'ADMIN' },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('startWork: 维修师傅接单开工', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        status: 'ASSIGNED',
+        assignedMaintainerId: 'm-1',
+        room: { buildingId: 'b-1' },
+      });
+      prisma.maintenanceRequest.update.mockResolvedValue({ id: 'mr-1', status: 'IN_PROGRESS' });
+
+      const res = await service.startWork('mr-1', { userId: 'm-1', role: 'MAINTAINER' }, { notes: '到达现场' });
+      expect(res.status).toBe('IN_PROGRESS');
+      expect(prisma.maintenanceRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'mr-1' },
+          data: { status: 'IN_PROGRESS' },
+        }),
+      );
+    });
+
+    it('startWork: 非被指派维修工无权操作', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        status: 'ASSIGNED',
+        assignedMaintainerId: 'm-other',
+        assignedTo: 'm-other',
+        room: { buildingId: 'b-1' },
+      });
+
+      await expect(
+        service.startWork('mr-1', { userId: 'm-intruder', role: 'MAINTAINER' }),
+      ).rejects.toThrow();
+    });
+
+    it('completeWork: 维修师傅提报完工说明与工时用料成本', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        status: 'IN_PROGRESS',
+        assignedMaintainerId: 'm-1',
+        room: { buildingId: 'b-1' },
+      });
+      prisma.maintenanceRequest.update.mockResolvedValue({
+        id: 'mr-1',
+        status: 'PENDING_CONFIRM',
+        totalCost: 15000,
+        tenantFault: true,
+      });
+
+      const res = await service.completeWork(
+        'mr-1',
+        { userId: 'm-1', role: 'MAINTAINER' },
+        {
+          resolution: '更换水龙头阀芯',
+          laborCost: 5000,
+          materialCost: 10000,
+          tenantFault: true,
+          faultReason: '人为用力过猛断裂',
+        },
+      );
+
+      expect(res.status).toBe('PENDING_CONFIRM');
+      expect(prisma.maintenanceRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'PENDING_CONFIRM',
+            laborCost: 5000,
+            materialCost: 10000,
+            totalCost: 15000,
+            tenantFault: true,
+          }),
+        }),
+      );
+    });
+
+    it('confirmWork: 租客确认通过流转至 COMPLETED 并记录 resolvedAt', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        status: 'PENDING_CONFIRM',
+        tenantId: 'tenant-1',
+        priority: 'NORMAL',
+        createdAt: new Date(),
+        room: { buildingId: 'b-1' },
+      });
+      prisma.maintenanceRequest.update.mockResolvedValue({ id: 'mr-1', status: 'COMPLETED' });
+
+      const res = await service.confirmWork(
+        'mr-1',
+        { userId: 'u-t1', role: 'TENANT', tenantId: 'tenant-1' },
+        { accepted: true, rating: 5, feedback: '修得很快很专业' },
+      );
+
+      expect(res.status).toBe('COMPLETED');
+      expect(prisma.maintenanceRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'COMPLETED',
+            resolvedAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('confirmWork: 租客验收驳回退回 IN_PROGRESS', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        status: 'PENDING_CONFIRM',
+        tenantId: 'tenant-1',
+        room: { buildingId: 'b-1' },
+      });
+      prisma.maintenanceRequest.update.mockResolvedValue({ id: 'mr-1', status: 'IN_PROGRESS' });
+
+      const res = await service.confirmWork(
+        'mr-1',
+        { userId: 'u-t1', role: 'TENANT', tenantId: 'tenant-1' },
+        { accepted: false, feedback: '水龙头还在滴水，未彻底解决' },
+      );
+
+      expect(res.status).toBe('IN_PROGRESS');
+      expect(prisma.maintenanceRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { status: 'IN_PROGRESS' },
+        }),
+      );
+    });
+
+    it('transferExpense: 租客责任工单一键转嫁生成账单', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        title: '更换水龙头阀芯',
+        roomId: 'r-1',
+        tenantId: 't-1',
+        tenantFault: true,
+        totalCost: 15000,
+        laborCost: 5000,
+        materialCost: 10000,
+        faultReason: '人为损坏',
+        expenseTransferred: false,
+        room: { buildingId: 'b-1' },
+      });
+      prisma.contract.findFirst.mockResolvedValue({ id: 'c-1', roomId: 'r-1', tenantId: 't-1' });
+      prisma.bill.create.mockResolvedValue({
+        id: 'bill-1',
+        billNumber: 'B1234567890',
+        billType: 'MAINTENANCE',
+        amount: 15000,
+      });
+      prisma.maintenanceRequest.update.mockResolvedValue({
+        id: 'mr-1',
+        expenseTransferred: true,
+        expenseBillId: 'bill-1',
+      });
+
+      const res = await service.transferExpense(
+        'mr-1',
+        { userId: 'admin-1', role: 'ADMIN' },
+        { dueDate: '2026-11-05' },
+      );
+
+      expect(res.bill.id).toBe('bill-1');
+      expect(prisma.bill.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            contractId: 'c-1',
+            billType: 'MAINTENANCE',
+            amount: 15000,
+            dedupKey: 'MAINTENANCE:mr-1',
+          }),
+        }),
+      );
+    });
+
+    it('transferExpense: 禁止重复转嫁或非租客责任工单转嫁', async () => {
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        tenantFault: false,
+        totalCost: 15000,
+        expenseTransferred: false,
+        room: { buildingId: 'b-1' },
+      });
+
+      await expect(
+        service.transferExpense('mr-1', { userId: 'admin-1', role: 'ADMIN' }),
+      ).rejects.toThrow(BadRequestException);
+
+      prisma.maintenanceRequest.findUnique.mockResolvedValue({
+        id: 'mr-1',
+        tenantFault: true,
+        totalCost: 15000,
+        expenseTransferred: true,
+        room: { buildingId: 'b-1' },
+      });
+
+      await expect(
+        service.transferExpense('mr-1', { userId: 'admin-1', role: 'ADMIN' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('getAssignedWorkOrders: 返回维修师傅名下的工单', async () => {
+      prisma.maintenanceRequest.findMany.mockResolvedValue([{ id: 'mr-1' }]);
+      prisma.maintenanceRequest.count.mockResolvedValue(1);
+
+      const res = await service.getAssignedWorkOrders('m-1', {});
+      expect(res.data).toHaveLength(1);
+      expect(prisma.maintenanceRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ assignedMaintainerId: 'm-1' }, { assignedTo: 'm-1' }],
+          }),
+        }),
+      );
+    });
+
+    it('getSlaAlerts: 检测超时工单并返回告警', async () => {
+      const pastCreated = new Date(Date.now() - 30 * 3600 * 1000); // 30h ago (urgent deadline was 2h/24h)
+      prisma.maintenanceRequest.findMany.mockResolvedValue([
+        {
+          id: 'mr-overdue',
+          priority: 'URGENT',
+          createdAt: pastCreated,
+          status: 'SUBMITTED',
+          isSlaBreached: false,
+          room: { buildingId: 'b-1' },
+        },
+      ]);
+      prisma.maintenanceRequest.update.mockResolvedValue({});
+
+      const res = await service.getSlaAlerts({}, { userId: 'admin-1', role: 'ADMIN' });
+      expect(res.alerts.length).toBe(1);
+      expect(res.alerts[0].id).toBe('mr-overdue');
+      expect(prisma.maintenanceRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'mr-overdue' },
+          data: expect.objectContaining({ isSlaBreached: true }),
+        }),
+      );
     });
   });
 });
