@@ -50,6 +50,7 @@ import { StaffModule } from './modules/staff/staff.module.js';
 import { SmsModule } from './modules/sms/sms.module.js';
 import { LeadsModule } from './modules/leads/leads.module.js';
 import { AppointmentsModule } from './modules/appointments/appointments.module.js';
+import { InspectionsModule } from './modules/inspections/inspections.module.js';
 
 @Module({
   imports: [
@@ -113,6 +114,8 @@ import { AppointmentsModule } from './modules/appointments/appointments.module.j
     // 招租管线（LSE-01 / T298）
     LeadsModule,
     AppointmentsModule,
+    // 验房交接（LSE-03 / T300）
+    InspectionsModule,
   ],
   controllers: [AppController],
   providers: [

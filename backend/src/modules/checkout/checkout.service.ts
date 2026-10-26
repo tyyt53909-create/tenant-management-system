@@ -58,6 +58,7 @@ export class CheckoutService {
           totalRefund: dto.totalRefund,
           processedBy: dto.processedBy,
           notes: dto.notes,
+          inspectionId: dto.inspectionId || undefined,
         },
       });
 

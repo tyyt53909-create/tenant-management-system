@@ -13,6 +13,8 @@ export * from './cleaning.js'
 export * from './notifications.js'
 export * from './tenants.js'
 export * from './public.js'
+export * from './checkout.js'
+export * from './inspections.js'
 
 // 亦支持领域命名空间导入
 import * as auth from './auth.js'
@@ -24,6 +26,8 @@ import * as cleaning from './cleaning.js'
 import * as notifications from './notifications.js'
 import * as tenants from './tenants.js'
 import * as publicApi from './public.js'
+import * as checkout from './checkout.js'
+import * as inspections from './inspections.js'
 
 export const api = {
   auth,
@@ -35,6 +39,8 @@ export const api = {
   notifications,
   tenants,
   public: publicApi,
+  checkout,
+  inspections,
 }
 
 export default api

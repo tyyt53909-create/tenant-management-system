@@ -1,14 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CheckoutController } from './checkout.controller.js';
 import { CheckoutService } from './checkout.service.js';
+import { CheckoutRequestsService } from './checkout-requests.service.js';
 import { ConflictException } from '@nestjs/common';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('CheckoutController', () => {
   let controller: CheckoutController;
   let service: CheckoutService;
+  let requestsService: any;
 
   beforeEach(async () => {
+    requestsService = {
+      create: vi.fn().mockResolvedValue({ id: 'req-1' }),
+      findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+      findByTenant: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+      findOne: vi.fn().mockResolvedValue({ id: 'req-1' }),
+      findOneForTenant: vi.fn().mockResolvedValue({ id: 'req-1' }),
+      review: vi.fn().mockResolvedValue({ id: 'req-1', status: 'APPROVED' }),
+      cancel: vi.fn().mockResolvedValue({ id: 'req-1', status: 'CANCELLED' }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CheckoutController],
       providers: [
@@ -24,7 +36,12 @@ describe('CheckoutController', () => {
             getVoucher: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
+            exportCheckouts: vi.fn().mockResolvedValue('a,b,c'),
           },
+        },
+        {
+          provide: CheckoutRequestsService,
+          useValue: requestsService,
         },
       ],
     }).compile();
@@ -119,5 +136,48 @@ describe('CheckoutController', () => {
     // TENANT
     await controller.getVoucher({ user: { role: 'TENANT', tenantId: 'tenant-1' } }, 'chk-1');
     expect(service.getVoucher).toHaveBeenCalledWith('chk-1', 'tenant-1');
+  });
+
+  describe('退租申请端点', () => {
+    it('createRequest 透传租客输入与 tenantId', async () => {
+      const dto = { contractId: 'c1', expectedCheckoutDate: '2026-12-01' } as any;
+      const res = await controller.createRequest(dto, { user: { role: 'TENANT', tenantId: 't1' } });
+      expect(res.id).toBe('req-1');
+      expect(requestsService.create).toHaveBeenCalledWith(dto, 't1');
+    });
+
+    it('findMyRequests 分别处理租客与管理员', async () => {
+      await controller.findMyRequests({ user: { role: 'TENANT', tenantId: 't1' } }, {});
+      expect(requestsService.findByTenant).toHaveBeenCalledWith('t1', {});
+
+      await controller.findMyRequests({ user: { role: 'ADMIN' } }, {});
+      expect(requestsService.findAll).toHaveBeenCalledWith({});
+    });
+
+    it('findAllRequests 仅管理员', async () => {
+      await controller.findAllRequests({});
+      expect(requestsService.findAll).toHaveBeenCalledWith({});
+    });
+
+    it('findOneRequest 分别处理租客与管理员', async () => {
+      await controller.findOneRequest('req-1', { user: { role: 'TENANT', tenantId: 't1' } });
+      expect(requestsService.findOneForTenant).toHaveBeenCalledWith('req-1', 't1');
+
+      await controller.findOneRequest('req-1', { user: { role: 'ADMIN' } });
+      expect(requestsService.findOne).toHaveBeenCalledWith('req-1');
+    });
+
+    it('reviewRequest 透传管理员审核', async () => {
+      const dto = { approved: true };
+      const res = await controller.reviewRequest('req-1', dto, { user: { userId: 'admin-1' } });
+      expect(res.status).toBe('APPROVED');
+      expect(requestsService.review).toHaveBeenCalledWith('req-1', dto, 'admin-1');
+    });
+
+    it('cancelRequest 透传租客撤回', async () => {
+      const res = await controller.cancelRequest('req-1', { user: { tenantId: 't1' } });
+      expect(res.status).toBe('CANCELLED');
+      expect(requestsService.cancel).toHaveBeenCalledWith('req-1', 't1');
+    });
   });
 });

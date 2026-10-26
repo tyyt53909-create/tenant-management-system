@@ -260,6 +260,45 @@ enum CheckoutStatus {
   CANCELLED // 已取消
 }
 
+// 验房类型（LSE-03 / T300）
+enum InspectionType {
+  CHECK_IN // 入住交付验房
+  CHECK_OUT // 退租交接验房
+}
+
+// 验房单状态（LSE-03 / T300）
+enum InspectionStatus {
+  DRAFT // 草稿
+  PENDING_CONFIRM // 待租客确认
+  CONFIRMED // 已确认
+  REJECTED // 驳回/有异议
+}
+
+// 验房物品完好状态（LSE-03 / T300）
+enum InspectionItemStatus {
+  INTACT // 完好正常
+  DAMAGED // 损坏
+  MISSING // 缺失
+  DIRTY // 污损需清洁
+}
+
+// 租客退租申请状态（LSE-03 / T300）
+enum CheckoutRequestStatus {
+  PENDING // 待审核
+  APPROVED // 已通过
+  REJECTED // 已拒绝
+  CANCELLED // 租客已撤回
+}
+
+// 退租原因类型（LSE-03 / T300）
+enum CheckoutReasonType {
+  NORMAL_EXPIRE // 到期正常退租
+  EARLY_TERMINATION // 提前退租
+  JOB_TRANSFER // 工作/学业变动
+  PERSONAL_REASON // 个人原因
+  OTHER // 其他原因
+}
+
 // 退租结算项类型
 enum CheckoutItemType {
   RENT_REFUND // 租金退还
@@ -396,6 +435,8 @@ model Room {
   roomShape           RoomShape?
   leads               Lead[]
   appointments        ViewingAppointment[]
+  inspections         RoomInspection[]
+  checkoutRequests    CheckoutRequest[]
 
   @@unique([buildingId, floor, roomNumber])
   @@index([buildingId, status])
@@ -491,6 +532,8 @@ model Tenant {
   registration        TenantRegistration?
   tags                TenantTag[]
   inviteCodes         InviteCode[]
+  inspections         RoomInspection[]
+  checkoutRequests    CheckoutRequest[]
 
   @@index([isActive])
   @@index([phone])
@@ -611,6 +654,8 @@ model Contract {
   utilityAllocations      PublicUtilityAllocation[]
   depositLedger           DepositLedger?
   coTenants               ContractCoTenant[]
+  inspections             RoomInspection[]
+  checkoutRequests        CheckoutRequest[]
 
   @@index([buildingId, status])
   @@index([tenantId, status])
@@ -1116,7 +1161,10 @@ model CheckoutRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items CheckoutItem[]
+  items           CheckoutItem[]
+  inspectionId    String?
+  inspection      RoomInspection?  @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  checkoutRequest CheckoutRequest?
 
   @@index([contractId])
   @@index([status])
@@ -1679,4 +1727,109 @@ model ContractCoTenant {
   @@index([contractId])
   @@index([phone])
   @@map("contract_co_tenants")
+}
+
+// 50. RoomInspection（房屋交付/退租验房单，LSE-03 / T300）
+model RoomInspection {
+  id             String           @id @default(cuid())
+  type           InspectionType
+  status         InspectionStatus @default(DRAFT)
+
+  contractId     String
+  contract       Contract         @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  roomId         String
+  room           Room             @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// 经办验房人（管家姓名/账号）
+  inspectorName  String
+  inspectorPhone String?
+
+  /// 水电燃气表读数快照 Json: { coldWater?: number, hotWater?: number, electric?: number, gas?: number }
+  meterReadings  Json?
+  /// 验房现场整体照片数组 Json: string[]
+  photos         Json?
+  /// 整体状况与验房备注
+  overallNotes   String?          @db.Text
+
+  /// 租客确认时间
+  tenantConfirmedAt DateTime?
+  /// 租客反馈/异议意见
+  tenantNotes       String?       @db.Text
+  /// 租客电子签名图片或标识
+  tenantSignature   String?
+
+  inspectedAt    DateTime         @default(now())
+  createdBy      String
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  items          InspectionItem[]
+  checkoutRecords CheckoutRecord[]
+
+  @@index([contractId, type])
+  @@index([roomId])
+  @@index([tenantId])
+  @@index([status])
+  @@map("room_inspections")
+}
+
+// 51. InspectionItem（验房物品与设施核查明细，LSE-03 / T300）
+model InspectionItem {
+  id                String               @id @default(cuid())
+  inspectionId      String
+  inspection        RoomInspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  name              String               // 设施或物品名称（如门禁钥匙、热水器、空调、床垫）
+  category          String?              // 分类（如电器设备、门卡钥匙、卫浴洁具、家具家私）
+  quantity          Int                  @default(1)
+  status            InspectionItemStatus @default(INTACT)
+  damageDescription String?              @db.Text
+  repairCost        Int                  @default(0) // 预估赔偿/维修金额（分）
+  photos            Json?                // 损坏照片 string[]
+  notes             String?
+
+  createdAt         DateTime             @default(now())
+
+  @@index([inspectionId])
+  @@map("inspection_items")
+}
+
+// 52. CheckoutRequest（租客自主发起退租申请，LSE-03 / T300）
+model CheckoutRequest {
+  id                   String                @id @default(cuid())
+  requestNumber        String                @unique
+
+  contractId           String
+  contract             Contract              @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  roomId               String
+  room                 Room                  @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  tenantId             String
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  expectedCheckoutDate DateTime              @db.Date
+  reasonType           CheckoutReasonType    @default(NORMAL_EXPIRE)
+  reasonDetail         String?               @db.Text
+  /// 押金/款项退还账户信息 Json: { type: 'BANK' | 'WECHAT' | 'ALIPAY', bankName?: string, accountNo?: string, accountName?: string }
+  refundAccount        Json?
+
+  status               CheckoutRequestStatus @default(PENDING)
+  rejectReason         String?               @db.Text
+
+  handledBy            String?
+  handledAt            DateTime?
+
+  checkoutRecordId     String?               @unique
+  checkoutRecord       CheckoutRecord?       @relation(fields: [checkoutRecordId], references: [id], onDelete: SetNull)
+
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([contractId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([expectedCheckoutDate])
+  @@map("checkout_requests")
 }

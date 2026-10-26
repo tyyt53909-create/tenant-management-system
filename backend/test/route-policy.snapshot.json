@@ -593,6 +593,58 @@
   },
   {
     "method": "GET",
+    "path": "/api/checkout/requests",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/checkout/requests",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/checkout/requests/:id",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/checkout/requests/:id/cancel",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/checkout/requests/:id/review",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/checkout/requests/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/contract-templates",
     "public": false,
     "roles": [
@@ -903,6 +955,73 @@
   {
     "method": "GET",
     "path": "/api/imports/:entity/template",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/inspections",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/inspections",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/inspections/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/inspections/:id",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/inspections/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/inspections/:id/confirm",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/inspections/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/inspections/template-items",
     "public": false,
     "roles": [
       "ADMIN"

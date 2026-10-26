@@ -89,4 +89,8 @@ export class CreateCheckoutDto {
   @Type(() => CheckoutItemDto)
   @IsOptional()
   items?: CheckoutItemDto[];
+
+  @IsString()
+  @IsOptional()
+  inspectionId?: string;
 }
