@@ -10,7 +10,14 @@
  * - 角色不在允许列表时跳转 `/forbidden`，不静默跳到工作台（否则用户不知道发生了什么）。
  */
 
-export type AppRole = 'ADMIN' | 'CLEANER' | 'TENANT';
+export type AppRole =
+  | 'ADMIN'
+  | 'PROPERTY_MANAGER'
+  | 'FINANCIAL'
+  | 'MAINTAINER'
+  | 'CLEANER'
+  | 'OWNER'
+  | 'TENANT';
 
 export interface RouteAccessMeta {
   public?: boolean;
@@ -39,6 +46,14 @@ export function filterNavigation<T extends { path: string; roles?: readonly AppR
 }
 
 export function roleLabel(role: string | null | undefined): string {
-  const map: Record<string, string> = { ADMIN: '管理员账号', TENANT: '租客账号', CLEANER: '保洁账号' };
+  const map: Record<string, string> = {
+    ADMIN: '管理员账号',
+    PROPERTY_MANAGER: '物业管家',
+    FINANCIAL: '财务专员',
+    MAINTAINER: '维修师傅',
+    CLEANER: '保洁账号',
+    OWNER: '业主房东',
+    TENANT: '租客账号',
+  };
   return map[role ?? ''] || '当前登录账号';
 }

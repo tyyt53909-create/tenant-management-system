@@ -58,6 +58,8 @@ import { ContractRenewalsService } from '../src/modules/contracts/contract-renew
 import { InspectionsController } from '../src/modules/inspections/inspections.controller.js';
 import { InspectionsService } from '../src/modules/inspections/inspections.service.js';
 import { CheckoutRequestsService } from '../src/modules/checkout/checkout-requests.service.js';
+import { StaffController } from '../src/modules/staff/staff.controller.js';
+import { StaffService } from '../src/modules/staff/staff.service.js';
 import { BusinessClock } from '../src/common/business-clock/business-clock.service.js';
 
 /**
@@ -177,6 +179,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         AppointmentsController,
         ContractTemplatesController,
         InspectionsController,
+        StaffController,
       ],
       providers: [
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
@@ -320,6 +323,19 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
             create: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
+          },
+        },
+        {
+          provide: StaffService,
+          useValue: {
+            list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+            create: vi.fn().mockResolvedValue({ id: 's1', role: 'PROPERTY_MANAGER' }),
+            findOne: vi.fn().mockResolvedValue({ id: 's1' }),
+            update: vi.fn().mockResolvedValue({ id: 's1' }),
+            resetPassword: vi.fn().mockResolvedValue({ message: 'ok' }),
+            assignBuildings: vi.fn().mockResolvedValue([{ id: 'b1' }]),
+            getAssignedBuildings: vi.fn().mockResolvedValue([{ id: 'b1' }]),
+            getMyBuildings: vi.fn().mockResolvedValue([{ id: 'b1' }]),
           },
         },
         {
@@ -819,6 +835,31 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       await as(request(app.getHttpServer()).get('/contracts/c1/renewal-intent'), 'TENANT', 'tenant-self').expect(200);
       await as(request(app.getHttpServer()).get('/contracts/renewal-intents'), 'TENANT').expect(403);
       await as(request(app.getHttpServer()).get('/contracts/renewal-intents'), 'ADMIN').expect(200);
+    });
+  });
+
+  describe('员工管理与负责楼栋范围（WRK-01 / T302）', () => {
+    it('员工管理全量接口：未登录 401，TENANT / CLEANER 403，仅 ADMIN 可操作', async () => {
+      await request(app.getHttpServer()).get('/staff').expect(401);
+      await as(request(app.getHttpServer()).get('/staff'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/staff'), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).get('/staff'), 'ADMIN').expect(200);
+
+      await as(request(app.getHttpServer()).post('/staff').send({ email: 'pm@example.com', role: 'PROPERTY_MANAGER' }), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/staff').send({ email: 'pm@example.com', role: 'PROPERTY_MANAGER' }), 'ADMIN').expect(201);
+
+      await as(request(app.getHttpServer()).get('/staff/s1'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/staff/s1'), 'ADMIN').expect(200);
+
+      await as(request(app.getHttpServer()).post('/staff/s1/buildings').send({ buildingIds: ['b1'] }), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/staff/s1/buildings').send({ buildingIds: ['b1'] }), 'ADMIN').expect(201);
+    });
+
+    it('员工端 /staff/me/buildings：租客 403，员工角色（保洁/管家/ADMIN）允许查看管辖楼栋', async () => {
+      await request(app.getHttpServer()).get('/staff/me/buildings').expect(401);
+      await as(request(app.getHttpServer()).get('/staff/me/buildings'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/staff/me/buildings'), 'CLEANER').expect(200);
+      await as(request(app.getHttpServer()).get('/staff/me/buildings'), 'ADMIN').expect(200);
     });
   });
 

@@ -13,7 +13,7 @@ export interface User {
   id: string;
   email: string;
   phone?: string;
-  role: 'ADMIN' | 'TENANT' | 'CLEANER';
+  role: 'ADMIN' | 'PROPERTY_MANAGER' | 'FINANCIAL' | 'MAINTAINER' | 'CLEANER' | 'OWNER' | 'TENANT';
   createdAt: string;
   features?: {
     meterSimulator?: boolean;
@@ -375,7 +375,7 @@ export interface QueryParams {
 export interface InviteCode {
   id: string;
   code: string;
-  role: 'ADMIN' | 'TENANT' | 'CLEANER';
+  role: 'ADMIN' | 'PROPERTY_MANAGER' | 'FINANCIAL' | 'MAINTAINER' | 'CLEANER' | 'OWNER' | 'TENANT';
   status: 'UNUSED' | 'USED' | 'REVOKED';
   notes?: string | null;
   creatorId?: string | null;

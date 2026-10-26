@@ -1576,12 +1576,24 @@
               "type": "string",
               "enum": [
                 "ADMIN",
-                "CLEANER"
+                "PROPERTY_MANAGER",
+                "FINANCIAL",
+                "MAINTAINER",
+                "CLEANER",
+                "OWNER"
               ]
             }
           },
           {
             "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "buildingId",
             "required": false,
             "in": "query",
             "schema": {
@@ -1635,19 +1647,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -1670,7 +1678,88 @@
         ]
       }
     },
+    "/api/staff/me/buildings": {
+      "get": {
+        "operationId": "StaffController_getMyBuildings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "当前登录员工查看自己负责管辖的楼栋列表（DEC-08 / WRK-01）",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/staff/{id}": {
+      "get": {
+        "operationId": "StaffController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
       "patch": {
         "operationId": "StaffController_update",
         "parameters": [
@@ -1695,12 +1784,11 @@
         },
         "responses": {
           "200": {
-            "description": "成功",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
@@ -1775,6 +1863,111 @@
             }
           }
         },
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/staff/{id}/buildings": {
+      "post": {
+        "operationId": "StaffController_assignBuildings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignStaffBuildingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "为员工指派/调整负责管辖楼栋（DEC-08 / WRK-01）",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "StaffController_getAssignedBuildings",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "查看某员工负责管辖的楼栋列表",
         "tags": [
           "Staff"
         ],
@@ -14187,7 +14380,11 @@
             "type": "string",
             "enum": [
               "ADMIN",
+              "PROPERTY_MANAGER",
+              "FINANCIAL",
+              "MAINTAINER",
               "CLEANER",
+              "OWNER",
               "TENANT"
             ]
           },
@@ -14526,8 +14723,18 @@
             "type": "string",
             "enum": [
               "ADMIN",
-              "CLEANER"
+              "PROPERTY_MANAGER",
+              "FINANCIAL",
+              "MAINTAINER",
+              "CLEANER",
+              "OWNER"
             ]
+          },
+          "buildingIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -14543,7 +14750,11 @@
             "type": "string",
             "enum": [
               "ADMIN",
-              "CLEANER"
+              "PROPERTY_MANAGER",
+              "FINANCIAL",
+              "MAINTAINER",
+              "CLEANER",
+              "OWNER"
             ]
           },
           "isActive": {
@@ -14553,6 +14764,12 @@
             "type": "string",
             "nullable": true,
             "maxLength": 32
+          },
+          "buildingIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -14566,6 +14783,20 @@
         },
         "required": [
           "newPassword"
+        ]
+      },
+      "AssignStaffBuildingsDto": {
+        "type": "object",
+        "properties": {
+          "buildingIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "buildingIds"
         ]
       },
       "RoomPhotoDto": {

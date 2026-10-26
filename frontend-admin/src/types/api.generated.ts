@@ -524,6 +524,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/staff/me/buildings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前登录员工查看自己负责管辖的楼栋列表（DEC-08 / WRK-01） */
+        get: operations["StaffController_getMyBuildings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/staff/{id}": {
         parameters: {
             query?: never;
@@ -531,7 +548,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["StaffController_findOne"];
         put?: never;
         post?: never;
         delete?: never;
@@ -550,6 +567,24 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["StaffController_resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/staff/{id}/buildings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看某员工负责管辖的楼栋列表 */
+        get: operations["StaffController_getAssignedBuildings"];
+        put?: never;
+        /** 为员工指派/调整负责管辖楼栋（DEC-08 / WRK-01） */
+        post: operations["StaffController_assignBuildings"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3353,7 +3388,7 @@ export interface components {
             count: number;
             notes?: string;
             /** @enum {string} */
-            role?: "ADMIN" | "CLEANER" | "TENANT";
+            role?: "ADMIN" | "PROPERTY_MANAGER" | "FINANCIAL" | "MAINTAINER" | "CLEANER" | "OWNER" | "TENANT";
             /** @description 租客邀请必须指定预建档案。职员邀请不要填。 */
             tenantId?: string;
         };
@@ -3448,16 +3483,21 @@ export interface components {
             password: string;
             phone?: string;
             /** @enum {string} */
-            role: "ADMIN" | "CLEANER";
+            role: "ADMIN" | "PROPERTY_MANAGER" | "FINANCIAL" | "MAINTAINER" | "CLEANER" | "OWNER";
+            buildingIds?: string[];
         };
         UpdateStaffDto: {
             /** @enum {string} */
-            role?: "ADMIN" | "CLEANER";
+            role?: "ADMIN" | "PROPERTY_MANAGER" | "FINANCIAL" | "MAINTAINER" | "CLEANER" | "OWNER";
             isActive?: boolean;
             phone?: string | null;
+            buildingIds?: string[];
         };
         ResetStaffPasswordDto: {
             newPassword: string;
+        };
+        AssignStaffBuildingsDto: {
+            buildingIds: string[];
         };
         RoomPhotoDto: {
             fileUrl: string;
@@ -5259,8 +5299,9 @@ export interface operations {
             query?: {
                 page?: number;
                 pageSize?: number;
-                role?: "ADMIN" | "CLEANER";
+                role?: "ADMIN" | "PROPERTY_MANAGER" | "FINANCIAL" | "MAINTAINER" | "CLEANER" | "OWNER";
                 keyword?: string;
+                buildingId?: string;
             };
             header?: never;
             path?: never;
@@ -5303,6 +5344,135 @@ export interface operations {
             };
         };
         responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    StaffController_getMyBuildings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    StaffController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    StaffController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStaffDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    StaffController_resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetStaffPasswordDto"];
+            };
+        };
+        responses: {
             /** @description 成功 */
             200: {
                 headers: {
@@ -5331,7 +5501,7 @@ export interface operations {
             };
         };
     };
-    StaffController_update: {
+    StaffController_getAssignedBuildings: {
         parameters: {
             query?: never;
             header?: never;
@@ -5340,11 +5510,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateStaffDto"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description 成功 */
             200: {
@@ -5368,7 +5534,7 @@ export interface operations {
             };
         };
     };
-    StaffController_resetPassword: {
+    StaffController_assignBuildings: {
         parameters: {
             query?: never;
             header?: never;
@@ -5379,7 +5545,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResetStaffPasswordDto"];
+                "application/json": components["schemas"]["AssignStaffBuildingsDto"];
             };
         };
         responses: {

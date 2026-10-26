@@ -1844,8 +1844,32 @@
     ]
   },
   {
+    "method": "GET",
+    "path": "/api/staff/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "PATCH",
     "path": "/api/staff/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/:id/buildings",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/staff/:id/buildings",
     "public": false,
     "roles": [
       "ADMIN"
@@ -1857,6 +1881,19 @@
     "public": false,
     "roles": [
       "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/staff/me/buildings",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER",
+      "FINANCIAL",
+      "MAINTAINER",
+      "CLEANER",
+      "OWNER"
     ]
   },
   {

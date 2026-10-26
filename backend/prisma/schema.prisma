@@ -331,10 +331,14 @@ enum RentCalculationMethod {
   FIXED_30_DAYS // 固定按30天
 }
 
-// 用户角色
+// 用户角色（DEC-08 / WRK-01）
 enum UserRole {
-  ADMIN // 管理者
-  CLEANER // 保洁
+  ADMIN // 系统超级管理员
+  PROPERTY_MANAGER // 楼管 / 物业经理 / 管家
+  FINANCIAL // 财务人员
+  MAINTAINER // 维修人员
+  CLEANER // 保洁人员
+  OWNER // 房东 / 业主
   TENANT // 租客
 }
 
@@ -408,6 +412,7 @@ model Building {
   meters             Meter[]
   publicUtilityBills PublicUtilityBill[]
   floorPlans         FloorPlan[]
+  staffAssignments   StaffBuildingAssignment[]
 
   @@index([isActive])
   @@map("buildings")
@@ -592,6 +597,7 @@ model User {
   usedInviteCode     InviteCode?  @relation("UsedInviteCode")
 
   publishedAnnouncements Announcement[] @relation("AnnouncementCreator")
+  buildingAssignments    StaffBuildingAssignment[]
 
   @@index([email])
   @@index([phone])
@@ -1911,4 +1917,24 @@ model RenewalOffer {
   @@index([roomId])
   @@index([status])
   @@map("renewal_offers")
+}
+
+// 55. StaffBuildingAssignment（员工管辖楼栋范围，DEC-08 / WRK-01）
+model StaffBuildingAssignment {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, buildingId])
+  @@index([userId])
+  @@index([buildingId])
+  @@map("staff_building_assignments")
 }
