@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { CreateMaintenanceDto } from './create-maintenance.dto.js';
 
 enum MaintenanceStatus {
@@ -23,5 +23,27 @@ export class UpdateMaintenanceDto extends PartialType(CreateMaintenanceDto) {
 
   @IsString()
   @IsOptional()
+  assignedMaintainerId?: string;
+
+  @IsString()
+  @IsOptional()
   resolution?: string;
+
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  laborCost?: number;
+
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  materialCost?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  tenantFault?: boolean;
+
+  @IsString()
+  @IsOptional()
+  faultReason?: string;
 }

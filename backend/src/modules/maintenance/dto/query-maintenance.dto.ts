@@ -1,5 +1,5 @@
-import { IsOptional, IsInt, IsString, IsEnum, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsInt, IsString, IsEnum, IsBoolean, Min, Max } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 enum MaintenanceStatus {
   SUBMITTED = 'SUBMITTED',
@@ -36,4 +36,17 @@ export class QueryMaintenanceDto {
   @IsString()
   @IsOptional()
   tenantId?: string;
+
+  @IsString()
+  @IsOptional()
+  buildingId?: string;
+
+  @IsString()
+  @IsOptional()
+  assignedMaintainerId?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  isSlaBreached?: boolean;
 }

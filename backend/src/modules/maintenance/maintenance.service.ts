@@ -1,11 +1,33 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import type { Prisma, MaintenanceCategory, MaintenancePriority } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMaintenanceDto } from './dto/create-maintenance.dto.js';
 import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js';
 import { QueryMaintenanceDto } from './dto/query-maintenance.dto.js';
 import { CreateMaintenanceMessageDto } from './dto/create-maintenance-message.dto.js';
+import {
+  DispatchMaintenanceDto,
+  StartMaintenanceDto,
+  CompleteMaintenanceDto,
+  ConfirmMaintenanceDto,
+  TransferExpenseDto,
+} from './dto/work-order-actions.dto.js';
 import { scopedWhere } from '../../common/utils/scoped-where.js';
+import {
+  getStaffBuildingScope,
+  assertStaffBuildingAccess,
+} from '../../common/utils/building-scope.util.js';
+import {
+  calculateMaintenanceSla,
+  evaluateSlaStatus,
+} from './maintenance-sla.util.js';
 import {
   isMaintenanceTransitionAllowed,
   maintenanceTransitionNeedsAssignee,
@@ -16,17 +38,18 @@ import {
 export class MaintenanceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateMaintenanceDto, user: { userId: string; role: string; tenantId?: string }) {
+  async create(
+    dto: CreateMaintenanceDto,
+    user: { userId: string; role: string; tenantId?: string },
+  ) {
     let roomId = dto.roomId;
     let tenantId = dto.tenantId;
 
     if (user.role === 'TENANT') {
-      // 租客自助报修：租客身份与房间均由服务端推导（忽略请求体中的 ID，防伪造）
       if (!user.tenantId) {
         throw new BadRequestException('租客账号未绑定租客档案，请联系管理员');
       }
 
-      // 统一走范围助手：tenantId 为空时直接 403，不让 Prisma 把 undefined 当作「不过滤」
       const contract = await this.prisma.contract.findFirst({
         where: scopedWhere(user.tenantId, { status: 'ACTIVE' as const }),
       });
@@ -43,7 +66,6 @@ export class MaintenanceService {
       throw new BadRequestException('管理员需指定 roomId 与 tenantId');
     }
 
-    // 验证房源和租客存在
     const [room, tenant] = await Promise.all([
       this.prisma.room.findUnique({ where: { id: roomId } }),
       this.prisma.tenant.findUnique({ where: { id: tenantId } }),
@@ -52,12 +74,14 @@ export class MaintenanceService {
     if (!room) throw new BadRequestException('房源不存在');
     if (!tenant) throw new BadRequestException('租客不存在');
 
-    // 照片与工单同事务落库，避免「有照片记录但无工单」的中间态。
-    // MaintenancePhoto.fileSize 为必填：优先取上报的大小，取不到以 0 占位
-    // （该字段仅用于展示，不参与业务判断）。
-    // 注意：全局 ValidationPipe 开启了 forbidNonWhitelisted，请求体不得携带
-    // DTO 未声明的字段，因此这里只接受 photos（路径），大小由上传接口自行记录。
+    if (user.role === 'PROPERTY_MANAGER') {
+      await assertStaffBuildingAccess(this.prisma, user, room.buildingId);
+    }
+
     const photos = (dto.photos ?? []).filter((p) => typeof p === 'string' && p.trim());
+    const priority = (dto.priority as MaintenancePriority) || 'NORMAL';
+    const now = new Date();
+    const { responseDueAt, slaDueAt } = calculateMaintenanceSla(priority, now);
 
     return this.prisma.$transaction(async (tx) => {
       const request = await tx.maintenanceRequest.create({
@@ -67,7 +91,10 @@ export class MaintenanceService {
           title: dto.title,
           description: dto.description,
           category: dto.category as MaintenanceCategory,
-          priority: (dto.priority as MaintenancePriority) || 'NORMAL',
+          priority,
+          responseDueAt,
+          slaDueAt,
+          isSlaBreached: false,
         },
       });
 
@@ -103,7 +130,6 @@ export class MaintenanceService {
     const { page = 1, limit = 20, status } = query;
     const skip = (page - 1) * limit;
 
-    // 此处 where 需按可选筛选条件增量赋值；Prisma 的联合过滤类型无法在填入普通 string 后再收窄，故保留 any（OPT-17 已注释豁免）
     const where: any = scopedWhere(tenantId);
     if (status) where.status = status;
 
@@ -126,7 +152,14 @@ export class MaintenanceService {
   /** 租客查询单条工单（仅限自己的） */
   async findOneForTenant(id: string, tenantId: string) {
     const scope = scopedWhere(tenantId);
-    const request = await this.prisma.maintenanceRequest.findUnique({ where: { id }, include: { photos: true } });
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: {
+        photos: true,
+        assignedMaintainer: { select: { id: true, email: true, phone: true } },
+        expenseBill: { select: { id: true, billNumber: true, status: true, amount: true, dueDate: true } },
+      },
+    });
 
     if (!request || request.tenantId !== scope.tenantId) {
       throw new NotFoundException('报修工单不存在');
@@ -135,14 +168,32 @@ export class MaintenanceService {
     return request;
   }
 
-  async findAll(query: QueryMaintenanceDto) {
-    const { page = 1, limit = 20, status, roomId, tenantId } = query;
+  async findAll(query: QueryMaintenanceDto, operator?: { userId: string; role: string }) {
+    const { page = 1, limit = 20, status, roomId, tenantId, buildingId, assignedMaintainerId, isSlaBreached } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.MaintenanceRequestWhereInput = {};
     if (status) where.status = status;
     if (roomId) where.roomId = roomId;
     if (tenantId) where.tenantId = tenantId;
+    if (assignedMaintainerId) where.assignedMaintainerId = assignedMaintainerId;
+    if (isSlaBreached !== undefined) where.isSlaBreached = isSlaBreached;
+
+    const roomWhere: Prisma.RoomWhereInput = {};
+    if (operator?.role === 'PROPERTY_MANAGER') {
+      const allowed = await getStaffBuildingScope(this.prisma, operator);
+      if (allowed !== null) {
+        roomWhere.buildingId = { in: allowed };
+      }
+    }
+
+    if (buildingId) {
+      roomWhere.buildingId = buildingId;
+    }
+
+    if (Object.keys(roomWhere).length > 0) {
+      where.room = roomWhere;
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.maintenanceRequest.findMany({
@@ -151,10 +202,11 @@ export class MaintenanceService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          room: { select: { roomNumber: true } },
-          tenant: { select: { name: true } },
+          room: { select: { id: true, roomNumber: true, buildingId: true, building: { select: { id: true, name: true } } } },
+          tenant: { select: { id: true, name: true, phone: true } },
           photos: { select: { id: true, fileUrl: true }, orderBy: { createdAt: 'asc' }, take: 1 },
           _count: { select: { photos: true } },
+          assignedMaintainer: { select: { id: true, email: true, phone: true } },
         },
       }),
       this.prisma.maintenanceRequest.count({ where }),
@@ -171,13 +223,18 @@ export class MaintenanceService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, operator?: { userId: string; role: string }) {
+    if (operator) {
+      await this.assertRequestAccess(id, operator as any);
+    }
     const request = await this.prisma.maintenanceRequest.findUnique({
       where: { id },
       include: {
-        room: true,
+        room: { include: { building: { select: { id: true, name: true } } } },
         tenant: true,
         photos: true,
+        assignedMaintainer: { select: { id: true, email: true, phone: true } },
+        expenseBill: { select: { id: true, billNumber: true, status: true, amount: true, dueDate: true } },
       },
     });
 
@@ -188,15 +245,597 @@ export class MaintenanceService {
     return request;
   }
 
-  async update(id: string, dto: UpdateMaintenanceDto) {
-    const request = await this.prisma.maintenanceRequest.findUnique({ where: { id } });
+  /**
+   * 维修派工（WRK-02 / T303）
+   */
+  async dispatch(
+    id: string,
+    dto: DispatchMaintenanceDto,
+    operator: { userId: string; role: string },
+  ) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: { room: true },
+    });
+    if (!request) {
+      throw new NotFoundException('报修记录不存在');
+    }
+    if (['COMPLETED', 'CANCELLED'].includes(request.status)) {
+      throw new ConflictException(`工单处于 ${request.status} 终态，不能派工`);
+    }
+
+    if (operator.role === 'PROPERTY_MANAGER') {
+      await assertStaffBuildingAccess(this.prisma, operator, request.room.buildingId);
+    }
+
+    const maintainer = await this.prisma.user.findUnique({
+      where: { id: dto.assignedMaintainerId },
+      select: { id: true, email: true, phone: true, role: true, isActive: true },
+    });
+    if (!maintainer || !['MAINTAINER', 'ADMIN', 'PROPERTY_MANAGER', 'CLEANER'].includes(maintainer.role)) {
+      throw new BadRequestException('指派的维修师傅账号不存在或角色不合法');
+    }
+    if (!maintainer.isActive) {
+      throw new BadRequestException('指派的维修师傅账号已停用');
+    }
+
+    const assignedTo = dto.assignedTo?.trim() || maintainer.phone || maintainer.email || maintainer.id;
+    const now = new Date();
+    const firstRespondedAt = request.firstRespondedAt ?? now;
+
+    const slaEvaluation = evaluateSlaStatus({
+      priority: request.priority,
+      createdAt: request.createdAt,
+      responseDueAt: request.responseDueAt,
+      slaDueAt: request.slaDueAt,
+      firstRespondedAt,
+      status: 'ASSIGNED',
+      now,
+    });
+
+    const isReDispatch = request.status === 'ASSIGNED';
+    const events: string[] = [];
+    if (!isReDispatch) {
+      events.push(`状态 ${request.status} → ASSIGNED`);
+    }
+    events.push(`派单给维修师傅 ${assignedTo}`);
+    if (dto.notes?.trim()) {
+      events.push(`备注：${dto.notes.trim()}`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.maintenanceRequest.update({
+        where: { id },
+        data: {
+          status: 'ASSIGNED',
+          assignedMaintainerId: maintainer.id,
+          assignedTo,
+          assignedAt: now,
+          firstRespondedAt,
+          ...(slaEvaluation.isBreached
+            ? {
+                isSlaBreached: true,
+                slaBreachType: slaEvaluation.breachType,
+                slaBreachedAt: slaEvaluation.breachAt ?? now,
+              }
+            : {}),
+        },
+        include: {
+          room: true,
+          tenant: true,
+          photos: true,
+          assignedMaintainer: { select: { id: true, email: true, phone: true } },
+        },
+      });
+
+      await tx.maintenanceMessage.create({
+        data: {
+          requestId: id,
+          type: 'SYSTEM',
+          authorId: operator.userId,
+          authorRole: operator.role,
+          body: events.join('；'),
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /**
+   * 维修师傅接单开工（WRK-02 / T303）
+   */
+  async startWork(
+    id: string,
+    user: { userId: string; role: string },
+    dto?: StartMaintenanceDto,
+  ) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: { room: true },
+    });
     if (!request) {
       throw new NotFoundException('报修记录不存在');
     }
 
+    if (user.role === 'MAINTAINER') {
+      if (
+        request.assignedMaintainerId !== user.userId &&
+        request.assignedTo !== user.userId
+      ) {
+        throw new ForbiddenException('您无权操作非本人承接的工单');
+      }
+    } else if (user.role === 'PROPERTY_MANAGER') {
+      await assertStaffBuildingAccess(this.prisma, user, request.room.buildingId);
+    }
+
+    if (request.status !== 'ASSIGNED') {
+      throw new ConflictException(`仅已派单（ASSIGNED）状态工单可开工，当前状态为 ${request.status}`);
+    }
+
+    const events = ['维修师傅已接单开始处理'];
+    if (dto?.notes?.trim()) {
+      events.push(`备注：${dto.notes.trim()}`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.maintenanceRequest.update({
+        where: { id },
+        data: {
+          status: 'IN_PROGRESS',
+        },
+        include: {
+          room: true,
+          tenant: true,
+          photos: true,
+        },
+      });
+
+      await tx.maintenanceMessage.create({
+        data: {
+          requestId: id,
+          type: 'SYSTEM',
+          authorId: user.userId,
+          authorRole: user.role,
+          body: events.join('；'),
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /**
+   * 维修师傅提报完工（WRK-02 / T303）
+   */
+  async completeWork(
+    id: string,
+    user: { userId: string; role: string },
+    dto: CompleteMaintenanceDto,
+  ) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: { room: true },
+    });
+    if (!request) {
+      throw new NotFoundException('报修记录不存在');
+    }
+
+    if (user.role === 'MAINTAINER') {
+      if (
+        request.assignedMaintainerId !== user.userId &&
+        request.assignedTo !== user.userId
+      ) {
+        throw new ForbiddenException('您无权操作非本人承接的工单');
+      }
+    } else if (user.role === 'PROPERTY_MANAGER') {
+      await assertStaffBuildingAccess(this.prisma, user, request.room.buildingId);
+    }
+
+    if (request.status !== 'IN_PROGRESS') {
+      throw new ConflictException(`仅在修中（IN_PROGRESS）状态工单可提报完工，当前状态为 ${request.status}`);
+    }
+
+    const laborCost = Math.max(0, dto.laborCost ?? 0);
+    const materialCost = Math.max(0, dto.materialCost ?? 0);
+    const totalCost = laborCost + materialCost;
+    const tenantFault = Boolean(dto.tenantFault);
+    const resolution = dto.resolution.trim();
+    if (!resolution) {
+      throw new BadRequestException('处理结果说明不能为空');
+    }
+
+    const events = [
+      `维修师傅提报完工：${resolution}`,
+      `工时费: ¥${(laborCost / 100).toFixed(2)}, 材料费: ¥${(materialCost / 100).toFixed(2)}（总计: ¥${(totalCost / 100).toFixed(2)}）`,
+    ];
+    if (tenantFault) {
+      events.push(`判定为租客责任${dto.faultReason ? `（原因：${dto.faultReason}）` : ''}`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.maintenanceRequest.update({
+        where: { id },
+        data: {
+          status: 'PENDING_CONFIRM',
+          resolution,
+          laborCost,
+          materialCost,
+          totalCost,
+          tenantFault,
+          faultReason: dto.faultReason?.trim() || null,
+        },
+        include: {
+          room: true,
+          tenant: true,
+          photos: true,
+        },
+      });
+
+      if (dto.photos?.length) {
+        await tx.maintenancePhoto.createMany({
+          data: dto.photos.map((fileUrl) => ({
+            requestId: id,
+            fileUrl,
+            fileSize: 0,
+          })),
+        });
+      }
+
+      await tx.maintenanceMessage.create({
+        data: {
+          requestId: id,
+          type: 'SYSTEM',
+          authorId: user.userId,
+          authorRole: user.role,
+          body: events.join('；'),
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /**
+   * 验收与确认（WRK-02 / T303）
+   */
+  async confirmWork(
+    id: string,
+    user: { userId: string; role: string; tenantId?: string },
+    dto: ConfirmMaintenanceDto,
+  ) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: { room: true },
+    });
+    if (!request) {
+      throw new NotFoundException('报修记录不存在');
+    }
+
+    if (user.role === 'TENANT') {
+      if (!user.tenantId || request.tenantId !== user.tenantId) {
+        throw new ForbiddenException('您无权操作非本人报修的工单');
+      }
+    } else if (user.role === 'PROPERTY_MANAGER') {
+      await assertStaffBuildingAccess(this.prisma, user, request.room.buildingId);
+    }
+
+    if (request.status !== 'PENDING_CONFIRM') {
+      throw new ConflictException(`工单当前为 ${request.status} 状态，无需/不能确认`);
+    }
+
+    const now = new Date();
+
+    if (dto.accepted) {
+      const slaEvaluation = evaluateSlaStatus({
+        priority: request.priority,
+        createdAt: request.createdAt,
+        responseDueAt: request.responseDueAt,
+        slaDueAt: request.slaDueAt,
+        firstRespondedAt: request.firstRespondedAt,
+        status: 'COMPLETED',
+        resolvedAt: now,
+      });
+
+      const events = ['租客/管理员验收通过，工单已完成'];
+      if (dto.feedback?.trim()) events.push(`评价反馈：${dto.feedback.trim()}`);
+      if (dto.rating) events.push(`评分：${dto.rating}星`);
+
+      return this.prisma.$transaction(async (tx) => {
+        const updated = await tx.maintenanceRequest.update({
+          where: { id },
+          data: {
+            status: 'COMPLETED',
+            resolvedAt: now,
+            ...(slaEvaluation.isBreached
+              ? {
+                  isSlaBreached: true,
+                  slaBreachType: slaEvaluation.breachType,
+                  slaBreachedAt: slaEvaluation.breachAt ?? now,
+                }
+              : {}),
+          },
+          include: {
+            room: true,
+            tenant: true,
+            photos: true,
+          },
+        });
+
+        await tx.maintenanceMessage.create({
+          data: {
+            requestId: id,
+            type: 'SYSTEM',
+            authorId: user.userId,
+            authorRole: user.role,
+            body: events.join('；'),
+          },
+        });
+
+        return updated;
+      });
+    } else {
+      const events = ['验收驳回重修'];
+      if (dto.feedback?.trim()) {
+        events.push(`驳回原因：${dto.feedback.trim()}`);
+      }
+
+      return this.prisma.$transaction(async (tx) => {
+        const updated = await tx.maintenanceRequest.update({
+          where: { id },
+          data: {
+            status: 'IN_PROGRESS',
+          },
+          include: {
+            room: true,
+            tenant: true,
+            photos: true,
+          },
+        });
+
+        await tx.maintenanceMessage.create({
+          data: {
+            requestId: id,
+            type: 'SYSTEM',
+            authorId: user.userId,
+            authorRole: user.role,
+            body: events.join('；'),
+          },
+        });
+
+        return updated;
+      });
+    }
+  }
+
+  /**
+   * 费用转嫁为租客账单（WRK-02 / T303）
+   */
+  async transferExpense(
+    id: string,
+    operator: { userId: string; role: string },
+    dto?: TransferExpenseDto,
+  ) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: { room: true },
+    });
+    if (!request) {
+      throw new NotFoundException('报修记录不存在');
+    }
+
+    if (operator.role === 'PROPERTY_MANAGER') {
+      await assertStaffBuildingAccess(this.prisma, operator, request.room.buildingId);
+    }
+
+    if (!request.tenantFault) {
+      throw new BadRequestException('该工单未被判定为租客过失责任，不可转嫁费用');
+    }
+    if (request.totalCost <= 0) {
+      throw new BadRequestException('工单维修费用为0，无需转嫁');
+    }
+    if (request.expenseTransferred) {
+      throw new ConflictException('该工单已转嫁生成账单，禁止重复转嫁');
+    }
+
+    const contract = await this.prisma.contract.findFirst({
+      where: {
+        tenantId: request.tenantId,
+        roomId: request.roomId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!contract) {
+      throw new BadRequestException('未找到对应租约合同，无法生成账单');
+    }
+
+    const now = new Date();
+    const dueDate = dto?.dueDate
+      ? new Date(dto.dueDate)
+      : new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const hex = randomBytes(3).toString('hex').toUpperCase();
+    const billNumber = `B${Date.now()}${hex}`;
+    const dedupKey = `MAINTENANCE:${id}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const bill = await tx.bill.create({
+        data: {
+          contractId: contract.id,
+          billNumber,
+          billType: 'MAINTENANCE',
+          period,
+          amount: request.totalCost,
+          paidAmount: 0,
+          dueDate,
+          status: 'PENDING',
+          dedupKey,
+          snapshot: {
+            maintenanceRequestId: id,
+            title: request.title,
+            laborCost: request.laborCost,
+            materialCost: request.materialCost,
+            totalCost: request.totalCost,
+            faultReason: request.faultReason,
+            notes: dto?.notes || null,
+          },
+        },
+      });
+
+      const updated = await tx.maintenanceRequest.update({
+        where: { id },
+        data: {
+          expenseTransferred: true,
+          expenseBillId: bill.id,
+          expenseTransferredAt: now,
+        },
+        include: {
+          room: true,
+          tenant: true,
+          expenseBill: true,
+        },
+      });
+
+      await tx.maintenanceMessage.create({
+        data: {
+          requestId: id,
+          type: 'SYSTEM',
+          authorId: operator.userId,
+          authorRole: operator.role,
+          body: `已将维修费用 ¥${(request.totalCost / 100).toFixed(2)} 转嫁生成租客账单（账单号：${bill.billNumber}，到期日：${dueDate.toISOString().slice(0, 10)}）`,
+        },
+      });
+
+      return {
+        maintenanceRequest: updated,
+        bill,
+      };
+    });
+  }
+
+  /**
+   * 维修师傅查询指派给本人的工单（WRK-02 / T303）
+   */
+  async getAssignedWorkOrders(maintainerId: string, query: QueryMaintenanceDto) {
+    const { page = 1, limit = 20, status } = query;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.MaintenanceRequestWhereInput = {
+      OR: [
+        { assignedMaintainerId: maintainerId },
+        { assignedTo: maintainerId },
+      ],
+      ...(status ? { status } : {}),
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.maintenanceRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          room: { select: { id: true, roomNumber: true, buildingId: true, building: { select: { id: true, name: true } } } },
+          tenant: { select: { id: true, name: true, phone: true } },
+          photos: { select: { id: true, fileUrl: true }, orderBy: { createdAt: 'asc' }, take: 1 },
+          _count: { select: { photos: true } },
+        },
+      }),
+      this.prisma.maintenanceRequest.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  /**
+   * 获取并同步 SLA 超时/预警工单（WRK-02 / T303）
+   */
+  async getSlaAlerts(query: QueryMaintenanceDto, operator?: { userId: string; role: string }) {
+    const now = new Date();
+    const activeRequests = await this.prisma.maintenanceRequest.findMany({
+      where: {
+        status: { notIn: ['COMPLETED', 'CANCELLED'] },
+      },
+      include: {
+        room: { select: { id: true, roomNumber: true, buildingId: true, building: { select: { id: true, name: true } } } },
+        tenant: { select: { id: true, name: true, phone: true } },
+        assignedMaintainer: { select: { id: true, email: true, phone: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const breachedList: any[] = [];
+    const updates: Promise<any>[] = [];
+
+    for (const req of activeRequests) {
+      if (operator?.role === 'PROPERTY_MANAGER') {
+        const allowed = await getStaffBuildingScope(this.prisma, operator);
+        if (allowed && !allowed.includes(req.room.buildingId)) {
+          continue;
+        }
+      }
+
+      const evalResult = evaluateSlaStatus({
+        priority: req.priority,
+        createdAt: req.createdAt,
+        responseDueAt: req.responseDueAt,
+        slaDueAt: req.slaDueAt,
+        firstRespondedAt: req.firstRespondedAt,
+        status: req.status,
+        now,
+      });
+
+      if (evalResult.isBreached || req.isSlaBreached) {
+        breachedList.push({
+          ...req,
+          breachType: evalResult.breachType || req.slaBreachType,
+          breachedAt: evalResult.breachAt || req.slaBreachedAt,
+        });
+
+        if (!req.isSlaBreached && evalResult.isBreached) {
+          updates.push(
+            this.prisma.maintenanceRequest.update({
+              where: { id: req.id },
+              data: {
+                isSlaBreached: true,
+                slaBreachType: evalResult.breachType,
+                slaBreachedAt: evalResult.breachAt ?? now,
+              },
+            }),
+          );
+        }
+      }
+    }
+
+    if (updates.length > 0) {
+      await Promise.all(updates);
+    }
+
+    return {
+      alerts: breachedList,
+      total: breachedList.length,
+      evaluatedAt: now,
+    };
+  }
+
+  async update(id: string, dto: UpdateMaintenanceDto, operator?: { userId: string; role: string }) {
+    const request = await this.prisma.maintenanceRequest.findUnique({
+      where: { id },
+      include: { room: true },
+    });
+    if (!request) {
+      throw new NotFoundException('报修记录不存在');
+    }
+
+    if (operator?.role === 'PROPERTY_MANAGER') {
+      await assertStaffBuildingAccess(this.prisma, operator, request.room.buildingId);
+    }
+
     const statusChanged = dto.status !== undefined && dto.status !== request.status;
-    // 状态流转校验（docs/04 §4.3）。原先直接写任意 status：COMPLETED 可退回 SUBMITTED、
-    // 可直接跳到 ASSIGNED 而不填 assignedTo，resolution 还会在未完成时就写 resolvedAt（T207）。
     if (statusChanged && !isMaintenanceTransitionAllowed(request.status, dto.status!)) {
       throw new ConflictException(
         `工单状态不允许从 ${request.status ?? '未知'} 变更为 ${dto.status}（合法流转见 docs/04-状态机.md §4.3）`,
@@ -217,10 +856,30 @@ export class MaintenanceService {
       updateData.assignedTo = dto.assignedTo;
       updateData.assignedAt = new Date();
     }
+    if (dto.assignedMaintainerId) {
+      updateData.assignedMaintainer = { connect: { id: dto.assignedMaintainerId } };
+    }
     if (dto.resolution) {
       updateData.resolution = dto.resolution;
     }
-    // resolvedAt 只在「确认完成」时写；未完成就填 resolution 不应留下已完成的痕迹
+    if (dto.laborCost !== undefined) {
+      updateData.laborCost = Math.max(0, dto.laborCost);
+    }
+    if (dto.materialCost !== undefined) {
+      updateData.materialCost = Math.max(0, dto.materialCost);
+    }
+    if (dto.laborCost !== undefined || dto.materialCost !== undefined) {
+      const l = dto.laborCost !== undefined ? dto.laborCost : request.laborCost;
+      const m = dto.materialCost !== undefined ? dto.materialCost : request.materialCost;
+      updateData.totalCost = Math.max(0, l) + Math.max(0, m);
+    }
+    if (dto.tenantFault !== undefined) {
+      updateData.tenantFault = dto.tenantFault;
+    }
+    if (dto.faultReason !== undefined) {
+      updateData.faultReason = dto.faultReason;
+    }
+
     if (
       (statusChanged && maintenanceTransitionSetsResolvedAt(dto.status!)) ||
       (!statusChanged && request.status === 'COMPLETED' && dto.resolution !== undefined)
@@ -243,8 +902,8 @@ export class MaintenanceService {
           data: {
             requestId: id,
             type: 'SYSTEM',
-            authorId: null,
-            authorRole: 'SYSTEM',
+            authorId: operator?.userId ?? null,
+            authorRole: operator?.role ?? 'SYSTEM',
             body: events.join('；'),
           },
         });
@@ -254,7 +913,7 @@ export class MaintenanceService {
     });
   }
 
-  /** 工单时间线：ADMIN 任意，TENANT 仅自己的工单。 */
+  /** 工单时间线：ADMIN / STAFF 任意，TENANT 仅自己的工单。 */
   async findMessages(id: string, user: { userId: string; role: string; tenantId?: string }) {
     await this.assertRequestAccess(id, user);
     const messages = await this.prisma.maintenanceMessage.findMany({
@@ -264,7 +923,7 @@ export class MaintenanceService {
     return { data: messages };
   }
 
-  /** 双方留言：ADMIN 任意，TENANT 仅自己的工单。 */
+  /** 双方留言：ADMIN / STAFF 任意，TENANT 仅自己的工单。 */
   async addMessage(
     id: string,
     dto: CreateMaintenanceMessageDto,
@@ -286,15 +945,27 @@ export class MaintenanceService {
 
   private async assertRequestAccess(
     id: string,
-    user: { role: string; tenantId?: string },
+    user: { userId: string; role: string; tenantId?: string },
   ): Promise<void> {
     const request = await this.prisma.maintenanceRequest.findUnique({
       where: { id },
-      select: { tenantId: true },
+      include: { room: true },
     });
     if (!request) throw new NotFoundException('报修记录不存在');
-    if (user.role === 'TENANT' && request.tenantId !== user.tenantId) {
-      throw new NotFoundException('报修记录不存在');
+
+    if (user.role === 'TENANT') {
+      if (request.tenantId !== user.tenantId) {
+        throw new NotFoundException('报修记录不存在');
+      }
+    } else if (user.role === 'MAINTAINER') {
+      if (
+        request.assignedMaintainerId !== user.userId &&
+        request.assignedTo !== user.userId
+      ) {
+        throw new ForbiddenException('您无权访问非本人承接的工单');
+      }
+    } else if (user.role === 'PROPERTY_MANAGER') {
+      await assertStaffBuildingAccess(this.prisma, user, request.room.buildingId);
     }
   }
 

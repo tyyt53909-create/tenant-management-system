@@ -323,6 +323,13 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
             create: vi.fn(),
             update: vi.fn(),
             remove: vi.fn(),
+            getAssignedWorkOrders: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            getSlaAlerts: vi.fn().mockResolvedValue({ alerts: [], total: 0 }),
+            dispatch: vi.fn().mockResolvedValue({ id: 'mr-1', status: 'ASSIGNED' }),
+            startWork: vi.fn().mockResolvedValue({ id: 'mr-1', status: 'IN_PROGRESS' }),
+            completeWork: vi.fn().mockResolvedValue({ id: 'mr-1', status: 'PENDING_CONFIRM' }),
+            confirmWork: vi.fn().mockResolvedValue({ id: 'mr-1', status: 'COMPLETED' }),
+            transferExpense: vi.fn().mockResolvedValue({ maintenanceRequest: { id: 'mr-1' }, bill: { id: 'b-1' } }),
           },
         },
         {
@@ -860,6 +867,47 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
       await as(request(app.getHttpServer()).get('/staff/me/buildings'), 'TENANT').expect(403);
       await as(request(app.getHttpServer()).get('/staff/me/buildings'), 'CLEANER').expect(200);
       await as(request(app.getHttpServer()).get('/staff/me/buildings'), 'ADMIN').expect(200);
+    });
+  });
+
+  describe('维修工单：派工、SLA、员工端与费用转嫁（WRK-02 / T303）', () => {
+    it('派工与费用转嫁：仅 ADMIN 与 PROPERTY_MANAGER 可操作，租客/保洁/维修工 403', async () => {
+      await request(app.getHttpServer()).post('/maintenance/mr-1/dispatch').expect(401);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/dispatch').send({ assignedMaintainerId: 'm-1' }), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/dispatch').send({ assignedMaintainerId: 'm-1' }), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/dispatch').send({ assignedMaintainerId: 'm-1' }), 'MAINTAINER').expect(403);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/dispatch').send({ assignedMaintainerId: 'm-1' }), 'PROPERTY_MANAGER').expect(201);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/dispatch').send({ assignedMaintainerId: 'm-1' }), 'ADMIN').expect(201);
+
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/transfer-expense').send({}), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/transfer-expense').send({}), 'MAINTAINER').expect(403);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/transfer-expense').send({}), 'ADMIN').expect(201);
+    });
+
+    it('维修工端点：MAINTAINER 可查看指派工单、开工与完工提报', async () => {
+      await request(app.getHttpServer()).get('/maintenance/assigned').expect(401);
+      await as(request(app.getHttpServer()).get('/maintenance/assigned'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/maintenance/assigned'), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).get('/maintenance/assigned'), 'MAINTAINER').expect(200);
+
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/start').send({}), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/start').send({}), 'MAINTAINER').expect(201);
+
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/complete').send({ resolution: '已修好' }), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/complete').send({ resolution: '已修好' }), 'MAINTAINER').expect(201);
+    });
+
+    it('SLA 告警监控：仅管理员与管家可访问', async () => {
+      await as(request(app.getHttpServer()).get('/maintenance/sla-alerts'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/maintenance/sla-alerts'), 'MAINTAINER').expect(403);
+      await as(request(app.getHttpServer()).get('/maintenance/sla-alerts'), 'ADMIN').expect(200);
+      await as(request(app.getHttpServer()).get('/maintenance/sla-alerts'), 'PROPERTY_MANAGER').expect(200);
+    });
+
+    it('工单验收确认：租客、管家与 ADMIN 均可确认', async () => {
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/confirm').send({ accepted: true }), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/confirm').send({ accepted: true }), 'TENANT').expect(201);
+      await as(request(app.getHttpServer()).post('/maintenance/mr-1/confirm').send({ accepted: true }), 'ADMIN').expect(201);
     });
   });
 
