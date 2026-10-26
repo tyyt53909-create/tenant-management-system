@@ -7,6 +7,7 @@ import { UpdatePrepayAccountDto } from './dto/update-prepay-account.dto.js';
 import { QueryPrepayAccountsDto } from './dto/query-prepay-accounts.dto.js';
 import { CreatePrepayTransactionDto } from './dto/create-prepay-transaction.dto.js';
 import { QueryPrepayTransactionsDto } from './dto/query-prepay-transactions.dto.js';
+import { PrepayRechargeJsapiDto, PrepayRechargeQueryDto } from './dto/wechat-prepay.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -48,6 +49,42 @@ export class PrepayController {
       return this.prepayService.findByTenant(tenantId);
     }
     return this.prepayService.findAll({});
+  }
+
+  // 租客发起预付线上充值微信 JSAPI 订单 (PAY-04 / T296)
+  @Post('my/recharge/wechat-jsapi')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.prepay.read')
+  createRechargeJsapi(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Body() dto: PrepayRechargeJsapiDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.tenantId ?? '';
+    return this.prepayService.createRechargeJsapiOrder(user.userId, tenantId, dto.amount);
+  }
+
+  // 租客主动查单同步预付充值 (PAY-04 / T296)
+  @Post('my/recharge/wechat-query')
+  @UseGuards(RolesGuard, CapabilityGuard)
+  @Roles('TENANT', 'ADMIN')
+  @RequireCapability('tenant.prepay.read')
+  queryRecharge(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Body() dto: PrepayRechargeQueryDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    const tenantId = user.tenantId ?? '';
+    return this.prepayService.queryAndSyncRecharge(user.userId, tenantId, dto.outTradeNo);
+  }
+
+  // 管理员：手动触发预付自动抵扣批处理 (PAY-04 / T296)
+  @Post('auto-deduct')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  autoDeduct() {
+    return this.prepayService.autoDeductBills();
   }
 
   // 管理员：预付交易流水导出（CSV）

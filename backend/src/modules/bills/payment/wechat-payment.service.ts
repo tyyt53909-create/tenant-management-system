@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -17,6 +18,7 @@ import {
 import { WechatJsapiPayDto, WechatPayQueryDto } from '../dto/wechat-pay.dto.js';
 import { PaymentMethod } from '../dto/create-payment.dto.js';
 import { randomHex } from '../../../common/utils/secure-random.js';
+import { PrepayService } from '../../prepay/prepay.service.js';
 
 @Injectable()
 export class WechatPaymentService {
@@ -27,6 +29,8 @@ export class WechatPaymentService {
     private readonly billPaymentService: BillPaymentService,
     @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => PrepayService))
+    private readonly prepayService?: PrepayService,
   ) {}
 
   /**
@@ -141,14 +145,80 @@ export class WechatPaymentService {
 
     if (resource.tradeState === 'SUCCESS') {
       let billId: string | undefined;
+      let prepayAccountId: string | undefined;
+      let purpose: string | undefined;
+      let userId: string | undefined;
 
       if (resource.attach) {
         try {
           const parsed = JSON.parse(resource.attach);
           billId = parsed.billId;
+          prepayAccountId = parsed.prepayAccountId;
+          purpose = parsed.purpose;
+          userId = parsed.userId;
         } catch {
           // 容错
         }
+      }
+
+      // 预付线上充值回调处理 (PAY-04 / T296)
+      if (purpose === 'PREPAY_RECHARGE' || prepayAccountId || resource.outTradeNo.startsWith('PR_')) {
+        const targetAccountId =
+          prepayAccountId ||
+          (this.paymentProvider as any)?.getOrder?.(resource.outTradeNo)?.prepayAccountId ||
+          (this.paymentProvider as any)?.getOrder?.(resource.outTradeNo)?.billId;
+
+        if (!targetAccountId) {
+          this.logger.error(`微信支付回调无法解析对应的预付账户: ${JSON.stringify(resource)}`);
+          throw new BadRequestException('预付充值通知缺少账户关联信息');
+        }
+
+        if (this.prepayService) {
+          await this.prepayService.recordOnlineRecharge(
+            targetAccountId,
+            resource.amount,
+            resource.outTradeNo,
+            resource.transactionId,
+            userId || 'SYSTEM_WECHAT_PAY',
+          );
+        } else {
+          // 兜底直接写入预付账户与流水
+          await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.prepayTransaction.findFirst({
+              where: {
+                accountId: targetAccountId,
+                type: 'RECHARGE',
+                relatedId: resource.transactionId || resource.outTradeNo,
+              },
+            });
+            if (!existing) {
+              const updated = await tx.prepayAccount.update({
+                where: { id: targetAccountId },
+                data: { balanceCache: { increment: resource.amount } },
+              });
+              await tx.prepayTransaction.create({
+                data: {
+                  accountId: targetAccountId,
+                  type: 'RECHARGE',
+                  amount: resource.amount,
+                  balanceAfter: updated.balanceCache,
+                  relatedId: resource.transactionId || resource.outTradeNo,
+                  description: `微信支付线上充值 (单号: ${resource.outTradeNo})`,
+                  operatorId: userId || 'SYSTEM_WECHAT_PAY',
+                },
+              });
+            }
+          });
+        }
+
+        this.logger.log(
+          `微信支付预付充值入账成功: 账户=${targetAccountId}, 单号=${resource.outTradeNo}, 交易号=${resource.transactionId}`,
+        );
+
+        return {
+          code: 'SUCCESS',
+          message: '成功',
+        };
       }
 
       // 如果 attach 无法还原，尝试通过 mockProvider 内存或已有订单还原

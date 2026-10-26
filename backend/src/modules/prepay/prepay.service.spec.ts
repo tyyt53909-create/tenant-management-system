@@ -1,18 +1,34 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrepayService } from './prepay.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { PAYMENT_PROVIDER } from '../bills/payment/payment-provider.js';
+import { BillPaymentService } from '../bills/bill-payment.service.js';
 
 describe('PrepayService', () => {
   let service: PrepayService;
   let prisma: any;
   let settings: any;
+  let paymentProvider: any;
+  let billPaymentService: any;
 
   const accountId = 'account-001';
   const operatorId = 'admin-001';
 
   beforeEach(async () => {
+    const paymentProviderMock: any = {
+      name: 'wechat-mock',
+      createJsapiOrder: vi.fn(),
+      queryOrder: vi.fn(),
+    };
+
+    const billPaymentServiceMock: any = {
+      addPayment: vi.fn(),
+    };
+
     const prismaMock: any = {
       prepayAccount: {
         findUnique: vi.fn(),
@@ -27,11 +43,14 @@ describe('PrepayService', () => {
       },
       prepayTransaction: {
         create: vi.fn(),
+        findFirst: vi.fn(),
         findMany: vi.fn(),
         count: vi.fn(),
       },
       tenant: { findUnique: vi.fn() },
       room: { findMany: vi.fn(), findUnique: vi.fn() },
+      bill: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+      userIdentity: { findFirst: vi.fn() },
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
@@ -44,11 +63,28 @@ describe('PrepayService', () => {
           provide: SettingsService,
           useValue: { getValue: vi.fn().mockResolvedValue(10000) },
         },
+        {
+          provide: BusinessClock,
+          useValue: {
+            now: vi.fn().mockReturnValue(new Date('2026-10-26T12:00:00Z')),
+            startOfDay: vi.fn().mockReturnValue(new Date('2026-10-26T00:00:00Z')),
+            todayString: vi.fn().mockReturnValue('2026-10-26'),
+            formatDate: vi.fn().mockReturnValue('2026-10-26'),
+          },
+        },
+        { provide: PAYMENT_PROVIDER, useValue: paymentProviderMock },
+        { provide: BillPaymentService, useValue: billPaymentServiceMock },
+        {
+          provide: ConfigService,
+          useValue: { get: vi.fn().mockReturnValue('true') },
+        },
       ],
     }).compile();
 
     service = module.get<PrepayService>(PrepayService);
     settings = module.get(SettingsService);
+    paymentProvider = module.get(PAYMENT_PROVIDER);
+    billPaymentService = module.get(BillPaymentService);
     prisma = prismaMock;
   });
 
@@ -582,6 +618,216 @@ describe('PrepayService', () => {
         expect.objectContaining({ where: { createdAt: { gte: new Date('2026-01-01') } } }),
       );
       expect(prisma.room.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('线上充值与查单同步 (PAY-04 / T296)', () => {
+    it('recordOnlineRecharge：首次充值增加余额并写入流水', async () => {
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId, balanceCache: 5000 });
+      prisma.prepayTransaction.findFirst.mockResolvedValue(null);
+      prisma.prepayAccount.update.mockResolvedValue({ id: accountId, balanceCache: 15000 });
+      prisma.prepayTransaction.create.mockResolvedValue({
+        id: 'tx-recharge-1',
+        type: 'RECHARGE',
+        amount: 10000,
+        balanceAfter: 15000,
+        relatedId: '4200001234',
+      });
+
+      const res = await service.recordOnlineRecharge(
+        accountId,
+        10000,
+        'PR_123456_7890',
+        '4200001234',
+        'user-1',
+      );
+
+      expect(res.alreadyProcessed).toBe(false);
+      expect(res.account.balanceCache).toBe(15000);
+      expect(prisma.prepayAccount.update).toHaveBeenCalledWith({
+        where: { id: accountId },
+        data: { balanceCache: { increment: 10000 } },
+      });
+      expect(prisma.prepayTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          accountId,
+          type: 'RECHARGE',
+          amount: 10000,
+          balanceAfter: 15000,
+          relatedId: '4200001234',
+          operatorId: 'user-1',
+        }),
+      });
+    });
+
+    it('recordOnlineRecharge：重复交易号入账幂等拦截，不重复增加余额', async () => {
+      const existingAccount = { id: accountId, balanceCache: 15000 };
+      const existingTx = {
+        id: 'tx-recharge-1',
+        type: 'RECHARGE',
+        amount: 10000,
+        balanceAfter: 15000,
+        relatedId: '4200001234',
+      };
+      prisma.prepayAccount.findUnique.mockResolvedValue(existingAccount);
+      prisma.prepayTransaction.findFirst.mockResolvedValue(existingTx);
+
+      const res = await service.recordOnlineRecharge(
+        accountId,
+        10000,
+        'PR_123456_7890',
+        '4200001234',
+      );
+
+      expect(res.alreadyProcessed).toBe(true);
+      expect(res.transaction).toEqual(existingTx);
+      expect(prisma.prepayAccount.update).not.toHaveBeenCalled();
+      expect(prisma.prepayTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('recordOnlineRecharge：金额必须大于 0', async () => {
+      await expect(
+        service.recordOnlineRecharge(accountId, 0, 'PR_123'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.recordOnlineRecharge(accountId, -500, 'PR_123'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('createRechargeJsapiOrder：有效租客发起充值成功获得 JSAPI 参数', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue({ id: accountId, tenantId: 'tenant-1' });
+      prisma.userIdentity.findFirst.mockResolvedValue({ providerUserId: 'wx-openid-tenant' });
+      paymentProvider.createJsapiOrder.mockResolvedValue({
+        appId: 'wx_mock_appid',
+        timeStamp: '1729891200',
+        nonceStr: 'mock_nonce',
+        package: 'prepay_id=mock_123',
+        signType: 'RSA',
+        paySign: 'mock_sign',
+        outTradeNo: 'PR_mock_001',
+      });
+
+      const res = await service.createRechargeJsapiOrder('user-1', 'tenant-1', 10000);
+      expect(res.package).toBe('prepay_id=mock_123');
+      expect(paymentProvider.createJsapiOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          billId: accountId,
+          amount: 10000,
+          openid: 'wx-openid-tenant',
+          description: '栖居生活-预付金充值',
+        }),
+      );
+    });
+
+    it('createRechargeJsapiOrder：缺失租客身份或账户不存在时拦截', async () => {
+      await expect(
+        service.createRechargeJsapiOrder('user-1', '', 10000),
+      ).rejects.toThrow(ForbiddenException);
+
+      prisma.prepayAccount.findFirst.mockResolvedValue(null);
+      await expect(
+        service.createRechargeJsapiOrder('user-1', 'tenant-1', 10000),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('queryAndSyncRecharge：订单成功时自动补单入账', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue({ id: accountId, tenantId: 'tenant-1' });
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId, balanceCache: 20000 });
+      prisma.prepayTransaction.findFirst.mockResolvedValue(null);
+      prisma.prepayAccount.update.mockResolvedValue({ id: accountId, balanceCache: 30000 });
+      prisma.prepayTransaction.create.mockResolvedValue({ id: 'tx-sync-1' });
+
+      paymentProvider.queryOrder.mockResolvedValue({
+        orderId: 'PR_101',
+        status: 'SUCCESS',
+        amount: 10000,
+        transactionId: '4200009999',
+      });
+
+      const res = await service.queryAndSyncRecharge('user-1', 'tenant-1', 'PR_101');
+      expect(res.status).toBe('SUCCESS');
+      expect(res.amount).toBe(10000);
+      expect(prisma.prepayAccount.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('预估可用天数与自动扣费 (PAY-04 / T296)', () => {
+    it('findByTenant：正确根据近 30 天扣费计算日均消耗与预估可用天数', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue({
+        id: accountId,
+        roomId: 'room-1',
+        balanceCache: 30000, // 300 元
+      });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', roomNumber: '202' });
+      // 近 30 天内发生 3 笔扣费，合计 -60000 分（600 元），日均 20 元（2000 分）
+      prisma.prepayTransaction.findMany.mockResolvedValue([
+        { amount: -20000 },
+        { amount: -30000 },
+        { amount: -10000 },
+      ]);
+
+      const res = await service.findByTenant('tenant-1');
+      expect(res.dailyAverageUsage).toBe(2000); // 60000 / 30 = 2000 分
+      expect(res.estimatedDaysRemaining).toBe(15); // 30000 / 2000 = 15 天
+    });
+
+    it('findByTenant：无近期扣费时预估可用天数为 null', async () => {
+      prisma.prepayAccount.findFirst.mockResolvedValue({
+        id: accountId,
+        roomId: 'room-1',
+        balanceCache: 30000,
+      });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', roomNumber: '202' });
+      prisma.prepayTransaction.findMany.mockResolvedValue([]);
+
+      const res = await service.findByTenant('tenant-1');
+      expect(res.dailyAverageUsage).toBe(0);
+      expect(res.estimatedDaysRemaining).toBeNull();
+    });
+
+    it('autoDeductBills：开关未开启时直接返回 0', async () => {
+      settings.getValue.mockImplementation(async (key: string) => {
+        if (key === 'prepay.autoDeductEnabled') return false;
+        return null;
+      });
+
+      const res = await service.autoDeductBills();
+      expect(res).toEqual({ deductedCount: 0, totalAmount: 0 });
+      expect(prisma.prepayAccount.findMany).not.toHaveBeenCalled();
+    });
+
+    it('autoDeductBills：开关开启时执行水电账单抵扣', async () => {
+      settings.getValue.mockImplementation(async (key: string) => {
+        if (key === 'prepay.autoDeductEnabled') return true;
+        if (key === 'prepay.autoDeductBillTypes') return ['UTILITY'];
+        if (key === 'prepay.autoDeductPartial') return false;
+        return null;
+      });
+
+      prisma.prepayAccount.findMany.mockResolvedValue([
+        { id: accountId, tenantId: 'tenant-1', balanceCache: 20000 },
+      ]);
+      prisma.bill.findMany.mockResolvedValue([
+        { id: 'bill-1', billNumber: 'B-001', amount: 15000, paidAmount: 0 },
+      ]);
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId, balanceCache: 20000 });
+      prisma.prepayAccount.updateMany.mockResolvedValue({ count: 1 });
+      prisma.prepayAccount.findUniqueOrThrow.mockResolvedValue({ id: accountId, balanceCache: 5000 });
+      prisma.prepayTransaction.create.mockResolvedValue({ id: 'tx-deduct-1' });
+
+      billPaymentService.addPayment.mockResolvedValue({ payment: { id: 'pay-1' } });
+
+      const res = await service.autoDeductBills();
+      expect(res.deductedCount).toBe(1);
+      expect(res.totalAmount).toBe(15000);
+      expect(billPaymentService.addPayment).toHaveBeenCalledWith(
+        'bill-1',
+        expect.objectContaining({
+          amount: 15000,
+          transactionNumber: 'tx-deduct-1',
+        }),
+        'SYSTEM_AUTO_DEDUCT',
+      );
     });
   });
 });

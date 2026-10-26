@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BillsService } from './bills.service.js';
 import { BillPaymentService } from './bill-payment.service.js';
@@ -14,9 +14,10 @@ import { WechatPaymentProvider } from './payment/wechat-payment.provider.js';
 import { WechatPaymentService } from './payment/wechat-payment.service.js';
 import { PaymentRefundService } from './payment/payment-refund.service.js';
 import { PaymentReconciliationService } from './payment/payment-reconciliation.service.js';
+import { PrepayModule } from '../prepay/prepay.module.js';
 
 @Module({
-  imports: [PrismaModule, ConfigModule],
+  imports: [PrismaModule, ConfigModule, forwardRef(() => PrepayModule)],
   controllers: [BillsController, PaymentsController],
   providers: [
     BillsService,

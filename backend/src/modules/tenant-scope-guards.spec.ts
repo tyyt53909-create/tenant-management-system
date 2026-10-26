@@ -13,6 +13,7 @@ import { BillPaymentService } from './bills/bill-payment.service.js';
 import { BillLateFeeService } from './bills/bill-late-fee.service.js';
 import { BillReceiptService } from './bills/bill-receipt.service.js';
 import { OfflinePaymentProvider } from './bills/payment/offline-payment.provider.js';
+import { PAYMENT_PROVIDER } from './bills/payment/payment-provider.js';
 import { BusinessClock } from '../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
 import { NotificationDispatcher } from './notifications/channels/notification-dispatcher.js';
@@ -74,6 +75,18 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
         {
           provide: BillReceiptService,
           useFactory: () => new BillReceiptService(prismaMock as never, new ConfigService({ JWT_SECRET: 'test' })),
+        },
+        {
+          provide: BusinessClock,
+          useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
+        },
+        {
+          provide: PAYMENT_PROVIDER,
+          useValue: new OfflinePaymentProvider(),
+        },
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({ NODE_ENV: 'test' }),
         },
         {
           provide: SettingsService,

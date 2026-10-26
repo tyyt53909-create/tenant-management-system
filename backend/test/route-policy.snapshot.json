@@ -1159,8 +1159,34 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/api/prepay-accounts/auto-deduct",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/api/prepay-accounts/my",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/prepay-accounts/my/recharge/wechat-jsapi",
+    "public": false,
+    "roles": [
+      "TENANT",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/prepay-accounts/my/recharge/wechat-query",
     "public": false,
     "roles": [
       "TENANT",

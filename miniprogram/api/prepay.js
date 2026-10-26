@@ -24,3 +24,21 @@ export const getMyAccount = () => {
 export const getRechargeRecords = (params) => {
   return request.get('/prepay-accounts/transactions', params)
 }
+
+/**
+ * 发起预付线上充值微信支付 JSAPI 下单 (PAY-04 / T296)
+ * @param {number} amount 充值金额（单位：分）
+ * @returns {Promise<{ appId: string, timeStamp: string, nonceStr: string, package: string, signType: string, paySign: string, outTradeNo: string }>}
+ */
+export const createPrepayJsapiPay = (amount) => {
+  return request.post('/prepay-accounts/my/recharge/wechat-jsapi', { amount })
+}
+
+/**
+ * 主动查询预付充值支付结果 (PAY-04 / T296)
+ * @param {string} outTradeNo 微信商户订单号
+ * @returns {Promise<{ status: string, amount?: number, account?: any, transaction?: any }>}
+ */
+export const queryPrepayPay = (outTradeNo) => {
+  return request.post('/prepay-accounts/my/recharge/wechat-query', { outTradeNo })
+}

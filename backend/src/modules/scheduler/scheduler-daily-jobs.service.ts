@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BillsService } from '../bills/bills.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -6,6 +7,7 @@ import { NotificationPriority } from '../notifications/dto/create-notification.d
 import { LateFeeUtil, type LateFeeRule } from '../bills/utils/late-fee.util.js';
 import { computeOverdue, dailyLateFeeAmount } from '../bills/bill-overdue.util.js';
 import { roomUpdateForContractTransition } from '../contracts/contract-transitions.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import {
   SYSTEM_OPERATOR,
   MS_PER_DAY,
@@ -25,6 +27,7 @@ export class SchedulerDailyJobsService {
     private readonly prisma: PrismaService,
     private readonly billsService: BillsService,
     private readonly notificationsService: NotificationsService,
+    private readonly clock: BusinessClock = new BusinessClock(new ConfigService()),
   ) {}
 
   // ------------------------------------------------------------------
@@ -294,7 +297,7 @@ export class SchedulerDailyJobsService {
   // ------------------------------------------------------------------
 
   async notifyLowBalancePrepay(): Promise<number> {
-    const today = startOfTodayUtc();
+    const today = this.clock.todayUtc();
 
     const accounts = await this.prisma.prepayAccount.findMany({
       where: {
@@ -310,20 +313,24 @@ export class SchedulerDailyJobsService {
       const userId = account.tenant?.userId;
       if (!userId) continue;
 
-      const { year, month, day } = getBusinessDateParts(today);
-      const dayKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayKey = this.clock.formatDate(today);
+
       await this.notify(
         userId,
         '预付余额不足提醒',
         `您的预付账户余额 ¥${formatAmount(account.balanceCache)} 已低于提醒阈值 ¥${formatAmount(account.lowBalanceThreshold)}，请及时充值`,
         'NORMAL',
-        { prepayAccountId: account.id },
+        {
+          prepayAccountId: account.id,
+          page: '/packageA/account/account',
+          action: 'RECHARGE',
+        },
         `LOW_BALANCE:${userId}:${account.id}:${dayKey}`,
       );
 
       await this.prisma.prepayAccount.update({
         where: { id: account.id },
-        data: { lastNotifiedAt: new Date() },
+        data: { lastNotifiedAt: this.clock.now() },
       });
       sent++;
     }

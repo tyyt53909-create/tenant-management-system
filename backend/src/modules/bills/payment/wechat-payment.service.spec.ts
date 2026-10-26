@@ -136,6 +136,43 @@ describe('WechatPaymentService (T293 / PAY-01)', () => {
         'SYSTEM_WECHAT_PAY',
       );
     });
+
+    it('handleNotify: 收到预付线上充值回调调用 prepayService.recordOnlineRecharge', async () => {
+      const prepayServiceMock = {
+        recordOnlineRecharge: vi.fn().mockResolvedValue({ alreadyProcessed: false }),
+      };
+
+      const serviceWithPrepay = new WechatPaymentService(
+        prisma,
+        billPaymentService,
+        paymentProvider,
+        configService,
+        prepayServiceMock as any,
+      );
+
+      const notifyBody = {
+        out_trade_no: 'PR_ORDER_123',
+        transaction_id: '4200008888',
+        amount: { total: 10000 },
+        payer: { openid: 'mock_openid' },
+        attach: JSON.stringify({
+          purpose: 'PREPAY_RECHARGE',
+          prepayAccountId: 'acc-prepay-001',
+          userId: 'u1',
+        }),
+      };
+
+      const res = await serviceWithPrepay.handleNotify({}, notifyBody);
+      expect(res.code).toBe('SUCCESS');
+      expect(prepayServiceMock.recordOnlineRecharge).toHaveBeenCalledWith(
+        'acc-prepay-001',
+        10000,
+        'PR_ORDER_123',
+        '4200008888',
+        'u1',
+      );
+      expect(billPaymentService.addPayment).not.toHaveBeenCalled();
+    });
   });
 
   describe('queryAndSyncPayment', () => {

@@ -78,6 +78,31 @@ export function normalizePrepayThreshold(raw: unknown): number {
   return requireInteger(raw, 'prepay.defaultLowBalanceThreshold', 0, 100_000_000);
 }
 
+export function normalizeBoolean(raw: unknown, key: string): boolean {
+  if (typeof raw === 'boolean') return raw;
+  if (raw === 'true' || raw === '1' || raw === 1) return true;
+  if (raw === 'false' || raw === '0' || raw === 0) return false;
+  throw new SettingValidationError(`${key} 必须是布尔值 (true/false)`);
+}
+
+const ALLOWED_BILL_TYPES = new Set(['RENT', 'DEPOSIT', 'UTILITY', 'CLEANING', 'DAMAGE', 'OTHER']);
+
+export function normalizeAutoDeductBillTypes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    throw new SettingValidationError('prepay.autoDeductBillTypes 必须是数组');
+  }
+  const types: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string' || !ALLOWED_BILL_TYPES.has(item)) {
+      throw new SettingValidationError(`prepay.autoDeductBillTypes 包含不支持的账单类型: ${item}`);
+    }
+    if (!types.includes(item)) {
+      types.push(item);
+    }
+  }
+  return types;
+}
+
 export const SETTING_DEFINITIONS = {
   'billing.defaultLateFeeRule': {
     key: 'billing.defaultLateFeeRule',
@@ -90,6 +115,24 @@ export const SETTING_DEFINITIONS = {
     description: '新预付账户默认低余额预警阈值（分；0 表示不提醒）',
     defaultValue: 10000,
     normalize: normalizePrepayThreshold,
+  },
+  'prepay.autoDeductEnabled': {
+    key: 'prepay.autoDeductEnabled',
+    description: '预付账户自动抵扣未缴账单开关（默认关闭）',
+    defaultValue: false,
+    normalize: (raw: unknown) => normalizeBoolean(raw, 'prepay.autoDeductEnabled'),
+  },
+  'prepay.autoDeductBillTypes': {
+    key: 'prepay.autoDeductBillTypes',
+    description: '预付自动抵扣允许的账单类型列表（默认仅 UTILITY）',
+    defaultValue: ['UTILITY'],
+    normalize: normalizeAutoDeductBillTypes,
+  },
+  'prepay.autoDeductPartial': {
+    key: 'prepay.autoDeductPartial',
+    description: '预付账户余额不足以全额结清时是否允许部分抵扣（默认 false）',
+    defaultValue: false,
+    normalize: (raw: unknown) => normalizeBoolean(raw, 'prepay.autoDeductPartial'),
   },
 } as const satisfies Record<string, SettingDefinition<unknown>>;
 
