@@ -1,6 +1,6 @@
 ---
-status: active
-execution_status: in_progress
+status: completed
+execution_status: completed
 task_id: T299
 plan_ref: LSE-02
 stage: M4
@@ -8,7 +8,8 @@ priority: P1
 model_tier: 强
 branch: feature/T299-contract-template-sign-cotenants
 start_time: 2026-10-26
-completed_time:
+completed_time: 2026-10-26 09:50:00
+merge_commit: e539e54
 blocked_by:
 depends_on: FIN-01, DEC-05, SEC-07, WX-01
 acceptance_evidence: tasks/evidence/T299.md
