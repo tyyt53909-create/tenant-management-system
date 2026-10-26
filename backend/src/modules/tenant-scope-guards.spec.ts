@@ -22,6 +22,8 @@ import { CryptoService } from '../common/crypto/crypto.service.js';
 import { ContractTemplatesService } from './contracts/contract-templates.service.js';
 import { ELECTRONIC_SIGN_PROVIDER } from './contracts/sign/electronic-sign-provider.interface.js';
 import { MockElectronicSignProvider } from './contracts/sign/mock-electronic-sign.provider.js';
+import { InspectionsService } from './inspections/inspections.service.js';
+import { CheckoutRequestsService } from './checkout/checkout-requests.service.js';
 
 /**
  * 租客范围查询在 tenantId / userId 缺失时必须 403。
@@ -34,6 +36,8 @@ const prismaMock: any = {
   prepayAccount: { findFirst: vi.fn(), findMany: vi.fn() },
   prepayTransaction: { findMany: vi.fn(), count: vi.fn() },
   checkoutRecord: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn() },
+  roomInspection: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn() },
+  checkoutRequest: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn() },
   notification: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
   room: { findUnique: vi.fn() },
 };
@@ -44,6 +48,8 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
   let maintenance: MaintenanceService;
   let prepay: PrepayService;
   let checkout: CheckoutService;
+  let checkoutRequests: CheckoutRequestsService;
+  let inspections: InspectionsService;
   let notifications: NotificationsService;
 
   beforeEach(async () => {
@@ -55,6 +61,8 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
         MaintenanceService,
         PrepayService,
         CheckoutService,
+        CheckoutRequestsService,
+        InspectionsService,
         NotificationsService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: SchedulerMonthlyBillsService, useValue: { issueDueRentBills: vi.fn() } },
@@ -128,6 +136,8 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
     maintenance = module.get(MaintenanceService);
     prepay = module.get(PrepayService);
     checkout = module.get(CheckoutService);
+    checkoutRequests = module.get(CheckoutRequestsService);
+    inspections = module.get(InspectionsService);
     notifications = module.get(NotificationsService);
   });
 
@@ -180,6 +190,27 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
     }
     expect(prismaMock.checkoutRecord.findMany).not.toHaveBeenCalled();
     expect(prismaMock.checkoutRecord.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('checkoutRequests：tenantId 缺失时 403，且不查库', async () => {
+    for (const id of missingIds) {
+      await expectForbidden(() => checkoutRequests.findByTenant(id as never, { page: 1, limit: 20 } as never));
+      await expectForbidden(() => checkoutRequests.findOneForTenant('req-1', id as never));
+      await expectForbidden(() => checkoutRequests.create({ contractId: 'c1', expectedCheckoutDate: '2026-12-01' }, id as never));
+      await expectForbidden(() => checkoutRequests.cancel('req-1', id as never));
+    }
+    expect(prismaMock.checkoutRequest.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.checkoutRequest.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('inspections：tenantId 缺失时 403，且不查库', async () => {
+    for (const id of missingIds) {
+      await expectForbidden(() => inspections.findByTenant(id as never, { page: 1, limit: 20 } as never));
+      await expectForbidden(() => inspections.findOneForTenant('insp-1', id as never));
+      await expectForbidden(() => inspections.confirm('insp-1', { agree: true }, id as never, true));
+    }
+    expect(prismaMock.roomInspection.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.roomInspection.findUnique).not.toHaveBeenCalled();
   });
 
   it('notifications：userId 缺失时 403，且不查库', async () => {

@@ -28,7 +28,7 @@ describe('SettingsService（T276）', () => {
 
   it('无数据库记录时返回注册表默认值并标记 isDefault', async () => {
     const list = await service.list();
-    expect(list).toHaveLength(2);
+    expect(list).toHaveLength(4);
     const threshold = list.find((item) => item.key === 'prepay.defaultLowBalanceThreshold');
     expect(threshold).toMatchObject({ value: 10000, defaultValue: 10000, isDefault: true });
     const lateFee = list.find((item) => item.key === 'billing.defaultLateFeeRule');
@@ -38,6 +38,8 @@ describe('SettingsService（T276）', () => {
       fixedDaily: null,
       cap: null,
     });
+    const advanceDays = list.find((item) => item.key === 'leasing.minCheckoutAdvanceDays');
+    expect(advanceDays).toMatchObject({ value: 0, defaultValue: 0, isDefault: true });
   });
 
   it('未知 key 读取/写入返回 404', async () => {

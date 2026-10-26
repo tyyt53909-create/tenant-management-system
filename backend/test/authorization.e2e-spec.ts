@@ -54,6 +54,9 @@ import { AppointmentsController } from '../src/modules/appointments/appointments
 import { AppointmentsService } from '../src/modules/appointments/appointments.service.js';
 import { ContractTemplatesController } from '../src/modules/contracts/contract-templates.controller.js';
 import { ContractTemplatesService } from '../src/modules/contracts/contract-templates.service.js';
+import { InspectionsController } from '../src/modules/inspections/inspections.controller.js';
+import { InspectionsService } from '../src/modules/inspections/inspections.service.js';
+import { CheckoutRequestsService } from '../src/modules/checkout/checkout-requests.service.js';
 import { BusinessClock } from '../src/common/business-clock/business-clock.service.js';
 
 /**
@@ -172,6 +175,7 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
         LeadsController,
         AppointmentsController,
         ContractTemplatesController,
+        InspectionsController,
       ],
       providers: [
         // AuthController 依赖 ConfigService 决定 refresh cookie 的 Secure 标志
@@ -207,6 +211,32 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
           },
         },
         { provide: CheckoutService, useValue: checkoutService },
+        {
+          provide: CheckoutRequestsService,
+          useValue: {
+            create: vi.fn().mockResolvedValue({ id: 'req-1' }),
+            findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findByTenant: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findOne: vi.fn().mockResolvedValue({ id: 'req-1' }),
+            findOneForTenant: vi.fn().mockResolvedValue({ id: 'req-1' }),
+            review: vi.fn().mockResolvedValue({ id: 'req-1', status: 'APPROVED' }),
+            cancel: vi.fn().mockResolvedValue({ id: 'req-1', status: 'CANCELLED' }),
+          },
+        },
+        {
+          provide: InspectionsService,
+          useValue: {
+            getTemplateItems: vi.fn().mockResolvedValue([]),
+            create: vi.fn().mockResolvedValue({ id: 'insp-1' }),
+            findAll: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findByTenant: vi.fn().mockResolvedValue({ data: [], meta: { total: 0 } }),
+            findOne: vi.fn().mockResolvedValue({ id: 'insp-1' }),
+            findOneForTenant: vi.fn().mockResolvedValue({ id: 'insp-1' }),
+            update: vi.fn().mockResolvedValue({ id: 'insp-1' }),
+            confirm: vi.fn().mockResolvedValue({ id: 'insp-1', status: 'CONFIRMED' }),
+            remove: vi.fn().mockResolvedValue({ success: true }),
+          },
+        },
         {
           provide: ContractsService,
           useValue: {
@@ -698,6 +728,43 @@ describe('接口越权回归（T148，真实守卫 + HTTP）', () => {
 
       await as(request(app.getHttpServer()).post('/contracts/c1/co-tenants'), 'TENANT').expect(403);
       await as(request(app.getHttpServer()).post('/contracts/c1/co-tenants'), 'ADMIN').expect(201);
+    });
+  });
+
+  describe('验房交接与退租申请（LSE-03 / T300）', () => {
+    it('验房单：全量与创建未登录 401，TENANT 仅能查看本人及确认，ADMIN 可全量管理', async () => {
+      await request(app.getHttpServer()).get('/inspections').expect(401);
+      await as(request(app.getHttpServer()).get('/inspections'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/inspections'), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).get('/inspections'), 'ADMIN').expect(200);
+
+      // 创建仅管理员
+      await as(request(app.getHttpServer()).post('/inspections').send({ type: 'CHECK_IN', contractId: 'c1', inspectorName: '管家' }), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/inspections').send({ type: 'CHECK_IN', contractId: 'c1', inspectorName: '管家' }), 'ADMIN').expect(201);
+
+      // 租客本人端点 /inspections/my 与 /inspections/:id 允许访问
+      await as(request(app.getHttpServer()).get('/inspections/my'), 'TENANT', 'tenant-self').expect(200);
+      await as(request(app.getHttpServer()).get('/inspections/insp-1'), 'TENANT', 'tenant-self').expect(200);
+      await as(request(app.getHttpServer()).post('/inspections/insp-1/confirm').send({ agree: true }), 'TENANT', 'tenant-self').expect(201);
+    });
+
+    it('退租申请：租客可发起/查看本人/撤回，管理员审批与全量查询，CLEANER 403', async () => {
+      await request(app.getHttpServer()).get('/checkout/requests').expect(401);
+      await as(request(app.getHttpServer()).get('/checkout/requests'), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).get('/checkout/requests'), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).get('/checkout/requests'), 'ADMIN').expect(200);
+
+      // 租客发起退租申请
+      await as(request(app.getHttpServer()).post('/checkout/requests').send({ contractId: 'c1', expectedCheckoutDate: '2026-12-01' }), 'CLEANER').expect(403);
+      await as(request(app.getHttpServer()).post('/checkout/requests').send({ contractId: 'c1', expectedCheckoutDate: '2026-12-01' }), 'TENANT', 'tenant-self').expect(201);
+
+      // 租客查看本人申请与撤回
+      await as(request(app.getHttpServer()).get('/checkout/requests/my'), 'TENANT', 'tenant-self').expect(200);
+      await as(request(app.getHttpServer()).post('/checkout/requests/req-1/cancel'), 'TENANT', 'tenant-self').expect(201);
+
+      // 管理员审批
+      await as(request(app.getHttpServer()).post('/checkout/requests/req-1/review').send({ approved: true }), 'TENANT').expect(403);
+      await as(request(app.getHttpServer()).post('/checkout/requests/req-1/review').send({ approved: true }), 'ADMIN').expect(201);
     });
   });
 

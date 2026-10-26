@@ -78,6 +78,41 @@ export function normalizePrepayThreshold(raw: unknown): number {
   return requireInteger(raw, 'prepay.defaultLowBalanceThreshold', 0, 100_000_000);
 }
 
+export const DEFAULT_INSPECTION_ITEMS = [
+  { name: '入户门及智能门锁', category: 'SECURITY', quantity: 1 },
+  { name: '门卡钥匙', category: 'KEYS', quantity: 2 },
+  { name: '空调及遥控器', category: 'APPLIANCE', quantity: 1 },
+  { name: '热水器', category: 'APPLIANCE', quantity: 1 },
+  { name: '洗衣机', category: 'APPLIANCE', quantity: 1 },
+  { name: '冰箱', category: 'APPLIANCE', quantity: 1 },
+  { name: '床及床垫', category: 'FURNITURE', quantity: 1 },
+  { name: '衣柜', category: 'FURNITURE', quantity: 1 },
+  { name: '卫浴洁具花洒', category: 'BATHROOM', quantity: 1 },
+  { name: '墙面门窗地面', category: 'INTERIOR', quantity: 1 },
+];
+
+export function normalizeInspectionItems(raw: unknown): Array<{ name: string; category?: string; quantity: number }> {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return DEFAULT_INSPECTION_ITEMS;
+  }
+  return raw.map((item, idx) => {
+    if (typeof item !== 'object' || item === null) {
+      throw new SettingValidationError(`leasing.defaultInspectionItems[${idx}] 必须为对象`);
+    }
+    const name = String((item as any).name || '').trim();
+    if (!name) {
+      throw new SettingValidationError(`leasing.defaultInspectionItems[${idx}].name 不能为空`);
+    }
+    const category = (item as any).category ? String((item as any).category).trim() : undefined;
+    const quantity = Number.isInteger((item as any).quantity) && (item as any).quantity > 0 ? (item as any).quantity : 1;
+    return { name, category, quantity };
+  });
+}
+
+export function normalizeCheckoutAdvanceDays(raw: unknown): number {
+  return requireInteger(raw, 'leasing.minCheckoutAdvanceDays', 0, 365);
+}
+
 export const SETTING_DEFINITIONS = {
   'billing.defaultLateFeeRule': {
     key: 'billing.defaultLateFeeRule',
@@ -90,6 +125,18 @@ export const SETTING_DEFINITIONS = {
     description: '新预付账户默认低余额预警阈值（分；0 表示不提醒）',
     defaultValue: 10000,
     normalize: normalizePrepayThreshold,
+  },
+  'leasing.defaultInspectionItems': {
+    key: 'leasing.defaultInspectionItems',
+    description: '默认验房设施与物品清单模板',
+    defaultValue: DEFAULT_INSPECTION_ITEMS,
+    normalize: normalizeInspectionItems,
+  },
+  'leasing.minCheckoutAdvanceDays': {
+    key: 'leasing.minCheckoutAdvanceDays',
+    description: '租客发起退租申请的最短提前天数（默认 0 表示不限）',
+    defaultValue: 0,
+    normalize: normalizeCheckoutAdvanceDays,
   },
 } as const satisfies Record<string, SettingDefinition<unknown>>;
 
