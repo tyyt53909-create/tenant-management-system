@@ -18,6 +18,10 @@ import { BusinessClock } from '../common/business-clock/business-clock.service.j
 import { ConfigService } from '@nestjs/config';
 import { NotificationDispatcher } from './notifications/channels/notification-dispatcher.js';
 import { AuditLogService } from './audit/audit-log.service.js';
+import { CryptoService } from '../common/crypto/crypto.service.js';
+import { ContractTemplatesService } from './contracts/contract-templates.service.js';
+import { ELECTRONIC_SIGN_PROVIDER } from './contracts/sign/electronic-sign-provider.interface.js';
+import { MockElectronicSignProvider } from './contracts/sign/mock-electronic-sign.provider.js';
 
 /**
  * 租客范围查询在 tenantId / userId 缺失时必须 403。
@@ -96,6 +100,25 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
         {
           provide: PAYMENT_PROVIDER,
           useValue: new OfflinePaymentProvider(),
+        },
+        {
+          provide: CryptoService,
+          useValue: {
+            encrypt: vi.fn((s: string) => `enc:${s}`),
+            decrypt: vi.fn((s: string) => s.replace('enc:', '')),
+            maskStored: vi.fn(() => '1101********0001'),
+          },
+        },
+        {
+          provide: ContractTemplatesService,
+          useValue: {
+            findDefault: vi.fn().mockResolvedValue({ id: 'tmpl-1', content: '模板' }),
+            render: vi.fn((c: string) => c),
+          },
+        },
+        {
+          provide: ELECTRONIC_SIGN_PROVIDER,
+          useClass: MockElectronicSignProvider,
         },
       ],
     }).compile();

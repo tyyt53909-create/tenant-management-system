@@ -75,6 +75,7 @@ const PUBLIC_ROUTE_ALLOWLIST = new Set([
   'POST /api/auth/wechat/bind',
   'POST /api/payments/wechat/notify',
   'POST /api/payments/wechat/refund-notify',
+  'POST /api/contracts/sign/callback',
   'POST /api/auth/password/forgot',
   'POST /api/auth/password/reset',
 ]);

@@ -106,6 +106,20 @@ enum ContractStatus {
   RENEWED // 已续签（被新合同替代）
 }
 
+// 合同电子签署状态（LSE-02 / T299）
+enum ContractSignStatus {
+  UNSIGNED // 未签署（草稿或线下纸质签）
+  SIGNING // 电子签签署中
+  SIGNED // 电子签已完成
+  REJECTED // 拒绝签署
+}
+
+// 合同模板状态（LSE-02 / T299）
+enum ContractTemplateStatus {
+  ACTIVE
+  INACTIVE
+}
+
 // 附件类型
 enum AttachmentType {
   CONTRACT_SCAN // 合同扫描件
@@ -571,6 +585,19 @@ model Contract {
 
   status ContractStatus @default(DRAFT)
 
+  /// 关联合同条款模板（可空）
+  templateId String?
+  template   ContractTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  /// 电子签署状态（LSE-02 / T299）
+  signStatus ContractSignStatus @default(UNSIGNED)
+  /// 第三方电子签约流程 ID
+  signFlowId String?
+  /// 签约完成时间
+  signedAt   DateTime?
+  /// 签约完成文件存储地址
+  signDocUrl String?
+
   renewedFromId String?   @unique
   renewedFrom   Contract? @relation("ContractRenewal", fields: [renewedFromId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   renewedTo     Contract? @relation("ContractRenewal")
@@ -583,11 +610,13 @@ model Contract {
   checkoutRecords         CheckoutRecord[]
   utilityAllocations      PublicUtilityAllocation[]
   depositLedger           DepositLedger?
+  coTenants               ContractCoTenant[]
 
   @@index([buildingId, status])
   @@index([tenantId, status])
   @@index([roomId, status])
   @@index([status, endDate])
+  @@index([signStatus])
   @@map("contracts")
 }
 
@@ -1606,4 +1635,48 @@ model ViewingAppointment {
   @@index([status, appointmentTime])
   @@index([phone])
   @@map("viewing_appointments")
+}
+
+// 48. ContractTemplate（合同条款模板，LSE-02 / T299）
+model ContractTemplate {
+  id          String                 @id @default(cuid())
+  name        String
+  code        String                 @unique
+  description String?
+  content     String                 @db.Text
+  terms       Json?
+  isDefault   Boolean                @default(false)
+  status      ContractTemplateStatus @default(ACTIVE)
+
+  createdBy   String
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  contracts   Contract[]
+
+  @@index([status, isDefault])
+  @@map("contract_templates")
+}
+
+// 49. ContractCoTenant（共同承租人 / 合租人，LSE-02 / T299）
+model ContractCoTenant {
+  id           String    @id @default(cuid())
+  contractId   String
+  contract     Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  name         String
+  phone        String
+  idType       IdType    @default(ID_CARD)
+  idNumber     String?   // 加密存储
+
+  relationship String?   // 配偶 / 同事 / 朋友 / 亲属 / 其他
+  isSigner     Boolean   @default(false) // 是否作为共同签署人
+  signedAt     DateTime?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([contractId])
+  @@index([phone])
+  @@map("contract_co_tenants")
 }

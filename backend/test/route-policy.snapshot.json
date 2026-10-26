@@ -593,6 +593,56 @@
   },
   {
     "method": "GET",
+    "path": "/api/contract-templates",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contract-templates",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/contract-templates/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contract-templates/:id",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/contract-templates/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contract-templates/default",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/contracts",
     "public": false,
     "roles": [
@@ -660,10 +710,60 @@
   },
   {
     "method": "POST",
+    "path": "/api/contracts/:id/co-tenants",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/contracts/:id/co-tenants/:coTenantId",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/:id/pdf",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
+    ]
+  },
+  {
+    "method": "POST",
     "path": "/api/contracts/:id/renew",
     "public": false,
     "roles": [
       "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/:id/sign/initiate",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/:id/sign/mock-complete",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/contracts/:id/sign/status",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "TENANT"
     ]
   },
   {
@@ -674,6 +774,12 @@
       "TENANT",
       "ADMIN"
     ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/contracts/sign/callback",
+    "public": true,
+    "roles": []
   },
   {
     "method": "GET",

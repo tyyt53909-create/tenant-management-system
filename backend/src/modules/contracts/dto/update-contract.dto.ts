@@ -1,6 +1,7 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { IsEnum, IsOptional } from 'class-validator';
 import { CreateContractDto } from './create-contract.dto.js';
+import { ContractSignStatus } from '@prisma/client';
 
 enum ContractStatus {
   DRAFT = 'DRAFT',
@@ -14,4 +15,8 @@ export class UpdateContractDto extends PartialType(CreateContractDto) {
   @IsEnum(ContractStatus)
   @IsOptional()
   status?: ContractStatus;
+
+  @IsEnum(ContractSignStatus)
+  @IsOptional()
+  signStatus?: ContractSignStatus;
 }
