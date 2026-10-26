@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PublicService } from './public.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
-describe('PublicService（公开看房 P1 / T155）', () => {
+describe('PublicService（公开看房 P1 / T155 & T298 / LSE-01）', () => {
   let service: PublicService;
   let prisma: any;
+  let notificationsService: any;
 
   const reachable = {
     id: 'room-1',
@@ -15,18 +17,33 @@ describe('PublicService（公开看房 P1 / T155）', () => {
     area: 25.5,
     facilities: { wifi: true },
     description: '朝南',
-    building: { name: 'A栋', address: '某路 1 号' },
+    listingPrice: 250000,
+    isListed: true,
+    availableDate: new Date('2026-11-01'),
+    building: { id: 'b-1', name: 'A栋', address: '某路 1 号' },
     photos: [],
+    roomShape: null,
   };
 
   beforeEach(async () => {
     const prismaMock: any = {
-      room: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn() },
+      room: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() },
       building: { findMany: vi.fn() },
+      lead: { create: vi.fn() },
+      viewingAppointment: { create: vi.fn() },
+      user: { findMany: vi.fn().mockResolvedValue([{ id: 'admin-1' }]) },
+    };
+
+    notificationsService = {
+      create: vi.fn().mockResolvedValue({ id: 'notif-1' }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [PublicService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        PublicService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: NotificationsService, useValue: notificationsService },
+      ],
     }).compile();
 
     service = module.get<PublicService>(PublicService);
@@ -134,6 +151,132 @@ describe('PublicService（公开看房 P1 / T155）', () => {
       const args = prisma.building.findMany.mock.calls[0][0];
       expect(args.where.rooms).toEqual({ some: { status: 'VACANT', cleanStatus: 'CLEAN' } });
       expect(args.select).toEqual({ id: true, name: true, address: true });
+    });
+  });
+
+  describe('招租与预约 (LSE-01 / T298)', () => {
+    it('listRooms：支持 minPrice 与 maxPrice 价格区间过滤', async () => {
+      prisma.room.findMany.mockResolvedValue([reachable]);
+      prisma.room.count.mockResolvedValue(1);
+
+      await service.listRooms({ minPrice: 200000, maxPrice: 300000 } as any);
+
+      const where = prisma.room.findMany.mock.calls[0][0].where;
+      expect(where.isListed).toBe(true);
+      expect(where.listingPrice).toEqual({ gte: 200000, lte: 300000 });
+    });
+
+    it('getRoomShareInfo：生成格式化标题、描述与小程序路径', async () => {
+      prisma.room.findFirst.mockResolvedValue(reachable);
+
+      const info = await service.getRoomShareInfo('room-1');
+
+      expect(info.roomId).toBe('room-1');
+      expect(info.title).toContain('A栋 101室 · SINGLE (¥2500.00/月)');
+      expect(info.path).toBe('/pages/index/index?roomId=room-1');
+      expect(info.priceText).toBe('¥2500.00/月');
+    });
+
+    it('createLead：成功留资并通知管理员', async () => {
+      prisma.lead.create.mockResolvedValue({
+        id: 'lead-1',
+        createdAt: new Date(),
+        source: 'MINIPROGRAM',
+      });
+
+      const res = await service.createLead({
+        name: '张三',
+        phone: '13800000000',
+        budgetMin: 200000,
+        budgetMax: 300000,
+      });
+
+      expect(res.id).toBe('lead-1');
+      expect(prisma.lead.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            name: '张三',
+            phone: '13800000000',
+            status: 'NEW',
+          }),
+        }),
+      );
+      expect(notificationsService.create).toHaveBeenCalled();
+    });
+
+    it('createLead：关联房源不存在时抛出 BadRequestException', async () => {
+      prisma.room.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.createLead({
+          name: '张三',
+          phone: '13800000000',
+          roomId: 'not-exist',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('createAppointment：成功发起预约看房并通知管理员', async () => {
+      prisma.room.findFirst.mockResolvedValue(reachable);
+      const futureTime = new Date(Date.now() + 86400000).toISOString();
+      prisma.viewingAppointment.create.mockResolvedValue({
+        id: 'appt-1',
+        status: 'PENDING',
+        appointmentTime: new Date(futureTime),
+      });
+
+      const res = await service.createAppointment(
+        {
+          roomId: 'room-1',
+          name: '李四',
+          phone: '13900000000',
+          appointmentTime: futureTime,
+          visitorsCount: 2,
+        },
+        'user-1',
+      );
+
+      expect(res.id).toBe('appt-1');
+      expect(res.status).toBe('PENDING');
+      expect(prisma.viewingAppointment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            roomId: 'room-1',
+            name: '李四',
+            phone: '13900000000',
+            userId: 'user-1',
+            status: 'PENDING',
+          }),
+        }),
+      );
+      expect(notificationsService.create).toHaveBeenCalled();
+    });
+
+    it('createAppointment：房源不可看抛出 404', async () => {
+      prisma.room.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.createAppointment({
+          roomId: 'room-occupied',
+          name: '李四',
+          phone: '13900000000',
+          appointmentTime: new Date(Date.now() + 86400000).toISOString(),
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('createAppointment：预约过去时间抛出 BadRequestException', async () => {
+      prisma.room.findFirst.mockResolvedValue(reachable);
+      const pastTime = new Date(Date.now() - 86400000).toISOString();
+
+      await expect(
+        service.createAppointment({
+          roomId: 'room-1',
+          name: '李四',
+          phone: '13900000000',
+          appointmentTime: pastTime,
+        }),
+      ).rejects.toThrow('预约看房时间必须为未来时间');
     });
   });
 });

@@ -48,6 +48,8 @@ import { FloorPlansModule } from './modules/floor-plans/floor-plans.module.js';
 import { SpaceModule } from './modules/space/space.module.js';
 import { StaffModule } from './modules/staff/staff.module.js';
 import { SmsModule } from './modules/sms/sms.module.js';
+import { LeadsModule } from './modules/leads/leads.module.js';
+import { AppointmentsModule } from './modules/appointments/appointments.module.js';
 
 @Module({
   imports: [
@@ -108,6 +110,9 @@ import { SmsModule } from './modules/sms/sms.module.js';
     SettingsModule,
     // 后台任务队列（OPS-05 / T278）
     JobsModule,
+    // 招租管线（LSE-01 / T298）
+    LeadsModule,
+    AppointmentsModule,
   ],
   controllers: [AppController],
   providers: [

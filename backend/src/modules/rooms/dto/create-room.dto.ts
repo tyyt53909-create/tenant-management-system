@@ -48,6 +48,21 @@ export class CreateRoomDto {
   @IsOptional()
   description?: string;
 
+  /// 挂牌月租金（单位：分）
+  @IsInt({ message: '挂牌月租金必须为整数（单位：分）' })
+  @Min(0, { message: '挂牌月租金不能为负数' })
+  @IsOptional()
+  listingPrice?: number;
+
+  /// 是否上架公开挂牌展示
+  @IsOptional()
+  isListed?: boolean;
+
+  /// 预计起租可用日期（YYYY-MM-DD）
+  @IsString({ message: '起租可用日期格式错误' })
+  @IsOptional()
+  availableDate?: string;
+
   /**
    * 房源照片（先 POST /api/files/upload 取得 url 再提交）。
    * 数组顺序即展示顺序，第一张作为封面；最多 20 张。
