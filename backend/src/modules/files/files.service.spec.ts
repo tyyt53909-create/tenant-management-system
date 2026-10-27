@@ -5,7 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
-import { FilesService } from './files.service.js';
+import { FilesService, clampSignedUrlExpiry } from './files.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 // 真实 PNG 夹具（**故意带 EXIF**）：原先内嵌的 1×1 base64 本身不合规（libpng 读不了），
@@ -270,5 +270,17 @@ describe('FilesService', () => {
     await expect(service.assertCanRead('k', { role: 'CLEANER', userId: 'c-1' })).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  describe('clampSignedUrlExpiry', () => {
+    it('非法值、0、负数回退至 3600 秒，且最高封顶 3600 秒', () => {
+      expect(clampSignedUrlExpiry(undefined)).toBe(3600);
+      expect(clampSignedUrlExpiry(0)).toBe(3600);
+      expect(clampSignedUrlExpiry(-10)).toBe(3600);
+      expect(clampSignedUrlExpiry('not-a-number')).toBe(3600);
+      expect(clampSignedUrlExpiry(600)).toBe(600);
+      expect(clampSignedUrlExpiry('1800')).toBe(1800);
+      expect(clampSignedUrlExpiry(999999)).toBe(3600);
+    });
   });
 });

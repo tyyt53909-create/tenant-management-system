@@ -687,6 +687,53 @@ describe('RoomsService', () => {
       );
     });
 
+    it('接单：保洁仅可将待清洁房间改为清洁中', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(pendingRoom as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 } as any);
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue({
+        ...pendingRoom,
+        cleanStatus: 'CLEANING',
+        version: 3,
+      } as any);
+
+      await expect(
+        service.updateStatus('room-c1', { cleanStatus: 'CLEANING', version: 2 } as any, 'CLEANER'),
+      ).resolves.toMatchObject({ cleanStatus: 'CLEANING' });
+    });
+
+    it('房态：保洁不得改占用状态或经此接口标记完成', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(pendingRoom as any);
+      const updateMany = vi.spyOn(prisma.room, 'updateMany');
+
+      await expect(
+        service.updateStatus(
+          'room-c1',
+          { status: 'OCCUPIED', cleanStatus: 'CLEAN', version: 2 } as any,
+          'CLEANER',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.updateStatus('room-c1', { cleanStatus: 'CLEAN', version: 2 } as any, 'CLEANER'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(updateMany).not.toHaveBeenCalled();
+    });
+
+    it('房态：保洁不得对接单以外的房间改清洁状态', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(occupiedRoom as any);
+
+      await expect(
+        service.updateStatus('room-o1', { cleanStatus: 'CLEANING', version: 1 } as any, 'CLEANER'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('房态：非法角色修改房态被拒绝 (403)', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(occupiedRoom as any);
+
+      await expect(
+        service.updateStatus('room-123', { status: 'RESERVED', version: 3 } as any, 'TENANT'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
     it('详情：保洁访问非待清洁房间 → 403', async () => {
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(occupiedRoom as any);
 

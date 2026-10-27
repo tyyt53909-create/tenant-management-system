@@ -137,14 +137,14 @@ describe('RoomsController', () => {
   });
 
   describe('updateStatus', () => {
-    it('应该透传房态流转参数（version 乐观锁）', async () => {
+    it('应该透传房态流转参数与调用方角色（version 乐观锁）', async () => {
       const dto = { status: 'VACANT', cleanStatus: 'PENDING_CLEAN', version: 3 } as any;
       vi.spyOn(service, 'updateStatus').mockResolvedValue({ id: 'room-123', version: 4 } as any);
 
-      const result = await controller.updateStatus('room-123', dto);
+      const result = await controller.updateStatus({ role: 'ADMIN' }, 'room-123', dto);
 
       expect(result.version).toBe(4);
-      expect(service.updateStatus).toHaveBeenCalledWith('room-123', dto);
+      expect(service.updateStatus).toHaveBeenCalledWith('room-123', dto, 'ADMIN');
     });
   });
 

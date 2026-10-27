@@ -22,6 +22,7 @@ import {
   setRefreshTokenCookie,
   clearRefreshTokenCookie,
   extractRefreshToken,
+  stripRefreshTokenForBrowser,
 } from './auth-cookie.util.js';
 import { durationMsOr } from '../../common/utils/duration.js';
 import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto } from './dto/password.dto.js';
@@ -52,12 +53,13 @@ export class AuthController {
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res?: Response,
+    @Req() req?: Request,
   ): Promise<RegisterResponseDto> {
     const result = await this.authService.register(dto);
     if (res && result?.refreshToken) {
       setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
-    return result;
+    return stripRefreshTokenForBrowser(result, req);
   }
 
   @Post('login')
@@ -66,12 +68,13 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res?: Response,
+    @Req() req?: Request,
   ): Promise<LoginResponseDto> {
     const result = await this.authService.login(dto);
     if (res && result?.refreshToken) {
       setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
-    return result;
+    return stripRefreshTokenForBrowser(result, req);
   }
 
   /**
@@ -122,7 +125,7 @@ export class AuthController {
     if (res && result?.refreshToken) {
       setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
-    return result;
+    return stripRefreshTokenForBrowser(result, req);
   }
 
   @Post('logout')
@@ -181,12 +184,13 @@ export class AuthController {
   async googleAuth(
     @Body() dto: GoogleAuthDto,
     @Res({ passthrough: true }) res?: Response,
+    @Req() req?: Request,
   ): Promise<GoogleAuthResponseDto> {
     const result = await this.authService.googleAuth(dto);
     if (res && result?.refreshToken) {
       setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
-    return result;
+    return stripRefreshTokenForBrowser(result, req);
   }
 
   /**
@@ -261,12 +265,13 @@ export class AuthController {
   async loginWithEmailCode(
     @Body() dto: LoginEmailCodeDto,
     @Res({ passthrough: true }) res?: Response,
+    @Req() req?: Request,
   ) {
     const result = await this.authService.loginWithEmailCode(dto);
     if (res && result?.refreshToken) {
       setRefreshTokenCookie(res, result.refreshToken, this.secureCookies, this.refreshCookieMaxAgeMs);
     }
-    return result;
+    return stripRefreshTokenForBrowser(result, req);
   }
 
   /**

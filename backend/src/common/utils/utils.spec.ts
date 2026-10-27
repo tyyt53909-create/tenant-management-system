@@ -34,6 +34,21 @@ describe('csv.util', () => {
     expect(csv).toContain('"He said ""hello""",¥20');
     expect(csv).toContain('"line1\nline2",¥30');
   });
+
+  it('应当中和会被 Excel 当成公式的单元格，并保留负数', () => {
+    const columns = [
+      { header: '名称', key: 'name' as const },
+      { header: '金额', key: 'amount' as const },
+    ];
+    const csv = generateCsv(columns, [
+      { name: '=cmd|"/c calc"!A1', amount: -12.5 },
+      { name: '+1+1', amount: 3 },
+    ]);
+    expect(csv).toContain("'=cmd|\"\"/c calc\"\"!A1");
+    expect(csv).toContain("'+1+1");
+    expect(csv).toContain(',-12.5');
+    expect(csv).not.toMatch(/^=cmd/m);
+  });
 });
 
 describe('currency.util', () => {

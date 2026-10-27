@@ -48,6 +48,28 @@ export function clearRefreshTokenCookie(res: Response, secure: boolean): void {
   }
 }
 
+/**
+ * 浏览器请求带 Origin，脚本能读到 JSON。刷新令牌只留在 HttpOnly Cookie。
+ * 小程序等非浏览器客户端通常不带 Origin，仍需要响应体里的 refreshToken。
+ *
+ * 「带 Origin 即浏览器」只在浏览器必带 Origin 的方法（POST/PUT/PATCH/DELETE）上成立；
+ * 同源 GET/HEAD 浏览器不带 Origin，区分不了客户端，一律剥除（fail-closed）。
+ */
+export function stripRefreshTokenForBrowser<T extends { refreshToken?: string }>(result: T, req?: Request): T {
+  if (!result?.refreshToken) {
+    return result;
+  }
+  const method = req?.method?.toUpperCase();
+  const origin = req?.headers?.origin;
+  const hasBrowserOrigin = typeof origin === 'string' && origin.trim() !== '';
+  if (hasBrowserOrigin || method === 'GET' || method === 'HEAD') {
+    const copy = { ...result };
+    delete copy.refreshToken;
+    return copy;
+  }
+  return result;
+}
+
 export function extractRefreshToken(req?: Request, dtoToken?: string): string | undefined {
   if (dtoToken && typeof dtoToken === 'string' && dtoToken.trim()) {
     return dtoToken.trim();

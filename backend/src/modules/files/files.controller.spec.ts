@@ -73,6 +73,15 @@ describe('FilesController.getFile 归属校验', () => {
     expect(result).toMatchObject({ expiresIn: 3600 });
   });
 
+  it('expiresIn 超过 3600 秒时自动封顶 3600 秒', async () => {
+    const { controller, service } = createController(async () => undefined);
+    const res = { json: vi.fn((body: unknown) => body) } as unknown as import('express').Response;
+
+    await controller.getFile('my-key', '86400', TENANT, res);
+
+    expect(service.signUrl).toHaveBeenCalledWith('my-key', 3600);
+  });
+
   it('非本人文件、不带 expiresIn：同样拒绝且不读取内容', async () => {
     const { controller, service, res } = createController(async () => {
       throw new NotFoundException('文件不存在');

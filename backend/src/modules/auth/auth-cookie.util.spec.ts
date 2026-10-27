@@ -4,6 +4,7 @@ import {
   clearRefreshTokenCookie,
   extractRefreshToken,
   refreshTokenCookieOptions,
+  stripRefreshTokenForBrowser,
   REFRESH_TOKEN_COOKIE_NAME,
 } from './auth-cookie.util.js';
 
@@ -70,5 +71,28 @@ describe('auth-cookie.util', () => {
     const req = { cookies: {} } as any;
     expect(extractRefreshToken(req, undefined)).toBeUndefined();
     expect(extractRefreshToken(undefined, undefined)).toBeUndefined();
+  });
+
+  describe('stripRefreshTokenForBrowser', () => {
+    it('浏览器 POST 请求（带 Origin）应当剥除 refreshToken', () => {
+      const data = { accessToken: 'acc', refreshToken: 'ref', user: { id: 'u1' } };
+      const req = { method: 'POST', headers: { origin: 'http://localhost:5173' } } as any;
+      const stripped = stripRefreshTokenForBrowser(data, req);
+      expect(stripped.refreshToken).toBeUndefined();
+      expect(stripped.accessToken).toBe('acc');
+    });
+
+    it('非浏览器 POST 请求（无 Origin）保留 refreshToken 供小程序使用', () => {
+      const data = { accessToken: 'acc', refreshToken: 'ref' };
+      const req = { method: 'POST', headers: {} } as any;
+      const stripped = stripRefreshTokenForBrowser(data, req);
+      expect(stripped.refreshToken).toBe('ref');
+    });
+
+    it('无 refreshToken 的对象保持原样', () => {
+      const data = { accessToken: 'acc' };
+      const req = { method: 'POST', headers: { origin: 'http://localhost:5173' } } as any;
+      expect(stripRefreshTokenForBrowser(data, req)).toEqual(data);
+    });
   });
 });

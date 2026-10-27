@@ -20,6 +20,14 @@ import {
 } from './storage.adapter.js';
 
 const ALLOWED_MIME = new Set<ImageMime>(['image/jpeg', 'image/png', 'image/webp']);
+export const MAX_SIGNED_URL_SECONDS = 3600;
+
+/** 预签名有效期由调用方传入，必须封顶，避免签发数年有效的对象地址。 */
+export function clampSignedUrlExpiry(raw: string | number | undefined): number {
+  const parsed = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return MAX_SIGNED_URL_SECONDS;
+  return Math.min(Math.floor(parsed), MAX_SIGNED_URL_SECONDS);
+}
 const PURPOSES = new Set<FilePurpose>([
   'ROOM_PHOTO',
   'CONTRACT',
@@ -196,10 +204,11 @@ export class FilesService {
     }
   }
 
-  async signUrl(key: string, expiresInSeconds = 3600) {
+  async signUrl(key: string, expiresInSeconds = MAX_SIGNED_URL_SECONDS) {
     this.assertSafeKey(key);
-    const url = await this.storage.signedUrl(key, expiresInSeconds);
-    return { key, url, expiresIn: expiresInSeconds };
+    const expiresIn = clampSignedUrlExpiry(expiresInSeconds);
+    const url = await this.storage.signedUrl(key, expiresIn);
+    return { key, url, expiresIn };
   }
 
   /**

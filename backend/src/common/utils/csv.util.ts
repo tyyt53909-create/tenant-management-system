@@ -13,7 +13,7 @@ export function generateCsv<T = Record<string, unknown>>(columns: CsvColumn<T>[]
     if (val === null || val === undefined) {
       return '';
     }
-    const str = String(val);
+    const str = neutralizeSpreadsheetFormula(String(val));
     if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
       return `"${str.replace(/"/g, '""')}"`;
     }
@@ -31,4 +31,14 @@ export function generateCsv<T = Record<string, unknown>>(columns: CsvColumn<T>[]
   );
 
   return '\uFEFF' + [headerLine, ...rowLines].join('\r\n');
+}
+
+/** Excel 会把以 = + - @ 开头的单元格当公式。纯数字（含负数）保持原样。 */
+export function neutralizeSpreadsheetFormula(value: string): string {
+  if (/^-?\d+(\.\d+)?$/.test(value)) return value;
+  // oxlint-disable-next-line no-control-regex
+  if (/^[\s\u0000-\u001f]*[=+\-@]/.test(value) || /^[\t\r]/.test(value)) {
+    return `'${value}`;
+  }
+  return value;
 }
