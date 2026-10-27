@@ -136,7 +136,7 @@ describe('EmailOtpService', () => {
     expect(await service.verifyCode(email, '000000')).toBe(false);
     expect(await service.verifyCode(email, '889900')).toBe(false);
 
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.spyOn(service, 'generateCode').mockReturnValue('550000');
     await service.sendCode(email);
 
     expect(await service.verifyCode(email, '550000')).toBe(true);
@@ -172,8 +172,8 @@ describe('EmailOtpService', () => {
 
     it('发信失败时日志搜不到本次验证码，且该验证码不能再使用', async () => {
       const entries = captureLogs();
-      vi.spyOn(Math, 'random').mockReturnValue(0.5);
       const isolated = new EmailOtpService(new ConfigService({ NODE_ENV: 'production' }));
+      vi.spyOn(isolated, 'generateCode').mockReturnValue('550000');
       (isolated as unknown as { transporter: { sendMail: () => Promise<never> } }).transporter = {
         sendMail: () => Promise.reject(new Error('smtp down body 550000')),
       };

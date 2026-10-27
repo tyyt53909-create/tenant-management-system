@@ -48,8 +48,14 @@ export class RoomsController {
   @Patch(':id/status')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'CLEANER')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateRoomStatusDto) {
-    return this.roomsService.updateStatus(id, dto);
+  updateStatus(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() dto: UpdateRoomStatusDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    // 保洁只可接单（PENDING_CLEAN → CLEANING），其余房态由服务层拒绝。完成清洁走 markClean。
+    return this.roomsService.updateStatus(id, dto, user.role);
   }
 
   // 标记已清洁（保洁/管理员，docs/05-接口规范.md §8.2）

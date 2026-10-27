@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, MinLength } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, MaxLength } from 'class-validator';
 
 export class LoginDto {
   @IsString()
@@ -7,6 +7,7 @@ export class LoginDto {
 
   @IsString()
   @MinLength(6, { message: '密码至少6位' })
+  @MaxLength(72, { message: '密码最长72位' })
   password: string;
 }
 

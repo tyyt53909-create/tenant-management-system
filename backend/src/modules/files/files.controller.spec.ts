@@ -64,6 +64,18 @@ describe('FilesController.getFile 归属校验', () => {
     expect(result).toMatchObject({ key: 'any-key', expiresIn: 600 });
   });
 
+  it('expiresIn 超过 1 小时或为负数时封顶/回退，不签发超长链接', async () => {
+    const { controller } = createController(async () => undefined);
+    const res = { json: vi.fn((body: unknown) => body) } as unknown as import('express').Response;
+
+    await expect(controller.getFile('my-key', '999999999', TENANT, res)).resolves.toMatchObject({
+      expiresIn: 3600,
+    });
+    await expect(controller.getFile('my-key', '-1', TENANT, res)).resolves.toMatchObject({
+      expiresIn: 3600,
+    });
+  });
+
   it('expiresIn 非法值回退 3600 秒', async () => {
     const { controller } = createController(async () => undefined);
     const res = { json: vi.fn((body: unknown) => body) } as unknown as import('express').Response;

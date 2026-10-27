@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ConflictException, UnauthorizedException, ForbiddenException, Optional } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ConflictException, UnauthorizedException, ForbiddenException, Optional } from '@nestjs/common';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto.js';
 import { LoginDto, LoginResponseDto } from './dto/login.dto.js';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto.js';
@@ -16,8 +16,13 @@ import { FederatedAuthService } from './federated-auth.service.js';
 import { isMeterSimulatorEnabled } from '../../config/feature-flags.js';
 import * as bcrypt from 'bcrypt';
 
+const INVALID_CREDENTIALS = '邮箱/手机号或密码错误';
+/** 只用于抹平「用户不存在」与「密码错误」的 bcrypt 耗时，不是任何真实账号的口令。 */
+const DUMMY_PASSWORD_HASH = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly federatedAuthService: FederatedAuthService;
 
   constructor(
@@ -142,23 +147,27 @@ export class AuthService {
       },
     });
 
-    // 2. 验证用户是否存在
+    // 2–4. 不存在、已禁用、未设密码、密码错误都返回同一句，避免探测账号状态。
+    // 禁用等原因只写日志。比较一律走 bcrypt，避免用响应时间区分用户是否存在。
     if (!user) {
-      throw new UnauthorizedException('邮箱/手机号或密码错误');
+      await bcrypt.compare(dto.password, DUMMY_PASSWORD_HASH);
+      throw new UnauthorizedException(INVALID_CREDENTIALS);
     }
 
-    // 3. 验证用户是否激活
     if (!user.isActive) {
-      throw new ForbiddenException('账号已被禁用');
+      await bcrypt.compare(dto.password, user.passwordHash || DUMMY_PASSWORD_HASH);
+      this.logger.warn(`禁用账号尝试密码登录: ${user.id}`);
+      throw new UnauthorizedException(INVALID_CREDENTIALS);
     }
 
-    // 4. 验证密码
     if (!user.passwordHash) {
-      throw new UnauthorizedException('该账号未设置密码，请使用 Google 第三方登录');
+      await bcrypt.compare(dto.password, DUMMY_PASSWORD_HASH);
+      this.logger.warn(`未设置密码的账号尝试密码登录: ${user.id}`);
+      throw new UnauthorizedException(INVALID_CREDENTIALS);
     }
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('邮箱/手机号或密码错误');
+      throw new UnauthorizedException(INVALID_CREDENTIALS);
     }
 
     // 5. 更新最后登录时间

@@ -332,11 +332,17 @@ export class RoomsService {
   /**
    * 房态流转（乐观锁：version 必填；冲突 409）
    */
-  async updateStatus(id: string, dto: UpdateRoomStatusDto) {
+  async updateStatus(id: string, dto: UpdateRoomStatusDto, actorRole: string) {
     const room = await this.prisma.room.findUnique({ where: { id } });
 
     if (!room) {
       throw new NotFoundException('房源不存在');
+    }
+
+    if (actorRole === 'CLEANER') {
+      this.assertCleanerMayAccept(room, dto);
+    } else if (actorRole !== 'ADMIN') {
+      throw new ForbiddenException('权限不足');
     }
 
     if (dto.status === undefined && dto.cleanStatus === undefined) {
@@ -364,6 +370,24 @@ export class RoomsService {
     const updated = await this.prisma.room.findUniqueOrThrow({ where: { id } });
     await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
     return updated;
+  }
+
+  /**
+   * 保洁经通用房态接口只可接单：VACANT+PENDING_CLEAN → VACANT+CLEANING。
+   * 不得改占用状态，也不得把清洁完成走这条接口（完成只走 markClean）。
+   */
+  private assertCleanerMayAccept(
+    room: { status: string; cleanStatus: string },
+    dto: UpdateRoomStatusDto,
+  ) {
+    const accepting =
+      dto.status === undefined &&
+      dto.cleanStatus === 'CLEANING' &&
+      room.status === 'VACANT' &&
+      room.cleanStatus === 'PENDING_CLEAN';
+    if (!accepting) {
+      throw new ForbiddenException('保洁仅可将待清洁房间接单为清洁中');
+    }
   }
 
   /**

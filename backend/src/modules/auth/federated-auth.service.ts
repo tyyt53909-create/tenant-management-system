@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import type { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GoogleAuthService } from './google-auth.service.js';
@@ -29,6 +29,10 @@ export class FederatedAuthService {
   async googleAuth(dto: GoogleAuthDto): Promise<GoogleAuthResponseDto> {
     // 1. 验证 Google idToken
     const googleUser = await this.googleAuthService.verifyIdToken(dto.idToken);
+    // 即使上游漏检，未验证邮箱也不得按 email 命中已有账号或领走预建租客档案。
+    if (googleUser.emailVerified !== true) {
+      throw new UnauthorizedException('Google 账号邮箱未验证，拒绝登录');
+    }
 
     // 2. 检查用户是否已存在（按 googleId 或 email 匹配）
     let user = await this.prisma.user.findFirst({
@@ -186,6 +190,10 @@ export class FederatedAuthService {
     if (user) {
       if (!user.isActive) {
         throw new ForbiddenException('账号已被禁用');
+      }
+      // 验证码只给租客免密登录。管理员/保洁信箱被接管不得直接拿到员工会话。
+      if (user.role !== 'TENANT') {
+        throw new UnauthorizedException('请使用密码登录');
       }
       await this.prisma.user.update({
         where: { id: user.id },

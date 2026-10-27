@@ -141,10 +141,19 @@ describe('RoomsController', () => {
       const dto = { status: 'VACANT', cleanStatus: 'PENDING_CLEAN', version: 3 } as any;
       vi.spyOn(service, 'updateStatus').mockResolvedValue({ id: 'room-123', version: 4 } as any);
 
-      const result = await controller.updateStatus('room-123', dto);
+      const result = await controller.updateStatus({ user: { role: 'ADMIN', userId: 'admin-1' } }, 'room-123', dto);
 
       expect(result.version).toBe(4);
-      expect(service.updateStatus).toHaveBeenCalledWith('room-123', dto);
+      expect(service.updateStatus).toHaveBeenCalledWith('room-123', dto, 'ADMIN');
+    });
+
+    it('保洁调用必须把角色交给服务层收窄', async () => {
+      const dto = { cleanStatus: 'CLEANING', version: 2 } as any;
+      vi.spyOn(service, 'updateStatus').mockResolvedValue({ id: 'room-123', version: 3 } as any);
+
+      await controller.updateStatus({ user: { role: 'CLEANER', userId: 'cleaner-1' } }, 'room-123', dto);
+
+      expect(service.updateStatus).toHaveBeenCalledWith('room-123', dto, 'CLEANER');
     });
   });
 

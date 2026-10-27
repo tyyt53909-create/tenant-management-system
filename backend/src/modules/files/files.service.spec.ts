@@ -75,6 +75,18 @@ describe('FilesService', () => {
     expect(meta.exif).toBeUndefined();
   });
 
+  it('magic bytes 像图片但解不开时拒绝保存，不落盘原字节', async () => {
+    const fakeJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x00, 0x11, 0x22, 0x33]);
+    await expect(
+      service.save({
+        mimetype: 'image/jpeg',
+        size: fakeJpeg.length,
+        originalname: 'broken.jpg',
+        buffer: fakeJpeg,
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('非图片类型应拒绝', async () => {
     await expect(
       service.save({ mimetype: 'application/pdf', size: 100, originalname: 'a.pdf', buffer: Buffer.alloc(10) } as any),

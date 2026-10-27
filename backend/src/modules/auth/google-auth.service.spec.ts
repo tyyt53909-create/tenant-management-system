@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { GoogleAuthService } from './google-auth.service.js';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 
 describe('GoogleAuthService', () => {
   let service: GoogleAuthService;
@@ -71,5 +71,44 @@ describe('GoogleAuthService', () => {
     expect(payload.email).toBe('simple@gmail.com');
     expect(payload.name).toBe('simple');
     expect(payload.googleId).toContain('google-sub-');
+  });
+
+  describe('真实 Google 令牌必须邮箱已验证', () => {
+    function serviceWithTicket(payload: Record<string, unknown> | undefined) {
+      const real = new GoogleAuthService(
+        new ConfigService({ GOOGLE_CLIENT_ID: 'test-google-client-id', NODE_ENV: 'production' }),
+      );
+      vi.spyOn((real as unknown as { client: { verifyIdToken: () => Promise<unknown> } }).client, 'verifyIdToken').mockResolvedValue({
+        getPayload: () => payload,
+      });
+      return real;
+    }
+
+    it('email_verified 缺失或为 false 时拒绝，不得把缺失当成已验证', async () => {
+      const missing = serviceWithTicket({ sub: 'sub-1', email: 'admin@example.com' });
+      const unverified = serviceWithTicket({
+        sub: 'sub-1',
+        email: 'admin@example.com',
+        email_verified: false,
+      });
+
+      await expect(missing.verifyIdToken('real-token')).rejects.toThrow(UnauthorizedException);
+      await expect(unverified.verifyIdToken('real-token')).rejects.toThrow(/邮箱未验证/);
+    });
+
+    it('email_verified 为 true 时才返回已验证邮箱', async () => {
+      const verified = serviceWithTicket({
+        sub: 'sub-1',
+        email: 'Admin@Example.com',
+        email_verified: true,
+        name: 'Admin',
+      });
+
+      await expect(verified.verifyIdToken('real-token')).resolves.toMatchObject({
+        googleId: 'sub-1',
+        email: 'admin@example.com',
+        emailVerified: true,
+      });
+    });
   });
 });

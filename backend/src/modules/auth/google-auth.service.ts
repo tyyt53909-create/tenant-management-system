@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException, ServiceUnavailableException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, HttpException, UnauthorizedException, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -76,14 +76,19 @@ export class GoogleAuthService {
       if (!payload || !payload.sub || !payload.email) {
         throw new BadRequestException('Google 凭证缺少必要的用户信息 (sub/email)');
       }
+      // 缺失不能当成已验证。未验证邮箱不得用来关联已有账号（含 ADMIN）。
+      if (payload.email_verified !== true) {
+        throw new UnauthorizedException('Google 账号邮箱未验证，拒绝登录');
+      }
       return {
         googleId: payload.sub,
         email: payload.email.toLowerCase(),
         name: payload.name || payload.email.split('@')[0],
         avatarUrl: payload.picture,
-        emailVerified: payload.email_verified ?? true,
+        emailVerified: true,
       };
     } catch (error: unknown) {
+      if (error instanceof HttpException) throw error;
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Google Token 验证失败: ${message}`);
       throw new UnauthorizedException(`Google 身份凭证无效或已过期: ${message}`);

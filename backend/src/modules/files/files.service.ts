@@ -13,6 +13,14 @@ import {
 } from './storage.adapter.js';
 
 const ALLOWED_MIME = new Set<ImageMime>(['image/jpeg', 'image/png', 'image/webp']);
+export const MAX_SIGNED_URL_SECONDS = 3600;
+
+/** 预签名有效期由调用方传入，必须封顶，避免签发数年有效的对象地址。 */
+export function clampSignedUrlExpiry(raw: string | number | undefined): number {
+  const parsed = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return MAX_SIGNED_URL_SECONDS;
+  return Math.min(Math.floor(parsed), MAX_SIGNED_URL_SECONDS);
+}
 const MAX_SIZE = 10 * 1024 * 1024;
 const EXTENSION: Record<ImageMime, string> = {
   'image/jpeg': '.jpg',
@@ -137,10 +145,11 @@ export class FilesService {
     }
   }
 
-  async signUrl(key: string, expiresInSeconds = 3600) {
+  async signUrl(key: string, expiresInSeconds = MAX_SIGNED_URL_SECONDS) {
     this.assertSafeKey(key);
-    const url = await this.storage.signedUrl(key, expiresInSeconds);
-    return { key, url, expiresIn: expiresInSeconds };
+    const expiresIn = clampSignedUrlExpiry(expiresInSeconds);
+    const url = await this.storage.signedUrl(key, expiresIn);
+    return { key, url, expiresIn };
   }
 
   /**
@@ -149,9 +158,7 @@ export class FilesService {
    * 三种允许的图片格式都要走这一步：手机相册的 PNG（eXIf chunk）与 WebP（EXIF chunk）
    * 同样会带定位信息，此前只处理 JPEG（T209）。
    *
-   * 解不开的文件（magic bytes 像图片但内容不合法）按原样保存并留日志：宁可保留可用性，
-   * 也不要把一个能存的文件变成 500；这类内容本身无法被当作图片渲染
-   * （下载时带 `X-Content-Type-Options: nosniff`）。
+   * 解不开的文件不再原样落盘：magic bytes 可以通过，但内容仍可能带元数据或不是可渲染图片。
    */
   private async stripMetadata(body: Buffer, format: ImageMime): Promise<Buffer> {
     try {
@@ -160,8 +167,8 @@ export class FilesService {
       if (format === 'image/webp') return await pipeline.webp().toBuffer();
       return await pipeline.jpeg({ quality: 90 }).toBuffer();
     } catch (error) {
-      this.logger.warn(`图片元数据清理失败，按原样保存：${(error as Error).message}`);
-      return body;
+      this.logger.warn(`图片元数据清理失败，已拒绝保存：${(error as Error).message}`);
+      throw new BadRequestException('文件内容不是有效的图片');
     }
   }
 

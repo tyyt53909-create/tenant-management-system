@@ -413,6 +413,58 @@ describe('AuthController', () => {
       });
     });
 
+    it('浏览器 Origin 请求不在 JSON 中返回 refreshToken，但仍写入 Cookie', async () => {
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({
+        id: 'user-123',
+        email: 'test@example.com',
+        phone: null,
+        passwordHash: await bcrypt.hash('password123', 10),
+        role: 'TENANT',
+        isActive: true,
+      } as any);
+      vi.spyOn(prisma.user, 'update').mockResolvedValue({} as any);
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
+      const res = { cookie: vi.fn() };
+
+      const result = await controller.login(
+        dto,
+        res as any,
+        { headers: { origin: 'http://localhost:5173' } } as any,
+      );
+
+      expect(result.accessToken).toBe('access-token');
+      expect(result).not.toHaveProperty('refreshToken');
+      expect(res.cookie).toHaveBeenCalledWith(
+        'refresh_token',
+        'refresh-token',
+        expect.objectContaining({ httpOnly: true }),
+      );
+    });
+
+    it('GET 请求不带 Origin 也剥除 refreshToken（同源 GET 浏览器不送 Origin，启发式失效时 fail-closed）', async () => {
+      vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({
+        id: 'user-123',
+        email: 'test@example.com',
+        phone: null,
+        passwordHash: await bcrypt.hash('password123', 10),
+        role: 'TENANT',
+        isActive: true,
+      } as any);
+      vi.spyOn(prisma.user, 'update').mockResolvedValue({} as any);
+      vi.spyOn(jwtService, 'generateTokens').mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
+      const res = { cookie: vi.fn() };
+
+      const result = await controller.login(dto, res as any, { method: 'GET' } as any);
+
+      expect(result).not.toHaveProperty('refreshToken');
+    });
+
     it('应该成功登录（使用手机号）', async () => {
       const dtoWithPhone = {
         identifier: '13800138000',
@@ -474,7 +526,8 @@ describe('AuthController', () => {
 
       vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser as any);
 
-      await expect(controller.login(dto)).rejects.toThrow(ForbiddenException);
+      await expect(controller.login(dto)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.login(dto)).rejects.toThrow('邮箱/手机号或密码错误');
     });
   });
 
@@ -625,6 +678,20 @@ describe('AuthController', () => {
         clientId: 'test-google-client-id',
         mockEnabled: false,
       });
+    });
+
+    it('未验证邮箱不得按邮箱关联已有账号', async () => {
+      vi.spyOn(googleAuthService, 'verifyIdToken').mockResolvedValue({
+        googleId: 'google-sub-unverified',
+        email: 'admin@example.com',
+        emailVerified: false,
+      });
+      const findFirst = vi.spyOn(prisma.user, 'findFirst');
+
+      await expect(controller.googleAuth({ idToken: 'unverified-token' })).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(findFirst).not.toHaveBeenCalled();
     });
 
     it('已有用户使用 Google 登录：匹配邮箱并自动关联 googleId', async () => {
@@ -817,6 +884,22 @@ describe('AuthController', () => {
         await expect(
           controller.loginWithEmailCode({ email: 'banned@example.com', code: '123456' }),
         ).rejects.toThrow(ForbiddenException);
+      });
+
+      it('管理员不能用验证码换取员工会话', async () => {
+        vi.spyOn(emailOtpService, 'verifyCode').mockResolvedValue(true);
+        vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({
+          id: 'admin-1',
+          email: 'admin@example.com',
+          role: 'ADMIN',
+          isActive: true,
+        } as any);
+        const update = vi.spyOn(prisma.user, 'update');
+
+        await expect(
+          controller.loginWithEmailCode({ email: 'admin@example.com', code: '123456' }),
+        ).rejects.toThrow('请使用密码登录');
+        expect(update).not.toHaveBeenCalled();
       });
 
       it('已有正常用户验证码登录成功', async () => {

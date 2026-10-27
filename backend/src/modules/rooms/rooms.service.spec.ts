@@ -360,10 +360,14 @@ describe('RoomsService', () => {
         version: 4,
       } as any);
 
-      const result = await service.updateStatus('room-123', {
-        status: 'RESERVED',
-        version: 3,
-      } as any);
+      const result = await service.updateStatus(
+        'room-123',
+        {
+          status: 'RESERVED',
+          version: 3,
+        } as any,
+        'ADMIN',
+      );
 
       expect(prisma.room.updateMany).toHaveBeenCalledWith({
         where: { id: 'room-123', version: 3 },
@@ -377,7 +381,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.contract, 'findFirst').mockResolvedValue(null);
 
       await expect(
-        service.updateStatus('room-123', { status: 'RESERVED', version: 3 } as any),
+        service.updateStatus('room-123', { status: 'RESERVED', version: 3 } as any, 'ADMIN'),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.room.updateMany).not.toHaveBeenCalled();
     });
@@ -386,7 +390,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
 
       await expect(
-        service.updateStatus('room-123', { status: 'OCCUPIED', version: 3 } as any),
+        service.updateStatus('room-123', { status: 'OCCUPIED', version: 3 } as any, 'ADMIN'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -398,7 +402,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.checkoutRecord, 'findFirst').mockResolvedValue(null);
 
       await expect(
-        service.updateStatus('room-123', { cleanStatus: 'PENDING_CLEAN', version: 3 } as any),
+        service.updateStatus('room-123', { cleanStatus: 'PENDING_CLEAN', version: 3 } as any, 'ADMIN'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -407,7 +411,7 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.maintenanceRequest, 'findFirst').mockResolvedValue(null);
 
       await expect(
-        service.updateStatus('room-123', { status: 'MAINTENANCE', version: 3 } as any),
+        service.updateStatus('room-123', { status: 'MAINTENANCE', version: 3 } as any, 'ADMIN'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -423,10 +427,14 @@ describe('RoomsService', () => {
         version: 4,
       } as any);
 
-      const result = await service.updateStatus('room-123', {
-        cleanStatus: 'CLEAN',
-        version: 3,
-      } as any);
+      const result = await service.updateStatus(
+        'room-123',
+        {
+          cleanStatus: 'CLEAN',
+          version: 3,
+        } as any,
+        'ADMIN',
+      );
 
       expect(result.cleanStatus).toBe('CLEAN');
     });
@@ -437,14 +445,14 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 0 });
 
       await expect(
-        service.updateStatus('room-123', { status: 'RESERVED', version: 999 } as any),
+        service.updateStatus('room-123', { status: 'RESERVED', version: 999 } as any, 'ADMIN'),
       ).rejects.toThrow(ConflictException);
     });
 
     it('未提供 status/cleanStatus：400', async () => {
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
 
-      await expect(service.updateStatus('room-123', { version: 3 } as any)).rejects.toThrow(
+      await expect(service.updateStatus('room-123', { version: 3 } as any, 'ADMIN')).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -453,8 +461,21 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(null);
 
       await expect(
-        service.updateStatus('room-999', { status: 'RESERVED', version: 1 } as any),
+        service.updateStatus('room-999', { status: 'RESERVED', version: 1 } as any, 'ADMIN'),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('非 ADMIN/CLEANER 角色：403，角色为空同样拒绝', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
+      const updateMany = vi.spyOn(prisma.room, 'updateMany');
+
+      await expect(
+        service.updateStatus('room-123', { status: 'RESERVED', version: 3 } as any, 'TENANT'),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.updateStatus('room-123', { status: 'RESERVED', version: 3 } as any, ''),
+      ).rejects.toThrow(ForbiddenException);
+      expect(updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -519,6 +540,45 @@ describe('RoomsService', () => {
       );
     });
 
+    it('接单：保洁仅可将待清洁房间改为清洁中', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(pendingRoom as any);
+      vi.spyOn(prisma.room, 'updateMany').mockResolvedValue({ count: 1 } as any);
+      vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue({
+        ...pendingRoom,
+        cleanStatus: 'CLEANING',
+        version: 3,
+      } as any);
+
+      await expect(
+        service.updateStatus('room-c1', { cleanStatus: 'CLEANING', version: 2 } as any, 'CLEANER'),
+      ).resolves.toMatchObject({ cleanStatus: 'CLEANING' });
+    });
+
+    it('房态：保洁不得改占用状态或经此接口标记完成', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(pendingRoom as any);
+      const updateMany = vi.spyOn(prisma.room, 'updateMany');
+
+      await expect(
+        service.updateStatus(
+          'room-c1',
+          { status: 'OCCUPIED', cleanStatus: 'CLEAN', version: 2 } as any,
+          'CLEANER',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.updateStatus('room-c1', { cleanStatus: 'CLEAN', version: 2 } as any, 'CLEANER'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(updateMany).not.toHaveBeenCalled();
+    });
+
+    it('房态：保洁不得对接单以外的房间改清洁状态', async () => {
+      vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(occupiedRoom as any);
+
+      await expect(
+        service.updateStatus('room-o1', { cleanStatus: 'CLEANING', version: 1 } as any, 'CLEANER'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
     it('详情：保洁访问非待清洁房间 → 403', async () => {
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(occupiedRoom as any);
 
@@ -579,11 +639,15 @@ describe('RoomsService', () => {
         { id: 'cleaner-2' },
       ] as any);
 
-      await service.updateStatus('room-o1', {
-        status: 'VACANT',
-        cleanStatus: 'PENDING_CLEAN',
-        version: 1,
-      } as any);
+      await service.updateStatus(
+        'room-o1',
+        {
+          status: 'VACANT',
+          cleanStatus: 'PENDING_CLEAN',
+          version: 1,
+        } as any,
+        'ADMIN',
+      );
 
       expect(notifications.create).toHaveBeenCalledTimes(2);
       expect(notifications.create).toHaveBeenCalledWith(
@@ -598,11 +662,15 @@ describe('RoomsService', () => {
       vi.spyOn(prisma.room, 'findUniqueOrThrow').mockResolvedValue({} as any);
 
       await expect(
-        service.updateStatus('room-o1', {
-          status: 'VACANT',
-          cleanStatus: 'PENDING_CLEAN',
-          version: 1,
-        } as any),
+        service.updateStatus(
+          'room-o1',
+          {
+            status: 'VACANT',
+            cleanStatus: 'PENDING_CLEAN',
+            version: 1,
+          } as any,
+          'ADMIN',
+        ),
       ).resolves.toBeDefined();
       expect(notifications.create).not.toHaveBeenCalled();
     });

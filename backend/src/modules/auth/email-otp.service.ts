@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import { Inject, Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
@@ -61,8 +62,8 @@ export class EmailOtpService {
       throw new BadRequestException(`验证码发送过于频繁，请等待 ${waitSeconds} 秒后再试`);
     }
 
-    // 生成 6 位随机验证码
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // 6 位验证码必须用密码学随机数。Math.random 与邀请码共用同一随机源，不能用来发登录码。
+    const code = this.generateCode();
     const expiresAt = now + 5 * 60 * 1000; // 5 分钟有效
 
     const record: OtpRecord = {
@@ -141,6 +142,11 @@ export class EmailOtpService {
     // 验证成功后单次失效
     await this.otpStore.delete(normalizedEmail);
     return true;
+  }
+
+  /** 测试可替换。必须走 crypto.randomInt，不能用 Math.random。 */
+  generateCode(): string {
+    return crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
   }
 
   private failedAttempts(record: OtpRecord): number {

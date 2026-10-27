@@ -45,7 +45,7 @@ describe('InviteCodeService', () => {
 
       const code = await service.generateInviteCode(adminUserId, expiryDays, '测试备注', 'TENANT');
 
-      expect(code).toMatch(/^INVITE-\d+-[A-Z0-9]{6}$/);
+      expect(code).toMatch(/^INVITE-[a-f0-9]{32}$/);
       expect(prisma.inviteCode.create).toHaveBeenCalledWith({
         data: {
           code: expect.any(String),

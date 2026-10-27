@@ -11,6 +11,18 @@ import { PrismaService } from '../../prisma/prisma.service.js';
  * 下游 `where: { tenantId: undefined }` 被 Prisma 当作「不过滤」，
  * 实测可越权读取全库 49 张账单 / 35 份合同 / 任意预付账户。
  */
+describe('JwtStrategy 密钥', () => {
+  it('未配置 JWT_SECRET 时拒绝启动，不使用硬编码后备密钥', () => {
+    expect(
+      () =>
+        new JwtStrategy(
+          { get: () => undefined } as unknown as ConfigService,
+          {} as PrismaService,
+        ),
+    ).toThrow(/JWT_SECRET/);
+  });
+});
+
 describe('JwtStrategy 租客档案强制校验（T158 安全回归）', () => {
   let strategy: JwtStrategy;
   let prisma: any;

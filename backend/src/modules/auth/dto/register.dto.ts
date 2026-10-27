@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, Matches, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class RegisterDto {
   @IsEmail({}, { message: '邮箱格式不正确' })
@@ -6,7 +6,9 @@ export class RegisterDto {
   email: string;
 
   @IsString()
-  @MinLength(6, { message: '密码至少6位' })
+  @MinLength(8, { message: '密码至少8位，且须同时包含字母和数字' })
+  @MaxLength(72, { message: '密码最长72位' })
+  @Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/, { message: '密码至少8位，且须同时包含字母和数字' })
   password: string;
 
   @IsString()

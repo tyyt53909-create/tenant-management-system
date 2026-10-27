@@ -2,7 +2,7 @@ import { Controller, Post, Get, Param, Query, UseGuards, UseInterceptors, Upload
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
-import { FilesService, type UploadedFileInput } from './files.service.js';
+import { FilesService, clampSignedUrlExpiry, type UploadedFileInput } from './files.service.js';
 import { detectImageMime } from './image-bytes.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser, resolveAuthUser, type CurrentUserParam } from '../../common/decorators/current-user.decorator.js';
@@ -46,7 +46,7 @@ export class FilesController {
     await this.filesService.assertCanRead(key, user);
 
     if (expiresIn !== undefined) {
-      return res.json(await this.filesService.signUrl(key, Number(expiresIn) || 3600));
+      return res.json(await this.filesService.signUrl(key, clampSignedUrlExpiry(expiresIn)));
     }
 
     const body = await this.filesService.read(key);
