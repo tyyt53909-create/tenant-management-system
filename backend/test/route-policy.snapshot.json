@@ -645,6 +645,96 @@
   },
   {
     "method": "GET",
+    "path": "/api/cleaning/tasks",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/cleaning/tasks",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/cleaning/tasks/:id",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER",
+      "CLEANER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/cleaning/tasks/:id/accept",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/cleaning/tasks/:id/assign",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/cleaning/tasks/:id/cancel",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/cleaning/tasks/:id/complete",
+    "public": false,
+    "roles": [
+      "CLEANER",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/cleaning/tasks/:id/reject",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "PROPERTY_MANAGER"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/cleaning/tasks/:id/start",
+    "public": false,
+    "roles": [
+      "CLEANER",
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/cleaning/tasks/assigned",
+    "public": false,
+    "roles": [
+      "CLEANER"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/contract-templates",
     "public": false,
     "roles": [

@@ -296,12 +296,38 @@ export class CheckoutService {
           if (!successor) {
             const room = await tx.room.findUnique({
               where: { id: record.contract.roomId },
-              select: { status: true },
+              select: { status: true, buildingId: true },
             });
             if (room) {
               const roomUpdate = roomUpdateForContractTransition(room, fromStatus, 'TERMINATED');
               if (roomUpdate) {
                 await tx.room.update({ where: { id: record.contract.roomId }, data: roomUpdate });
+
+                // WRK-03 / T304：退租完成自动生成保洁任务工单
+                if (tx.cleaningTask) {
+                  const existingTask = await tx.cleaningTask.findFirst({
+                    where: {
+                      roomId: record.contract.roomId,
+                      status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED'] },
+                    },
+                  });
+                  if (!existingTask) {
+                    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                    const randomHexStr = Math.random().toString(16).slice(2, 8).toUpperCase();
+                    await tx.cleaningTask.create({
+                      data: {
+                        taskNumber: `CL-${todayStr}-${randomHexStr}`,
+                        buildingId: room.buildingId,
+                        roomId: record.contract.roomId,
+                        type: 'CHECKOUT',
+                        status: 'PENDING',
+                        source: 'CHECKOUT_AUTO',
+                        sourceId: record.id,
+                        notes: `退租记录 ${record.id} 自动生成保洁任务`,
+                      },
+                    });
+                  }
+                }
               }
             }
           }
