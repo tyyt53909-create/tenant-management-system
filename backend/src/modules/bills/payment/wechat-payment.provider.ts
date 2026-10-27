@@ -11,7 +11,11 @@ import type {
   PaymentOrder,
   PaymentOrderRequest,
   PaymentProvider,
+  RefundOrderRequest,
+  RefundOrderResult,
+  WechatBillTradeItem,
   WechatPaymentNotifyResource,
+  WechatRefundNotifyResource,
 } from './payment-provider.js';
 
 export interface WechatPaymentConfig {
@@ -153,8 +157,209 @@ export class WechatPaymentProvider implements PaymentProvider {
     orderId: string,
     amount: number,
   ): Promise<{ orderId: string; amount: number; status: 'RECORDED' }> {
-    // 基础退款接口后续在 PAY-02 完善
     return { orderId, amount, status: 'RECORDED' };
+  }
+
+  /**
+   * 微信支付申请退款 (API v3)
+   * POST /v3/refund/domestic/refunds
+   */
+  async createRefund(request: RefundOrderRequest): Promise<RefundOrderResult> {
+    const url = '/v3/refund/domestic/refunds';
+    const payload: any = {
+      out_refund_no: request.outRefundNo,
+      amount: {
+        refund: request.refundAmount,
+        total: request.totalAmount,
+        currency: 'CNY',
+      },
+    };
+    if (request.transactionId) {
+      payload.transaction_id = request.transactionId;
+    } else {
+      payload.out_trade_no = request.outTradeNo;
+    }
+    if (request.reason) {
+      payload.reason = request.reason;
+    }
+
+    const bodyStr = JSON.stringify(payload);
+    const authorization = this.buildAuthorization('POST', url, bodyStr);
+
+    const response = await fetch(`${this.baseUrl}${url}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: authorization,
+      },
+      body: bodyStr,
+    });
+
+    const data = (await response.json()) as any;
+    if (!response.ok || !data.refund_id) {
+      this.logger.error(`微信支付申请退款失败: [${response.status}] ${JSON.stringify(data)}`);
+      throw new Error(`微信支付退款失败: ${data?.message || data?.code || '未知错误'}`);
+    }
+
+    return {
+      outRefundNo: data.out_refund_no,
+      refundId: data.refund_id,
+      status: data.status,
+      refundAmount: data.amount?.refund ?? request.refundAmount,
+      channel: data.channel,
+    };
+  }
+
+  /**
+   * 微信支付查询退款 (API v3)
+   * GET /v3/refund/domestic/refunds/{out_refund_no}
+   */
+  async queryRefund(outRefundNo: string): Promise<RefundOrderResult | null> {
+    const url = `/v3/refund/domestic/refunds/${encodeURIComponent(outRefundNo)}`;
+    const authorization = this.buildAuthorization('GET', url, '');
+
+    try {
+      const response = await fetch(`${this.baseUrl}${url}`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: authorization,
+        },
+      });
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      const data = (await response.json()) as any;
+      if (!response.ok) {
+        this.logger.error(`微信支付查询退款失败: [${response.status}] ${JSON.stringify(data)}`);
+        return null;
+      }
+
+      return {
+        outRefundNo: data.out_refund_no,
+        refundId: data.refund_id,
+        status: data.status,
+        refundAmount: data.amount?.refund ?? 0,
+        channel: data.channel,
+      };
+    } catch (err: any) {
+      this.logger.error(`微信支付查询退款异常: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 验证并解密微信支付退款结果通知
+   */
+  async verifyAndParseRefundNotify(
+    headers: Record<string, string | string[] | undefined>,
+    body: any,
+  ): Promise<WechatRefundNotifyResource> {
+    if (!this.config.apiV3Key) {
+      throw new Error('未配置 WECHAT_PAY_API_V3_KEY，无法解密退款通知');
+    }
+
+    const resource = body?.resource;
+    if (!resource || resource.algorithm !== 'AEAD_AES_256_GCM') {
+      throw new Error('不支持的加密算法或缺少 resource 数据');
+    }
+
+    const decryptedText = this.decryptAesGcm(
+      this.config.apiV3Key,
+      resource.nonce,
+      resource.associated_data || '',
+      resource.ciphertext,
+    );
+
+    const decrypted = JSON.parse(decryptedText);
+    const outTradeNo = decrypted.out_trade_no;
+    const transactionId = decrypted.transaction_id;
+    const outRefundNo = decrypted.out_refund_no;
+    const refundId = decrypted.refund_id;
+    const refundStatus = decrypted.refund_status;
+    const refundAmount = Number(decrypted.amount?.refund ?? decrypted.amount?.payer_refund ?? 0);
+
+    return {
+      outTradeNo,
+      transactionId,
+      outRefundNo,
+      refundId,
+      refundStatus,
+      refundAmount,
+      successTime: decrypted.success_time,
+    };
+  }
+
+  /**
+   * 下载日终交易对账单 (API v3)
+   * GET /v3/bill/tradebill?bill_date=YYYY-MM-DD&bill_type=ALL
+   */
+  async downloadTradeBill(billDate: string): Promise<WechatBillTradeItem[]> {
+    const url = `/v3/bill/tradebill?bill_date=${encodeURIComponent(billDate)}&bill_type=ALL`;
+    const authorization = this.buildAuthorization('GET', url, '');
+
+    const response = await fetch(`${this.baseUrl}${url}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: authorization,
+      },
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      this.logger.error(`微信支付下载账单申请失败: [${response.status}] ${err}`);
+      throw new Error(`微信支付账单下载申请失败: ${response.status}`);
+    }
+
+    const data = (await response.json()) as any;
+    if (!data.download_url) {
+      throw new Error('微信对账单响应缺少 download_url');
+    }
+
+    const downloadRes = await fetch(data.download_url);
+    const csvContent = await downloadRes.text();
+    return this.parseTradeBillCsv(csvContent);
+  }
+
+  /**
+   * 解析微信交易对账单 CSV 文本
+   */
+  parseTradeBillCsv(csvContent: string): WechatBillTradeItem[] {
+    const lines = csvContent.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    const items: WechatBillTradeItem[] = [];
+    if (lines.length < 2) return items;
+
+    // 第一行为标题，中间为明文，倒数前几行为汇总数据
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('总交易单数') || line.startsWith('总清算金额') || line.startsWith('`总交易单数')) {
+        break;
+      }
+      // 微信账单单元格通常以 ` 开头
+      const cols = line.split(',').map((c) => c.replace(/^`/, '').trim());
+      if (cols.length >= 13) {
+        const tradeTime = cols[0];
+        const transactionId = cols[5];
+        const outTradeNo = cols[6];
+        const tradeState = cols[9];
+        const amountYuan = parseFloat(cols[12]) || 0;
+        const amountCents = Math.round(amountYuan * 100);
+
+        items.push({
+          tradeTime,
+          outTradeNo,
+          transactionId,
+          amount: amountCents,
+          tradeState,
+          tradeType: cols[7],
+        });
+      }
+    }
+    return items;
   }
 
   /**

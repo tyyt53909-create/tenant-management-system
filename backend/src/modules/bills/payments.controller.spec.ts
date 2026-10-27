@@ -9,6 +9,7 @@ describe('PaymentsController (T293 / PAY-01)', () => {
   beforeEach(() => {
     service = {
       handleNotify: vi.fn().mockResolvedValue({ code: 'SUCCESS', message: '成功' }),
+      handleRefundNotify: vi.fn().mockResolvedValue({ code: 'SUCCESS', message: '成功' }),
     };
     controller = new PaymentsController(service as WechatPaymentService);
   });
@@ -20,5 +21,14 @@ describe('PaymentsController (T293 / PAY-01)', () => {
     const res = await controller.handleWechatNotify(headers, body);
     expect(res).toEqual({ code: 'SUCCESS', message: '成功' });
     expect(service.handleNotify).toHaveBeenCalledWith(headers, body);
+  });
+
+  it('handleWechatRefundNotify 委托 WechatPaymentService 处理退款通知 (PAY-02)', async () => {
+    const headers = { 'wechatpay-signature': 'sig-ref-123' };
+    const body = { id: 'evt-ref-1' };
+
+    const res = await controller.handleWechatRefundNotify(headers, body);
+    expect(res).toEqual({ code: 'SUCCESS', message: '成功' });
+    expect(service.handleRefundNotify).toHaveBeenCalledWith(headers, body);
   });
 });

@@ -1555,6 +1555,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bills/reconciliation/wechat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BillsController_reconcileWechatPayments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bills/export": {
         parameters: {
             query?: never;
@@ -1715,6 +1731,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bills/{id}/payments/{paymentId}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BillsController_refundWechatPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/payments/wechat/notify": {
         parameters: {
             query?: never;
@@ -1726,6 +1758,23 @@ export interface paths {
         put?: never;
         /** 微信支付结果通知回调 (API v3) */
         post: operations["PaymentsController_handleWechatNotify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payments/wechat/refund-notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 微信支付退款结果通知回调 (API v3) */
+        post: operations["PaymentsController_handleWechatRefundNotify"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2763,6 +2812,23 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        WechatReconciliationQueryDto: {
+            billDate: string;
+            autoSyncMissing?: boolean;
+        };
+        WechatReconciliationResponseDto: {
+            billDate: string;
+            totalWechatCount: number;
+            totalWechatAmount: number;
+            totalLocalCount: number;
+            totalLocalAmount: number;
+            matchedCount: number;
+            matchedAmount: number;
+            remoteOnlyCount: number;
+            localOnlyCount: number;
+            amountMismatchCount: number;
+            discrepancies: Record<string, never>[];
+        };
         Object: Record<string, never>;
         UpdateBillDto: {
             /**
@@ -2798,6 +2864,21 @@ export interface components {
         WechatPayQueryDto: {
             /** @description 商户订单号 (out_trade_no) */
             outTradeNo: string;
+        };
+        CreateWechatRefundDto: {
+            amount: number;
+            reason?: string;
+            outRefundNo?: string;
+        };
+        WechatRefundResponseDto: {
+            billId: string;
+            paymentId: string;
+            outRefundNo: string;
+            refundId: string;
+            refundAmount: number;
+            status: string;
+            reversalPaymentId: string;
+            remainingPaidAmount: number;
         };
         DepositAmountDto: {
             amount: number;
@@ -7294,6 +7375,38 @@ export interface operations {
             };
         };
     };
+    BillsController_reconcileWechatPayments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WechatReconciliationQueryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WechatReconciliationResponseDto"];
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     BillsController_exportBills: {
         parameters: {
             query?: {
@@ -7811,7 +7924,73 @@ export interface operations {
             };
         };
     };
+    BillsController_refundWechatPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWechatRefundDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WechatRefundResponseDto"];
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     PaymentsController_handleWechatNotify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    PaymentsController_handleWechatRefundNotify: {
         parameters: {
             query?: never;
             header?: never;

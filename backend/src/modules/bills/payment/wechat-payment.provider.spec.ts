@@ -63,6 +63,53 @@ describe('Payment Providers (T293 / PAY-01)', () => {
       expect(res.amount).toBe(200000);
       expect(res.tradeState).toBe('SUCCESS');
     });
+
+    it('createRefund 与 queryRefund 模拟退款操作 (PAY-02)', async () => {
+      const refundRes = await mock.createRefund({
+        outTradeNo: 'WXP_001',
+        outRefundNo: 'WR_001',
+        refundAmount: 50000,
+        totalAmount: 100000,
+        reason: '退押金',
+      });
+
+      expect(refundRes.outRefundNo).toBe('WR_001');
+      expect(refundRes.status).toBe('SUCCESS');
+      expect(refundRes.refundAmount).toBe(50000);
+
+      const queried = await mock.queryRefund('WR_001');
+      expect(queried?.refundId).toBe(refundRes.refundId);
+    });
+
+    it('verifyAndParseRefundNotify 模拟解析退款通知报文', async () => {
+      const refundNotify = {
+        out_trade_no: 'WXP_001',
+        out_refund_no: 'WR_001',
+        refund_status: 'SUCCESS',
+        amount: { refund: 50000 },
+      };
+
+      const res = await mock.verifyAndParseRefundNotify({}, refundNotify);
+      expect(res.outRefundNo).toBe('WR_001');
+      expect(res.refundStatus).toBe('SUCCESS');
+      expect(res.refundAmount).toBe(50000);
+    });
+
+    it('downloadTradeBill 返回对账单项目', async () => {
+      await mock.createJsapiOrder({
+        billId: 'b-recon',
+        amount: 8800,
+        description: '测试对账',
+        openid: 'o1',
+      });
+      const order = Array.from((mock as any).orders.values())[0] as any;
+      mock.simulateSuccess(order.outTradeNo);
+
+      const bills = await mock.downloadTradeBill('2026-10-27');
+      expect(bills.length).toBeGreaterThanOrEqual(1);
+      expect(bills[0].outTradeNo).toBe(order.outTradeNo);
+      expect(bills[0].amount).toBe(8800);
+    });
   });
 
   describe('WechatPaymentProvider (API v3)', () => {
@@ -173,6 +220,63 @@ describe('Payment Providers (T293 / PAY-01)', () => {
       expect(res.amount).toBe(88800);
       expect(res.openid).toBe('user_openid_123');
       expect(res.attach).toContain('bill-test-abc');
+    });
+
+    it('createRefund 成功调用微信 API v3 退款端点', async () => {
+      const provider = new WechatPaymentProvider({
+        appId: 'wx_real_appid',
+        mchId: '1600000001',
+        serialNo: 'CERT_SERIAL_001',
+        privateKey,
+        apiV3Key,
+      });
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          refund_id: '500000001',
+          out_refund_no: 'WR_123',
+          status: 'SUCCESS',
+          amount: { refund: 20000 },
+          channel: 'ORIGINAL',
+        }),
+      } as any);
+
+      const res = await provider.createRefund({
+        outTradeNo: 'WXP_123',
+        outRefundNo: 'WR_123',
+        refundAmount: 20000,
+        totalAmount: 50000,
+        reason: '退押金',
+      });
+
+      expect(res.refundId).toBe('500000001');
+      expect(res.outRefundNo).toBe('WR_123');
+      expect(res.status).toBe('SUCCESS');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://api.mch.weixin.qq.com/v3/refund/domestic/refunds',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('parseTradeBillCsv 正确解析微信官方 CSV 格式对账单', () => {
+      const provider = new WechatPaymentProvider({
+        appId: 'wx_real_appid',
+        mchId: '1600000001',
+      });
+
+      const csvContent =
+        '交易时间,公众账号ID,商户号,子商户号,设备号,微信订单号,商户订单号,用户标识,交易类型,交易状态,付款银行,货币种类,应结订单金额\n' +
+        '`2026-10-27 10:15:20,`wx123,`mch123,`sub_mch,`dev01,`4200001,`WXP_001,`o1,`JSAPI,`SUCCESS,`BOC,`CNY,`100.50\n' +
+        '总交易单数,`1\n总交易金额,`100.50';
+
+      const items = provider.parseTradeBillCsv(csvContent);
+      expect(items.length).toBe(1);
+      expect(items[0].outTradeNo).toBe('WXP_001');
+      expect(items[0].transactionId).toBe('4200001');
+      expect(items[0].amount).toBe(10050); // 100.50 元 = 10050 分
+      expect(items[0].tradeState).toBe('SUCCESS');
     });
   });
 });

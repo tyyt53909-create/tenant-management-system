@@ -18,4 +18,17 @@ export class PaymentsController {
   ) {
     return this.wechatPaymentService.handleNotify(headers, body);
   }
+
+  /**
+   * 微信支付退款结果通知回调 (API v3)
+   */
+  @Post('wechat/refund-notify')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  async handleWechatRefundNotify(
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: any,
+  ) {
+    return this.wechatPaymentService.handleRefundNotify(headers, body);
+  }
 }

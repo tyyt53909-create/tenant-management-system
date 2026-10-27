@@ -9,6 +9,8 @@ import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { VoidPaymentDto } from './dto/void-payment.dto.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { WechatJsapiPayDto, WechatPayQueryDto } from './dto/wechat-pay.dto.js';
+import { CreateWechatRefundDto } from './dto/wechat-refund.dto.js';
+import { WechatReconciliationQueryDto } from './dto/wechat-reconciliation.dto.js';
 import { WechatPaymentService } from './payment/wechat-payment.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -31,6 +33,16 @@ export class BillsController {
   @Roles('ADMIN')
   create(@Body() createBillDto: CreateBillDto) {
     return this.billsService.create(createBillDto);
+  }
+
+  // 微信支付日终对账与差异分析（管理员专用，PAY-02）
+  @Post('reconciliation/wechat')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  reconcileWechatPayments(
+    @Body() dto: WechatReconciliationQueryDto,
+  ) {
+    return this.wechatPaymentService.reconcileWechatPayments(dto);
   }
 
   // 账单 CSV 导出（仅管理者）
@@ -198,5 +210,19 @@ export class BillsController {
   ) {
     const user = resolveAuthUser(userParam);
     return this.wechatPaymentService.queryAndSyncPayment(id, user.userId, user.role, dto);
+  }
+
+  // 微信支付退款（管理员专用，PAY-02）
+  @Post(':id/payments/:paymentId/refund')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  refundWechatPayment(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+    @Body() dto: CreateWechatRefundDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.wechatPaymentService.createRefund(id, paymentId, dto, user.userId);
   }
 }

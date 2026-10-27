@@ -61,3 +61,21 @@ export const payBillWithWechatJsapi = (billId, data) => {
 export const queryWechatPaymentStatus = (billId, data) => {
   return request.post(`/bills/${billId}/pay/wechat-query`, data)
 }
+
+/**
+ * 微信支付退款（管理端，PAY-02）
+ * @param {string} billId - 账单 ID
+ * @param {string} paymentId - 收款记录 ID
+ * @param {{ amount: number, reason?: string, outRefundNo?: string }} data
+ */
+export const refundWechatPayment = (billId, paymentId, data) => {
+  return request.post(`/bills/${billId}/payments/${paymentId}/refund`, data)
+}
+
+/**
+ * 微信支付日终对账（管理端，PAY-02）
+ * @param {{ billDate: string, autoSyncMissing?: boolean }} data
+ */
+export const reconcileWechatPayments = (data) => {
+  return request.post('/bills/reconciliation/wechat', data)
+}

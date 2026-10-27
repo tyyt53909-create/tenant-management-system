@@ -6,7 +6,11 @@ import type {
   PaymentOrder,
   PaymentOrderRequest,
   PaymentProvider,
+  RefundOrderRequest,
+  RefundOrderResult,
+  WechatBillTradeItem,
   WechatPaymentNotifyResource,
+  WechatRefundNotifyResource,
 } from './payment-provider.js';
 
 export interface MockStoredOrder {
@@ -25,6 +29,8 @@ export class MockPaymentProvider implements PaymentProvider {
   readonly name = 'wechat-mock';
   private readonly logger = new Logger(MockPaymentProvider.name);
   private readonly orders = new Map<string, MockStoredOrder>();
+  private readonly refunds = new Map<string, RefundOrderResult>();
+  private customBills: WechatBillTradeItem[] | null = null;
 
   async createOrder(request: PaymentOrderRequest): Promise<PaymentOrder> {
     const orderId = `mock_order_${randomUUID()}`;
@@ -188,7 +194,106 @@ export class MockPaymentProvider implements PaymentProvider {
     return this.orders.get(outTradeNo);
   }
 
+  async createRefund(request: RefundOrderRequest): Promise<RefundOrderResult> {
+    const refundId = `mock_ref_${randomUUID().replace(/-/g, '')}`;
+    const result: RefundOrderResult = {
+      outRefundNo: request.outRefundNo,
+      refundId,
+      status: 'SUCCESS',
+      refundAmount: request.refundAmount,
+      channel: 'ORIGINAL',
+    };
+    this.refunds.set(request.outRefundNo, result);
+    const order = this.orders.get(request.outTradeNo);
+    if (order) {
+      order.status = 'REFUND';
+    }
+    this.logger.log(
+      `[MOCK PAYMENT] 微信退款成功: 原单号=${request.outTradeNo}, 退款单号=${request.outRefundNo}, 金额=${request.refundAmount}分`,
+    );
+    return result;
+  }
+
+  async queryRefund(outRefundNo: string): Promise<RefundOrderResult | null> {
+    return this.refunds.get(outRefundNo) || null;
+  }
+
+  async verifyAndParseRefundNotify(
+    _headers: Record<string, string | string[] | undefined>,
+    body: any,
+  ): Promise<WechatRefundNotifyResource> {
+    if (body?.resource?.ciphertext && typeof body.resource.ciphertext === 'string') {
+      try {
+        const decoded = Buffer.from(body.resource.ciphertext, 'base64').toString('utf8');
+        const parsed = JSON.parse(decoded);
+        return this.handleRefundNotifySuccess(parsed);
+      } catch {
+        // 如果不是 base64 json，继续走下面
+      }
+    }
+
+    if (body?.out_refund_no || body?.outRefundNo) {
+      return this.handleRefundNotifySuccess(body);
+    }
+
+    throw new Error('模拟退款通知报文解析失败');
+  }
+
+  private handleRefundNotifySuccess(data: any): WechatRefundNotifyResource {
+    const outRefundNo = data.out_refund_no || data.outRefundNo;
+    const outTradeNo = data.out_trade_no || data.outTradeNo || 'mock_out_trade_no';
+    const transactionId = data.transaction_id || data.transactionId || 'mock_tx_id';
+    const refundId = data.refund_id || data.refundId || `mock_ref_${randomUUID()}`;
+    const refundAmount = Number(
+      data.amount?.refund ?? data.amount?.payer_refund ?? data.refundAmount ?? 0,
+    );
+    const refundStatus = (data.refund_status || data.refundStatus || 'SUCCESS') as
+      | 'SUCCESS'
+      | 'CLOSED'
+      | 'ABNORMAL';
+
+    this.logger.log(
+      `[MOCK PAYMENT] 收到模拟退款通知: 退款单号=${outRefundNo}, 状态=${refundStatus}, 金额=${refundAmount}分`,
+    );
+
+    return {
+      outTradeNo,
+      transactionId,
+      outRefundNo,
+      refundId,
+      refundStatus,
+      refundAmount,
+      successTime: data.success_time || new Date().toISOString(),
+    };
+  }
+
+  setMockBills(bills: WechatBillTradeItem[] | null): void {
+    this.customBills = bills;
+  }
+
+  async downloadTradeBill(billDate: string): Promise<WechatBillTradeItem[]> {
+    if (this.customBills !== null) {
+      return this.customBills;
+    }
+    const items: WechatBillTradeItem[] = [];
+    for (const order of this.orders.values()) {
+      if (order.status === 'SUCCESS' || order.status === 'REFUND') {
+        items.push({
+          tradeTime: `${billDate} 12:00:00`,
+          outTradeNo: order.outTradeNo,
+          transactionId: order.transactionId || `mock_tx_${order.outTradeNo}`,
+          amount: order.amount,
+          tradeState: order.status === 'REFUND' ? 'REFUND' : 'SUCCESS',
+          tradeType: 'JSAPI',
+        });
+      }
+    }
+    return items;
+  }
+
   clear(): void {
     this.orders.clear();
+    this.refunds.clear();
+    this.customBills = null;
   }
 }

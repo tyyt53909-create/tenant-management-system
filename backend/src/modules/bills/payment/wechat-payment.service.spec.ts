@@ -174,4 +174,180 @@ describe('WechatPaymentService (T293 / PAY-01)', () => {
       );
     });
   });
+
+  describe('createRefund (PAY-02)', () => {
+    it('非微信收款记录不可申请退款', async () => {
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p-offline',
+        billId: 'b1',
+        paymentMethod: 'CASH',
+        status: 'CONFIRMED',
+        amount: 10000,
+      });
+
+      await expect(
+        service.createRefund('b1', 'p-offline', { amount: 5000 }, 'admin-1'),
+      ).rejects.toThrow('非微信支付收款记录');
+    });
+
+    it('退款金额超出付款金额抛出 BadRequestException', async () => {
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p-wechat',
+        billId: 'b1',
+        paymentMethod: 'WECHAT',
+        status: 'CONFIRMED',
+        amount: 10000,
+        idempotencyKey: 'wechat_pay_WP_123',
+      });
+
+      await expect(
+        service.createRefund('b1', 'p-wechat', { amount: 20000 }, 'admin-1'),
+      ).rejects.toThrow('退款金额 (20000分) 超过原付款金额');
+    });
+
+    it('全额退款成功调用 voidPayment 冲正', async () => {
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p-wechat',
+        billId: 'b1',
+        paymentMethod: 'WECHAT',
+        status: 'CONFIRMED',
+        amount: 10000,
+        idempotencyKey: 'wechat_pay_WP_123',
+      });
+
+      billPaymentService.voidPayment = vi.fn().mockResolvedValue({
+        reversal: { id: 'rev-001' },
+        bill: { id: 'b1', paidAmount: 0 },
+      });
+
+      const res = await service.createRefund(
+        'b1',
+        'p-wechat',
+        { amount: 10000, outRefundNo: 'WR_REF_001' },
+        'admin-1',
+      );
+
+      expect(res.refundAmount).toBe(10000);
+      expect(res.status).toBe('SUCCESS');
+      expect(res.reversalPaymentId).toBe('rev-001');
+      expect(res.remainingPaidAmount).toBe(0);
+      expect(billPaymentService.voidPayment).toHaveBeenCalledWith(
+        'b1',
+        'p-wechat',
+        'admin-1',
+        expect.stringContaining('WR_REF_001'),
+      );
+    });
+
+    it('部分退款成功冲正账单部分实缴额', async () => {
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        id: 'p-wechat',
+        billId: 'b1',
+        paymentMethod: 'WECHAT',
+        status: 'CONFIRMED',
+        amount: 10000,
+        idempotencyKey: 'wechat_pay_WP_123',
+        bill: { id: 'b1', amount: 10000, paidAmount: 10000 },
+      });
+
+      prisma.$transaction = vi.fn().mockImplementation(async (cb) => {
+        const tx = {
+          paymentRecord: {
+            create: vi.fn().mockResolvedValue({ id: 'rev-partial-001' }),
+          },
+          bill: {
+            update: vi.fn().mockResolvedValue({ id: 'b1', paidAmount: 7000 }),
+          },
+        };
+        return cb(tx);
+      });
+
+      const res = await service.createRefund(
+        'b1',
+        'p-wechat',
+        { amount: 3000, outRefundNo: 'WR_PARTIAL_001' },
+        'admin-1',
+      );
+
+      expect(res.refundAmount).toBe(3000);
+      expect(res.reversalPaymentId).toBe('rev-partial-001');
+      expect(res.remainingPaidAmount).toBe(7000);
+    });
+  });
+
+  describe('reconcileWechatPayments (PAY-02)', () => {
+    it('对账平账、微信单边多（自动补账）、本地单边多与金额差异精确统计', async () => {
+      paymentProvider.setMockBills([
+        // 1. 平账订单
+        {
+          tradeTime: '2026-10-27 10:00:00',
+          outTradeNo: 'WP_MATCHED',
+          transactionId: 'TX_MATCHED',
+          amount: 50000,
+          tradeState: 'SUCCESS',
+        },
+        // 2. 微信单边多 (REMOTE_ONLY)
+        {
+          tradeTime: '2026-10-27 11:00:00',
+          outTradeNo: 'WP_REMOTE_ONLY',
+          transactionId: 'TX_REMOTE_ONLY',
+          amount: 20000,
+          tradeState: 'SUCCESS',
+        },
+        // 3. 金额不一致 (AMOUNT_MISMATCH)
+        {
+          tradeTime: '2026-10-27 12:00:00',
+          outTradeNo: 'WP_DIFF',
+          transactionId: 'TX_DIFF',
+          amount: 30000,
+          tradeState: 'SUCCESS',
+        },
+      ]);
+
+      prisma.paymentRecord.findMany = vi.fn().mockResolvedValue([
+        // 本地平账记录
+        {
+          id: 'p-matched',
+          amount: 50000,
+          idempotencyKey: 'wechat_pay_WP_MATCHED',
+          transactionNumber: 'TX_MATCHED',
+        },
+        // 本地金额不一致记录 (本地记了 25000，微信是 30000)
+        {
+          id: 'p-diff',
+          amount: 25000,
+          idempotencyKey: 'wechat_pay_WP_DIFF',
+          transactionNumber: 'TX_DIFF',
+        },
+        // 本地单边多记录 (LOCAL_ONLY)
+        {
+          id: 'p-local-only',
+          amount: 15000,
+          idempotencyKey: 'wechat_pay_WP_LOCAL_ONLY',
+          transactionNumber: 'TX_LOCAL_ONLY',
+        },
+      ]);
+
+      const report = await service.reconcileWechatPayments({
+        billDate: '2026-10-27',
+        autoSyncMissing: false,
+      });
+
+      expect(report.totalWechatCount).toBe(3);
+      expect(report.totalLocalCount).toBe(3);
+      expect(report.matchedCount).toBe(1);
+      expect(report.matchedAmount).toBe(50000);
+      expect(report.remoteOnlyCount).toBe(1);
+      expect(report.localOnlyCount).toBe(1);
+      expect(report.amountMismatchCount).toBe(1);
+
+      expect(report.discrepancies).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'REMOTE_ONLY', outTradeNo: 'WP_REMOTE_ONLY' }),
+          expect.objectContaining({ type: 'LOCAL_ONLY', outTradeNo: 'WP_LOCAL_ONLY' }),
+          expect.objectContaining({ type: 'AMOUNT_MISMATCH', outTradeNo: 'WP_DIFF' }),
+        ]),
+      );
+    });
+  });
 });

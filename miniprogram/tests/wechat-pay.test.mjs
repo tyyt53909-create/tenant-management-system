@@ -1,6 +1,11 @@
 import test, { beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { payBillWithWechatJsapi, queryWechatPaymentStatus } from '../api/index.js'
+import {
+  payBillWithWechatJsapi,
+  queryWechatPaymentStatus,
+  refundWechatPayment,
+  reconcileWechatPayments,
+} from '../api/index.js'
 
 let calls, replies
 beforeEach(() => {
@@ -58,4 +63,45 @@ test('queryWechatPaymentStatus 请求 POST /bills/:id/pay/wechat-query 主动查
   assert.equal(calls[0].url.endsWith('/bills/bill-001/pay/wechat-query'), true)
   assert.equal(calls[0].method, 'POST')
   assert.equal(calls[0].data.outTradeNo, 'WP_1729891200_1234')
+})
+
+test('refundWechatPayment 请求 POST /bills/:id/payments/:paymentId/refund 发起退款 (PAY-02)', async () => {
+  replies.push({
+    status: 201,
+    data: {
+      billId: 'b1',
+      paymentId: 'p1',
+      outRefundNo: 'WR_001',
+      refundId: 'ref_999',
+      refundAmount: 5000,
+      status: 'SUCCESS',
+    },
+  })
+
+  const res = await refundWechatPayment('b1', 'p1', { amount: 5000, reason: '多收退款' })
+  assert.equal(res.outRefundNo, 'WR_001')
+  assert.equal(res.status, 'SUCCESS')
+  assert.equal(calls[0].url.endsWith('/bills/b1/payments/p1/refund'), true)
+  assert.equal(calls[0].method, 'POST')
+  assert.equal(calls[0].data.amount, 5000)
+})
+
+test('reconcileWechatPayments 请求 POST /bills/reconciliation/wechat 触发日终对账 (PAY-02)', async () => {
+  replies.push({
+    status: 201,
+    data: {
+      billDate: '2026-10-27',
+      matchedCount: 5,
+      remoteOnlyCount: 0,
+      localOnlyCount: 0,
+      amountMismatchCount: 0,
+    },
+  })
+
+  const res = await reconcileWechatPayments({ billDate: '2026-10-27', autoSyncMissing: true })
+  assert.equal(res.billDate, '2026-10-27')
+  assert.equal(res.matchedCount, 5)
+  assert.equal(calls[0].url.endsWith('/bills/reconciliation/wechat'), true)
+  assert.equal(calls[0].method, 'POST')
+  assert.equal(calls[0].data.billDate, '2026-10-27')
 })

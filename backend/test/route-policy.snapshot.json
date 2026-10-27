@@ -306,6 +306,14 @@
   },
   {
     "method": "POST",
+    "path": "/api/bills/:id/payments/:paymentId/refund",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
     "path": "/api/bills/:id/payments/:paymentId/void",
     "public": false,
     "roles": [
@@ -341,6 +349,14 @@
   {
     "method": "POST",
     "path": "/api/bills/recognize",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/bills/reconciliation/wechat",
     "public": false,
     "roles": [
       "ADMIN"
@@ -1009,6 +1025,12 @@
   {
     "method": "POST",
     "path": "/api/payments/wechat/notify",
+    "public": true,
+    "roles": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/payments/wechat/refund-notify",
     "public": true,
     "roles": []
   },

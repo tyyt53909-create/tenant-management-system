@@ -6403,6 +6403,52 @@
         ]
       }
     },
+    "/api/bills/reconciliation/wechat": {
+      "post": {
+        "operationId": "BillsController_reconcileWechatPayments",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WechatReconciliationQueryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WechatReconciliationResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Bills"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/bills/export": {
       "get": {
         "operationId": "BillsController_exportBills",
@@ -7254,6 +7300,69 @@
         ]
       }
     },
+    "/api/bills/{id}/payments/{paymentId}/refund": {
+      "post": {
+        "operationId": "BillsController_refundWechatPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paymentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWechatRefundDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WechatRefundResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Bills"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/payments/wechat/notify": {
       "post": {
         "operationId": "PaymentsController_handleWechatNotify",
@@ -7282,6 +7391,44 @@
           }
         },
         "summary": "微信支付结果通知回调 (API v3)",
+        "tags": [
+          "Payments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/payments/wechat/refund-notify": {
+      "post": {
+        "operationId": "PaymentsController_handleWechatRefundNotify",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "微信支付退款结果通知回调 (API v3)",
         "tags": [
           "Payments"
         ],
@@ -11533,6 +11680,75 @@
           "dueDate"
         ]
       },
+      "WechatReconciliationQueryDto": {
+        "type": "object",
+        "properties": {
+          "billDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "autoSyncMissing": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "billDate"
+        ]
+      },
+      "WechatReconciliationResponseDto": {
+        "type": "object",
+        "properties": {
+          "billDate": {
+            "type": "string"
+          },
+          "totalWechatCount": {
+            "type": "number"
+          },
+          "totalWechatAmount": {
+            "type": "number"
+          },
+          "totalLocalCount": {
+            "type": "number"
+          },
+          "totalLocalAmount": {
+            "type": "number"
+          },
+          "matchedCount": {
+            "type": "number"
+          },
+          "matchedAmount": {
+            "type": "number"
+          },
+          "remoteOnlyCount": {
+            "type": "number"
+          },
+          "localOnlyCount": {
+            "type": "number"
+          },
+          "amountMismatchCount": {
+            "type": "number"
+          },
+          "discrepancies": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "billDate",
+          "totalWechatCount",
+          "totalWechatAmount",
+          "totalLocalCount",
+          "totalLocalAmount",
+          "matchedCount",
+          "matchedAmount",
+          "remoteOnlyCount",
+          "localOnlyCount",
+          "amountMismatchCount",
+          "discrepancies"
+        ]
+      },
       "Object": {
         "type": "object",
         "properties": {}
@@ -11637,6 +11853,63 @@
         },
         "required": [
           "outTradeNo"
+        ]
+      },
+      "CreateWechatRefundDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string"
+          },
+          "outRefundNo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "WechatRefundResponseDto": {
+        "type": "object",
+        "properties": {
+          "billId": {
+            "type": "string"
+          },
+          "paymentId": {
+            "type": "string"
+          },
+          "outRefundNo": {
+            "type": "string"
+          },
+          "refundId": {
+            "type": "string"
+          },
+          "refundAmount": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reversalPaymentId": {
+            "type": "string"
+          },
+          "remainingPaidAmount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "billId",
+          "paymentId",
+          "outRefundNo",
+          "refundId",
+          "refundAmount",
+          "status",
+          "reversalPaymentId",
+          "remainingPaidAmount"
         ]
       },
       "DepositAmountDto": {
