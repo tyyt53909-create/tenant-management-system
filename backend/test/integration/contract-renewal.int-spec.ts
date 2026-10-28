@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { auth, createApp, http, login, prisma, resetDatabase, seedBase } from './harness.js';
 import { JwtAuthService } from '../../src/modules/auth/jwt.service.js';
 import { SchedulerDailyJobsService } from '../../src/modules/scheduler/scheduler-daily-jobs.service.js';
+import { startOfTodayUtc, MS_PER_DAY } from '../../src/modules/scheduler/scheduler.util.js';
 
 let app: INestApplication;
 
@@ -55,10 +56,10 @@ describe('合同到期提醒、续约意向与续约报价集成测试（T301 / 
       await jwtService.generateTokens({ sub: tenantUser.id, role: 'TENANT' })
     ).accessToken;
 
-    const now = new Date();
-    // 设置 30 天后到期（UTC 零点）
-    const endDate30 = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 30));
-    const startDate = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), now.getUTCDate()));
+    const today = startOfTodayUtc();
+    // 设置 30 天后到期（业务日 UTC 零点）
+    const endDate30 = new Date(today.getTime() + 30 * MS_PER_DAY);
+    const startDate = new Date(today.getTime() - 365 * MS_PER_DAY);
 
     const activeContract = await prisma.contract.create({
       data: {
@@ -187,7 +188,7 @@ describe('合同到期提醒、续约意向与续约报价集成测试（T301 / 
       },
     });
 
-    const pastEndDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 10));
+    const pastEndDate = new Date(today.getTime() - 10 * MS_PER_DAY);
     const expiredContract = await prisma.contract.create({
       data: {
         buildingId: base.buildingId,
@@ -198,7 +199,7 @@ describe('合同到期提醒、续约意向与续约报价集成测试（T301 / 
         depositAmount: 280000,
         paymentCycle: 'MONTHLY',
         paymentDay: 5,
-        startDate: new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), now.getUTCDate() - 10)),
+        startDate: new Date(today.getTime() - 375 * MS_PER_DAY),
         endDate: pastEndDate,
         status: 'EXPIRED',
         lateFeeRule: {},

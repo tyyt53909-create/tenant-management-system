@@ -314,5 +314,56 @@ describe('CleaningService (WRK-03 / T304)', () => {
       );
       expect(res.status).toBe(CleaningTaskStatus.IN_PROGRESS);
     });
+
+    it('未完工工单不可驳回', async () => {
+      prisma.cleaningTask.findUnique.mockResolvedValue({
+        id: 't1',
+        status: CleaningTaskStatus.IN_PROGRESS,
+        buildingId: 'b1',
+      });
+
+      await expect(
+        service.rejectCleaning('t1', { reason: 'bad' }, { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('cancel', () => {
+    it('已完成或已归档工单不可取消', async () => {
+      prisma.cleaningTask.findUnique.mockResolvedValue({
+        id: 't1',
+        status: CleaningTaskStatus.ACCEPTED,
+        buildingId: 'b1',
+      });
+
+      await expect(
+        service.cancel('t1', { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('正常取消工单', async () => {
+      prisma.cleaningTask.findUnique.mockResolvedValue({
+        id: 't1',
+        status: CleaningTaskStatus.PENDING,
+        buildingId: 'b1',
+      });
+      prisma.cleaningTask.update.mockResolvedValue({
+        id: 't1',
+        status: CleaningTaskStatus.CANCELLED,
+      });
+
+      const res = await service.cancel('t1', { userId: 'admin', role: 'ADMIN' }, '不再需要保洁');
+      expect(res.status).toBe(CleaningTaskStatus.CANCELLED);
+    });
+  });
+
+  describe('findOne', () => {
+    it('工单不存在抛出 NotFoundException', async () => {
+      prisma.cleaningTask.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.findOne('t-not-exist', { userId: 'admin', role: 'ADMIN' }),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 });

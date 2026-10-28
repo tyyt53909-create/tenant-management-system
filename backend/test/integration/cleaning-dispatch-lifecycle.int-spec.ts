@@ -48,7 +48,7 @@ describe('保洁工单：自动建单、指派、开工完工与验收恢复全�
 
     // 2. 管理员手动创建退租保洁工单
     const createRes = await http(app)
-      .post('/api/cleaning/tasks')
+      .post('/cleaning/tasks')
       .set(auth(adminToken))
       .send({
         roomId: room.id,
@@ -63,9 +63,9 @@ describe('保洁工单：自动建单、指派、开工完工与验收恢复全�
 
     // 3. 管理员指派保洁员
     const assignRes = await http(app)
-      .post(`/api/cleaning/tasks/${taskId}/assign`)
+      .post(`/cleaning/tasks/${taskId}/assign`)
       .set(auth(adminToken))
-      .send({ cleanerId: cleanerUser.id })
+      .send({ cleanerId: cleanerUser.id })\
       .expect(201);
 
     expect(assignRes.body.status).toBe('ASSIGNED');
@@ -73,7 +73,7 @@ describe('保洁工单：自动建单、指派、开工完工与验收恢复全�
 
     // 4. 保洁员登录专属端点查看指派任务
     const assignedRes = await http(app)
-      .get('/api/cleaning/tasks/assigned')
+      .get('/cleaning/tasks/assigned')
       .set(auth(cleanerToken))
       .expect(200);
 
@@ -82,7 +82,7 @@ describe('保洁工单：自动建单、指派、开工完工与验收恢复全�
 
     // 5. 保洁员开工，联动房间状态为 CLEANING
     const startRes = await http(app)
-      .post(`/api/cleaning/tasks/${taskId}/start`)
+      .post(`/cleaning/tasks/${taskId}/start`)
       .set(auth(cleanerToken))
       .expect(201);
 
@@ -93,7 +93,7 @@ describe('保洁工单：自动建单、指派、开工完工与验收恢复全�
 
     // 6. 保洁员提报完工
     const completeRes = await http(app)
-      .post(`/api/cleaning/tasks/${taskId}/complete`)
+      .post(`/cleaning/tasks/${taskId}/complete`)
       .set(auth(cleanerToken))
       .send({
         afterPhotos: ['clean_after_01.jpg', 'clean_after_02.jpg'],
@@ -105,7 +105,7 @@ describe('保洁工单：自动建单、指派、开工完工与验收恢复全�
 
     // 7. 管理员验收合格，评5星，联动房态原子恢复为 CLEAN！
     const acceptRes = await http(app)
-      .post(`/api/cleaning/tasks/${taskId}/accept`)
+      .post(`/cleaning/tasks/${taskId}/accept`)
       .set(auth(adminToken))
       .send({
         rating: 5,
@@ -151,7 +151,7 @@ describe('保洁工单：自动建单、指派、开工完工与验收恢复全�
 
     // 管理员驳回返工
     const rejectRes = await http(app)
-      .post(`/api/cleaning/tasks/${task.id}/reject`)
+      .post(`/cleaning/tasks/${task.id}/reject`)
       .set(auth(adminToken))
       .send({ reason: '窗台有浮尘，需重擦' })
       .expect(201);
