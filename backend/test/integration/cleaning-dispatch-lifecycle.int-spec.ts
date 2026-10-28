@@ -65,7 +65,7 @@ describe('保洁工单：自动建单、指派、开工完工与验收恢复全�
     const assignRes = await http(app)
       .post(`/cleaning/tasks/${taskId}/assign`)
       .set(auth(adminToken))
-      .send({ cleanerId: cleanerUser.id })\
+      .send({ cleanerId: cleanerUser.id })
       .expect(201);
 
     expect(assignRes.body.status).toBe('ASSIGNED');
