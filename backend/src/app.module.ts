@@ -51,6 +51,7 @@ import { SmsModule } from './modules/sms/sms.module.js';
 import { LeadsModule } from './modules/leads/leads.module.js';
 import { AppointmentsModule } from './modules/appointments/appointments.module.js';
 import { InspectionsModule } from './modules/inspections/inspections.module.js';
+import { CleaningModule } from './modules/cleaning/cleaning.module.js';
 
 @Module({
   imports: [
@@ -116,6 +117,8 @@ import { InspectionsModule } from './modules/inspections/inspections.module.js';
     AppointmentsModule,
     // 验房交接（LSE-03 / T300）
     InspectionsModule,
+    // 保洁工单任务（WRK-03 / T304）
+    CleaningModule,
   ],
   controllers: [AppController],
   providers: [

@@ -34,8 +34,8 @@ export class PaymentReconciliationService {
    * 触发日终对账比对（管理端 / 定时任务）
    */
   async runReconciliation(billDateStr: string, operatorId: string) {
-    const start = new Date(`${billDateStr}T00:00:00.000Z`);
-    const end = new Date(`${billDateStr}T23:59:59.999Z`);
+    const start = new Date(`${billDateStr}T00:00:00+08:00`);
+    const end = new Date(`${billDateStr}T23:59:59.999+08:00`);
     const batchNumber = `REC_${billDateStr.replace(/-/g, '')}_${randomHex(3).toUpperCase()}`;
 
     // 1. 获取微信日终对账流水

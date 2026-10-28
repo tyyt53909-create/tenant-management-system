@@ -17,7 +17,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | 196 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 171 files / 1670 tests |
+| 後端單元測試 | ✅ pass | 174 files / 1706 tests |
 | 後端 e2e | ✅ pass | 4 files / 83 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 33 files / 100 tests |
+| 整合測試 | ✅ pass | 34 files / 102 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -36,14 +36,14 @@
 
 | 類別 | 數量 |
 |---|---|
-| 總任務數 | 160 |
+| 總任務數 | 161 |
 | 已驗證完成 | 64 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 0 |
+| 進行中 | 1 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -87,6 +87,7 @@
 
 ## 近期交接
 
+- [交接记录：T304 保洁任务：自动建单、指派、验收（WRK-03）](docs/handoff/2026-10-28-T304-保洁任务自动建单指派与验收.md)
 - [交接记录：T303 维修工单：派工、SLA、员工端、费用转嫁（WRK-02）](docs/handoff/2026-10-26-T303-维修工单派工SLA与费用转嫁.md)
 - [交接记录：T302 员工角色、权限与楼栋范围（WRK-01）](docs/handoff/2026-10-26-T302-员工角色权限与楼栋范围.md)
 - [交接记录：T301 到期提醒、续约意向与续约报价（LSE-04）](docs/handoff/2026-10-26-T301-到期提醒续约意向与续约报价.md)
@@ -102,15 +103,15 @@
 
 ## 統計
 
-- 資料模型：**55** 張表
-- OpenAPI 路由：**270** 條
+- 資料模型：**56** 張表
+- OpenAPI 路由：**280** 條
 - 後端程式碼：**32450** 行
 - 管理後台程式碼：**33210** 行
 - 小程序程式碼：**8510** 行
 - 文件：**187** 份
 
 ### 測試
-- 後端單元：171 files / 1670 tests
+- 後端單元：174 files / 1706 tests
 - 後端 e2e：4 files / 83 tests
 - 管理後台單元：22 files / 112 tests
 - 小程序單元：168 tests

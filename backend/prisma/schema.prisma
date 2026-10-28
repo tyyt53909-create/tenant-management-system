@@ -38,6 +38,24 @@ enum CleanStatus {
   CLEANING // 清洁中
 }
 
+// 保洁任务类型 (WRK-03 / T304)
+enum CleaningTaskType {
+  CHECKOUT // 退租保洁
+  DAILY // 日常保洁
+  DEEP // 深度保洁
+  INSPECTION // 验房前保洁
+}
+
+// 保洁任务状态 (WRK-03 / T304)
+enum CleaningTaskStatus {
+  PENDING // 待指派
+  ASSIGNED // 已指派待开工
+  IN_PROGRESS // 清洁中
+  COMPLETED // 已完成待验收
+  ACCEPTED // 验收合格已归档
+  CANCELLED // 已取消
+}
+
 // 意向线索状态
 enum LeadStatus {
   NEW // 新留资待跟进
@@ -414,6 +432,7 @@ model Building {
   publicUtilityBills PublicUtilityBill[]
   floorPlans         FloorPlan[]
   staffAssignments   StaffBuildingAssignment[]
+  cleaningTasks      CleaningTask[]
 
   @@index([isActive])
   @@map("buildings")
@@ -460,6 +479,7 @@ model Room {
   inspections         RoomInspection[]
   checkoutRequests    CheckoutRequest[]
   renewalOffers       RenewalOffer[]
+  cleaningTasks       CleaningTask[]
 
   @@unique([buildingId, floor, roomNumber])
   @@index([buildingId, status])
@@ -600,6 +620,7 @@ model User {
   publishedAnnouncements Announcement[] @relation("AnnouncementCreator")
   buildingAssignments    StaffBuildingAssignment[]
   assignedMaintenanceRequests MaintenanceRequest[] @relation("MaintainerAssignedRequests")
+  assignedCleaningTasks  CleaningTask[]        @relation("AssignedCleaner")
 
   @@index([email])
   @@index([phone])
@@ -1963,4 +1984,43 @@ model StaffBuildingAssignment {
   @@index([userId])
   @@index([buildingId])
   @@map("staff_building_assignments")
+}
+
+// 56. CleaningTask（保洁工单任务，WRK-03 / T304）
+model CleaningTask {
+  id              String             @id @default(cuid())
+  taskNumber      String             @unique
+  buildingId      String
+  building        Building           @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  roomId          String
+  room            Room               @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  type            CleaningTaskType   @default(CHECKOUT)
+  status          CleaningTaskStatus @default(PENDING)
+
+  cleanerId       String?
+  cleaner         User?              @relation("AssignedCleaner", fields: [cleanerId], references: [id], onDelete: SetNull)
+  assignedBy      String?
+  assignedAt      DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  acceptedAt      DateTime?
+  acceptedBy      String?
+  rating          Int?
+  acceptanceNotes String?            @db.Text
+
+  beforePhotos    String[]           @default([])
+  afterPhotos     String[]           @default([])
+  notes           String?            @db.Text
+  source          String?            // CHECKOUT_AUTO, MANUAL
+  sourceId        String?
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([buildingId])
+  @@index([roomId])
+  @@index([cleanerId])
+  @@index([status])
+  @@map("cleaning_tasks")
 }
