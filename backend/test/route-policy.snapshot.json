@@ -426,6 +426,14 @@
   },
   {
     "method": "GET",
+    "path": "/api/bills/current-aging",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/bills/export",
     "public": false,
     "roles": [

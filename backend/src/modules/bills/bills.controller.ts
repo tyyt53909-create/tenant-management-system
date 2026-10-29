@@ -8,6 +8,7 @@ import { BusinessClock } from '../../common/business-clock/business-clock.servic
 import { CreateBillDto } from './dto/create-bill.dto.js';
 import { UpdateBillDto } from './dto/update-bill.dto.js';
 import { QueryBillsDto } from './dto/query-bills.dto.js';
+import { QueryAgingDto } from './dto/query-aging.dto.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { VoidPaymentDto } from './dto/void-payment.dto.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
@@ -56,6 +57,14 @@ export class BillsController {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="bills-export-${dateStr}.csv"`);
     return csv;
+  }
+
+  @Get('current-aging')
+  @ApiOkResponse({ schema: { type: 'object', required: ['asOfBusinessDate', 'generatedAt', 'groups', 'totals'], properties: { asOfBusinessDate: { type: 'string', description: '当前业务日，非历史截止日' }, generatedAt: { type: 'string', format: 'date-time' }, groups: { type: 'array', items: { type: 'object', additionalProperties: true } }, totals: { type: 'object', additionalProperties: true } } } })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  currentAging(@Query() query: QueryAgingDto) {
+    return this.billsService.currentAging(query, this.clock);
   }
 
   @Get()

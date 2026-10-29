@@ -21,6 +21,9 @@ import { rentBillDedupKey } from '../../common/utils/duplicate-keys.js';
 import { BillPaymentService } from './bill-payment.service.js';
 import { BillLateFeeService } from './bill-late-fee.service.js';
 import { BillReceiptService } from './bill-receipt.service.js';
+import { calculateCurrentAging } from './current-aging.util.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { QueryAgingDto } from './dto/query-aging.dto.js';
 
 const BILL_TYPE_LABEL: Record<string, string> = {
   RENT: '租金',
@@ -155,6 +158,37 @@ export class BillsService {
       }
       return { ...existing, alreadyExists: true as const };
     }
+  }
+
+  async currentAging(query: QueryAgingDto, clock: BusinessClock) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const started = clock.now();
+      const date = clock.formatDate(started);
+      const today = clock.todayUtc(started);
+      const groups = await this.prisma.$transaction(async tx => {
+        const bills = await tx.bill.findMany({
+          where: {
+            ...(query.billType ? { billType: query.billType } : {}),
+            ...(query.buildingId ? { contract: { room: { buildingId: query.buildingId } } } : {}),
+          },
+          select: { id: true, billNumber: true, billType: true, status: true, amount: true, paidAmount: true, dueDate: true,
+            paymentRecords: { select: { status: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true } },
+            lateFees: { select: { confirmedAmount: true, settledAmount: true } },
+          },
+        });
+        return calculateCurrentAging(bills, today).filter(group => !query.billType || group.billType === query.billType);
+      }, { isolationLevel: 'RepeatableRead' });
+      const totals = groups.reduce((acc, group) => {
+        for (const key of ['principal', 'principalCount', 'unknownPrincipalCount', 'lateFee', 'lateFeeCount', 'unknownLateFeeCount'] as const) {
+          acc[key] += group[key];
+          if (!Number.isSafeInteger(acc[key])) throw new Error('账龄合计超出安全整数范围');
+        }
+        return acc;
+      }, { principal: 0, principalCount: 0, unknownPrincipalCount: 0, lateFee: 0, lateFeeCount: 0, unknownLateFeeCount: 0 });
+      const finished = clock.now();
+      if (clock.formatDate(finished) === date) return { asOfBusinessDate: date, generatedAt: finished.toISOString(), groups, totals };
+    }
+    throw new ConflictException('业务日变化，请重新查询');
   }
 
   async findAll(query: QueryBillsDto) {

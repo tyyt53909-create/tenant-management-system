@@ -205,6 +205,13 @@ describe('微信退款、对账与差异处理整合测试（T294 / PAY-02）', 
     const refundRec = billAfterRefund?.refundRecords[0];
     expect(refundRec?.status).toBe('SUCCESS');
     expect(refundRec?.refundId).toBe(refundRes.body.refund.refundId);
+    const aging = await http(app).get('/bills/current-aging?billType=RENT').set(auth(data.adminToken));
+    expect(aging.status).toBe(200);
+    const rent = aging.body.groups[0];
+    expect(rent.principal).toBe(300000);
+    expect(rent.unknownPrincipalCount).toBe(0);
+    expect(Object.values(rent.buckets).some((cell: any) => cell.billIds.includes(data.billId))).toBe(true);
+
 
     // 5. 重复推送相同退款通知，验证幂等性
     const notifyRes2 = await http(app)

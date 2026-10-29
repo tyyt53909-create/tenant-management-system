@@ -1,6 +1,7 @@
 <template>
   <div class="bills-page">
     <ManagementMetrics resource="bills" />
+    <CurrentAgingPanel @open="openAgingDetail" />
     <ResourcePanel title="账单与收款" :count="pagination.total" :loading="loading" :error="loadError || undefined" @retry="fetchData">
       <template #actions>
         <ExportCurrent resource="bills" :rows="tableData" />
@@ -172,6 +173,7 @@ import ResourceDrawer from '@/components/common/ResourceDrawer.vue';
 import ReceiptModal from '@/components/common/ReceiptModal.vue';
 import VoucherRecognitionModal from '@/components/common/VoucherRecognitionModal.vue';
 import BillFormDialog from './components/BillFormDialog.vue';
+import CurrentAgingPanel from './components/CurrentAgingPanel.vue';
 import BillPaymentDialog from './components/BillPaymentDialog.vue';
 import BillLateFeeDialog from './components/BillLateFeeDialog.vue';
 import { downloadCsvFromServer } from '@/utils/csv';
@@ -199,6 +201,10 @@ import {
 
 const detailVisible = ref(false);
 const detailId = ref('');
+function openAgingDetail(id: string) {
+  detailId.value = id;
+  detailVisible.value = true;
+}
 function openDetail(row: Bill) {
   detailId.value = row.id;
   detailVisible.value = true;
