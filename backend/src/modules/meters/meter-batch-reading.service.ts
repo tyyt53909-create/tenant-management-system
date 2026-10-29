@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
-import { buildReadingDedupKey } from './meter-dedup.util.js';
+import { buildReadingDedupKey, hasReservedReadingMarker } from './meter-dedup.util.js';
 import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -147,6 +147,10 @@ export class MeterBatchReadingService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const item of dto.readings) {
+        if (hasReservedReadingMarker(item.notes) || hasReservedReadingMarker(item.messageId)) {
+          results.push({ meterId: item.meterId, success: false, error: '备注或消息编号不得包含系统保留的结算标记' });
+          continue;
+        }
         const meter = await tx.meter.findUnique({
           where: { id: item.meterId },
           include: { room: true },
@@ -174,6 +178,7 @@ export class MeterBatchReadingService {
 
         const readingTime = item.readingTime ? new Date(item.readingTime) : new Date();
         const source = item.source || 'MANUAL';
+        const readingScope = NOT_SIMULATED;
         const dedupKey = buildReadingDedupKey({
           messageId: item.messageId,
           readingTime,
@@ -186,6 +191,10 @@ export class MeterBatchReadingService {
           where: { meterId_dedupKey: { meterId: item.meterId, dedupKey } },
         });
         if (existingDedupReading) {
+          if (existingDedupReading.source === 'SIMULATED') {
+            results.push({ meterId: item.meterId, meterNumber: meter.meterNumber, success: false, error: '历史模拟读数的去重键与真实读数冲突，需人工核对' });
+            continue;
+          }
           results.push({
             meterId: item.meterId,
             meterNumber: meter.meterNumber,
@@ -204,6 +213,7 @@ export class MeterBatchReadingService {
           const existingMsgReading = await tx.meterReading.findFirst({
             where: {
               meterId: item.meterId,
+              source: readingScope,
               notes: { contains: msgTag },
             },
           });
@@ -222,7 +232,7 @@ export class MeterBatchReadingService {
         }
 
         const latestReadingRecord = await tx.meterReading.findFirst({
-          where: { meterId: item.meterId },
+          where: { meterId: item.meterId, source: readingScope },
           orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
         });
 
@@ -289,6 +299,7 @@ export class MeterBatchReadingService {
           const laterReadingWithLowerValue = await tx.meterReading.findFirst({
             where: {
               meterId: item.meterId,
+              source: readingScope,
               readingTime: { gte: readingTime },
               currentReading: { lt: item.currentReading },
             },
@@ -308,6 +319,7 @@ export class MeterBatchReadingService {
           const precedingRecord = await tx.meterReading.findFirst({
             where: {
               meterId: item.meterId,
+              source: readingScope,
               readingTime: { lte: readingTime },
             },
             orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],

@@ -17,7 +17,7 @@ export interface ReadingIdentity {
  * 结果写入 `MeterReading.dedupKey`，由数据库 `@@unique([meterId, dedupKey])` 兜底并发。
  */
 export function buildReadingDedupKey(identity: ReadingIdentity): string {
-  if (identity.messageId) return `msg:${identity.messageId}`;
+  if (identity.messageId) return `${identity.source === 'SIMULATED' ? 'sim-msg:' : 'msg:'}${identity.messageId}`;
   const normalizedReading = Number(identity.currentReading).toFixed(2);
   const payload = `${identity.readingTime.toISOString()}|${normalizedReading}|${identity.source}`;
   return `auto:${createHash('sha256').update(payload).digest('hex').slice(0, 40)}`;
@@ -47,4 +47,9 @@ export function isUniqueViolation(error: unknown, field?: string): boolean {
   if (Array.isArray(target)) return target.includes(field);
   if (typeof target === 'string') return target.includes(field);
   return false;
+}
+
+/** 保留历史结算标记供读取旧记录，禁止外部输入伪造。 */
+export function hasReservedReadingMarker(value?: string | null): boolean {
+  return value?.includes('[SETTLED]') === true || value?.includes('[INITIAL]') === true;
 }

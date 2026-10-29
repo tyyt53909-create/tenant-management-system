@@ -18,6 +18,11 @@ describe('读数去重键（T274）', () => {
     expect(a).toMatch(/^auto:[a-f0-9]{40}$/);
   });
 
+  it('模拟与真实消息的去重键互不干扰', () => {
+    expect(buildReadingDedupKey({ messageId: 'same', readingTime, currentReading: 1, source: 'SIMULATED' })).toBe('sim-msg:same');
+    expect(buildReadingDedupKey({ messageId: 'same', readingTime, currentReading: 1, source: 'DEVICE' })).toBe('msg:same');
+  });
+
   it('同时间不同读数/不同来源是不同键（合法修正不应被误判重复）', () => {
     const base = buildReadingDedupKey({ readingTime, currentReading: 10, source: 'MANUAL' });
     expect(buildReadingDedupKey({ readingTime, currentReading: 11, source: 'MANUAL' })).not.toBe(base);

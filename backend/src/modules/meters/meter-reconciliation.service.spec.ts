@@ -46,6 +46,7 @@ describe('MeterReconciliationService', () => {
     prisma.$queryRaw.mockResolvedValue([{ total: 1000n }]);
 
     const result = await service.reconcile({ period: '2026-01' });
+    expect(prisma.meterReading.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ source: { not: 'SIMULATED' } }) }));
     const row = result.rows[0];
 
     expect(row).toMatchObject({

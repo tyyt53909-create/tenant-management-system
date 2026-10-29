@@ -5,7 +5,7 @@ import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
-import { buildReadingDedupKey, isSettledReading, isUniqueViolation } from './meter-dedup.util.js';
+import { buildReadingDedupKey, hasReservedReadingMarker, isUniqueViolation } from './meter-dedup.util.js';
 import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -33,8 +33,12 @@ export class MeterReadingService {
     dto: Omit<CreateMeterReadingDto, 'source'> & { source?: 'MANUAL' | 'DEVICE' | 'SIMULATED' },
     operatorId: string,
   ) {
+    if (hasReservedReadingMarker(dto.notes) || hasReservedReadingMarker(dto.messageId)) {
+      throw new BadRequestException('备注或消息编号不得包含系统保留的结算标记');
+    }
     const readingTime = dto.readingTime ? new Date(dto.readingTime) : new Date();
     const source = dto.source || 'MANUAL';
+    const readingScope = source === 'SIMULATED' ? 'SIMULATED' as const : NOT_SIMULATED;
     // 手工录入默认结算。设备上报和模拟器读数默认只采集。
     const shouldAutoSettle = settlesByDefault(source, dto.autoSettle);
     // 业务去重键：messageId 优先，否则时间+读数+来源摘要（T274）
@@ -47,6 +51,8 @@ export class MeterReadingService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+      // Serialize simulated messages for the same meter before inspecting timestamps.
+      if (source === 'SIMULATED') await tx.$queryRaw`SELECT id FROM meters WHERE id = ${meterId} FOR UPDATE`;
       const meter = await tx.meter.findUnique({ where: { id: meterId } });
 
       if (!meter) {
@@ -62,6 +68,9 @@ export class MeterReadingService {
         where: { meterId_dedupKey: { meterId, dedupKey } },
       });
       if (existingDedupReading) {
+        if ((existingDedupReading.source === 'SIMULATED') !== (source === 'SIMULATED')) {
+          throw new BadRequestException('历史模拟读数的去重键与真实读数冲突，需人工核对');
+        }
         return {
           reading: existingDedupReading,
           deduction: { applied: false, reason: '重复读数（去重键已存在），已忽略并返回已有记录' },
@@ -74,6 +83,7 @@ export class MeterReadingService {
         const existingMsgReading = await tx.meterReading.findFirst({
           where: {
             meterId,
+            source: readingScope,
             notes: { contains: msgTag },
           },
         });
@@ -87,9 +97,14 @@ export class MeterReadingService {
 
       // 查询当前最新读数记录
       const latestReadingRecord = await tx.meterReading.findFirst({
-        where: { meterId },
+        where: { meterId, source: readingScope },
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
+
+      if (source === 'SIMULATED' && latestReadingRecord && readingTime <= latestReadingRecord.readingTime &&
+          !(readingTime.getTime() === latestReadingRecord.readingTime.getTime() && Number(latestReadingRecord.currentReading) === dto.currentReading)) {
+        throw new BadRequestException('模拟遥测时间必须晚于已有读数');
+      }
 
       // 2. 首次读数 / 初始底数处理
       // 1) 显式声明 isInitial: true
@@ -144,6 +159,7 @@ export class MeterReadingService {
         const duplicateHistorical = await tx.meterReading.findFirst({
           where: {
             meterId,
+            source: readingScope,
             readingTime,
             currentReading: dto.currentReading,
           },
@@ -159,6 +175,7 @@ export class MeterReadingService {
         const laterReadingWithLowerValue = await tx.meterReading.findFirst({
           where: {
             meterId,
+            source: readingScope,
             readingTime: { gte: readingTime },
             currentReading: { lt: dto.currentReading },
           },
@@ -172,6 +189,7 @@ export class MeterReadingService {
         const precedingRecord = await tx.meterReading.findFirst({
           where: {
             meterId,
+            source: readingScope,
             readingTime: { lte: readingTime },
           },
           orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
@@ -294,6 +312,9 @@ export class MeterReadingService {
       if (isUniqueViolation(error, 'dedupKey')) {
         const existing = await this.prisma.meterReading.findFirst({ where: { meterId, dedupKey } });
         if (existing) {
+          if ((existing.source === 'SIMULATED') !== (source === 'SIMULATED')) {
+            throw new BadRequestException('历史模拟读数的去重键与真实读数冲突，需人工核对');
+          }
           return {
             reading: existing,
             deduction: { applied: false, reason: '重复读数（去重键已存在），已忽略并返回已有记录' },

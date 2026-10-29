@@ -44,6 +44,7 @@ describe('V3 管理摘要：来源与聚合口径',()=>{
     prisma.meterReading.aggregate.mockResolvedValueOnce({_sum:{usage:'32.60'}}).mockResolvedValueOnce({_sum:{usage:'827.25'}});
     const result=await service.snapshot('admin');expect(result.meters).toEqual({total:3,read:2,pending:1,water:32.6,electricity:827.25});
     const query=prisma.meterReading.aggregate.mock.calls[0][0];expect(query.where.readingTime.gte).toBeInstanceOf(Date);expect(query.where.readingTime.lt).toBeInstanceOf(Date);
+    expect(query.where.source).toEqual({not:'SIMULATED'});expect(prisma.meterReading.groupBy.mock.calls[0][0].where.source).toEqual({not:'SIMULATED'});
   });
   it('低余额采用每个账户的字段阈值，未结算金额不代表已退款',async()=>{
     await service.snapshot('admin');expect(prisma.prepayAccount.count).toHaveBeenCalledWith({where:{balanceCache:{lt:prisma.prepayAccount.fields.lowBalanceThreshold}}});

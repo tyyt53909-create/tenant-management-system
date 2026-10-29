@@ -80,7 +80,7 @@ export class MeterReconciliationService {
     const meterIds = meters.map((meter) => meter.id);
     const priceBook = await this.priceService.loadPriceBook(meters);
     const readings = await this.prisma.meterReading.findMany({
-      where: { meterId: { in: meterIds }, readingTime: { gte: start, lt: end }, source: { not: NOT_SIMULATED } },
+      where: { meterId: { in: meterIds }, readingTime: { gte: start, lt: end }, source: NOT_SIMULATED },
       orderBy: [{ meterId: 'asc' }, { readingTime: 'asc' }],
       select: { id: true, meterId: true, currentReading: true, usage: true, readingTime: true },
     });

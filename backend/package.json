@@ -33,7 +33,8 @@
     "simulate:meters": "tsx scripts/simulate-meters.ts",
     "simulate:mqtt": "tsx scripts/mqtt-meter-simulator.ts",
     "rotate:id-numbers": "tsx scripts/encrypt-id-numbers.ts --rotate",
-    "test:int": "vitest run --config ./vitest.config.int.ts --no-file-parallelism"
+    "test:int": "vitest run --config ./vitest.config.int.ts --no-file-parallelism",
+    "simulate:mqtt:consumer": "tsx scripts/mqtt-local-consumer.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
