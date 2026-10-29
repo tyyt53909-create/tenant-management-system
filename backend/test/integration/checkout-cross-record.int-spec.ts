@@ -7,6 +7,12 @@ let app: INestApplication;
 beforeAll(async () => { app = await createApp({ denyPayments: true }); });
 afterAll(async () => { await app?.close(); await prisma.$disconnect(); });
 beforeEach(async () => { await resetDatabase(); });
+async function raceContract<T>(contractId: string, firstActionFirst: boolean, firstAction: () => Promise<T>, secondAction: () => Promise<T>): Promise<[T, T]> {
+  let release!: () => void; let locked!: () => void; const ready = new Promise<void>(resolve => { locked = resolve; }); const barrier = new Promise<void>(resolve => { release = resolve; });
+  const hold = prisma.$transaction(async tx => { await tx.$queryRaw`SELECT id FROM contracts WHERE id = ${contractId} FOR UPDATE`; locked(); await barrier; }, { timeout: 15000 }); await ready;
+  const wait = async (count: number) => { for (let i = 0; i < 100; i++) { const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT count(*) AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%contracts%'`; if (Number(rows[0].count) >= count) return; await new Promise(resolve => setTimeout(resolve, 50)); } throw new Error('contract lock barrier not reached'); };
+  try { const first = firstActionFirst ? firstAction() : secondAction(); await wait(1); const second = firstActionFirst ? secondAction() : firstAction(); await wait(2); release(); await hold; return await Promise.all([first, second]) as [T, T]; } finally { release(); await hold; }
+}
 describe('跨退租单并发', () => {
   it.each([false, true])('两个真实入口创建的退租单同步完成仅允许一个（反序 %s）', async (reverse) => {
     const base = await seedBase(); const tenancy = await setupTenancy(app, base);
@@ -138,10 +144,10 @@ describe('跨退租单并发', () => {
     await prisma.depositLedger.create({ data: { contractId: next.id, tenantId: t.tenantId, roomId: t.roomId, amount: 3000, balance: 0 } });
     const created = await http(app).post('/checkout').set(auth(t.adminToken)).send({ contractId: old.id, roomId: t.roomId, checkoutDate: '2026-10-29', totalRefund: 3000, processedBy: 'synthetic', items: [{ itemType: 'DEPOSIT_REFUND', description: '押金', amount: 3000 }] }); expect(created.status).toBe(201);
     let release!: () => void; let locked!: () => void; const ready = new Promise<void>(resolve => { locked = resolve; }); const barrier = new Promise<void>(resolve => { release = resolve; });
-    const hold = prisma.$transaction(async tx => { await tx.$queryRaw`SELECT id FROM deposit_ledgers WHERE "contractId" = ${old.id} FOR UPDATE`; locked(); await barrier; }, { timeout: 15000 }); await ready;
+    const hold = prisma.$transaction(async tx => { await tx.$queryRaw`SELECT id FROM contracts WHERE id = ${old.id} FOR UPDATE`; locked(); await barrier; }, { timeout: 15000 }); await ready;
     const transfer = () => http(app).post(`/deposits/${old.id}/transfer`).set(auth(t.adminToken)).send({ toContractId: next.id }).then(r => r);
     const checkout = () => http(app).patch(`/checkout/${created.body.id}`).set(auth(t.adminToken)).send({ status: 'COMPLETED' }).then(r => r);
-    const waitLocks = async (target: number) => { for (let i = 0; i < 100; i++) { const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT count(*) AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%deposit_ledgers%'`; if (Number(rows[0].count) >= target) return; await new Promise(resolve => setTimeout(resolve, 50)); } throw new Error('ledger barrier not reached'); };
+    const waitLocks = async (target: number) => { for (let i = 0; i < 100; i++) { const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT count(*) AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%contracts%'`; if (Number(rows[0].count) >= target) return; await new Promise(resolve => setTimeout(resolve, 50)); } throw new Error('ledger barrier not reached'); };
     const first = transferFirst ? transfer() : checkout(); await waitLocks(1); const second = transferFirst ? checkout() : transfer(); await waitLocks(2); release(); await hold;
     const [a, b] = await Promise.all([first, second]); expect(a.status).toBe(transferFirst ? 201 : 200); expect(b.status).toBe(400);
     const source = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: old.id }, include: { transactions: true } });
@@ -153,6 +159,59 @@ describe('跨退租单并发', () => {
     expect(await prisma.cleaningTask.count({ where: { roomId: t.roomId } })).toBe(transferFirst ? 0 : 1);
     expect((await prisma.contract.findUniqueOrThrow({ where: { id: old.id } })).status).toBe(transferFirst ? 'ACTIVE' : 'TERMINATED');
     expect((await prisma.contract.findUniqueOrThrow({ where: { id: next.id } })).status).toBe('DRAFT');
+  }, 30000);
+
+  it.each([true, false])('押金收款与退租按合同锁顺序互斥（收款先 %s）', async (paymentFirst) => {
+    const t = await setupTenancy(app, await seedBase());
+    await prisma.depositLedger.create({ data: { contractId: t.contractId, roomId: t.roomId, tenantId: t.tenantId, amount: 3000, balance: 1000, status: 'PARTIAL' } });
+    const bill = await http(app).post('/bills').set(auth(t.adminToken)).send({ contractId: t.contractId, billType: 'DEPOSIT', period: '2099-DEP', amount: 2000, dueDate: '2099-12-31', snapshot: {} }); expect(bill.status).toBe(201);
+    const co = await http(app).post('/checkout').set(auth(t.adminToken)).send({ contractId: t.contractId, roomId: t.roomId, checkoutDate: '2026-10-29', totalRefund: 1000, processedBy: 'synthetic', items: [{ itemType: 'DEPOSIT_REFUND', description: '押金', amount: 1000 }] }); expect(co.status).toBe(201);
+    const result = await raceContract(t.contractId, paymentFirst, () => http(app).post(`/bills/${bill.body.id}/payments`).set(auth(t.adminToken)).send({ amount: 2000, paymentMethod: 'CASH' }).then(r => r), () => http(app).patch(`/checkout/${co.body.id}`).set(auth(t.adminToken)).send({ status: 'COMPLETED' }).then(r => r));
+    expect(result.map(r => r.status)).toEqual(paymentFirst ? [201, 400] : [200, 409]);
+    expect(await prisma.bill.findUniqueOrThrow({ where: { id: bill.body.id } })).toMatchObject({ paidAmount: paymentFirst ? 2000 : 0, status: paymentFirst ? 'PAID' : 'PENDING' });
+    expect(await prisma.paymentRecord.count({ where: { billId: bill.body.id } })).toBe(paymentFirst ? 1 : 0);
+    const ledger = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: t.contractId }, include: { transactions: true } }); expect(ledger.balance).toBe(paymentFirst ? 3000 : 0); expect(ledger.transactions.map(x => [x.type, x.amount])).toEqual(paymentFirst ? [['COLLECT', 2000]] : [['REFUND', -1000]]);
+    expect((await prisma.checkoutRecord.findUniqueOrThrow({ where: { id: co.body.id } })).status).toBe(paymentFirst ? 'DRAFT' : 'COMPLETED');
+  }, 30000);
+
+  it.each([true, false])('押金冲正与退租按合同锁顺序互斥（冲正先 %s）', async (voidFirst) => {
+    const t = await setupTenancy(app, await seedBase());
+    const bill = await http(app).post('/bills').set(auth(t.adminToken)).send({ contractId: t.contractId, billType: 'DEPOSIT', period: '2099-DEP', amount: 3000, dueDate: '2099-12-31', snapshot: {} }); expect(bill.status).toBe(201);
+    const payment = await http(app).post(`/bills/${bill.body.id}/payments`).set(auth(t.adminToken)).send({ amount: 3000, paymentMethod: 'CASH' }); expect(payment.status).toBe(201);
+    const co = await http(app).post('/checkout').set(auth(t.adminToken)).send({ contractId: t.contractId, roomId: t.roomId, checkoutDate: '2026-10-29', totalRefund: 3000, processedBy: 'synthetic', items: [{ itemType: 'DEPOSIT_REFUND', description: '押金', amount: 3000 }] }); expect(co.status).toBe(201);
+    const result = await raceContract(t.contractId, voidFirst, () => http(app).post(`/bills/${bill.body.id}/payments/${payment.body.payment.id}/void`).set(auth(t.adminToken)).send({ reason: 'synthetic' }).then(r => r), () => http(app).patch(`/checkout/${co.body.id}`).set(auth(t.adminToken)).send({ status: 'COMPLETED' }).then(r => r));
+    expect(result[0].status).toBe(voidFirst ? 201 : 200); expect(result[1].status).toBeGreaterThanOrEqual(400);
+    const ledger = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: t.contractId }, include: { transactions: true } }); expect(ledger.balance).toBe(0); expect(ledger.transactions.map(x => x.type).sort()).toEqual(voidFirst ? ['COLLECT', 'REVERSAL'] : ['COLLECT', 'REFUND']);
+    expect(await prisma.bill.findUniqueOrThrow({ where: { id: bill.body.id } })).toMatchObject({ paidAmount: voidFirst ? 0 : 3000, status: voidFirst ? 'PENDING' : 'PAID' });
+    expect(await prisma.paymentRecord.count({ where: { billId: bill.body.id } })).toBe(voidFirst ? 2 : 1);
+    expect((await prisma.checkoutRecord.findUniqueOrThrow({ where: { id: co.body.id } })).status).toBe(voidFirst ? 'DRAFT' : 'COMPLETED');
+  }, 30000);
+
+  it.each([true, false])('向续约目标转入与目标退租互斥（转入先 %s）', async (transferFirst) => {
+    const t = await setupTenancy(app, await seedBase()); const source = await prisma.contract.findUniqueOrThrow({ where: { id: t.contractId } });
+    await prisma.contract.update({ where: { id: source.id }, data: { status: 'RENEWED' } });
+    const target = await prisma.contract.create({ data: { buildingId: source.buildingId, roomId: source.roomId, tenantId: source.tenantId, contractNumber: 'TARGET-ACTIVE', rentAmount: source.rentAmount, depositAmount: source.depositAmount, paymentCycle: source.paymentCycle, paymentDay: source.paymentDay, startDate: new Date('2026-01-01'), endDate: new Date('2027-12-01'), lateFeeRule: source.lateFeeRule as object, renewedFromId: source.id, status: 'ACTIVE' } });
+    await prisma.depositLedger.create({ data: { contractId: source.id, roomId: t.roomId, tenantId: t.tenantId, amount: 3000, balance: 3000 } });
+    await prisma.depositLedger.create({ data: { contractId: target.id, roomId: t.roomId, tenantId: t.tenantId, amount: 3000, balance: 1000 } });
+    const co = await http(app).post('/checkout').set(auth(t.adminToken)).send({ contractId: target.id, roomId: t.roomId, checkoutDate: '2026-10-29', totalRefund: 1000, processedBy: 'synthetic', items: [{ itemType: 'DEPOSIT_REFUND', description: '押金', amount: 1000 }] }); expect(co.status).toBe(201);
+    const result = await raceContract(target.id, transferFirst, () => http(app).post(`/deposits/${source.id}/transfer`).set(auth(t.adminToken)).send({ toContractId: target.id }).then(r => r), () => http(app).patch(`/checkout/${co.body.id}`).set(auth(t.adminToken)).send({ status: 'COMPLETED' }).then(r => r));
+    expect(result.map(r => r.status)).toEqual(transferFirst ? [201, 400] : [200, 409]);
+    const a = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: source.id }, include: { transactions: true } }); const b = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: target.id }, include: { transactions: true } });
+    expect([a.balance, b.balance]).toEqual(transferFirst ? [0, 4000] : [3000, 0]); expect(a.transactions.map(x => [x.type, x.amount])).toEqual(transferFirst ? [['TRANSFER', -3000]] : []); expect(b.transactions.map(x => [x.type, x.amount])).toEqual(transferFirst ? [['TRANSFER', 3000]] : [['REFUND', -1000]]);
+    expect((await prisma.checkoutRecord.findUniqueOrThrow({ where: { id: co.body.id } })).status).toBe(transferFirst ? 'DRAFT' : 'COMPLETED');
+  }, 30000);
+
+  it.each([true, false])('首次建立目标台账与目标退租互斥（转入先 %s）', async (transferFirst) => {
+    const t = await setupTenancy(app, await seedBase()); const source = await prisma.contract.findUniqueOrThrow({ where: { id: t.contractId } });
+    await prisma.contract.update({ where: { id: source.id }, data: { status: 'RENEWED' } });
+    const target = await prisma.contract.create({ data: { buildingId: source.buildingId, roomId: source.roomId, tenantId: source.tenantId, contractNumber: 'FIRST-TARGET', rentAmount: source.rentAmount, depositAmount: source.depositAmount, paymentCycle: source.paymentCycle, paymentDay: source.paymentDay, startDate: new Date('2026-01-01'), endDate: new Date('2027-12-01'), lateFeeRule: source.lateFeeRule as object, renewedFromId: source.id, status: 'ACTIVE' } });
+    await prisma.depositLedger.create({ data: { contractId: source.id, roomId: t.roomId, tenantId: t.tenantId, amount: 3000, balance: 3000 } });
+    const co = await http(app).post('/checkout').set(auth(t.adminToken)).send({ contractId: target.id, roomId: t.roomId, checkoutDate: '2026-10-29', totalRefund: 3000, processedBy: 'synthetic', items: [{ itemType: 'DEPOSIT_REFUND', description: '押金', amount: 3000 }] }); expect(co.status).toBe(201);
+    const result = await raceContract(target.id, transferFirst, () => http(app).post(`/deposits/${source.id}/transfer`).set(auth(t.adminToken)).send({ toContractId: target.id }).then(r => r), () => http(app).patch(`/checkout/${co.body.id}`).set(auth(t.adminToken)).send({ status: 'COMPLETED' }).then(r => r));
+    expect(result.map(r => r.status)).toEqual(transferFirst ? [201, 200] : [400, 201]);
+    const a = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: source.id }, include: { transactions: true } }); const b = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: target.id }, include: { transactions: true } });
+    expect([a.balance, b.balance]).toEqual(transferFirst ? [0, 0] : [0, 3000]); expect(a.transactions.map(x => [x.type, x.amount])).toEqual([['TRANSFER', -3000]]); expect(b.transactions.map(x => [x.type, x.amount])).toEqual(transferFirst ? [['TRANSFER', 3000], ['REFUND', -3000]] : [['TRANSFER', 3000]]);
+    expect((await prisma.checkoutRecord.findUniqueOrThrow({ where: { id: co.body.id } })).status).toBe(transferFirst ? 'COMPLETED' : 'DRAFT');
   }, 30000);
 
   it('同房已有活动保洁任务时不重复建单', async () => {

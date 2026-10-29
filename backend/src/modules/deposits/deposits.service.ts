@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { lockDepositContract } from './deposit-ledger.util.js';
 
 export interface DepositView {
   id: string;
@@ -83,6 +84,8 @@ export class DepositsService {
       }
 
       const [firstId, secondId] = [fromContractId, toContractId].sort();
+      await lockDepositContract(tx, firstId);
+      await lockDepositContract(tx, secondId);
       await lockLedger(tx, firstId);
       await lockLedger(tx, secondId);
 
@@ -92,12 +95,16 @@ export class DepositsService {
       });
       const targetContract = await tx.contract.findUnique({
         where: { id: toContractId },
-        select: { id: true, tenantId: true, roomId: true, depositAmount: true, renewedFromId: true },
+        select: { id: true, tenantId: true, roomId: true, depositAmount: true, renewedFromId: true, status: true },
       });
       if (!sourceContract) throw new NotFoundException('源合同不存在');
       if (!targetContract) throw new NotFoundException('目标合同不存在');
       if (targetContract.renewedFromId !== fromContractId) {
         throw new BadRequestException('只能把押金转移到由该合同续签出来的新合同');
+      }
+      const existingTarget = await tx.depositLedger.findUnique({ where: { contractId: toContractId } });
+      if (targetContract.status === 'TERMINATED' || existingTarget?.status === 'REFUNDED') {
+        throw new ConflictException('目标合同已终止或押金已结清，不能转入押金');
       }
       if (sourceContract.tenantId !== targetContract.tenantId) {
         throw new BadRequestException('不能跨租客转移押金');

@@ -16,6 +16,7 @@ import { PrepayPayBillDto } from './dto/prepay-pay-bill.dto.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment/payment-provider.js';
 import {
   applyDepositCollection,
+  assertDepositCollectionAllowed,
   reverseDepositCollection,
 } from '../deposits/deposit-ledger.util.js';
 import { computeOverdue, derivePaymentStatus } from './bill-overdue.util.js';
@@ -114,6 +115,9 @@ export class BillPaymentService {
           throw new ConflictException('该交易号已登记过，请勿重复收款');
         }
       }
+
+      // 押金状态须在调用支付提供方之前锁定并校验。
+      await assertDepositCollectionAllowed(tx, bill);
 
       if ((dto.paymentMethod as string) !== 'PREPAY') {
         await this.payments.createOrder({ billId, amount: dto.amount, paymentMethod: dto.paymentMethod, description: `账单 ${billId}` });

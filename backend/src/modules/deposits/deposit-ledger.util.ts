@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import type { Prisma, Bill } from '@prisma/client';
 
 /**
@@ -11,6 +12,22 @@ function statusFor(balance: number, amount: number): 'HELD' | 'PARTIAL' {
   return balance >= amount ? 'HELD' : 'PARTIAL';
 }
 
+/** 合同先于台账加锁；合同锁亦保护台账首次创建。 */
+export async function lockDepositContract(tx: Tx, contractId: string) {
+  await tx.$queryRaw`SELECT id FROM contracts WHERE id = ${contractId} FOR UPDATE`;
+  return tx.contract.findUnique({ where: { id: contractId }, select: { id: true, tenantId: true, roomId: true, depositAmount: true, status: true } });
+}
+
+export async function assertDepositCollectionAllowed(tx: Tx, bill: Pick<Bill, 'contractId' | 'billType'>) {
+  if (bill.billType !== 'DEPOSIT') return null;
+  const contract = await lockDepositContract(tx, bill.contractId);
+  if (!contract) throw new ConflictException('押金合同不存在，请核对');
+  await tx.$queryRaw`SELECT id FROM deposit_ledgers WHERE "contractId" = ${bill.contractId} FOR UPDATE`;
+  const ledger = await tx.depositLedger.findUnique({ where: { contractId: bill.contractId } });
+  if (contract.status === 'TERMINATED' || ledger?.status === 'REFUNDED') throw new ConflictException('合同已终止或押金已结清，不能收取押金');
+  return contract;
+}
+
 /** 押金账单收款入账。非 DEPOSIT 账单直接忽略。 */
 export async function applyDepositCollection(
   tx: Tx,
@@ -19,10 +36,7 @@ export async function applyDepositCollection(
   const { bill, amount, operatorId } = params;
   if (bill.billType !== 'DEPOSIT' || amount <= 0) return null;
 
-  const contract = await tx.contract.findUnique({
-    where: { id: bill.contractId },
-    select: { id: true, tenantId: true, roomId: true, depositAmount: true },
-  });
+  const contract = await assertDepositCollectionAllowed(tx, bill);
   if (!contract) return null;
 
   const ledger = await tx.depositLedger.upsert({
@@ -70,6 +84,7 @@ export async function reverseDepositCollection(
   const { bill, amount, operatorId } = params;
   if (bill.billType !== 'DEPOSIT' || amount <= 0) return null;
 
+  await lockDepositContract(tx, bill.contractId);
   await tx.$queryRaw`SELECT id FROM deposit_ledgers WHERE "contractId" = ${bill.contractId} FOR UPDATE`;
   const ledger = await tx.depositLedger.findUnique({ where: { contractId: bill.contractId } });
   if (!ledger) return null;
