@@ -95,4 +95,39 @@ describe('MQTT QoS1 persistent-session reliability with Aedes', () => {
       await new Promise<void>(resolve => server.close(() => resolve()));
     }
   }, 30000);
+  it('stops after five real delayed retries when database transactions keep failing', async () => {
+    const building = await prisma.building.create({ data: { name: 'retry', floors: 1 } });
+    const meter = await prisma.meter.create({ data: { buildingId: building.id, meterNumber: 'W-RETRY', meterType: 'WATER', unitPrice: 100, priceEffectiveDate: new Date('2026-01-01') } });
+    const broker = new Aedes();
+    const server = createServer(broker.handle);
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const url = `mqtt://127.0.0.1:${(server.address() as { port: number }).port}`;
+    let connected = false; let subscribed = false; let failures = 0; let acknowledgements = 0;
+    const reports: string[] = [];
+    broker.on('client', c => { if (c.id.startsWith('t306-')) connected = true; });
+    broker.on('clientDisconnect', c => { if (c.id.startsWith('t306-')) connected = false; });
+    broker.on('subscribe', (_s, c) => { if (c.id.startsWith('t306-')) subscribed = true; });
+    broker.on('ack', (_p, c) => { if (c.id.startsWith('t306-')) acknowledgements++; });
+    const writer = { createReading: async () => {
+      failures++;
+      await prisma.$transaction(async tx => {
+        await tx.meterReading.create({ data: { meterId: meter.id, currentReading: 99, previousReading: 99, usage: 0, source: 'SIMULATED', readingTime: new Date(), dedupKey: 'rollback-only' } });
+        throw new Error('synthetic persistent database failure');
+      });
+    } };
+    const consumer = new MqttSimulatorConsumer(url, { meterId: meter.id, buildingId: building.id, meterType: 'WATER', meterNumber: 'W-RETRY' }, prisma.meter, writer, m => reports.push(m));
+    const publisher = connect(url, { reconnectPeriod: 0 });
+    try {
+      consumer.start(); await until(() => subscribed && publisher.connected);
+      const started = Date.now();
+      await new Promise<void>((resolve, reject) => publisher.publish('tenant-system/meters/WATER/W-RETRY/telemetry', JSON.stringify({ messageId: 'failure', meterNumber: 'W-RETRY', meterType: 'WATER', timestamp: '2026-01-02T00:00:00Z', reading: 20 }), { qos: 1 }, e => e ? reject(e) : resolve()));
+      await until(() => reports.some(m => m.includes('retry limit reached')), 850);
+      expect(Date.now() - started).toBeGreaterThanOrEqual(30000);
+      expect(failures).toBe(6); expect(acknowledgements).toBe(0); expect(connected).toBe(false);
+      expect(await prisma.meterReading.count({ where: { meterId: meter.id } })).toBe(0);
+      consumer.start(); await until(() => connected); await until(() => failures >= 7);
+      await consumer.stop(); expect(await prisma.meterReading.count({ where: { meterId: meter.id } })).toBe(0);
+    } finally { await consumer.stop(); await new Promise<void>(resolve => publisher.end(true, () => resolve())); await new Promise<void>(resolve => broker.close(() => resolve())); await new Promise<void>(resolve => server.close(() => resolve())); }
+  }, 60000);
+
 });

@@ -8,6 +8,7 @@ import { BusinessClock } from '../../src/common/business-clock/business-clock.se
 import { MeterPriceService } from '../../src/modules/meters/meter-price.service.js';
 import { MeterBillingService } from '../../src/modules/meters/meter-billing.service.js';
 import { MeterReadingService } from '../../src/modules/meters/meter-reading.service.js';
+import { MeterBatchReadingService } from '../../src/modules/meters/meter-batch-reading.service.js';
 import { MeterReconciliationService } from '../../src/modules/meters/meter-reconciliation.service.js';
 import { MqttSimulatorConsumer } from '../../src/modules/meters/adapters/mqtt-simulator-consumer.js';
 import type { PrismaService } from '../../src/modules/prisma/prisma.service.js';
@@ -53,7 +54,15 @@ describe('loopback MQTT simulation and isolated PostgreSQL', () => {
     const clock = new BusinessClock(new ConfigService());
     const price = new MeterPriceService(db, clock);
     const writer = new MeterReadingService(db, new MeterBillingService(db, clock, price), price);
+    const batch = new MeterBatchReadingService(db, new MeterBillingService(db, clock, price), price);
+    const rejected = await batch.createBatchReadings({ readings: [{ meterId: meter.id, currentReading: 999, source: 'SIMULATED' as never }] }, 'synthetic');
+    expect(rejected.failureCount).toBe(1);
     await writer.createReading(meter.id, { currentReading: 10, readingTime: '2026-01-01T00:00:00Z', source: 'MANUAL', autoSettle: false }, 'synthetic');
+    const beforeMeter = await prisma.meter.findUniqueOrThrow({ where: { id: meter.id } });
+    const beforeReal = await prisma.meterReading.findMany({ where: { meterId: meter.id, source: 'MANUAL' } });
+    const beforeBills = await prisma.bill.count();
+    const beforeTransactions = await prisma.prepayTransaction.count();
+    await expect(writer.createReading(meter.id, { currentReading: 999, source: 'SIMULATED', autoSettle: true }, 'synthetic')).rejects.toThrow('模拟读数不能自动结算');
     const b = await broker();
     const consumer = new MqttSimulatorConsumer(b.url, { meterId: meter.id, buildingId: building.id, meterNumber: meter.meterNumber, meterType: 'WATER' }, prisma.meter, writer);
     let publisher = connect(b.url, { reconnectPeriod: 0 });
@@ -74,6 +83,10 @@ describe('loopback MQTT simulation and isolated PostgreSQL', () => {
       publisher.publish(topic, JSON.stringify({ ...body, messageId: 'bad-value', reading: -1 }), { qos: 1 });
       await new Promise(r => setTimeout(r, 300));
       expect(await prisma.meterReading.count({ where: { meterId: meter.id, source: 'SIMULATED' } })).toBe(1);
+      expect(await prisma.meter.findUniqueOrThrow({ where: { id: meter.id } })).toEqual(beforeMeter);
+      expect(await prisma.meterReading.findMany({ where: { meterId: meter.id, source: 'MANUAL' } })).toEqual(beforeReal);
+      expect(await prisma.bill.count()).toBe(beforeBills);
+      expect(await prisma.prepayTransaction.count()).toBe(beforeTransactions);
       const real = await writer.createReading(meter.id, { currentReading: 12, readingTime: '2026-01-03T00:00:00Z', source: 'MANUAL', autoSettle: false, messageId: 'same' }, 'synthetic');
       expect(Number(real.reading.previousReading)).toBe(10);
       expect(Number(real.reading.usage)).toBe(2);
