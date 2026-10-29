@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
+import { BusinessClock } from '../../src/common/business-clock/business-clock.service.js';
 import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth, login } from './harness.js';
 let app: INestApplication;
 beforeAll(async () => { app = await createApp(); });
@@ -58,6 +59,22 @@ describe('T308 当前账单清单与导出', () => {
     expect(voidCsv.text.split('\r\n').find((line: string) => line.includes('VOID-CURRENT'))).toContain(',23.00,0.00,23.00,');
     expect((await http(app).get('/bills').query({status:'BAD'}).set(auth(tenant.adminToken))).status).toBe(400);
     expect((await http(app).get('/bills/export').query({status:'BAD'}).set(auth(tenant.adminToken))).status).toBe(400);
+  });
+
+  it('清单和详情依据业务午夜计算当前逾期，取消与已付不显示逾期', async () => {
+    const base = await seedBase(); const tenant = await setupTenancy(app, base);
+    const bill = await prisma.bill.create({ data: { contractId: tenant.contractId, billNumber: 'BUSINESS-DAY', billType: 'RENT', period: '2026-02', amount: 10000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const clock = app.get(BusinessClock);
+    const now = vi.spyOn(clock, 'now').mockReturnValue(new Date('2026-02-10T15:59:59Z'));
+    const list = () => http(app).get('/bills').query({contractId:tenant.contractId}).set(auth(tenant.adminToken));
+    const find = (response: any) => response.body.data.find((row: { id: string }) => row.id === bill.id);
+    expect(find(await list()).currentOverdueDays).toBe(0);
+    now.mockReturnValue(new Date('2026-02-10T16:00:00Z'));
+    expect(find(await list()).currentOverdueDays).toBe(1);
+    expect((await http(app).get(`/bills/${bill.id}`).set(auth(tenant.adminToken))).body.currentOverdueDays).toBe(1);
+    await prisma.bill.update({ where: { id: bill.id }, data: { status: 'CANCELLED', isOverdue: true } });
+    expect(find(await list()).currentOverdueDays).toBe(0);
+    now.mockRestore();
   });
 
 });

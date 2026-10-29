@@ -8290,12 +8290,30 @@
         ],
         "responses": {
           "200": {
-            "description": "成功",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "additionalProperties": true,
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "required": [
+                          "currentOverdueDays"
+                        ],
+                        "properties": {
+                          "currentOverdueDays": {
+                            "type": "integer",
+                            "description": "当前业务日逾期天数，非历史截止日"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -8521,12 +8539,30 @@
         ],
         "responses": {
           "200": {
-            "description": "成功",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "additionalProperties": true,
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "required": [
+                          "currentOverdueDays"
+                        ],
+                        "properties": {
+                          "currentOverdueDays": {
+                            "type": "integer",
+                            "description": "当前业务日逾期天数，非历史截止日"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -8848,7 +8884,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "currentOverdueDays"
+                  ],
+                  "properties": {
+                    "currentOverdueDays": {
+                      "type": "integer",
+                      "description": "当前业务日逾期天数，非历史截止日"
+                    }
+                  }
                 }
               }
             }

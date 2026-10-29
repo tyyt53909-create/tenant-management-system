@@ -1,3 +1,5 @@
+import { ApiOkResponse } from '@nestjs/swagger';
+import { computeOverdue } from './bill-overdue.util.js';
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res, Headers } from '@nestjs/common';
 import type { Response } from 'express';
 import { BillsService } from './bills.service.js';
@@ -32,6 +34,11 @@ export class BillsController {
     private readonly billPaymentService: BillPaymentService,
   ) {}
 
+  private currentOverdue<T extends { dueDate: Date; status: string; amount: number; paidAmount: number }>(bill: T, today: Date) {
+    const open = (['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status)) && bill.amount > bill.paidAmount;
+    return { ...bill, currentOverdueDays: open ? computeOverdue(bill.dueDate, today).overdueDays : 0 };
+  }
+
   @Post()
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -52,26 +59,33 @@ export class BillsController {
   }
 
   @Get()
+  @ApiOkResponse({ schema: { type: 'object', additionalProperties: true, properties: { data: { type: 'array', items: { type: 'object', additionalProperties: true, required: ['currentOverdueDays'], properties: { currentOverdueDays: { type: 'integer', description: '当前业务日逾期天数，非历史截止日' } } } } } } })
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  findAll(@Query() query: QueryBillsDto) {
-    return this.billsService.findAll(query);
+  async findAll(@Query() query: QueryBillsDto) {
+    const today = this.clock.todayUtc();
+    const result = await this.billsService.findAll(query);
+    return { ...result, data: result.data.map(bill => this.currentOverdue(bill, today)) };
   }
 
   // 租客查看自己的账单
   @Get('my')
+  @ApiOkResponse({ schema: { type: 'object', additionalProperties: true, properties: { data: { type: 'array', items: { type: 'object', additionalProperties: true, required: ['currentOverdueDays'], properties: { currentOverdueDays: { type: 'integer', description: '当前业务日逾期天数，非历史截止日' } } } } } } })
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.bill.read')
-  findMy(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryBillsDto) {
+  async findMy(@CurrentUser() userParam: CurrentUserParam, @Query() query: QueryBillsDto) {
+    const today = this.clock.todayUtc();
     const user = resolveAuthUser(userParam);
     // 租客只能查看自己的账单
     if (user.role === 'TENANT') {
       const tenantId = user.tenantId ?? '';
-      return this.billsService.findByTenant(tenantId, query);
+      const result = await this.billsService.findByTenant(tenantId, query);
+      return { ...result, data: result.data.map(bill => this.currentOverdue(bill, today)) };
     }
     // 管理员可以看所有
-    return this.billsService.findAll(query);
+    const result = await this.billsService.findAll(query);
+    return { ...result, data: result.data.map(bill => this.currentOverdue(bill, today)) };
   }
 
   // 租客查看名下所有电子收款收据列表（T297 / LSE-05）
@@ -159,17 +173,18 @@ export class BillsController {
   }
 
   @Get(':id')
+  @ApiOkResponse({ schema: { type: 'object', additionalProperties: true, required: ['currentOverdueDays'], properties: { currentOverdueDays: { type: 'integer', description: '当前业务日逾期天数，非历史截止日' } } } })
   @UseGuards(RolesGuard, CapabilityGuard)
   @Roles('TENANT', 'ADMIN')
   @RequireCapability('tenant.bill.read')
-  findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
+  async findOne(@CurrentUser() userParam: CurrentUserParam, @Param('id') id: string) {
     const user = resolveAuthUser(userParam);
     // 租客需要验证是否是自己的账单
     if (user.role === 'TENANT') {
       const tenantId = user.tenantId ?? '';
-      return this.billsService.findOneForTenant(id, tenantId);
+      return this.currentOverdue(await this.billsService.findOneForTenant(id, tenantId), this.clock.todayUtc());
     }
-    return this.billsService.findOne(id);
+    return this.currentOverdue(await this.billsService.findOne(id), this.clock.todayUtc());
   }
 
   @Patch(':id')

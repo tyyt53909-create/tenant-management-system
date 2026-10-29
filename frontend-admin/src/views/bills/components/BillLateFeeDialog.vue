@@ -182,15 +182,8 @@ const statusTypeMap: Record<string, any> = {
 
 const formatDateTime = (value: string) => (value ? value.replace('T', ' ').slice(0, 19) : '-');
 
-const overdueDaysOf = (bill: Bill) => {
-  const due = new Date(bill.dueDate);
-  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.max(0, Math.floor((today - dueDay) / 86400000));
-};
-
-const isOverdueByDate = (bill: Bill) => overdueDaysOf(bill) > 0;
+const overdueDaysOf = (bill: Bill) => bill.currentOverdueDays ?? null;
+const isOverdueByDate = (bill: Bill) => (overdueDaysOf(bill) ?? 0) > 0;
 
 const unpaidPrincipalCents = computed(() => {
   const bill = currentBill.value;
@@ -203,8 +196,8 @@ const lateFeeDueDateText = computed(() =>
 );
 
 const lateFeeOverdueDaysText = computed(() => {
-  const days = currentLateFee.value?.overdueDays ?? (currentBill.value ? overdueDaysOf(currentBill.value) : 0);
-  return days > 0 ? days + ' 天' : '未逾期';
+  const days = currentLateFee.value?.overdueDays ?? (currentBill.value ? overdueDaysOf(currentBill.value) : null);
+  return days === null ? '待确认' : days > 0 ? days + ' 天' : '未逾期';
 });
 
 const currentLateFee = computed<LateFee | null>(() => lateFeeRecords.value[0] ?? null);
@@ -221,6 +214,7 @@ const lateFeeDisabledReason = (bill: Bill | null): string => {
   if (!bill) return '';
   if (bill.status === 'PAID') return '账单已缴清，不可新增滞纳金';
   if (bill.status === 'CANCELLED') return '账单已取消，不可新增滞纳金';
+  if (overdueDaysOf(bill) === null) return '逾期状态待确认';
   if (!isOverdueByDate(bill)) return '账单尚未逾期，无需计算滞纳金';
   if (bill.amount - bill.paidAmount <= 0) return '账单已缴清，无需计算滞纳金';
   return '';

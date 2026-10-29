@@ -72,6 +72,7 @@
               <strong>{{ row.period }}</strong>
               <small :class="{ 'is-overdue': showOverdue(row as Bill) }">
                 <template v-if="showOverdue(row as Bill)">{{ formatMonthDay(row.dueDate) }} · 逾期 {{ overdueDaysOf(row as Bill) }} 天</template>
+                <template v-else-if="overdueDaysOf(row as Bill) === null && ['PENDING', 'PARTIAL'].includes(row.status)">到期 {{ formatMonthDay(row.dueDate) }} · 逾期待确认</template>
                 <template v-else>到期 {{ formatMonthDay(row.dueDate) }}</template>
               </small>
             </div>
@@ -92,7 +93,7 @@
         <el-table-column label="状态 / 滞纳金" width="120">
           <template #default="{ row }">
             <div class="bill-status">
-              <el-tag v-if="row.isOverdue" type="danger" size="small">逾期 {{ row.overdueDays ?? 0 }} 天</el-tag>
+              <el-tag v-if="showOverdue(row as Bill)" type="danger" size="small">逾期 {{ row.currentOverdueDays }} 天</el-tag>
               <el-tag :type="statusTypeMap[row.status]" size="small">{{ statusMap[row.status] }}</el-tag>
               <button
                 v-if="showLateFee(row as Bill)"
@@ -221,7 +222,7 @@ const lateFeeOf = (bill: Bill): LateFee | null => lateFeeMap.value[bill.id]?.[0]
 const canManageLateFee = (bill: Bill | null) => lateFeeDisabledReason(bill) === '';
 const canOpenLateFee = (bill: Bill) => !!lateFeeOf(bill) || canManageLateFee(bill);
 
-const isOverdueByDate = (bill: Bill) => overdueDaysOf(bill) > 0;
+const isOverdueByDate = (bill: Bill) => (overdueDaysOf(bill) ?? 0) > 0;
 const showLateFee = (bill: Bill) =>
   !!lateFeeOf(bill) || (isOverdueByDate(bill) && canManageLateFee(bill));
 

@@ -35,25 +35,13 @@ export function unpaidOf(bill: Pick<Bill, 'amount' | 'paidAmount'> & Partial<Pic
   return bill.status === 'CANCELLED' ? 0 : Math.max(0, bill.amount - bill.paidAmount);
 }
 
-/**
- * 逾期天数。以 UTC 日期为基准计算，避免本地时区把「到期当天」算成逾期一天。
- */
-export function overdueDaysOf(bill: Pick<Bill, 'dueDate'>, now: Date = new Date()): number {
-  const due = new Date(bill.dueDate);
-  if (Number.isNaN(due.getTime())) return 0;
-  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.max(0, Math.floor((today - dueDay) / 86_400_000));
+/** 当前逾期天数由服务端业务时钟提供；缺失时不猜测。 */
+export function overdueDaysOf(bill: Partial<Pick<Bill, 'currentOverdueDays'>>, _now?: Date): number | null {
+  return typeof bill.currentOverdueDays === 'number' ? bill.currentOverdueDays : null;
 }
 
-/** 后端 `isOverdue` 优先；缺失时按「未结清 + 已过到期日」推断。 */
-export function showOverdue(
-  bill: Pick<Bill, 'isOverdue' | 'status' | 'dueDate'>,
-  now: Date = new Date(),
-): boolean {
-  if (bill.isOverdue === true) return true;
-  const open = ['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status);
-  return open && overdueDaysOf(bill, now) > 0;
+export function showOverdue(bill: Pick<Bill, 'status'> & Partial<Pick<Bill, 'currentOverdueDays'>>, _now?: Date): boolean {
+  return ['PENDING', 'PARTIAL', 'OVERDUE'].includes(bill.status) && (overdueDaysOf(bill) ?? 0) > 0;
 }
 
 /** 收款摘要：已结清 / 未付 / 部分缴纳。 */
@@ -81,13 +69,15 @@ export function canReceive(bill: Pick<Bill, 'status'> | null): boolean {
 
 /** 解锁滞纳金操作的原因；空串表示可操作。 */
 export function lateFeeDisabledReason(
-  bill: Pick<Bill, 'status' | 'amount' | 'paidAmount' | 'dueDate'> | null,
+  bill: Pick<Bill, 'status' | 'amount' | 'paidAmount' | 'dueDate'> & Partial<Pick<Bill, 'currentOverdueDays'>> | null,
   now: Date = new Date(),
 ): string {
   if (!bill) return '';
   if (bill.status === 'PAID') return '账单已缴清，不可新增滞纳金';
   if (bill.status === 'CANCELLED') return '账单已取消，不可新增滞纳金';
-  if (overdueDaysOf(bill, now) <= 0) return '账单尚未逾期，无需计算滞纳金';
+  const overdue = overdueDaysOf(bill, now);
+  if (overdue === null) return '逾期状态待确认';
+  if (overdue <= 0) return '账单尚未逾期，无需计算滞纳金';
   if (unpaidOf(bill) <= 0) return '账单已缴清，无需计算滞纳金';
   return '';
 }

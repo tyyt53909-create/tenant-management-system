@@ -22,6 +22,7 @@ const baseBill = {
   status: 'PENDING',
   dueDate: '2026-10-01',
   isOverdue: false,
+  currentOverdueDays: 9,
 } as unknown as Bill;
 
 describe('账单行展示规则（T286）', () => {
@@ -32,19 +33,13 @@ describe('账单行展示规则（T286）', () => {
     expect(unpaidOf({ amount: 100000, paidAmount: 120000 } as Bill)).toBe(0);
   });
 
-  it('逾期天数按 UTC 日期计算，到期当天为 0', () => {
-    const now = new Date('2026-10-05T23:30:00+08:00'); // UTC 15:30
-    expect(overdueDaysOf({ dueDate: '2026-10-01' } as Bill, now)).toBe(4);
-    expect(overdueDaysOf({ dueDate: '2026-10-05' } as Bill, now)).toBe(0);
-    expect(overdueDaysOf({ dueDate: 'not-a-date' } as Bill, now)).toBe(0);
-  });
-
-  it('后端 isOverdue 优先；否则按未结清 + 已过期推断', () => {
-    const now = new Date('2026-10-05T00:00:00Z');
-    expect(showOverdue({ ...baseBill, isOverdue: true }, now)).toBe(true);
-    expect(showOverdue({ ...baseBill, dueDate: '2026-10-01' }, now)).toBe(true);
-    expect(showOverdue({ ...baseBill, status: 'PAID', dueDate: '2026-10-01' }, now)).toBe(false);
-    expect(showOverdue({ ...baseBill, dueDate: '2026-10-20' }, now)).toBe(false);
+  it('逾期天数仅使用服务端当前值，缺失保持未知', () => {
+    expect(overdueDaysOf({ currentOverdueDays: 4 })).toBe(4);
+    expect(overdueDaysOf({})).toBeNull();
+    expect(showOverdue({ status: 'PENDING', currentOverdueDays: 4 })).toBe(true);
+    expect(showOverdue({ status: 'PAID', currentOverdueDays: 4 })).toBe(false);
+    expect(showOverdue({ status: 'CANCELLED', currentOverdueDays: 4 })).toBe(false);
+    expect(showOverdue({ status: 'PENDING' })).toBe(false);
   });
 
   it('收款摘要区分已结清/未付/部分缴纳', () => {
@@ -64,7 +59,7 @@ describe('账单行展示规则（T286）', () => {
     const now = new Date('2026-10-10T00:00:00Z');
     expect(lateFeeDisabledReason({ ...baseBill, status: 'PAID' }, now)).toContain('已缴清');
     expect(lateFeeDisabledReason({ ...baseBill, status: 'CANCELLED' }, now)).toContain('已取消');
-    expect(lateFeeDisabledReason({ ...baseBill, dueDate: '2026-10-20' }, now)).toContain('尚未逾期');
+    expect(lateFeeDisabledReason({ ...baseBill, dueDate: '2026-10-20', currentOverdueDays: 0 }, now)).toContain('尚未逾期');
     expect(lateFeeDisabledReason({ ...baseBill, paidAmount: 100000 }, now)).toContain('无需计算');
     expect(lateFeeDisabledReason(baseBill, now)).toBe('');
   });

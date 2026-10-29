@@ -10246,13 +10246,19 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 成功 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        data?: ({
+                            /** @description 当前业务日逾期天数，非历史截止日 */
+                            currentOverdueDays: number;
+                        } & {
+                            [key: string]: unknown;
+                        })[];
+                    } & {
                         [key: string]: unknown;
                     };
                 };
@@ -10359,13 +10365,19 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 成功 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        data?: ({
+                            /** @description 当前业务日逾期天数，非历史截止日 */
+                            currentOverdueDays: number;
+                        } & {
+                            [key: string]: unknown;
+                        })[];
+                    } & {
                         [key: string]: unknown;
                     };
                 };
@@ -10599,7 +10611,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        /** @description 当前业务日逾期天数，非历史截止日 */
+                        currentOverdueDays: number;
+                    } & {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description 错误 */
