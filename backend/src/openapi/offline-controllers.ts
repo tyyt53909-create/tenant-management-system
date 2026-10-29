@@ -122,4 +122,3 @@ export function assertSame(path: string, next: string, label: string) {
     throw new Error(`${label} 与代码不一致。请重新运行 npm run openapi:generate 后提交。`);
   }
 }
-
