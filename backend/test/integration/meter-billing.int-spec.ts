@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth } from './harness.js';
+import { MeterReadingService } from '../../src/modules/meters/meter-reading.service.js';
+import { ingestMqttSimulation } from '../../src/modules/meters/adapters/mqtt-telemetry.js';
 
 /** FIN-08 / T274：抄表去重、生效单价与结算幂等（真实 DB） */
 let app: INestApplication;
@@ -211,6 +213,47 @@ describe('抄表与计价（FIN-08）', () => {
       .set(auth(tenancy.adminToken)).send({});
     expect(result.status).toBe(201);
     expect(result.body).toMatchObject({ settled: true, usage: 40, amount: 4000 });
+  });
+
+  it('nonempty financial baseline remains unchanged by simulated telemetry and historical rejection', async () => {
+    const base = await seedBase();
+    const tenancy = await setupTenancy(app, base);
+    const accountId = await preparePrepay(tenancy.adminToken, tenancy.tenantId, tenancy.roomId);
+    const meterId = await createMeter(tenancy.adminToken, base.buildingId, tenancy.roomId, 100);
+    const meter = await prisma.meter.findUniqueOrThrow({ where: { id: meterId } });
+    await prisma.bill.create({ data: { contractId: tenancy.contractId, billNumber: 'SYNTHETIC-T306', billType: 'RENT', period: '2026-02', amount: 12345, paidAmount: 1000, snapshot: {}, dueDate: new Date('2026-02-01'), status: 'PARTIAL' } });
+    const settled = await http(app).post(`/meters/${meterId}/readings`).set(auth(tenancy.adminToken)).send(readingBody(30, '2026-02-10T00:00:00Z'));
+    expect(settled.status).toBe(201); expect(settled.body.deduction.amount).toBe(3000);
+    const pending = await http(app).post(`/meters/${meterId}/readings`).set(auth(tenancy.adminToken)).send(readingBody(40, '2026-02-20T00:00:00Z', { source: 'DEVICE', messageId: 'same-id' }));
+    expect(pending.status).toBe(201); expect(pending.body.reading.settledAt).toBeNull();
+    const snapshot = async () => ({
+      meter: await prisma.meter.findUniqueOrThrow({ where: { id: meterId } }),
+      readings: await prisma.meterReading.findMany({ where: { meterId, source: { not: 'SIMULATED' } }, orderBy: { id: 'asc' } }),
+      bills: await prisma.bill.findMany({ orderBy: { id: 'asc' } }),
+      account: await prisma.prepayAccount.findUniqueOrThrow({ where: { id: accountId } }),
+      transactions: await prisma.prepayTransaction.findMany({ orderBy: { id: 'asc' } }),
+    });
+    const before = await snapshot();
+    expect(before.bills.some(b => b.amount === 12345 && b.paidAmount === 1000)).toBe(true);
+    expect(before.account.balanceCache).toBe(97000);
+    expect(before.transactions.length).toBeGreaterThanOrEqual(2);
+    expect(before.readings.some(r => r.settledAmount === 3000)).toBe(true);
+    expect(before.readings.some(r => r.dedupKey === 'msg:same-id' && r.settledAt === null)).toBe(true);
+    const writer = app.get(MeterReadingService);
+    const binding = { meterId, buildingId: base.buildingId, meterNumber: meter.meterNumber, meterType: 'ELECTRICITY' as const };
+    const topic = `tenant-system/meters/ELECTRICITY/${meter.meterNumber}/telemetry`;
+    const send = (messageId: string, reading: number, timestamp: string) => ingestMqttSimulation(topic, Buffer.from(JSON.stringify({ messageId, meterNumber: meter.meterNumber, meterType: 'ELECTRICITY', timestamp, reading })), binding, prisma.meter, writer);
+    await send('same-id', 900, '2026-02-15T00:00:00Z');
+    await send('sim-next', 910, '2026-02-25T00:00:00Z');
+    await expect(send('sim-old', 905, '2026-02-18T00:00:00Z')).rejects.toThrow('模拟遥测时间必须晚于已有读数');
+    expect(await snapshot()).toEqual(before);
+    const historical = await http(app).post(`/meters/${meterId}/readings`).set(auth(tenancy.adminToken)).send(readingBody(35, '2026-02-15T00:00:00Z', { source: 'DEVICE', messageId: 'historical' }));
+    expect(historical.status).toBe(201); expect(historical.body.deduction.applied).toBe(false);
+    const afterHistory = await snapshot();
+    expect(afterHistory.meter).toEqual(before.meter); expect(afterHistory.bills).toEqual(before.bills); expect(afterHistory.account).toEqual(before.account); expect(afterHistory.transactions).toEqual(before.transactions);
+    for (const reading of before.readings) expect(afterHistory.readings).toContainEqual(reading);
+    const final = await http(app).post(`/meters/${meterId}/readings`).set(auth(tenancy.adminToken)).send(readingBody(50, '2026-03-01T00:00:00Z'));
+    expect(final.status).toBe(201); expect(Number(final.body.reading.previousReading)).toBe(40); expect(final.body.deduction.amount).toBe(2000);
   });
 
 });
