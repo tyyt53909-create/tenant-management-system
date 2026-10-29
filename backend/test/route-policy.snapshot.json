@@ -2072,6 +2072,14 @@
   },
   {
     "method": "GET",
+    "path": "/api/statistics/rent-report",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/tags",
     "public": false,
     "roles": [

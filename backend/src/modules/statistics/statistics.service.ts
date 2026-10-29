@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { RentReportDto } from './dto/rent-report.dto.js';
 import { QueryStatisticsDto } from './dto/query-statistics.dto.js';
 import { collectionRate, occupancyRate, sumAmounts } from '../../common/metrics/finance-metrics.js';
 
@@ -27,6 +28,36 @@ export class StatisticsService {
     private readonly prisma: PrismaService,
     private readonly clock: BusinessClock,
   ) {}
+
+  /** 管理口径：预付抵扣按收款实际业务月；退款及历史分配待核对。 */
+  async rentReport(query: RentReportDto) {
+    const [year, month] = query.month.split('-').map(Number);
+    // 先取足以覆盖任何时区的候选区间，再由 BusinessClock 确认业务月。
+    const start = new Date(Date.UTC(year, month - 1, 1) - 2 * 86400000);
+    const end = new Date(Date.UTC(year, month, 1) + 2 * 86400000);
+    const [payments, adjustments, rooms] = await Promise.all([
+      this.prisma.paymentRecord.findMany({
+        where: { paidAt: { gte: start, lt: end }, status: 'CONFIRMED', bill: { billType: 'RENT', contract: { buildingId: query.buildingId } } },
+        select: { paidAt: true, billPortion: true },
+      }),
+      // 在口径确定前，只要该楼栋存在租金退款/冲正，即不宣称完整。
+      this.prisma.paymentRecord.count({
+        where: { bill: { billType: 'RENT', contract: { buildingId: query.buildingId } }, OR: [{ status: { in: ['VOIDED', 'REVERSAL'] } }, { refundRecords: { some: { status: { in: ['PROCESSING', 'SUCCESS'] } } } }] },
+      }),
+      this.prisma.room.findMany({ where: { buildingId: query.buildingId }, select: { id: true } }),
+    ]);
+    const balance = await this.prisma.prepayAccount.aggregate({ where: { roomId: { in: rooms.map(room => room.id) } }, _sum: { balanceCache: true } });
+    return {
+      month: query.month, buildingId: query.buildingId,
+      rentIncome: payments.filter(p => this.clock.monthKey(p.paidAt) === query.month).reduce((sum, p) => sum + p.billPortion, 0),
+      currentPrepayBalance: balance._sum.balanceCache ?? 0,
+      status: 'incomplete',
+      netOperatingIncome: null,
+      basis: '管理口径：按租金本金实际收款或预付抵扣的业务月归集',
+      limitations: ['退款和冲正归期尚待确定', '历史收款本金分配可能包含滞纳金，须核对', '支出尚未接入；不计算净收益'],
+      hasRentAdjustments: adjustments > 0,
+    };
+  }
 
   /** 依 period（+自定义区间）解析出 [start, end) */
   resolveRange(query: QueryStatisticsDto): PeriodRange {

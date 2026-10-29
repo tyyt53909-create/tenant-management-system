@@ -1,5 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { StatisticsService } from './statistics.service.js';
+import { RentReportDto } from './dto/rent-report.dto.js';
 import { QueryStatisticsDto } from './dto/query-statistics.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -11,6 +12,11 @@ import { Roles } from '../../common/decorators/roles.decorator.js';
 @Roles('ADMIN')
 export class StatisticsController {
   constructor(private readonly statisticsService: StatisticsService) {}
+
+  @Get('rent-report')
+  rentReport(@Query() query: RentReportDto) {
+    return this.statisticsService.rentReport(query);
+  }
 
   /**
    * 统计总览
