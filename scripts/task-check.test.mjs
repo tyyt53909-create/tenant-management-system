@@ -248,3 +248,20 @@ test('enforcement: legacy 即使任務號 >= 門檻也只警告', () => {
   assert.equal(result.errors.length, 0);
   assert.equal(result.warnings.some((item) => item.code === 'missing-stage'), true);
 });
+
+test('单一记录保留合入、验收及 blocker 校验', () => {
+  const meta = { task_id: 'T325', stage: 'M4', plan_ref: 'WRK-05', execution_status: 'completed', record_format: 'single', acceptance_status: 'pass', branch: 'feature/T325' };
+  const text = '# 任务\n## 验收证据\n- pass | npm test | 53 tests passed | artifacts/test.log\n## 未完成\n无\n';
+  const check = (changes = {}, opts = {}) => analyzeTasks([task(325, { ...meta, ...changes }, { text: opts.text ?? text })], { isAncestor: always(opts.merged ?? true), pathExists: always(true) });
+  assert.equal(check().ok, true);
+  assert.equal(check({}, { merged: false }).errors.some(x => x.code === 'missing-merge-evidence'), true);
+  assert.equal(check({}, { text: '# 无证据' }).errors.some(x => x.code === 'missing-acceptance-evidence'), true);
+  assert.equal(check({}, { text: '## 验收证据\nNOT_RUN\n' }).errors.some(x => x.code === 'missing-acceptance-evidence'), true);
+  assert.equal(check({}, { text: '## 验收证据\n完成了\n' }).ok, false);
+  assert.equal(check({}, { text: '## 验收证据\n- pass | npm test | pass\n' }).ok, false);
+  assert.equal(check({}, { text: '## 验收证据\n- fail | npm test | 1 failed | abc1234\n' }).ok, false);
+  assert.equal(check({}, { text: '## 验收证据\n- not-run | npm test | pending | abc1234\n' }).ok, false);
+  assert.equal(check({}, { text: text + '## 发布门禁\n人工 UAT NOT_RUN\n' }).ok, true);
+  assert.equal(check({ acceptance_status: 'not-run' }).errors.some(x => x.code === 'missing-acceptance-evidence'), true);
+  assert.equal(check({ blocked_by: 'needs-human' }).errors.some(x => x.code === 'completed-with-blockers'), true);
+});

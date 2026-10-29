@@ -95,7 +95,24 @@ export function parseTaskFile(fileName, text) {
     blockedBy: parseBlockedBy(meta),
     acceptanceEvidence: meta.acceptance_evidence || '',
     meta,
+    text,
   };
+}
+
+/** 單一紀錄需明確列出驗收結果及可追溯證據。 */
+export function hasSingleRecordEvidence(task) {
+  const text = String(task.text || '');
+  const section = text.match(/^## 验收证据\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1]?.trim() || '';
+  // 每一行是本任务的必要验收项：结果 | 执行命令 | 结果摘要 | 版本或证据引用。
+  const rows = section.split('\n').map(line => line.trim()).filter(Boolean);
+  return task.meta?.acceptance_status === 'pass' && rows.length > 0 && rows.every(line => {
+    const match = line.match(/^- (pass|fail|not-run) \| ([^|]+) \| ([^|]+) \| ([^|]+)$/i);
+    if (!match || match[1].toLowerCase() !== 'pass') return false;
+    const fields = match.slice(2).map(value => value.trim());
+    return fields.every(value => value.length >= 3) &&
+      !fields.some(value => /^(?:not[-_ ]run|todo|未运行|未運行|未验收|未驗收|无|無|none|n\/a)$/i.test(value)) &&
+      /(?:[a-f0-9]{7,40}|https?:\/\/\S+|[\w./-]+\.(?:log|json|xml|txt))/i.test(fields[2]);
+  });
 }
 
 /** 把歷史任務與新任務的狀態寫法收斂成 completed/active/draft/blocked/unknown。 */
@@ -181,6 +198,12 @@ export function classifyTask(task, options = {}) {
       reason = '歷史 completed，缺可驗證的 merge 證據';
       if (!handoffExists) reason += '；且缺 handoff';
       else if (handoffRegistered === false) reason += '；handoff 未登記 INDEX';
+    } else if (meta.record_format === 'single' && (blockedBy.length || !hasSingleRecordEvidence(task))) {
+      classification = 'unverified';
+      reason = '单一记录验收证据缺失或仍有阻塞';
+    } else if (meta.record_format === 'single' && merged === true) {
+      classification = 'verified';
+      reason = 'completed，合入与单一记录证据齐全';
     } else if (!handoffExists) {
       classification = 'missing-handoff';
       reason = 'completed，但 handoff 檔案不存在';

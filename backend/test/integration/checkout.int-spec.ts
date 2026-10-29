@@ -64,16 +64,19 @@ describe('退租结算', () => {
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const checkoutId = created.body.id as string;
 
+    const otherCheckout = await http(app).post('/checkout').set(auth(tenancy.adminToken)).send({ contractId: tenancy.contractId, roomId: tenancy.roomId, checkoutDate: new Date().toISOString().slice(0, 10), totalRefund: 250000, processedBy: 'integration-admin', items: [{ itemType: 'DEPOSIT_DEDUCTION', description: '损坏', amount: 50000 }, { itemType: 'DEPOSIT_REFUND', description: '押金', amount: 300000 }] });
+    expect(otherCheckout.status).toBe(201);
     const submitted = await http(app)
       .patch(`/checkout/${checkoutId}`)
       .set(auth(tenancy.adminToken))
       .send({ status: 'PENDING' });
     expect(submitted.status).toBe(200);
 
-    const completed = await http(app)
+    const [completed, concurrent] = await Promise.all([1, 2].map(() => http(app)
       .patch(`/checkout/${checkoutId}`)
       .set(auth(tenancy.adminToken))
-      .send({ status: 'COMPLETED' });
+      .send({ status: 'COMPLETED' })));
+    expect(concurrent.status, JSON.stringify(concurrent.body)).toBe(200);
     expect(completed.status, JSON.stringify(completed.body)).toBe(200);
     expect(completed.body.status).toBe('COMPLETED');
     expect(completed.body.processedAt).toBeTruthy();
@@ -87,12 +90,18 @@ describe('退租结算', () => {
     expect(room.body.status).toBe('VACANT');
     expect(room.body.cleanStatus).toBe('PENDING_CLEAN');
 
+    const cleaningTasks = await prisma.cleaningTask.findMany({ where: { roomId: tenancy.roomId } });
+    expect(cleaningTasks).toHaveLength(1);
+    expect(cleaningTasks[0]).toMatchObject({ status: 'PENDING', type: 'CHECKOUT', source: 'CHECKOUT_AUTO', sourceId: checkoutId });
+
     const ledger = await http(app)
       .get(`/deposits/${tenancy.contractId}`)
       .set(auth(tenancy.adminToken));
     expect(ledger.body.balance).toBe(0);
     expect(ledger.body.status).toBe('REFUNDED');
     const types = (ledger.body.transactions as Array<{ type: string }>).map((row) => row.type);
+    expect(types.filter(type => type === 'DEDUCT')).toHaveLength(1);
+    expect(types.filter(type => type === 'REFUND')).toHaveLength(1);
     expect(types).toEqual(expect.arrayContaining(['COLLECT', 'DEDUCT', 'REFUND']));
 
     // 重复完成幂等，不会二次扣减押金
@@ -101,10 +110,15 @@ describe('退租结算', () => {
       .set(auth(tenancy.adminToken))
       .send({ status: 'COMPLETED' });
     expect(again.status).toBe(200);
+    expect(await prisma.cleaningTask.count({ where: { roomId: tenancy.roomId } })).toBe(1);
     const ledgerAgain = await http(app)
       .get(`/deposits/${tenancy.contractId}`)
       .set(auth(tenancy.adminToken));
     expect(ledgerAgain.body.balance).toBe(0);
+    const different = await http(app).patch(`/checkout/${otherCheckout.body.id}`).set(auth(tenancy.adminToken)).send({ status: 'COMPLETED' });
+    expect(different.status).toBe(400);
+    expect((await prisma.checkoutRecord.findUniqueOrThrow({ where: { id: otherCheckout.body.id } })).status).toBe('DRAFT');
+    expect(await prisma.cleaningTask.count({ where: { roomId: tenancy.roomId } })).toBe(1);
   });
 
   it('结算等式不成立 → 400，状态不变', async () => {
@@ -142,5 +156,8 @@ describe('退租结算', () => {
       .get(`/checkout/${created.body.id}`)
       .set(auth(tenancy.adminToken));
     expect(after.body.status).toBe('PENDING');
+    expect((await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: tenancy.contractId } })).balance).toBe(300000);
+    expect(await prisma.cleaningTask.count({ where: { roomId: tenancy.roomId } })).toBe(0);
+    expect((await prisma.contract.findUniqueOrThrow({ where: { id: tenancy.contractId } })).status).toBe('ACTIVE');
   });
 });

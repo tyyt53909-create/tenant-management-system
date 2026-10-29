@@ -205,7 +205,7 @@ export class PublicUtilitiesService {
   private async resolveAmount(buildingId: string, dto: CreatePublicUtilityBillDto) {
     if (dto.meterId) {
       const meter = await this.prisma.meter.findFirst({
-        where: { id: dto.meterId, buildingId, meterType: dto.meterType as MeterType },
+        where: { id: dto.meterId, buildingId, meterType: dto.meterType as MeterType, roomId: null },
         select: { id: true, meterType: true, unitPrice: true },
       });
       if (!meter) throw new BadRequestException('公共表不存在或与楼栋/表类型不匹配');

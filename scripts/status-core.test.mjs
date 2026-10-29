@@ -465,3 +465,13 @@ test('checkStatusSemantics：抓到假的 GO、Gate 狀態、任務數與模型�
   );
 });
 
+
+test('单一记录只有合入、验收通过且无阻塞才 verified', () => {
+  const meta = { execution_status: 'completed', record_format: 'single', acceptance_status: 'pass', branch: 'feature/T325' };
+  const text = '## 验收证据\n- pass | npm test | 53 tests passed | test.log\n## 后续\n无\n';
+  const check = (m = {}, t = text, merged = true) => classifyTask({ ...task(325, { ...meta, ...m }), text: t }, { isAncestor: always(merged) }).classification;
+  assert.equal(check(), 'verified');
+  assert.equal(check({}, text, false), 'unmerged');
+  assert.equal(check({}, '## 验收证据\nNOT_RUN\n'), 'unverified');
+  assert.equal(check({ blocked_by: 'needs-human' }), 'unverified');
+});

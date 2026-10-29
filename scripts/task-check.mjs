@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   classifyTask,
+  hasSingleRecordEvidence,
   normalizeStatus,
   parseBlockedBy,
   parseFrontMatter,
@@ -161,6 +162,10 @@ export function analyzeTasks(tasks, options = {}) {
     const status = normalizeStatus(meta.execution_status ?? meta.status);
     const schemaStrict = Number(item.number) >= Number(schemaFrom);
 
+    if (!schemaStrict && meta.record_format === 'single' && status === 'completed' && !hasSingleRecordEvidence(item)) {
+      issues.push(issue(level, 'missing-acceptance-evidence', item, '单一记录需要已通过的验收证据'));
+    }
+
     if (schemaStrict) {
       const planRef = String(meta.plan_ref || '').trim();
       if (!planRef) {
@@ -172,7 +177,11 @@ export function analyzeTasks(tasks, options = {}) {
       }
 
       const evidencePath = String(meta.acceptance_evidence || '').trim();
-      if (!evidencePath) {
+      if (meta.record_format === 'single') {
+        if (status === 'completed' && !hasSingleRecordEvidence(item)) {
+          issues.push(issue(level, 'missing-acceptance-evidence', item, '单一记录需要已通过的验收证据，未运行不得标为完成'));
+        }
+      } else if (!evidencePath) {
         issues.push(
           issue(level, 'missing-acceptance-evidence', item, '缺少 acceptance_evidence（tasks/evidence/T*.md）'),
         );
@@ -235,6 +244,7 @@ export function analyzeTasks(tasks, options = {}) {
     }
 
     const handoff = meta.handoff || '';
+    if (meta.record_format === 'single') continue;
     if (!handoff) {
       issues.push(issue(level, 'missing-handoff', item, 'completed 但缺少 handoff 欄位'));
     } else if (!pathExists(handoff)) {
