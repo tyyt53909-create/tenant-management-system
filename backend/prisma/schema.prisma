@@ -882,6 +882,8 @@ model PaymentRecord {
   createdAt DateTime @default(now())
 
   refundRecords RefundRecord[]
+  refundReversalId String? @unique
+  refundReversal RefundRecord? @relation("RefundReversal", fields: [refundReversalId], references: [id], onDelete: Restrict)
 
   @@unique([billId, transactionNumber])
   @@index([billId])
@@ -1443,6 +1445,7 @@ model RefundRecord {
   userReceivedAccount String?
   successAt           DateTime?
   rawResponse         Json?
+  reversal PaymentRecord? @relation("RefundReversal")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

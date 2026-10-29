@@ -24,7 +24,18 @@ describe('BillPaymentService', () => {
         findFirst: vi.fn(),
         findUnique: vi.fn(),
         findMany: vi.fn(),
+        count: vi.fn().mockResolvedValue(0),
         create: vi.fn(),
+        update: vi.fn(),
+      },
+      refundRecord: {
+        count: vi.fn().mockResolvedValue(0),
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn().mockImplementation(async ({ where }: any) => {
+          const payment = await prisma.paymentRecord.findUnique.mock.results.at(-1)?.value;
+          const amounts: Record<string, number> = { RF_FULL_001: 1000, RF_PART_001: 300, RF_FEE_001: 500, RF_FEE_002: 500, RF_FEE_003: 500, RF_OVER_001: 200, RF_NO_ALLOC: 500 };
+          return { id: 'refund-1', billId: payment?.billId, paymentRecordId: payment?.id, amount: amounts[where.outRefundNo], status: 'PROCESSING', reversal: null };
+        }),
         update: vi.fn(),
       },
       prepayAccount: {
@@ -650,7 +661,7 @@ describe('BillPaymentService', () => {
               settledAmount: 150,
             });
           }
-          return Promise.resolve(null);
+          return Promise.resolve({ id: 'fee-not-found', confirmedAmount: 50, settledAmount: 50 });
         });
 
         prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-fee' });
@@ -781,7 +792,7 @@ describe('BillPaymentService', () => {
         expect(result.bill.isOverdue).toBe(false);
       });
 
-      it('退款含滞纳金冲退但无分配记录时安全跳过', async () => {
+      it('退款含滞纳金但无分配记录时拒绝以免误冲', async () => {
         prisma.bill.findUnique.mockResolvedValue(
           bill({ amount: 1000, paidAmount: 1000, status: 'PAID' }),
         );
@@ -798,15 +809,14 @@ describe('BillPaymentService', () => {
         prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-no-alloc' });
         prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));
 
-        const result = await service.applyRefundReversal({
+        await expect(service.applyRefundReversal({
           billId: 'b1',
           paymentId: 'p-no-alloc',
           refundAmount: 500,
           outRefundNo: 'RF_NO_ALLOC',
           operatorId: 'admin-1',
-        });
-
-        expect(result.bill.paidAmount).toBe(600);
+        })).rejects.toThrow('滞纳金分配不足');
+        expect(prisma.paymentRecord.create).not.toHaveBeenCalled();
       });
     });
   });

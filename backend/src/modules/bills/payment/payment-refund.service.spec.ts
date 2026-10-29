@@ -30,6 +30,7 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
           createdAt: new Date(),
         })),
         findUnique: vi.fn(),
+        updateMany: vi.fn(),
         update: vi.fn().mockImplementation(({ where, data }) => ({
           id: where.id,
           ...data,
@@ -176,11 +177,12 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
         id: 'r1',
         outRefundNo: 'RF_DONE',
         status: 'SUCCESS',
+        amount: 100,
       });
 
-      const res = await service.handleRefundNotify({}, { out_refund_no: 'RF_DONE' });
+      const res = await service.handleRefundNotify({}, { out_refund_no: 'RF_DONE', amount: { total: 100, refund: 100 } });
       expect(res).toEqual({ code: 'SUCCESS', message: '成功' });
-      expect(billPaymentService.applyRefundReversal).not.toHaveBeenCalled();
+      expect(billPaymentService.applyRefundReversal).toHaveBeenCalled();
     });
 
     it('退款成功通知触发财务冲正并将退款单更新为 SUCCESS', async () => {
@@ -214,15 +216,8 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
         }),
       );
 
-      expect(prisma.refundRecord.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'r1' },
-          data: expect.objectContaining({
-            status: 'SUCCESS',
-            refundId: 'REF_WX_999',
-          }),
-        }),
-      );
+      expect(prisma.refundRecord.update).not.toHaveBeenCalled(); // 状态与冲正在同一事务中由 BillPaymentService 写入
+
     });
 
     it('通道不支持解析通知时抛出 BadRequestException', async () => {
@@ -247,8 +242,8 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
 
       const res = await service.handleRefundNotify({}, notifyBody);
       expect(res.code).toBe('SUCCESS');
-      expect(prisma.refundRecord.update).toHaveBeenCalledWith({
-        where: { id: 'r-fail' },
+      expect(prisma.refundRecord.updateMany).toHaveBeenCalledWith({
+        where: { id: 'r-fail', status: 'PROCESSING' },
         data: {
           status: 'FAILED',
           refundId: 'REF_WX_FAIL',

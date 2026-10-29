@@ -247,6 +247,8 @@ export class BillPaymentService {
         throw new NotFoundException('收款记录不存在');
       }
 
+      const relatedRefunds = await tx.refundRecord.count({ where: { paymentRecordId: payment.id } });
+      if (relatedRefunds > 0) throw new ConflictException('收款存在退款记录，不能再次作废');
       if (payment.status === 'VOIDED') {
         const reversal = await tx.paymentRecord.findUnique({
           where: { reversalOfId: payment.id },
@@ -363,6 +365,8 @@ export class BillPaymentService {
     refundId?: string;
     operatorId: string;
     reason?: string;
+    successAt?: Date;
+    userReceivedAccount?: string;
   }) {
     const { billId, paymentId, refundAmount, outRefundNo, refundId, operatorId, reason } = params;
     return this.prisma.$transaction(async (tx) => {
@@ -371,27 +375,62 @@ export class BillPaymentService {
       const bill = await tx.bill.findUnique({ where: { id: billId } });
       if (!bill) throw new NotFoundException('账单不存在');
 
+      await this.lockPayment(tx, paymentId);
       const payment = await tx.paymentRecord.findUnique({ where: { id: paymentId } });
       if (!payment || payment.billId !== billId) {
         throw new NotFoundException('收款记录不存在');
       }
 
-      const isFull = refundAmount === payment.amount;
-      const refundBillPortion = Math.min(refundAmount, payment.billPortion);
-      const refundLateFeePortion = Math.max(0, refundAmount - refundBillPortion);
+      const refund = await tx.refundRecord.findUnique({ where: { outRefundNo }, include: { reversal: true } });
+      if (!refund || refund.paymentRecordId !== paymentId || refund.billId !== billId || refund.amount !== refundAmount) {
+        throw new ConflictException('退款记录与收款不匹配');
+      }
+      if (refund.status === 'SUCCESS') {
+        if (refundId && refund.refundId && refundId !== refund.refundId) throw new ConflictException('退款渠道编号与已有记录不一致');
+        if (!refund.reversal) throw new ConflictException('历史退款缺少可靠冲正关联，需要核对');
+        return { reversal: refund.reversal, bill };
+      }
+      if (refund.reversal) throw new ConflictException('退款状态与冲正记录不一致，需要核对');
+      if (payment.status !== 'CONFIRMED') throw new ConflictException('收款状态不允许退款冲正');
+      const previousRefunds = await tx.refundRecord.findMany({
+        where: { paymentRecordId: paymentId, id: { not: refund.id }, status: 'SUCCESS' },
+        include: { reversal: true },
+      });
+      if (previousRefunds.some((item) => !item.reversal || item.reversal.allocationVerified !== true || item.reversal.status !== 'REVERSAL' || item.reversal.amount !== -item.amount || item.reversal.billPortion > 0 || item.reversal.lateFeePortion > 0 || item.reversal.billPortion + item.reversal.lateFeePortion !== -item.amount)) {
+        throw new ConflictException('历史退款缺少可靠冲正关联，需要核对');
+      }
+      const unknownReversals = await tx.paymentRecord.count({ where: { billId, status: 'REVERSAL', refundReversalId: null, reversalOfId: null } });
+      if (unknownReversals > 0) throw new ConflictException('存在未关联的历史部分冲正，需要核对');
+      if (payment.billPortion < 0 || payment.lateFeePortion < 0 || payment.billPortion + payment.lateFeePortion !== payment.amount) throw new ConflictException('原收款分配不一致，需要核对');
+      const previousPrincipal = previousRefunds.reduce((sum, item) => sum - item.reversal!.billPortion, 0);
+      const previousFees = previousRefunds.reduce((sum, item) => sum - item.reversal!.lateFeePortion, 0);
+      const previousAmount = previousRefunds.reduce((sum, item) => sum + item.amount, 0);
+      if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0 || previousAmount + refundAmount > payment.amount || previousPrincipal < 0 || previousFees < 0 || previousPrincipal > payment.billPortion || previousFees > payment.lateFeePortion || previousPrincipal + previousFees !== previousAmount) {
+        throw new ConflictException('退款累计金额或历史分配不一致，需要核对');
+      }
+      const isFull = previousAmount + refundAmount === payment.amount;
+      const refundBillPortion = Math.min(refundAmount, payment.billPortion - previousPrincipal);
+      const refundLateFeePortion = refundAmount - refundBillPortion;
+      if (refundLateFeePortion > payment.lateFeePortion - previousFees) throw new ConflictException('退款滞纳金超过原分配');
 
       // 回滚滞纳金核销
       if (refundLateFeePortion > 0) {
         const allocations =
           (payment.lateFeeAllocations as unknown as FeeAllocation[] | null) ?? [];
         let remainingFeeRollback = refundLateFeePortion;
+        let alreadyRolledBack = previousFees;
         for (const allocation of allocations) {
           if (remainingFeeRollback <= 0) break;
+          const skipped = Math.min(alreadyRolledBack, allocation.amount);
+          alreadyRolledBack -= skipped;
+          const available = allocation.amount - skipped;
+          if (available <= 0) continue;
           const fee = await tx.lateFee.findUnique({ where: { id: allocation.lateFeeId } });
           if (!fee) continue;
-          const rollbackAmount = Math.min(remainingFeeRollback, allocation.amount);
+          const rollbackAmount = Math.min(remainingFeeRollback, available);
           remainingFeeRollback -= rollbackAmount;
-          const newSettled = Math.max(0, (fee.settledAmount ?? 0) - rollbackAmount);
+          if ((fee.settledAmount ?? 0) < rollbackAmount) throw new ConflictException('滞纳金已核销余额不足，退款需要核对');
+          const newSettled = (fee.settledAmount ?? 0) - rollbackAmount;
           const stillSettled =
             (fee.confirmedAmount ?? 0) > 0 && newSettled >= (fee.confirmedAmount ?? 0);
           await tx.lateFee.update({
@@ -402,6 +441,7 @@ export class BillPaymentService {
             },
           });
         }
+        if (remainingFeeRollback > 0) throw new ConflictException('滞纳金分配不足，退款需要核对');
       }
 
       // 创建冲正记录
@@ -417,7 +457,9 @@ export class BillPaymentService {
           confirmedBy: operatorId,
           notes: `微信退款冲正 (${outRefundNo})${reason ? `: ${reason}` : ''}`,
           transactionNumber: refundId || outRefundNo,
-          ...(isFull ? { reversalOfId: payment.id } : {}),
+          refundReversalId: refund.id,
+          allocationVerified: payment.allocationVerified === true && previousRefunds.every(item => item.reversal?.allocationVerified === true) ? true : null,
+          ...(isFull && previousAmount === 0 ? { reversalOfId: payment.id } : {}),
         },
       });
 
@@ -472,6 +514,10 @@ export class BillPaymentService {
         },
       });
 
+      await tx.refundRecord.update({ where: { id: refund.id }, data: {
+        status: 'SUCCESS', refundId, userReceivedAccount: params.userReceivedAccount,
+        successAt: params.successAt ?? null,
+      } });
       return { reversal, bill: updatedBill };
     });
   }
@@ -486,6 +532,12 @@ export class BillPaymentService {
     const raw = tx as unknown as RawClient;
     if (typeof raw.$queryRaw !== 'function') return;
     await raw.$queryRaw(Prisma.sql`SELECT id FROM bills WHERE id = ${billId} FOR UPDATE`);
+  }
+
+  private async lockPayment(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
+    const raw = tx as unknown as RawClient;
+    if (typeof raw.$queryRaw !== 'function') return;
+    await raw.$queryRaw(Prisma.sql`SELECT id FROM payment_records WHERE id = ${paymentId} FOR UPDATE`);
   }
 
   /** 收据号：R{业务日}{6 位序号}；序列由数据库原子分配。 */

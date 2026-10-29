@@ -99,6 +99,9 @@ export class PaymentRefundService {
     let updatedBill = null;
 
     if (providerResult.status === 'SUCCESS') {
+      if (providerResult.amount !== refundAmount) throw new BadRequestException('渠道退款金额与申请不一致，需要核对');
+      const successAt = providerResult.successTime ? new Date(providerResult.successTime) : undefined;
+      if (successAt && Number.isNaN(successAt.getTime())) throw new BadRequestException('渠道退款完成时间无效');
       // 若通道即时返回退款成功（如 mock 测试环境），立即联动财务冲正
       const reversalRes = await this.billPaymentService.applyRefundReversal({
         billId,
@@ -108,19 +111,12 @@ export class PaymentRefundService {
         refundId: providerResult.refundId,
         operatorId,
         reason: dto.reason,
+        successAt,
+        userReceivedAccount: providerResult.userReceivedAccount,
       });
       reversalRecord = reversalRes.reversal;
       updatedBill = reversalRes.bill;
 
-      await this.prisma.refundRecord.update({
-        where: { id: refundRecord.id },
-        data: {
-          status: 'SUCCESS',
-          refundId: providerResult.refundId,
-          userReceivedAccount: providerResult.userReceivedAccount,
-          successAt: new Date(),
-        },
-      });
     } else {
       await this.prisma.refundRecord.update({
         where: { id: refundRecord.id },
@@ -159,12 +155,12 @@ export class PaymentRefundService {
       throw new NotFoundException(`未找到退款记录 ${resource.outRefundNo}`);
     }
 
-    if (refundRecord.status === 'SUCCESS') {
-      // 已经冲正成功，保持幂等
-      return { code: 'SUCCESS', message: '成功' };
-    }
+    if (refundRecord.status === 'SUCCESS' && resource.refundStatus !== 'SUCCESS') return { code: 'SUCCESS', message: '成功' };
 
     if (resource.refundStatus === 'SUCCESS') {
+      if (resource.amount.refund !== refundRecord.amount) throw new BadRequestException('渠道退款金额与申请不一致，需要核对');
+      const successAt = resource.successTime ? new Date(resource.successTime) : undefined;
+      if (successAt && Number.isNaN(successAt.getTime())) throw new BadRequestException('渠道退款完成时间无效');
       await this.billPaymentService.applyRefundReversal({
         billId: refundRecord.billId,
         paymentId: refundRecord.paymentRecordId,
@@ -173,24 +169,16 @@ export class PaymentRefundService {
         refundId: resource.refundId,
         operatorId: 'SYSTEM_WECHAT_REFUND',
         reason: refundRecord.reason || undefined,
-      });
-
-      await this.prisma.refundRecord.update({
-        where: { id: refundRecord.id },
-        data: {
-          status: 'SUCCESS',
-          refundId: resource.refundId,
-          userReceivedAccount: resource.userReceivedAccount,
-          successAt: resource.successTime ? new Date(resource.successTime) : new Date(),
-        },
+        successAt,
+        userReceivedAccount: resource.userReceivedAccount,
       });
 
       this.logger.log(
         `微信退款冲正成功: 账单=${refundRecord.billId}, 退款单号=${refundRecord.outRefundNo}, 微信退款号=${resource.refundId}`,
       );
     } else if (resource.refundStatus === 'CLOSED' || resource.refundStatus === 'ABNORMAL') {
-      await this.prisma.refundRecord.update({
-        where: { id: refundRecord.id },
+      await this.prisma.refundRecord.updateMany({
+        where: { id: refundRecord.id, status: 'PROCESSING' },
         data: {
           status: 'FAILED',
           refundId: resource.refundId,
