@@ -55,7 +55,7 @@ export class StatisticsService {
     return {
       month: query.month, buildingId: query.buildingId,
       rentIncome: null,
-      provisionalRentIncome: monthlyPayments.filter(p => p.allocationVerified === true).reduce((sum, p) => sum + p.billPortion, 0),
+      verifiedAllocationRentSubtotal: monthlyPayments.filter(p => p.allocationVerified === true).reduce((sum, p) => sum + p.billPortion, 0),
       unknownAllocationCount: monthlyPayments.filter(p => p.allocationVerified !== true).length,
       paidExpenses: paidExpenses._sum.amount ?? 0,
       currentPrepayBalance: balance._sum.balanceCache ?? 0,
