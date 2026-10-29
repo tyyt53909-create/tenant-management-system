@@ -3,6 +3,7 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { CheckoutService } from './checkout.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 
 describe('CheckoutService', () => {
   let service: CheckoutService;
@@ -26,6 +27,7 @@ describe('CheckoutService', () => {
       room: { findUnique: vi.fn(), update: vi.fn() },
       depositLedger: { findUnique: vi.fn().mockResolvedValue(null), update: vi.fn() },
       depositTransaction: { create: vi.fn() },
+      cleaningTask: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
@@ -38,6 +40,7 @@ describe('CheckoutService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutService,
+        { provide: BusinessClock, useValue: { formatDate: () => '2026-10-29' } },
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
       ],
