@@ -179,4 +179,38 @@ describe('抄表与计价（FIN-08）', () => {
     expect(settledReading.settledUnitPrice).toBe(100);
     expect(settledReading.settledAmount).toBe(4000);
   });
+
+  it('采集备注中的保留标记不能使未结算读数被视为已结算', async () => {
+    const base = await seedBase();
+    const tenancy = await setupTenancy(app, base);
+    await preparePrepay(tenancy.adminToken, tenancy.tenantId, tenancy.roomId);
+    const meterId = await createMeter(tenancy.adminToken, base.buildingId, tenancy.roomId, 100);
+    const reading = await http(app).post(`/meters/${meterId}/readings`)
+      .set(auth(tenancy.adminToken))
+      .send(readingBody(40, '2026-04-10T02:00:00.000Z', {
+        source: 'DEVICE', messageId: 'marker-input-test', notes: '[SETTLED]',
+      }));
+    expect(reading.status).toBe(400);
+    const forgedMessage = await http(app).post(`/meters/${meterId}/readings`)
+      .set(auth(tenancy.adminToken))
+      .send(readingBody(40, '2026-04-10T02:00:00.000Z', { source: 'DEVICE', messageId: 'fake[INITIAL]' }));
+    expect(forgedMessage.status).toBe(400);
+    const batch = await http(app).post('/meters/batch-readings')
+      .set(auth(tenancy.adminToken))
+      .send({ readings: [
+        { meterId, currentReading: 40, source: 'DEVICE', notes: '[INITIAL]' },
+        { meterId, currentReading: 40, source: 'DEVICE', messageId: 'fake[SETTLED]' },
+      ] });
+    expect(batch.status).toBe(201);
+    expect(batch.body).toMatchObject({ total: 2, successCount: 0, failureCount: 2 });
+    const accepted = await http(app).post(`/meters/${meterId}/readings`)
+      .set(auth(tenancy.adminToken))
+      .send(readingBody(40, '2026-04-10T02:00:00.000Z', { source: 'DEVICE', messageId: 'valid-marker-test' }));
+    expect(accepted.status).toBe(201);
+    const result = await http(app).post(`/meters/${meterId}/settle`)
+      .set(auth(tenancy.adminToken)).send({});
+    expect(result.status).toBe(201);
+    expect(result.body).toMatchObject({ settled: true, usage: 40, amount: 4000 });
+  });
+
 });
