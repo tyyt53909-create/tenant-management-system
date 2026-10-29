@@ -92,6 +92,7 @@
         </el-table>
       </template>
       <RentReportPanel :buildings="buildings" />
+      <CurrentBalancesPanel :buildings="buildings" />
     </ResourcePanel>
   </div>
 </template>
@@ -109,6 +110,7 @@ import {
 } from '@/api/statistics';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
 import RentReportPanel from './RentReportPanel.vue';
+import CurrentBalancesPanel from './CurrentBalancesPanel.vue';
 import { formatMoneyPlain } from '@/utils/money';
 import { notifyApiError } from '@/utils/notify';
 

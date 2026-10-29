@@ -18,7 +18,8 @@ for (const command of ['openapi:generate', 'openapi:check']) {
     assert.match(readFileSync('src/openapi/offline-controllers.ts', 'utf8'), /class OfflineController \{\}/);
     const document = JSON.parse(readFileSync('openapi.json', 'utf8'));
     assert.ok(document.paths['/api/bills']);
-    assert.equal(Object.values(document.paths).reduce((n, path) => n + Object.keys(path).filter(key => ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'].includes(key)).length, 0), 290);
+    assert.ok(document.paths['/api/statistics/current-balances'].get);
+    assert.equal(Object.values(document.paths).reduce((n, path) => n + Object.keys(path).filter(key => ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'].includes(key)).length, 0), 291);
     assert.equal(document.components.schemas.CreateRefundDto.required.includes('requestKey'), true);
     assert.equal(document.paths['/api/bills'].get.responses['200'].content['application/json'].schema.properties.data.items.properties.currentOverdueDays.type, 'integer');
   });

@@ -18,6 +18,10 @@ const source = await prisma.paymentRecord.create({ data: { billId: bill.id, amou
 await prisma.paymentRecord.create({ data: { billId: bill.id, amount: -5000, billPortion: -5000, reversalOfId: source.id, status: 'REVERSAL', paymentMethod: 'CASH', paidAt: new Date('2026-03-06T00:00:00Z'), confirmedBy: base.adminId } });
 await prisma.refundRecord.create({ data: { paymentRecordId: payment.id, billId: bill.id, outRefundNo: 'BROWSER-UNDATED', amount: 1000, status: 'SUCCESS', operatorId: base.adminId } });
 await prisma.building.create({ data: { name: '空测试楼栋', floors: 1 } });
+const prepay = await prisma.prepayAccount.create({ data: { tenantId: tenancy.tenantId, roomId: tenancy.roomId, balanceCache: 12000 } });
+await prisma.prepayTransaction.create({ data: { accountId: prepay.id, type: 'RECHARGE', amount: 12000, balanceAfter: 12000, description: '合成', operatorId: base.adminId } });
+const ledger = await prisma.depositLedger.create({ data: { contractId: tenancy.contractId, tenantId: tenancy.tenantId, roomId: tenancy.roomId, amount: 30000, balance: 30000 } });
+await prisma.depositTransaction.create({ data: { ledgerId: ledger.id, type: 'COLLECT', amount: 30000, balanceAfter: 30000, operatorId: base.adminId } });
 console.log(`SYNTHETIC_BROWSER_BUILDING=${base.buildingId}`);
 await app.close(); await redis.quit();
 

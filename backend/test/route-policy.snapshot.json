@@ -2142,6 +2142,14 @@
   },
   {
     "method": "GET",
+    "path": "/api/statistics/current-balances",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/statistics/overview",
     "public": false,
     "roles": [

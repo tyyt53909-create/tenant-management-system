@@ -1,0 +1,35 @@
+import { test, expect } from '@playwright/test';
+test('当前余额连接隔离 API，切换不显示旧楼栋', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByPlaceholder('请输入邮箱或手机号').fill('integration-admin@example.com');
+  await page.getByPlaceholder('请输入密码').fill('Integration@123');
+  await page.getByRole('button', { name: '进入运营中心' }).click();
+  await page.waitForURL(url => !url.pathname.includes('login'));
+  await page.goto('/statistics');
+  const panel = page.getByRole('region', { name: '当前余额核对' });
+  await panel.locator('.el-select').click();
+  await page.getByText('集成测试楼栋', { exact: true }).last().click();
+  await panel.getByRole('button', { name: '查询余额' }).click();
+  await expect(panel).toContainText('¥300.00'); await expect(panel).toContainText('¥120.00');
+  await expect(panel).toContainText('历史流水完整性无法证明'); await expect(panel).toContainText('一致（不证明完整）');
+  await expect(panel).toContainText('完整核实合计：不可提供');
+  await panel.getByText('查看编号与流水').first().click();
+  await expect(panel).toContainText('COLLECT');
+  await page.route('**/api/statistics/current-balances?*', async route => {
+    const response = await route.fetch();
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await route.fulfill({ response });
+  });
+  const oldRequest = page.waitForRequest(r => r.url().includes('/statistics/current-balances'));
+  await panel.getByRole('button', { name: '查询余额' }).click();
+  await oldRequest;
+  await panel.locator('.el-select').click();
+  await page.getByText('空测试楼栋', { exact: true }).last().click();
+  await expect(panel).not.toContainText('¥300.00');
+  await panel.getByRole('button', { name: '查询余额' }).click();
+  await expect(panel).toContainText('当前无记录');
+  await page.waitForTimeout(1800);
+  await expect(panel).not.toContainText('¥300.00');
+  await page.goto('/bills'); await page.goBack();
+  await expect(panel).not.toContainText('¥300.00');
+});

@@ -16012,6 +16012,51 @@
           }
         ]
       }
+    },
+    "/api/statistics/current-balances": {
+      "get": {
+        "operationId": "StatisticsController_currentBalances",
+        "parameters": [
+          {
+            "name": "buildingId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentBalancesResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Statistics"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -19249,6 +19294,154 @@
           "verified",
           "unknownReason",
           "paymentMethod"
+        ]
+      },
+      "BalanceMovementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "balanceAfter": {
+            "type": "number"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relatedId": {
+            "type": "string",
+            "nullable": true
+          },
+          "relatedType": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "amount",
+          "balanceAfter",
+          "createdAt",
+          "relatedId",
+          "relatedType"
+        ]
+      },
+      "BalanceItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string",
+            "nullable": true
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "number",
+            "nullable": true
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "movements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceMovementDto"
+            }
+          },
+          "inScope": {
+            "type": "boolean"
+          },
+          "arithmetic": {
+            "enum": [
+              "consistent",
+              "inconsistent",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "contractId",
+          "roomId",
+          "balance",
+          "arithmetic",
+          "inScope",
+          "reasons",
+          "movements"
+        ]
+      },
+      "BalanceCategoryDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceItemDto"
+            }
+          },
+          "bookSubtotal": {
+            "type": "number"
+          },
+          "unknownCount": {
+            "type": "number"
+          },
+          "verifiedTotal": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "items",
+          "bookSubtotal",
+          "unknownCount",
+          "verifiedTotal"
+        ]
+      },
+      "CurrentBalancesResponseDto": {
+        "type": "object",
+        "properties": {
+          "buildingId": {
+            "type": "string"
+          },
+          "capturedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deposit": {
+            "$ref": "#/components/schemas/BalanceCategoryDto"
+          },
+          "prepay": {
+            "$ref": "#/components/schemas/BalanceCategoryDto"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "buildingId",
+          "capturedAt",
+          "deposit",
+          "prepay",
+          "limitations"
         ]
       }
     }
