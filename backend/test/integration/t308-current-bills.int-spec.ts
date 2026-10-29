@@ -29,4 +29,35 @@ describe('T308 当前账单清单与导出', () => {
     const other = await prisma.building.create({data:{name:'其他',floors:1}});
     expect((await http(app).get('/bills').query({buildingId:other.id}).set(auth(tenant.adminToken))).body.data).toHaveLength(0);
   });
+  it('退款及纯冲正后当前未付本金与清单和导出一致，非法状态拒绝', async () => {
+    const base = await seedBase(); const tenant = await setupTenancy(app, base);
+    const bill = await prisma.bill.create({ data: { contractId: tenant.contractId, billNumber: 'REFUND-CURRENT', billType: 'RENT', period: '2026-02', amount: 10000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const pay = await http(app).post(`/bills/${bill.id}/payments`).set(auth(tenant.adminToken)).send({ amount: 10000, paymentMethod: 'CASH', idempotencyKey: 't308-pay' });
+    expect(pay.status).toBe(201);
+    const paymentId = pay.body.payment.id;
+    for (const [key, amount, expected] of [['partial', 4000, 4000], ['rest', 6000, 10000]] as const) {
+      const r = await http(app).post(`/bills/${bill.id}/payments/${paymentId}/refund`).set(auth(tenant.adminToken)).send({ requestKey: key, amount });
+      expect(r.status).toBe(201);
+      const notice = { out_refund_no: r.body.refund.outRefundNo, refund_id: r.body.refund.refundId, refund_status: 'SUCCESS', amount: { total: 10000, refund: amount } };
+      expect((await http(app).post('/payments/wechat/refund-notify').send(notice)).status).toBe(200);
+      expect((await http(app).post('/payments/wechat/refund-notify').send(notice)).status).toBe(200);
+      const list = await http(app).get('/bills').query({contractId:tenant.contractId}).set(auth(tenant.adminToken));
+      const row = list.body.data.find((item: { id: string }) => item.id === bill.id);
+      expect(row.amount - row.paidAmount).toBe(expected);
+      const csv = await http(app).get('/bills/export').query({contractId:tenant.contractId}).set(auth(tenant.adminToken));
+      expect(csv.text.split('\r\n').find((line: string) => line.includes('REFUND-CURRENT'))).toContain(`,100.00,${((10000-expected)/100).toFixed(2)},${(expected/100).toFixed(2)},`);
+    }
+    const other = await prisma.bill.create({ data: { contractId: tenant.contractId, billNumber: 'VOID-CURRENT', billType: 'RENT', period: '2026-02', amount: 2300, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const collected = await http(app).post(`/bills/${other.id}/payments`).set(auth(tenant.adminToken)).send({ amount: 2300, paymentMethod: 'CASH', idempotencyKey: 't308-void-pay' });
+    expect(collected.status).toBe(201);
+    const voided = await http(app).post(`/bills/${other.id}/payments/${collected.body.payment.id}/void`).set(auth(tenant.adminToken)).send({ reason: '合成测试' });
+    expect(voided.status).toBe(201);
+    const afterVoid = await http(app).get('/bills').query({contractId:tenant.contractId}).set(auth(tenant.adminToken));
+    expect(afterVoid.body.data.find((item: { id: string }) => item.id === other.id).paidAmount).toBe(0);
+    const voidCsv = await http(app).get('/bills/export').query({contractId:tenant.contractId}).set(auth(tenant.adminToken));
+    expect(voidCsv.text.split('\r\n').find((line: string) => line.includes('VOID-CURRENT'))).toContain(',23.00,0.00,23.00,');
+    expect((await http(app).get('/bills').query({status:'BAD'}).set(auth(tenant.adminToken))).status).toBe(400);
+    expect((await http(app).get('/bills/export').query({status:'BAD'}).set(auth(tenant.adminToken))).status).toBe(400);
+  });
+
 });
