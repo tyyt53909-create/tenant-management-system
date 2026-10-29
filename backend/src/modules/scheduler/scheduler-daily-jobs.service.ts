@@ -72,7 +72,7 @@ export class SchedulerDailyJobsService {
         });
         if (otherActive) return false;
         const lockedRoom = await tx.room.findUnique({ where: { id: contract.roomId }, select: { status: true, cleanStatus: true } });
-        if (!lockedRoom || (lockedRoom.status === 'VACANT' && lockedRoom.cleanStatus === 'PENDING_CLEAN')) return false;
+        if (!lockedRoom || (lockedRoom.status === 'VACANT' && ['PENDING_CLEAN', 'CLEANING'].includes(lockedRoom.cleanStatus))) return false;
         if (originalToRenew) {
           const changed = await tx.contract.updateMany({ where: { id: originalToRenew, status: 'ACTIVE' }, data: { status: 'RENEWED' } });
           if (!changed.count) return false;

@@ -38,10 +38,12 @@ export async function applyDepositCollection(
     update: {},
   });
 
-  const balance = ledger.balance + amount;
+  await tx.$queryRaw`SELECT id FROM deposit_ledgers WHERE "contractId" = ${bill.contractId} FOR UPDATE`;
+  const lockedLedger = await tx.depositLedger.findUniqueOrThrow({ where: { contractId: bill.contractId } });
+  const balance = lockedLedger.balance + amount;
   const updated = await tx.depositLedger.update({
     where: { id: ledger.id },
-    data: { balance, status: statusFor(balance, ledger.amount) },
+    data: { balance, status: statusFor(balance, lockedLedger.amount) },
   });
 
   await tx.depositTransaction.create({
@@ -68,6 +70,7 @@ export async function reverseDepositCollection(
   const { bill, amount, operatorId } = params;
   if (bill.billType !== 'DEPOSIT' || amount <= 0) return null;
 
+  await tx.$queryRaw`SELECT id FROM deposit_ledgers WHERE "contractId" = ${bill.contractId} FOR UPDATE`;
   const ledger = await tx.depositLedger.findUnique({ where: { contractId: bill.contractId } });
   if (!ledger) return null;
 
@@ -115,6 +118,7 @@ export async function settleDepositOnCheckout(
 ): Promise<{ id: string; deductions: number; refundAmount: number } | null> {
   const { contractId, deductions, refundAmount, operatorId, checkoutId } = params;
 
+  await tx.$queryRaw`SELECT id FROM deposit_ledgers WHERE "contractId" = ${contractId} FOR UPDATE`;
   const ledger = await tx.depositLedger.findUnique({ where: { contractId } });
   if (!ledger) {
     throw new Error('缺少押金台账，不能自动按零押金或已缴全额完成退租');

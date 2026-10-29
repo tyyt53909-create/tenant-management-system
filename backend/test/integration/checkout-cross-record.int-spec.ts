@@ -41,10 +41,17 @@ describe('跨退租单并发', () => {
     const loserId = winner.body.id === one.body.id ? two.body.id : one.body.id;
     expect(loser.status).toBe(409); expect((await request(loserId)).status).toBe(409);
     if (!reverse) {
-      await prisma.cleaningTask.updateMany({ where: { roomId: tenancy.roomId }, data: { status: 'ACCEPTED' } });
-      await prisma.room.update({ where: { id: tenancy.roomId }, data: { status: 'RESERVED', cleanStatus: 'CLEAN' } });
+      const oldTask = await prisma.cleaningTask.findFirstOrThrow({ where: { roomId: tenancy.roomId } });
+      expect((await http(app).post(`/cleaning/tasks/${oldTask.id}/start`).set(auth(tenancy.adminToken))).status).toBe(201);
       const old = await prisma.contract.findUniqueOrThrow({ where: { id: tenancy.contractId } });
       const next = await prisma.contract.create({ data: { buildingId: old.buildingId, roomId: old.roomId, tenantId: old.tenantId, contractNumber: 'LATER-CONTRACT', rentAmount: old.rentAmount, depositAmount: old.depositAmount, paymentCycle: old.paymentCycle, paymentDay: old.paymentDay, startDate: new Date('2026-10-01'), endDate: new Date('2027-10-01'), lateFeeRule: old.lateFeeRule as object } });
+      expect((await http(app).patch(`/contracts/${next.id}`).set(auth(tenancy.adminToken)).send({ status: 'ACTIVE' })).status).toBe(409);
+      expect((await app.get(SchedulerDailyJobsService).autoTransitionContracts()).activated).toBe(0);
+      expect((await prisma.contract.findUniqueOrThrow({ where: { id: next.id } })).status).toBe('DRAFT');
+      expect((await http(app).post(`/cleaning/tasks/${oldTask.id}/complete`).set(auth(tenancy.adminToken)).send({})).status).toBe(201);
+      expect((await http(app).patch(`/rooms/${tenancy.roomId}/clean`).set(auth(tenancy.adminToken)).send({})).status).toBe(200);
+      expect((await prisma.cleaningTask.findUniqueOrThrow({ where: { id: oldTask.id } })).status).toBe('COMPLETED');
+      expect((await http(app).patch(`/rooms/${tenancy.roomId}`).set(auth(tenancy.adminToken)).send({ status: 'RESERVED' })).status).toBe(200);
       expect((await http(app).patch(`/contracts/${next.id}`).set(auth(tenancy.adminToken)).send({ status: 'ACTIVE' })).status).toBe(200);
       await prisma.depositLedger.create({ data: { contractId: next.id, roomId: tenancy.roomId, tenantId: tenancy.tenantId, amount: 3000, balance: 3000 } });
       const later = await http(app).post('/checkout').set(auth(tenancy.adminToken)).send({ ...body, contractId: next.id });
@@ -103,6 +110,33 @@ describe('跨退租单并发', () => {
     expect((await prisma.room.findUniqueOrThrow({ where: { id: t.roomId } })).status).toBe('OCCUPIED');
     expect(await prisma.cleaningTask.count({ where: { roomId: t.roomId } })).toBe(0);
     audit.mockRestore(); expect((await complete()).status).toBe(200);
+  });
+
+  it.each([[false, 'deduct'], [true, 'deduct'], [false, 'refund'], [true, 'refund']] as const)('独立押金扣退与退租结算同台账互斥（扣退先 %s，%s）', async (deductFirst, action) => {
+    const base = await seedBase(); const t = await setupTenancy(app, base);
+    await prisma.depositLedger.create({ data: { contractId: t.contractId, tenantId: t.tenantId, roomId: t.roomId, amount: 3000, balance: 3000 } });
+    const created = await http(app).post('/checkout').set(auth(t.adminToken)).send({ contractId: t.contractId, roomId: t.roomId, checkoutDate: '2026-10-29', totalRefund: 3000, processedBy: 'synthetic', items: [{ itemType: 'DEPOSIT_REFUND', description: '押金', amount: 3000 }] }); expect(created.status).toBe(201);
+    let release!: () => void; let locked!: () => void; const ready = new Promise<void>(resolve => { locked = resolve; }); const barrier = new Promise<void>(resolve => { release = resolve; });
+    const hold = prisma.$transaction(async tx => { await tx.$queryRaw`SELECT id FROM deposit_ledgers WHERE "contractId" = ${t.contractId} FOR UPDATE`; locked(); await barrier; }, { timeout: 15000 }); await ready;
+    const deduct = () => http(app).post(`/deposits/${t.contractId}/${action}`).set(auth(t.adminToken)).send({ amount: 500, reason: '合成扣除' }).then(r => r);
+    const checkout = () => http(app).patch(`/checkout/${created.body.id}`).set(auth(t.adminToken)).send({ status: 'COMPLETED' }).then(r => r);
+    const waitLocks = async (target: number) => { for (let i = 0; i < 100; i++) { const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT count(*) AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%deposit_ledgers%'`; if (Number(rows[0].count) >= target) return; await new Promise(resolve => setTimeout(resolve, 50)); } throw new Error('ledger barrier not reached'); };
+    const first = deductFirst ? deduct() : checkout(); await waitLocks(1); const second = deductFirst ? checkout() : deduct(); await waitLocks(2); release(); await hold;
+    const [a, b] = await Promise.all([first, second]); expect(a.status).toBe(deductFirst ? 201 : 200); expect(b.status).toBe(400);
+    const ledger = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: t.contractId }, include: { transactions: true } });
+    expect(ledger.balance).toBe(deductFirst ? 2500 : 0);
+    expect(ledger.transactions.reduce((sum, row) => sum + row.amount, 0)).toBe(deductFirst ? -500 : -3000);
+    expect((await prisma.checkoutRecord.findUniqueOrThrow({ where: { id: created.body.id } })).status).toBe(deductFirst ? 'DRAFT' : 'COMPLETED');
+    expect(await prisma.cleaningTask.count({ where: { roomId: t.roomId } })).toBe(deductFirst ? 0 : 1);
+  }, 30000);
+
+  it('同房已有活动保洁任务时不重复建单', async () => {
+    const base = await seedBase(); const t = await setupTenancy(app, base);
+    await prisma.depositLedger.create({ data: { contractId: t.contractId, tenantId: t.tenantId, roomId: t.roomId, amount: 3000, balance: 3000 } });
+    const task = await http(app).post('/cleaning/tasks').set(auth(t.adminToken)).send({ roomId: t.roomId, type: 'CHECKOUT' }); expect(task.status).toBe(201);
+    const created = await http(app).post('/checkout').set(auth(t.adminToken)).send({ contractId: t.contractId, roomId: t.roomId, checkoutDate: '2026-10-29', totalRefund: 3000, processedBy: 'synthetic', items: [{ itemType: 'DEPOSIT_REFUND', description: '押金', amount: 3000 }] }); expect(created.status).toBe(201);
+    expect((await http(app).patch(`/checkout/${created.body.id}`).set(auth(t.adminToken)).send({ status: 'COMPLETED' })).status).toBe(200);
+    const tasks = await prisma.cleaningTask.findMany({ where: { roomId: t.roomId } }); expect(tasks).toHaveLength(1); expect(tasks[0].id).toBe(task.body.id);
   });
 
 });

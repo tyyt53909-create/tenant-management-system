@@ -321,7 +321,10 @@ export class CheckoutService {
                   const existingTask = await tx.cleaningTask.findFirst({
                     where: {
                       roomId: record.contract.roomId,
-                      status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED'] },
+                      OR: [
+                        { status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS'] } },
+                        { status: 'COMPLETED', source: 'CHECKOUT_AUTO', sourceId: record.id },
+                      ],
                     },
                   });
                   if (!existingTask) {

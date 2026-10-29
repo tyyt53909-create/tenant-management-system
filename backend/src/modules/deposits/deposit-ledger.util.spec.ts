@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { applyDepositCollection, reverseDepositCollection } from './deposit-ledger.util.js';
 
 function txMock() {
-  const tx = {
+  const tx: any = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     contract: {
       findUnique: vi.fn().mockResolvedValue({
         id: 'c1',
@@ -14,10 +15,12 @@ function txMock() {
     depositLedger: {
       upsert: vi.fn().mockResolvedValue({ id: 'l1', amount: 200000, balance: 0 }),
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       update: vi.fn().mockImplementation(({ data }: any) => ({ id: 'l1', amount: 200000, ...data })),
     },
     depositTransaction: { create: vi.fn().mockResolvedValue({}) },
   };
+  tx.depositLedger.findUniqueOrThrow.mockImplementation(() => tx.depositLedger.upsert.mock.results.at(-1).value);
   return tx;
 }
 

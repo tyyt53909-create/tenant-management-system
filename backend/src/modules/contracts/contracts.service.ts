@@ -375,7 +375,7 @@ export class ContractsService {
 
       if (statusChanged && dto.status === 'ACTIVE') {
         const room = await tx.room.findUnique({ where: { id: contract.roomId }, select: { status: true, cleanStatus: true } });
-        if (!room || (room.status === 'VACANT' && room.cleanStatus === 'PENDING_CLEAN')) throw new ConflictException('房间待清洁，请重新核对入住状态');
+        if (!room || (room.status === 'VACANT' && ['PENDING_CLEAN', 'CLEANING'].includes(room.cleanStatus))) throw new ConflictException('房间待清洁，请重新核对入住状态');
       }
 
       if (renewedOldId) {
