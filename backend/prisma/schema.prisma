@@ -853,6 +853,8 @@ model PaymentRecord {
 
   /// 客户端幂等键（全局唯一）；同一键重放返回原收款
   idempotencyKey String? @unique
+  /// 预付抵扣的原始请求指纹；历史记录为空。
+  prepayRequestFingerprint String?
   /// 收据号：R{业务日}{6 位序号}，由数据库序列原子分配
   receiptNumber  String? @unique
 

@@ -18,7 +18,7 @@ describe('BillPaymentService', () => {
 
   beforeEach(async () => {
     prisma = {
-      bill: { findUnique: vi.fn(), update: vi.fn() },
+      bill: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() },
       lateFee: { findMany: vi.fn(), update: vi.fn() },
       paymentRecord: {
         findFirst: vi.fn(),
@@ -41,6 +41,7 @@ describe('BillPaymentService', () => {
       $transaction: vi.fn(),
     };
     prisma.$transaction.mockImplementation((cb: any) => cb(prisma));
+    prisma.bill.findUniqueOrThrow.mockImplementation(async () => await prisma.bill.findUnique.mock.results.at(-1)?.value);
     prisma.lateFee.findMany.mockResolvedValue([]);
     prisma.paymentRecord.create.mockResolvedValue({ id: 'p1' });
     prisma.bill.update.mockImplementation(({ data }: any) => ({ ...bill(), ...data }));

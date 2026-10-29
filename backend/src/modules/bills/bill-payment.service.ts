@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   forwardRef,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { Prisma, type PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
@@ -57,7 +58,10 @@ export class BillPaymentService {
    * - 分配顺序：先账单本金，再按确认时间核销滞纳金
    */
   async addPayment(billId: string, dto: CreatePaymentDto, operatorId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction((tx) => this.addPaymentInTransaction(tx, billId, dto, operatorId));
+  }
+
+  private async addPaymentInTransaction(tx: Prisma.TransactionClient, billId: string, dto: CreatePaymentDto, operatorId: string, prepayRequestFingerprint?: string) {
       await this.lockBill(tx, billId);
 
       const bill = await tx.bill.findUnique({ where: { id: billId } });
@@ -111,12 +115,9 @@ export class BillPaymentService {
         }
       }
 
-      await this.payments.createOrder({
-        billId,
-        amount: dto.amount,
-        paymentMethod: dto.paymentMethod,
-        description: `账单 ${billId}`,
-      });
+      if ((dto.paymentMethod as string) !== 'PREPAY') {
+        await this.payments.createOrder({ billId, amount: dto.amount, paymentMethod: dto.paymentMethod, description: `账单 ${billId}` });
+      }
 
       const billPortion = Math.min(dto.amount, remaining);
       let feePortion = dto.amount - billPortion;
@@ -157,6 +158,7 @@ export class BillPaymentService {
             paymentMethod: dto.paymentMethod as PaymentMethod,
             transactionNumber: dto.transactionNumber,
             idempotencyKey: dto.idempotencyKey,
+            prepayRequestFingerprint,
             receiptNumber,
             status: 'CONFIRMED',
             billPortion,
@@ -221,7 +223,6 @@ export class BillPaymentService {
       });
 
       return { payment, bill: updatedBill, lateFees: settledFees, idempotent: false };
-    });
   }
 
   /**
@@ -547,99 +548,42 @@ export class BillPaymentService {
       }
     }
 
-    if (bill.status === 'PAID' || bill.status === 'CANCELLED') {
-      throw new BadRequestException(`账单当前为 ${bill.status} 状态，无需支付`);
-    }
-
-    // 计算未付金额（本金 + 确认的滞纳金）
-    const unsettledFees = await this.prisma.lateFee.findMany({
-      where: { billId, confirmedAmount: { not: null } },
-    });
-    const outstandingFees = unsettledFees.reduce((sum, fee) => {
-      const confirmed = fee.confirmedAmount ?? 0;
-      const settled = fee.settledAmount ?? 0;
-      return sum + Math.max(0, confirmed - settled);
-    }, 0);
-
-    const remaining = bill.amount - bill.paidAmount + outstandingFees;
-    if (remaining <= 0) {
-      throw new BadRequestException('账单已无待缴金额');
-    }
-
-    // 查找租客的预付账户
-    const prepayAccount = await this.prisma.prepayAccount.findUnique({
-      where: {
-        tenantId_roomId: {
-          tenantId: bill.contract.tenantId,
-          roomId: bill.contract.roomId,
-        },
-      },
-    });
-
-    if (!prepayAccount || prepayAccount.balanceCache <= 0) {
-      throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '预付账户余额不足');
-    }
-
-    const maxDeductible = Math.min(prepayAccount.balanceCache, remaining);
-    const deductAmount = dto.amount ? Math.min(dto.amount, maxDeductible) : maxDeductible;
-
-    if (deductAmount <= 0) {
-      throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '预付账户余额不足');
-    }
-
-    const idempotencyKey =
-      dto.idempotencyKey || `prepay_bill_${bill.id}_${Date.now()}_${randomHex(4)}`;
-    const transactionNumber = `PREPAY_DEDUCT_${Date.now()}_${randomHex(4)}`;
-
-    // 事务内原子扣减预付账户余额与记录流水
-    await this.prisma.$transaction(async (tx) => {
-      const result = await tx.prepayAccount.updateMany({
-        where: { id: prepayAccount.id, balanceCache: { gte: deductAmount } },
-        data: { balanceCache: { decrement: deductAmount } },
-      });
-
-      if (result.count === 0) {
-        throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '预付账户余额不足');
+    const idempotencyKey = dto.idempotencyKey || `prepay_bill_${bill.id}_${Date.now()}_${randomHex(4)}`;
+    const fingerprint = createHash('sha256').update(JSON.stringify([billId, user.userId, dto.amount ?? null])).digest('hex');
+    const payment = await this.prisma.$transaction(async (tx) => {
+      await this.lockBill(tx, billId);
+      const lockedBill = await tx.bill.findUniqueOrThrow({ where: { id: billId } });
+      const existing = await tx.paymentRecord.findUnique({ where: { idempotencyKey } });
+      if (existing) {
+        if (existing.billId !== billId || existing.paymentMethod !== 'PREPAY' || existing.status !== 'CONFIRMED' || existing.prepayRequestFingerprint !== fingerprint) throw new ConflictException('幂等键已用于其他收款请求');
+        return { payment: existing, bill: lockedBill, lateFees: [], idempotent: true };
       }
-
-      const updatedAccount = await tx.prepayAccount.findUniqueOrThrow({
-        where: { id: prepayAccount.id },
-      });
-
-      await tx.prepayTransaction.create({
-        data: {
-          accountId: prepayAccount.id,
-          type: 'DEDUCTION',
-          amount: -deductAmount,
-          balanceAfter: updatedAccount.balanceCache,
-          relatedId: bill.id,
-          relatedType: 'BILL_DEDUCTION',
-          description: `预付余额抵扣账单(${bill.billNumber})`,
-          operatorId: user.userId,
-        },
-      });
+      if (lockedBill.status === 'PAID' || lockedBill.status === 'CANCELLED') throw new BadRequestException(`账单当前为 ${lockedBill.status} 状态，无需支付`);
+      const fees = await tx.lateFee.findMany({ where: { billId, confirmedAmount: { not: null } } });
+      const remaining = lockedBill.amount - lockedBill.paidAmount + fees.reduce((sum, fee) => sum + this.lateFeeOutstanding(fee), 0);
+      const account = await tx.prepayAccount.findUnique({ where: { tenantId_roomId: { tenantId: bill.contract.tenantId, roomId: bill.contract.roomId } } });
+      if (remaining <= 0) throw new BadRequestException('账单已无待缴金额');
+      if (!account || account.balanceCache <= 0) throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '预付账户余额不足');
+      const amount = Math.min(dto.amount ?? remaining, account.balanceCache, remaining);
+      const result = await tx.prepayAccount.updateMany({ where: { id: account.id, balanceCache: { gte: amount } }, data: { balanceCache: { decrement: amount } } });
+      if (result.count === 0) throw apiError(ErrorCode.PREPAY_INSUFFICIENT_BALANCE, '预付账户余额不足');
+      const updated = await tx.prepayAccount.findUniqueOrThrow({ where: { id: account.id } });
+      await tx.prepayTransaction.create({ data: { accountId: account.id, type: 'DEDUCTION', amount: -amount, balanceAfter: updated.balanceCache, relatedId: bill.id, relatedType: 'BILL_DEDUCTION', description: `预付余额抵扣账单(${bill.billNumber})`, operatorId: user.userId } });
+      const resultPayment = await this.addPaymentInTransaction(tx, billId, { amount, paymentMethod: 'PREPAY' as any, transactionNumber: `PREPAY_DEDUCT_${Date.now()}_${randomHex(4)}`, idempotencyKey, notes: `预付账户余额抵扣 (账户: ${account.id})` }, user.userId, fingerprint);
+      return { ...resultPayment, accountId: account.id };
     });
-
-    // 登记账单收款并结转滞纳金与收据
-    const payment = await this.addPayment(
-      billId,
-      {
-        amount: deductAmount,
-        paymentMethod: 'PREPAY' as any,
-        transactionNumber,
-        idempotencyKey,
-        notes: `预付账户余额抵扣 (账户: ${prepayAccount.id})`,
-      },
-      user.userId,
-    );
 
     // 检测低余额预警并触发通知（带每日频控）
     try {
-      await this.prepayService.triggerLowBalanceAlertIfNeeded(prepayAccount.id);
+      if (!payment.idempotent && 'accountId' in payment) await this.prepayService.triggerLowBalanceAlertIfNeeded(payment.accountId);
     } catch {
       // 提醒失败不阻断已成功的账单抵扣流程
     }
 
+    if ('accountId' in payment) {
+      const { accountId: _accountId, ...response } = payment;
+      return response;
+    }
     return payment;
   }
 }

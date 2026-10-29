@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import { auth, createApp, http, login, prisma, resetDatabase, seedBase } from './harness.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from '../../src/modules/bills/payment/payment-provider.js';
 import { MockPaymentProvider } from '../../src/modules/bills/payment/mock-payment.provider.js';
+import { AuditLogService } from '../../src/modules/audit/audit-log.service.js';
 import { JwtAuthService } from '../../src/modules/auth/jwt.service.js';
 
 let app: INestApplication;
@@ -364,4 +365,67 @@ describe('预付线上充值、自动扣费与低余额提醒集成测试（T296
     expect(notification).not.toBeNull();
     expect(notification?.title).toContain('预付');
   });
+  it('收款登记失败必须回滚预付扣款', async () => {
+    const data = await setupTenantWithPrepay({ roomNumber: '901', tenantName: '测试', phone: '13800000901', openid: 'test901', initialBalance: 100000 });
+    const bill = await prisma.bill.create({ data: { contractId: data.contract.id, billNumber: 'TEST-901', billType: 'RENT', period: '2026-02', amount: 80000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const spy = vi.spyOn(app.get(AuditLogService), 'recordEvent').mockRejectedValueOnce(new Error('injected failure'));
+    const res = await http(app).post(`/bills/${bill.id}/pay/prepay`).set(auth(data.tenantToken)).send({ amount: 60000, idempotencyKey: 'test-failure-901' });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect((await prisma.prepayAccount.findUniqueOrThrow({ where: { id: data.prepayAccount.id } })).balanceCache).toBe(100000);
+    expect(await prisma.prepayTransaction.count({ where: { accountId: data.prepayAccount.id, relatedId: bill.id } })).toBe(0);
+    expect(await prisma.paymentRecord.count({ where: { billId: bill.id } })).toBe(0);
+    spy.mockRestore();
+  });
+  it('相同幂等键重复请求只扣一次', async () => {
+    const data = await setupTenantWithPrepay({ roomNumber: '902', tenantName: '测试', phone: '13800000902', openid: 'test902', initialBalance: 100000 });
+    const bill = await prisma.bill.create({ data: { contractId: data.contract.id, billNumber: 'TEST-902', billType: 'RENT', period: '2026-02', amount: 80000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const send = () => http(app).post(`/bills/${bill.id}/pay/prepay`).set(auth(data.tenantToken)).send({ amount: 30000, idempotencyKey: 'test-retry-902' });
+    expect((await send()).status).toBe(201);
+    expect((await send()).status).toBe(201);
+    expect((await prisma.prepayAccount.findUniqueOrThrow({ where: { id: data.prepayAccount.id } })).balanceCache).toBe(70000);
+    expect(await prisma.prepayTransaction.count({ where: { accountId: data.prepayAccount.id, relatedId: bill.id } })).toBe(1);
+  });
+
+  it('并发同键重试只扣一次且不同请求正常结算', async () => {
+    const data = await setupTenantWithPrepay({ roomNumber: '903', tenantName: '测试', phone: '13800000903', openid: 'test903', initialBalance: 100000 });
+    const bill = await prisma.bill.create({ data: { contractId: data.contract.id, billNumber: 'TEST-903', billType: 'RENT', period: '2026-02', amount: 80000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const send = (key: string, amount: number, token = data.tenantToken) => http(app).post(`/bills/${bill.id}/pay/prepay`).set(auth(token)).send({ amount, idempotencyKey: key });
+    const other = await setupTenantWithPrepay({ roomNumber: '904', tenantName: '测试二', phone: '13800000904', openid: 'test904', base: { buildingId: data.room.buildingId }, adminToken: data.adminToken });
+    expect((await send('unauthorized', 10000, other.tenantToken)).status).toBe(403);
+    const results = await Promise.all([send('concurrent-key', 30000), send('concurrent-key', 30000)]);
+    expect(results.map(r => r.status)).toEqual([201, 201]);
+    expect((await prisma.prepayAccount.findUniqueOrThrow({ where: { id: data.prepayAccount.id } })).balanceCache).toBe(70000);
+    expect(await prisma.prepayTransaction.count({ where: { accountId: data.prepayAccount.id, relatedId: bill.id } })).toBe(1);
+    expect((await send('different-key', 20000)).status).toBe(201);
+    expect((await prisma.prepayAccount.findUniqueOrThrow({ where: { id: data.prepayAccount.id } })).balanceCache).toBe(50000);
+    expect((await send('concurrent-key', 10000)).status).toBe(409);
+  });
+
+  it('截額後同鍵重試仍按原始請求比對', async () => {
+    const data = await setupTenantWithPrepay({ roomNumber: '905', tenantName: '测试', phone: '13800000905', openid: 'test905', initialBalance: 40000 });
+    const bill = await prisma.bill.create({ data: { contractId: data.contract.id, billNumber: 'TEST-905', billType: 'RENT', period: '2026-02', amount: 80000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const send = (amount: number) => http(app).post(`/bills/${bill.id}/pay/prepay`).set(auth(data.tenantToken)).send({ amount, idempotencyKey: 'clipped-905' });
+    const results = await Promise.all([send(60000), send(60000)]);
+    expect(results.map(r => r.status)).toEqual([201, 201]);
+    expect((await prisma.prepayAccount.findUniqueOrThrow({ where: { id: data.prepayAccount.id } })).balanceCache).toBe(0);
+    expect(await prisma.prepayTransaction.count({ where: { accountId: data.prepayAccount.id, relatedId: bill.id } })).toBe(1);
+    expect((await send(40000)).status).toBe(409);
+    expect((await send(60000)).status).toBe(201);
+  });
+
+  it('截到未付金额后同键重试，零余额不产生扣款', async () => {
+    const data = await setupTenantWithPrepay({ roomNumber: '906', tenantName: '测试', phone: '13800000906', openid: 'test906', initialBalance: 100000 });
+    const bill = await prisma.bill.create({ data: { contractId: data.contract.id, billNumber: 'TEST-906', billType: 'RENT', period: '2026-02', amount: 30000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const send = (token: string, key: string, amount: number) => http(app).post(`/bills/${bill.id}/pay/prepay`).set(auth(token)).send({ amount, idempotencyKey: key });
+    expect((await send(data.tenantToken, 'bill-cap-906', 60000)).status).toBe(201);
+    expect((await send(data.tenantToken, 'bill-cap-906', 60000)).status).toBe(201);
+    expect((await send(data.adminToken, 'bill-cap-906', 60000)).status).toBe(409);
+    expect((await prisma.prepayAccount.findUniqueOrThrow({ where: { id: data.prepayAccount.id } })).balanceCache).toBe(70000);
+    const empty = await setupTenantWithPrepay({ roomNumber: '907', tenantName: '测试二', phone: '13800000907', openid: 'test907', base: { buildingId: data.room.buildingId }, adminToken: data.adminToken, initialBalance: 0 });
+    const bill2 = await prisma.bill.create({ data: { contractId: empty.contract.id, billNumber: 'TEST-907', billType: 'RENT', period: '2026-02', amount: 30000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const response = await http(app).post(`/bills/${bill2.id}/pay/prepay`).set(auth(empty.tenantToken)).send({ amount: 10000, idempotencyKey: 'empty-907' });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(await prisma.prepayTransaction.count({ where: { accountId: empty.prepayAccount.id, relatedId: bill2.id } })).toBe(0);
+  });
+
 });
