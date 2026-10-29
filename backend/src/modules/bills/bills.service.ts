@@ -455,7 +455,7 @@ export class BillsService {
       { header: '账期', key: 'period' },
       { header: '应付金额(元)', formatter: (b) => centsToYuanString(b.amount) },
       { header: '已付金额(元)', formatter: (b) => centsToYuanString(b.paidAmount) },
-      { header: '未付本金(元)', formatter: (b) => centsToYuanString(Math.max(0, b.amount - b.paidAmount)) },
+      { header: '未付本金(元)', formatter: (b) => centsToYuanString(b.status === 'CANCELLED' ? 0 : Math.max(0, b.amount - b.paidAmount)) },
       {
         header: '确认滞纳金(元)',
         formatter: (b) => {

@@ -31,8 +31,8 @@ export const BILL_STATUS_TAG: Record<string, 'warning' | 'info' | 'success' | 'd
 };
 
 /** 未缴金额（分）；溢缴时按 0 处理，不显示负数。 */
-export function unpaidOf(bill: Pick<Bill, 'amount' | 'paidAmount'>): number {
-  return Math.max(0, bill.amount - bill.paidAmount);
+export function unpaidOf(bill: Pick<Bill, 'amount' | 'paidAmount'> & Partial<Pick<Bill, 'status'>>): number {
+  return bill.status === 'CANCELLED' ? 0 : Math.max(0, bill.amount - bill.paidAmount);
 }
 
 /**
@@ -57,14 +57,15 @@ export function showOverdue(
 }
 
 /** 收款摘要：已结清 / 未付 / 部分缴纳。 */
-export function paymentSummary(bill: Pick<Bill, 'amount' | 'paidAmount'>): string {
+export function paymentSummary(bill: Pick<Bill, 'amount' | 'paidAmount'> & Partial<Pick<Bill, 'status'>>): string {
+  if (bill.status === 'CANCELLED') return '已取消';
   const unpaid = unpaidOf(bill);
   if (unpaid <= 0) return '已结清';
   if (bill.paidAmount <= 0) return `未付 ${formatMoney(unpaid)}`;
   return `已付 ${formatMoney(bill.paidAmount)} / 未付 ${formatMoney(unpaid)}`;
 }
 
-export function paymentTitle(bill: Pick<Bill, 'amount' | 'paidAmount'>): string {
+export function paymentTitle(bill: Pick<Bill, 'amount' | 'paidAmount'> & Partial<Pick<Bill, 'status'>>): string {
   return `已付 ${formatMoney(bill.paidAmount)} / 未付 ${formatMoney(unpaidOf(bill))}`;
 }
 

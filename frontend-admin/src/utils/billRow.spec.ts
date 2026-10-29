@@ -27,6 +27,8 @@ const baseBill = {
 describe('账单行展示规则（T286）', () => {
   it('未缴金额不为负（溢缴按 0 计）', () => {
     expect(unpaidOf({ amount: 100000, paidAmount: 30000 } as Bill)).toBe(70000);
+    expect(unpaidOf({ amount: 100000, paidAmount: 0, status: 'CANCELLED' } as Bill)).toBe(0);
+    expect(paymentSummary({ amount: 100000, paidAmount: 0, status: 'CANCELLED' } as Bill)).toBe('已取消');
     expect(unpaidOf({ amount: 100000, paidAmount: 120000 } as Bill)).toBe(0);
   });
 

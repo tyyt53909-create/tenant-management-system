@@ -1,0 +1,32 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { INestApplication } from '@nestjs/common';
+import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth, login } from './harness.js';
+let app: INestApplication;
+beforeAll(async () => { app = await createApp(); });
+afterAll(async () => { await app.close(); await prisma.$disconnect(); });
+beforeEach(async () => { await resetDatabase(); });
+describe('T308 当前账单清单与导出', () => {
+  it('取消账单不应列出尚欠本金，列表导出按楼栋隔离且拒绝租客', async () => {
+    const base = await seedBase(); const tenant = await setupTenancy(app, base);
+    const admin = await prisma.user.findUniqueOrThrow({ where: { id: base.adminId } });
+    await prisma.user.create({ data: { email: 'financial@example.invalid', passwordHash: admin.passwordHash, role: 'FINANCIAL', isActive: true } });
+    const financial = await login(app, 'financial@example.invalid', base.adminPassword);
+    const entries = [ ['PENDING', 12345, 0], ['PARTIAL', 12345, 2345], ['PAID', 12345, 12345], ['CANCELLED', 12345, 0] ] as const;
+    for (const [status, amount, paidAmount] of entries) await prisma.bill.create({ data: { contractId: tenant.contractId, billNumber: `TEST-${status}`, billType: 'RENT', period: '2026-02', amount, paidAmount, status, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const list = await http(app).get('/bills').query({ buildingId: base.buildingId }).set(auth(tenant.adminToken));
+    expect(list.status).toBe(200); expect(list.body.data.filter((row: { billNumber: string }) => row.billNumber.startsWith('TEST-'))).toHaveLength(4);
+    const csv = await http(app).get('/bills/export').query({ buildingId: base.buildingId }).set(auth(tenant.adminToken));
+    expect(csv.status).toBe(200);
+    const cancelled = csv.text.split('\r\n').find((row: string) => row.includes('TEST-CANCELLED'));
+    expect(cancelled).toContain(',123.45,0.00,0.00,');
+    expect(csv.text.split('\r\n').find((row: string) => row.includes('TEST-PARTIAL'))).toContain(',123.45,23.45,100.00,');
+    expect(csv.text.split('\r\n').find((row: string) => row.includes('TEST-PAID'))).toContain(',123.45,123.45,0.00,');
+    await prisma.tenant.update({ where: { id: tenant.tenantId }, data: { name: '=租客,\"甲\"\n乙' } });
+    const special = await http(app).get('/bills/export').query({ buildingId: base.buildingId }).set(auth(tenant.adminToken));
+    expect(special.text).toContain(`\"'=租客,\"\"甲\"\"\n乙\"`);
+    expect((await http(app).get('/bills/export').set(auth(tenant.tenantToken))).status).toBe(403);
+    expect((await http(app).get('/bills/export').set(auth(financial))).status).toBe(403);
+    const other = await prisma.building.create({data:{name:'其他',floors:1}});
+    expect((await http(app).get('/bills').query({buildingId:other.id}).set(auth(tenant.adminToken))).body.data).toHaveLength(0);
+  });
+});
