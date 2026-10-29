@@ -2166,6 +2166,14 @@
   },
   {
     "method": "GET",
+    "path": "/api/statistics/unassigned-prepay",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/tags",
     "public": false,
     "roles": [

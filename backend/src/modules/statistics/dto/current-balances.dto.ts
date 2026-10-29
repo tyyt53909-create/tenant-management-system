@@ -9,7 +9,7 @@ export class BalanceMovementDto {
 }
 export class BalanceItemDto {
   @ApiProperty() id!: string; @ApiProperty({ type: String, nullable: true }) contractId!: string | null;
-  @ApiProperty() roomId!: string; @ApiProperty({ type: Number, nullable: true }) balance!: number | null;
+  @ApiProperty() roomId!: string; @ApiProperty({ type: Number, nullable: true }) balance!: number | null; @ApiProperty({ type: Number, nullable: true }) movementTotal!: number | null;
   @ApiProperty({ enum: ['consistent', 'inconsistent', 'unknown'] }) arithmetic!: 'consistent' | 'inconsistent' | 'unknown'; @ApiProperty() inScope!: boolean; @ApiProperty({ type: [String] }) reasonCodes!: string[]; @ApiProperty({ type: [String] }) reasons!: string[];
   @ApiProperty({ type: [BalanceMovementDto] }) movements!: BalanceMovementDto[];
 }
@@ -24,3 +24,5 @@ export class CurrentBalancesResponseDto {
   @ApiProperty({ type: BalanceCategoryDto }) prepay!: BalanceCategoryDto;
   @ApiProperty({ type: [String] }) limitations!: string[];
 }
+
+export class UnassignedPrepayResponseDto { @ApiProperty() capturedAt!: Date; @ApiProperty({ type: [BalanceItemDto] }) items!: BalanceItemDto[]; }

@@ -16,6 +16,10 @@ test('楼栋列表失败可重试，并能选择第 101 棟之后', async ({ pag
   await panel.getByRole('button', { name: '下一页' }).click();
   await panel.locator('.el-select').click();
   await page.getByText('集成测试楼栋', { exact: true }).last().click();
+  await page.route('**/api/buildings?*', async route => { const response = await route.fetch(); await new Promise(resolve => setTimeout(resolve, 1000)); await route.fulfill({ response }); });
+  await panel.getByRole('button', { name: '上一页' }).click();
+  await expect(panel.getByRole('button', { name: '下一页' })).toBeEnabled();
+  await expect(panel.locator('.el-select')).toContainText('集成测试楼栋');
   await panel.getByRole('button', { name: '查询余额' }).click();
   await expect(panel).toContainText('¥300.00');
 });

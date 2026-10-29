@@ -17,9 +17,19 @@ describe('当前余额核对', () => {
     expect(result.status).toBe(200);
     expect(result.body.deposit).toMatchObject({ bookSubtotal: 10000, unknownCount: 1, verifiedTotal: null });
     expect(result.body.deposit.items[0].reasons).toContain('历史流水完整性无法证明');
+    expect(result.body.deposit.items[0].movementTotal).toBe(10000);
     expect(result.body.prepay).toMatchObject({ bookSubtotal: -100, unknownCount: 1, verifiedTotal: null });
     expect(result.body.prepay.items[0].reasons).toContain('账面余额为负数');
     expect((await get(base.buildingId, t.tenantToken)).status).toBe(403);
+    const orphan = await prisma.prepayAccount.create({ data: { tenantId: t.tenantId, roomId: 'no-synthetic-room', balanceCache: 0 } });
+    await prisma.prepayTransaction.createMany({ data: [
+      { accountId: orphan.id, type: 'RECHARGE', amount: 100, balanceAfter: 100, description: '合成', operatorId: base.adminId, createdAt: new Date('2026-01-01') },
+      { accountId: orphan.id, type: 'DEDUCTION', amount: -100, balanceAfter: 0, description: '合成', operatorId: base.adminId, createdAt: new Date('2026-01-01') },
+    ] });
+    const anomalies = await http(app).get('/statistics/unassigned-prepay').set(auth(t.adminToken));
+    expect(anomalies.status).toBe(200);
+    expect(anomalies.body.items).toEqual([expect.objectContaining({ id: orphan.id, roomId: 'no-synthetic-room', balance: 0, movementTotal: 0, arithmetic: 'unknown', inScope: false, reasonCodes: expect.arrayContaining(['ORDER_UNKNOWN', 'OWNERSHIP_UNKNOWN']) })]);
+    expect((await http(app).get('/statistics/unassigned-prepay').set(auth(t.tenantToken))).status).toBe(403);
     const other = await prisma.building.create({ data: { name: '空楼', floors: 1 } });
     expect((await get(other.id)).body.deposit).toMatchObject({ bookSubtotal: 0, unknownCount: 0 });
   });
@@ -50,7 +60,7 @@ describe('当前余额核对', () => {
     await prisma.paymentRecord.create({ data: { billId: missingBill.id, amount: 1000, paymentMethod: 'CASH', paidAt: new Date('2026-01-05'), confirmedBy: base.adminId } });
     const result = (await get()).body.deposit;
     expect(result.bookSubtotal).toBe(10000);
-    expect(result.items.find((item: { contractId: string }) => item.contractId === missingContract.id)).toMatchObject({ balance: null, arithmetic: 'unknown', reasons: ['押金账单已有收款但缺少台账'] });
+    expect(result.items.find((item: { contractId: string }) => item.contractId === missingContract.id)).toMatchObject({ balance: null, movementTotal: null, arithmetic: 'unknown', reasons: ['押金账单已有收款但缺少台账'] });
   });
   it('流水数量超限明确拒绝', async () => {
     const base = await seedBase(); const t = await setupTenancy(app, base);
@@ -66,5 +76,9 @@ describe('当前余额核对', () => {
     expect(small.body.prepay).toMatchObject({ bookSubtotal: 0, unknownCount: 0 });
     const all = await http(app).get('/statistics/current-balances').set(auth(t.adminToken));
     expect(all.status).toBe(400);
+    const orphanAccount = await prisma.prepayAccount.findFirstOrThrow({ where: { roomId: 'missing-synthetic-room' } });
+    await prisma.prepayTransaction.createMany({ data: Array.from({ length: 5001 }, () => ({ accountId: orphanAccount.id, type: 'ADJUSTMENT' as const, amount: 1, balanceAfter: 1, description: '合成', operatorId: base.adminId })) });
+    expect((await http(app).get('/statistics/unassigned-prepay').set(auth(t.adminToken))).status).toBe(400);
+    expect((await http(app).get('/statistics/current-balances').query({ buildingId: other.id }).set(auth(t.adminToken))).status).toBe(200);
   });
 });

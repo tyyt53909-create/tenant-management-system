@@ -3773,6 +3773,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/statistics/unassigned-prepay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StatisticsController_unassignedPrepay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4733,6 +4749,7 @@ export interface components {
             /** @enum {string} */
             arithmetic: "consistent" | "inconsistent" | "unknown";
             reasonCodes: string[];
+            movementTotal: number | null;
         };
         BalanceCategoryDto: {
             items: components["schemas"]["BalanceItemDto"][];
@@ -4749,6 +4766,11 @@ export interface components {
             limitations: string[];
             unassignedPrepayCount: number;
             unassignedDepositCount: number;
+        };
+        UnassignedPrepayResponseDto: {
+            /** Format: date-time */
+            capturedAt: string;
+            items: components["schemas"]["BalanceItemDto"][];
         };
     };
     responses: never;
@@ -14975,6 +14997,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentBalancesResponseDto"];
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    StatisticsController_unassignedPrepay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnassignedPrepayResponseDto"];
                 };
             };
             /** @description 错误 */

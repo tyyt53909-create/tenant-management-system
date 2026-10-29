@@ -20,6 +20,8 @@ await prisma.refundRecord.create({ data: { paymentRecordId: payment.id, billId: 
 await prisma.building.create({ data: { name: '空测试楼栋', floors: 1 } });
 const prepay = await prisma.prepayAccount.create({ data: { tenantId: tenancy.tenantId, roomId: tenancy.roomId, balanceCache: 12000 } });
 await prisma.prepayTransaction.create({ data: { accountId: prepay.id, type: 'RECHARGE', amount: 12000, balanceAfter: 12000, description: '合成', operatorId: base.adminId } });
+const orphan = await prisma.prepayAccount.create({ data: { tenantId: tenancy.tenantId, roomId: 'browser-no-room', balanceCache: 2500 } });
+await prisma.prepayTransaction.create({ data: { accountId: orphan.id, type: 'RECHARGE', amount: 2500, balanceAfter: 2500, description: '合成', operatorId: base.adminId } });
 const ledger = await prisma.depositLedger.create({ data: { contractId: tenancy.contractId, tenantId: tenancy.tenantId, roomId: tenancy.roomId, amount: 30000, balance: 30000 } });
 await prisma.depositTransaction.create({ data: { ledgerId: ledger.id, type: 'COLLECT', amount: 20000, balanceAfter: 20000, operatorId: base.adminId, createdAt: new Date('2026-01-01') } });
 await prisma.depositTransaction.create({ data: { ledgerId: ledger.id, type: 'TRANSFER', amount: 10000, balanceAfter: 30000, operatorId: base.adminId, createdAt: new Date('2026-01-02') } });

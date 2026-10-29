@@ -14,6 +14,13 @@ test('当前余额连接隔离 API，切换不显示旧楼栋', async ({ page })
   await expect(panel).toContainText('¥300.00'); await expect(panel).toContainText('¥120.00');
   await expect(panel).toContainText('历史流水完整性无法证明'); await expect(panel).toContainText('一致（不证明完整）');
   await expect(panel).toContainText('完整核实合计：不可提供');
+  await expect(panel).toContainText('流水总和（元）');
+  const orphanSection = panel.getByRole('region', { name: '全局无房间归属预付' });
+  await orphanSection.getByRole('button', { name: '查询异常明细' }).click();
+  await expect(orphanSection).toContainText('browser-no-room');
+  await expect(orphanSection).toContainText('¥25.00');
+  await orphanSection.getByText('查看流水').click();
+  await expect(orphanSection).toContainText('RECHARGE');
   await expect(panel).toContainText('押金转移配对未核实');
   await expect(panel).toContainText('台账、合同或房间的当前归属不一致');
   await panel.getByText('查看编号与流水').first().click();

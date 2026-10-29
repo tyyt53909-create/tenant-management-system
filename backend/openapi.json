@@ -16057,6 +16057,42 @@
           }
         ]
       }
+    },
+    "/api/statistics/unassigned-prepay": {
+      "get": {
+        "operationId": "StatisticsController_unassignedPrepay",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnassignedPrepayResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Statistics"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -19379,6 +19415,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "movementTotal": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -19386,6 +19426,7 @@
           "contractId",
           "roomId",
           "balance",
+          "movementTotal",
           "arithmetic",
           "inScope",
           "reasonCodes",
@@ -19458,6 +19499,25 @@
           "deposit",
           "prepay",
           "limitations"
+        ]
+      },
+      "UnassignedPrepayResponseDto": {
+        "type": "object",
+        "properties": {
+          "capturedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceItemDto"
+            }
+          }
+        },
+        "required": [
+          "capturedAt",
+          "items"
         ]
       }
     }

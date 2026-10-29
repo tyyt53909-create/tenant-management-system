@@ -1,7 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiOkResponse } from '@nestjs/swagger';
 import { RentReportResponseDto } from './dto/rent-report-response.dto.js';
-import { CurrentBalancesQueryDto, CurrentBalancesResponseDto } from './dto/current-balances.dto.js';
+import { CurrentBalancesQueryDto, CurrentBalancesResponseDto, UnassignedPrepayResponseDto } from './dto/current-balances.dto.js';
 import { StatisticsService } from './statistics.service.js';
 import { RentReportDto } from './dto/rent-report.dto.js';
 import { QueryStatisticsDto } from './dto/query-statistics.dto.js';
@@ -15,6 +15,10 @@ import { Roles } from '../../common/decorators/roles.decorator.js';
 @Roles('ADMIN')
 export class StatisticsController {
   constructor(private readonly statisticsService: StatisticsService) {}
+
+  @Get('unassigned-prepay')
+  @ApiOkResponse({ type: UnassignedPrepayResponseDto })
+  unassignedPrepay() { return this.statisticsService.unassignedPrepay(); }
 
   @Get('current-balances')
   @ApiOkResponse({ type: CurrentBalancesResponseDto })

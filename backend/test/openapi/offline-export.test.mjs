@@ -19,7 +19,8 @@ for (const command of ['openapi:generate', 'openapi:check']) {
     const document = JSON.parse(readFileSync('openapi.json', 'utf8'));
     assert.ok(document.paths['/api/bills']);
     assert.ok(document.paths['/api/statistics/current-balances'].get);
-    assert.equal(Object.values(document.paths).reduce((n, path) => n + Object.keys(path).filter(key => ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'].includes(key)).length, 0), 291);
+    assert.ok(document.paths['/api/statistics/unassigned-prepay'].get);
+    assert.equal(Object.values(document.paths).reduce((n, path) => n + Object.keys(path).filter(key => ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'].includes(key)).length, 0), 292);
     assert.equal(document.components.schemas.CreateRefundDto.required.includes('requestKey'), true);
     assert.equal(document.paths['/api/bills'].get.responses['200'].content['application/json'].schema.properties.data.items.properties.currentOverdueDays.type, 'integer');
   });
