@@ -130,6 +130,31 @@ describe('跨退租单并发', () => {
     expect(await prisma.cleaningTask.count({ where: { roomId: t.roomId } })).toBe(deductFirst ? 0 : 1);
   }, 30000);
 
+  it.each([true, false])('续约押金转移与退租结算互斥（转移先 %s）', async (transferFirst) => {
+    const base = await seedBase(); const t = await setupTenancy(app, base);
+    const old = await prisma.contract.findUniqueOrThrow({ where: { id: t.contractId } });
+    const next = await prisma.contract.create({ data: { buildingId: old.buildingId, roomId: old.roomId, tenantId: old.tenantId, contractNumber: 'TRANSFER-NEXT', rentAmount: old.rentAmount, depositAmount: old.depositAmount, paymentCycle: old.paymentCycle, paymentDay: old.paymentDay, startDate: new Date('2026-11-01'), endDate: new Date('2027-11-01'), lateFeeRule: old.lateFeeRule as object, renewedFromId: old.id } });
+    await prisma.depositLedger.create({ data: { contractId: old.id, tenantId: t.tenantId, roomId: t.roomId, amount: 3000, balance: 3000 } });
+    await prisma.depositLedger.create({ data: { contractId: next.id, tenantId: t.tenantId, roomId: t.roomId, amount: 3000, balance: 0 } });
+    const created = await http(app).post('/checkout').set(auth(t.adminToken)).send({ contractId: old.id, roomId: t.roomId, checkoutDate: '2026-10-29', totalRefund: 3000, processedBy: 'synthetic', items: [{ itemType: 'DEPOSIT_REFUND', description: '押金', amount: 3000 }] }); expect(created.status).toBe(201);
+    let release!: () => void; let locked!: () => void; const ready = new Promise<void>(resolve => { locked = resolve; }); const barrier = new Promise<void>(resolve => { release = resolve; });
+    const hold = prisma.$transaction(async tx => { await tx.$queryRaw`SELECT id FROM deposit_ledgers WHERE "contractId" = ${old.id} FOR UPDATE`; locked(); await barrier; }, { timeout: 15000 }); await ready;
+    const transfer = () => http(app).post(`/deposits/${old.id}/transfer`).set(auth(t.adminToken)).send({ toContractId: next.id }).then(r => r);
+    const checkout = () => http(app).patch(`/checkout/${created.body.id}`).set(auth(t.adminToken)).send({ status: 'COMPLETED' }).then(r => r);
+    const waitLocks = async (target: number) => { for (let i = 0; i < 100; i++) { const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT count(*) AS count FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%deposit_ledgers%'`; if (Number(rows[0].count) >= target) return; await new Promise(resolve => setTimeout(resolve, 50)); } throw new Error('ledger barrier not reached'); };
+    const first = transferFirst ? transfer() : checkout(); await waitLocks(1); const second = transferFirst ? checkout() : transfer(); await waitLocks(2); release(); await hold;
+    const [a, b] = await Promise.all([first, second]); expect(a.status).toBe(transferFirst ? 201 : 200); expect(b.status).toBe(400);
+    const source = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: old.id }, include: { transactions: true } });
+    const target = await prisma.depositLedger.findUniqueOrThrow({ where: { contractId: next.id }, include: { transactions: true } });
+    expect(source.balance).toBe(0); expect(target.balance).toBe(transferFirst ? 3000 : 0);
+    expect(source.transactions.map(row => [row.type, row.amount])).toEqual([[transferFirst ? 'TRANSFER' : 'REFUND', -3000]]);
+    expect(target.transactions.map(row => [row.type, row.amount])).toEqual(transferFirst ? [['TRANSFER', 3000]] : []);
+    expect((await prisma.checkoutRecord.findUniqueOrThrow({ where: { id: created.body.id } })).status).toBe(transferFirst ? 'DRAFT' : 'COMPLETED');
+    expect(await prisma.cleaningTask.count({ where: { roomId: t.roomId } })).toBe(transferFirst ? 0 : 1);
+    expect((await prisma.contract.findUniqueOrThrow({ where: { id: old.id } })).status).toBe(transferFirst ? 'ACTIVE' : 'TERMINATED');
+    expect((await prisma.contract.findUniqueOrThrow({ where: { id: next.id } })).status).toBe('DRAFT');
+  }, 30000);
+
   it('同房已有活动保洁任务时不重复建单', async () => {
     const base = await seedBase(); const t = await setupTenancy(app, base);
     await prisma.depositLedger.create({ data: { contractId: t.contractId, tenantId: t.tenantId, roomId: t.roomId, amount: 3000, balance: 3000 } });
