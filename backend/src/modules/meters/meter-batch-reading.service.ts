@@ -147,6 +147,10 @@ export class MeterBatchReadingService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const item of dto.readings) {
+        if ((item.source as string | undefined) === 'SIMULATED') {
+          results.push({ meterId: item.meterId, success: false, error: '批量接口不支持模拟读数' });
+          continue;
+        }
         if (hasReservedReadingMarker(item.notes) || hasReservedReadingMarker(item.messageId)) {
           results.push({ meterId: item.meterId, success: false, error: '备注或消息编号不得包含系统保留的结算标记' });
           continue;

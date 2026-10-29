@@ -38,6 +38,7 @@ export class MeterReadingService {
     }
     const readingTime = dto.readingTime ? new Date(dto.readingTime) : new Date();
     const source = dto.source || 'MANUAL';
+    if (source === 'SIMULATED' && dto.autoSettle === true) throw new BadRequestException('模拟读数不能自动结算');
     const readingScope = source === 'SIMULATED' ? 'SIMULATED' as const : NOT_SIMULATED;
     const assertSimulationReplay = (reading: { readingTime: Date; currentReading: unknown }) => {
       if (source === 'SIMULATED' && (reading.readingTime.getTime() !== readingTime.getTime() || Number(reading.currentReading) !== dto.currentReading)) {
