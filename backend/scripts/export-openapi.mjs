@@ -3,8 +3,6 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from '
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-process.env.JWT_SECRET = process.env.JWT_SECRET || 'openapi-export-jwt-secret-min-32-bytes!';
-process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef';
 
 const backendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(backendRoot, 'dist');
