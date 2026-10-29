@@ -18,17 +18,22 @@ test('真实合成 API 的租金明细', async ({ page }) => {
   await expect(panel).toContainText('收入 / 预付抵扣');
   await expect(panel).toContainText('成功退款');
   await expect(panel).toContainText('更正');
-  await expect(panel).toContainText('-5000');
+  await expect(panel).toContainText('¥-50.00');
   await expect(panel).toContainText('无法归月，待核对');
   await expect(panel).toContainText('成功退款缺少完成时间');
-  await expect(panel).toContainText('-10000');
-  await expect(panel).toContainText('60000');
+  await expect(panel).toContainText('¥-100.00');
+  await expect(panel).toContainText('¥600.00');
   await expect(panel).toContainText('待核对');
   await expect(panel).toContainText('账单：');
   await expect(panel).toContainText('退款：');
+  await panel.getByRole('button', { name: '查看账单详情' }).first().click();
+  const drawer = page.locator('.resource-drawer');
+  await expect(drawer).toContainText('BROWSER-RENT');
+  await expect(drawer.getByRole('button', { name: '编辑资料' })).toHaveCount(0);
+  await drawer.getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByPlaceholder('选择月份').click();
   await page.locator('.el-month-table td').nth(3).click();
-  await expect(panel).not.toContainText('-10000');
+  await expect(panel).not.toContainText('¥-100.00');
   await panel.getByRole('button', { name: '查询收支' }).click();
   await expect(panel).toContainText('本月没有租金明细');
   // 延迟真实三月 API 响应，再切换查询四月，旧响应不得覆盖新结果。
@@ -47,7 +52,7 @@ test('真实合成 API 的租金明细', async ({ page }) => {
   await panel.getByRole('button', { name: '查询收支' }).click();
   await expect(panel).toContainText('本月没有租金明细');
   await page.waitForTimeout(2200);
-  await expect(panel).not.toContainText('-10000');
+  await expect(panel).not.toContainText('¥-100.00');
   await panel.locator('.el-select').click();
   await page.getByText('空测试楼栋', { exact: true }).last().click();
   await panel.getByRole('button', { name: '查询收支' }).click();
@@ -55,5 +60,5 @@ test('真实合成 API 的租金明细', async ({ page }) => {
   await expect(panel).not.toContainText('无法归月，待核对');
   await page.goto('/bills');
   await page.goBack();
-  await expect(panel).not.toContainText('-10000');
+  await expect(panel).not.toContainText('¥-100.00');
 });
