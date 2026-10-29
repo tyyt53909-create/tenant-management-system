@@ -47,8 +47,11 @@ describe('T305 租金管理口径（暂未完成）', () => {
     expect((await http(app).post(`/bills/${water.id}/pay/prepay`).set(auth(tenancy.tenantToken)).send({ amount: 10000, idempotencyKey: 'water-report' })).status).toBe(201);
     await prisma.paymentRecord.updateMany({ where: { billId: water.id }, data: { paidAt: new Date('2026-02-01T00:00:00Z') } });
     expect((await report('2026-02')).body.provisionalRentIncome).toBe(60000);
-    await prisma.paymentRecord.create({ data: { billId: bill.id, amount: 10000, billPortion: 5000, lateFeePortion: 5000, paymentMethod: 'CASH', paidAt: new Date('2026-02-02T00:00:00Z'), confirmedBy: base.adminId } });
+    await prisma.paymentRecord.create({ data: { billId: bill.id, amount: 10000, billPortion: 5000, lateFeePortion: 5000, allocationVerified: true, paymentMethod: 'CASH', paidAt: new Date('2026-02-02T00:00:00Z'), confirmedBy: base.adminId } });
     expect((await report('2026-02')).body.provisionalRentIncome).toBe(65000);
+    await prisma.paymentRecord.create({ data: { billId: bill.id, amount: 9000, billPortion: 9000, lateFeePortion: 0, paymentMethod: 'CASH', paidAt: new Date('2026-02-03T00:00:00Z'), confirmedBy: base.adminId } });
+    const uncertain = await report('2026-02');
+    expect(uncertain.body).toMatchObject({ provisionalRentIncome: 65000, unknownAllocationCount: 1, rentIncome: null, netOperatingIncome: null });
     await prisma.paymentRecord.updateMany({ where: { billId: bill.id }, data: { status: 'VOIDED' } });
     expect((await report('2026-02')).body).toMatchObject({ status: 'incomplete', hasRentAdjustments: true });
   });

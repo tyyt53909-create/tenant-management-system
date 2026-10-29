@@ -41,7 +41,7 @@ export class StatisticsService {
     const [payments, adjustments, rooms, paidExpenses] = await Promise.all([
       this.prisma.paymentRecord.findMany({
         where: { paidAt: { gte: start, lt: end }, status: 'CONFIRMED', bill: { billType: 'RENT', contract: { buildingId: query.buildingId } } },
-        select: { paidAt: true, billPortion: true },
+        select: { paidAt: true, billPortion: true, allocationVerified: true },
       }),
       // 在口径确定前，只要该楼栋存在租金退款/冲正，即不宣称完整。
       this.prisma.paymentRecord.count({
@@ -51,16 +51,18 @@ export class StatisticsService {
       this.prisma.expensePayment.aggregate({ where: { paidDate: { gte: dateStart, lt: dateEnd, lte: today }, expense: { buildingId: query.buildingId, cancelledAt: null } }, _sum: { amount: true } }),
     ]);
     const balance = await this.prisma.prepayAccount.aggregate({ where: { roomId: { in: rooms.map(room => room.id) } }, _sum: { balanceCache: true } });
+    const monthlyPayments = payments.filter(p => this.clock.monthKey(p.paidAt) === query.month);
     return {
       month: query.month, buildingId: query.buildingId,
       rentIncome: null,
-      provisionalRentIncome: payments.filter(p => this.clock.monthKey(p.paidAt) === query.month).reduce((sum, p) => sum + p.billPortion, 0),
+      provisionalRentIncome: monthlyPayments.filter(p => p.allocationVerified === true).reduce((sum, p) => sum + p.billPortion, 0),
+      unknownAllocationCount: monthlyPayments.filter(p => p.allocationVerified !== true).length,
       paidExpenses: paidExpenses._sum.amount ?? 0,
       currentPrepayBalance: balance._sum.balanceCache ?? 0,
       status: 'incomplete',
       netOperatingIncome: null,
       basis: '管理口径：按租金本金实际收款或预付抵扣的业务月归集',
-      limitations: ['退款和冲正归期尚待确定', '历史收款本金分配可能包含滞纳金，须核对', '当前预付余额不是月末余额；不计算净收益'],
+      limitations: ['退款和冲正归期尚待确定', '来源未核实的收款未计入候选租金，须核对', '当前预付余额不是月末余额；不计算净收益'],
       hasRentAdjustments: adjustments > 0,
     };
   }

@@ -162,6 +162,7 @@ export class BillPaymentService {
             receiptNumber,
             status: 'CONFIRMED',
             billPortion,
+            allocationVerified: true,
             lateFeePortion: dto.amount - billPortion,
             lateFeeAllocations: allocations as unknown as Prisma.InputJsonValue,
             paidAt: dto.paidAt ? new Date(dto.paidAt) : now,

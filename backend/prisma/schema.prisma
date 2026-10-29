@@ -860,6 +860,7 @@ model PaymentRecord {
   receiptNumber  String? @unique
 
   /// 本次收款分配到账单本金/滞纳金的金额（用于精确冲正）
+  allocationVerified Boolean? // null = 来源未核实，不推断历史记录
   billPortion    Int  @default(0)
   lateFeePortion Int  @default(0)
   /// [{ lateFeeId, amount }]，按冲正需要精确回滚
