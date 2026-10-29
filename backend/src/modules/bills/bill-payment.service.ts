@@ -519,6 +519,9 @@ export class BillPaymentService {
     dto: PrepayPayBillDto,
     user: { userId: string; role: string; tenantId?: string },
   ) {
+    if (dto.amount !== undefined && (!Number.isSafeInteger(dto.amount) || dto.amount <= 0)) {
+      throw new BadRequestException('抵扣金额必须为正整数');
+    }
     const bill = await this.prisma.bill.findUnique({
       where: { id: billId },
       include: {
