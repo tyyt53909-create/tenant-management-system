@@ -87,6 +87,10 @@ describe('退租结算', () => {
     expect(room.body.status).toBe('VACANT');
     expect(room.body.cleanStatus).toBe('PENDING_CLEAN');
 
+    const cleaningTasks = await prisma.cleaningTask.findMany({ where: { roomId: tenancy.roomId } });
+    expect(cleaningTasks).toHaveLength(1);
+    expect(cleaningTasks[0]).toMatchObject({ status: 'PENDING', type: 'CHECKOUT', source: 'CHECKOUT_AUTO', sourceId: checkoutId });
+
     const ledger = await http(app)
       .get(`/deposits/${tenancy.contractId}`)
       .set(auth(tenancy.adminToken));
@@ -101,6 +105,7 @@ describe('退租结算', () => {
       .set(auth(tenancy.adminToken))
       .send({ status: 'COMPLETED' });
     expect(again.status).toBe(200);
+    expect(await prisma.cleaningTask.count({ where: { roomId: tenancy.roomId } })).toBe(1);
     const ledgerAgain = await http(app)
       .get(`/deposits/${tenancy.contractId}`)
       .set(auth(tenancy.adminToken));

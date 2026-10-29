@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import type { Prisma, CheckoutItemType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
+import { randomHex } from '../../common/utils/secure-random.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js';
 import { UpdateCheckoutDto } from './dto/update-checkout.dto.js';
@@ -33,6 +35,7 @@ export class CheckoutService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    private readonly clock: BusinessClock,
   ) {}
 
   async create(dto: CreateCheckoutDto) {
@@ -304,7 +307,7 @@ export class CheckoutService {
                 await tx.room.update({ where: { id: record.contract.roomId }, data: roomUpdate });
 
                 // WRK-03 / T304：退租完成自动生成保洁任务工单
-                if (tx.cleaningTask) {
+                {
                   const existingTask = await tx.cleaningTask.findFirst({
                     where: {
                       roomId: record.contract.roomId,
@@ -312,8 +315,8 @@ export class CheckoutService {
                     },
                   });
                   if (!existingTask) {
-                    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-                    const randomHexStr = Math.random().toString(16).slice(2, 8).toUpperCase();
+                    const todayStr = this.clock.formatDate().replace(/-/g, '');
+                    const randomHexStr = randomHex(3).toUpperCase();
                     await tx.cleaningTask.create({
                       data: {
                         taskNumber: `CL-${todayStr}-${randomHexStr}`,

@@ -18,8 +18,8 @@ beforeEach(async () => {
   await resetDatabase();
 });
 
-describe('保洁工单：自动建单、指派、开工完工与验收恢复全生命周期集成测试（T304 / WRK-03）', () => {
-  it('退租自动生成保洁任务 -> 指派保洁员 -> 开工联动CLEANING -> 完工提报 -> 验收合格原子恢复CLEAN', async () => {
+describe('保洁工单：手动建单、指派、开工完工与验收恢复集成测试（T304 / WRK-03）', () => {
+  it('手动创建保洁任务 -> 指派保洁员 -> 开工联动CLEANING -> 完工提报 -> 验收合格原子恢复CLEAN', async () => {
     const base = await seedBase();
     const adminToken = await login(app, base.adminEmail, base.adminPassword);
     const jwt = app.get(JwtAuthService);
