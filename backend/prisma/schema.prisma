@@ -434,9 +434,27 @@ model Building {
   floorPlans         FloorPlan[]
   staffAssignments   StaffBuildingAssignment[]
   cleaningTasks      CleaningTask[]
+  roomStatusSnapshots RoomStatusSnapshot[]
 
   @@index([isActive])
   @@map("buildings")
+}
+
+// Immutable daily room status capture; no financial data.
+model RoomStatusSnapshot {
+  id           String   @id @default(cuid())
+  buildingId   String
+  building     Building @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  businessDate DateTime @db.Date
+  capturedAt   DateTime
+  total        Int
+  vacant       Int
+  reserved     Int
+  occupied     Int
+  maintenance  Int
+
+  @@unique([buildingId, businessDate])
+  @@map("room_status_snapshots")
 }
 
 // 2. Room（房间）

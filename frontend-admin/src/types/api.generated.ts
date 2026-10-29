@@ -3150,6 +3150,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dashboard/room-status-history/{buildingId}/capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 捕获当前业务日的房态；同日重试返回原快照 */
+        post: operations["RoomStatusSnapshotController_capture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dashboard/room-status-history/{buildingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取指定业务日房态；缺日返回 snapshot: null */
+        get: operations["RoomStatusSnapshotController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/public/buildings": {
         parameters: {
             query?: never;
@@ -4487,6 +4521,25 @@ export interface components {
             /** @description 立即发布到站内通知；为 false/省略时只存草稿 */
             publish?: boolean;
             expiredAt?: string;
+        };
+        RoomStatusSnapshotDto: {
+            id: string;
+            buildingId: string;
+            /**
+             * Format: date-time
+             * @description 业务日期（数据库 date 的 UTC 零点）
+             */
+            businessDate: string;
+            /** Format: date-time */
+            capturedAt: string;
+            total: number;
+            vacant: number;
+            reserved: number;
+            occupied: number;
+            maintenance: number;
+        };
+        RoomStatusHistoryDto: {
+            snapshot: components["schemas"]["RoomStatusSnapshotDto"] | null;
         };
         CreatePublicLeadDto: {
             name: string;
@@ -13301,6 +13354,70 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    RoomStatusSnapshotController_capture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                buildingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 房态快照；只允许管理员 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomStatusSnapshotDto"];
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    RoomStatusSnapshotController_get: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path: {
+                buildingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 包含 snapshot 的对象；未捕获时 snapshot 为 null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomStatusHistoryDto"];
                 };
             };
             /** @description 错误 */

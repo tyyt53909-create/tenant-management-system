@@ -13409,6 +13409,107 @@
         ]
       }
     },
+    "/api/dashboard/room-status-history/{buildingId}/capture": {
+      "post": {
+        "operationId": "RoomStatusSnapshotController_capture",
+        "parameters": [
+          {
+            "name": "buildingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "房态快照；只允许管理员",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomStatusSnapshotDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "捕获当前业务日的房态；同日重试返回原快照",
+        "tags": [
+          "RoomStatusSnapshot"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/dashboard/room-status-history/{buildingId}": {
+      "get": {
+        "operationId": "RoomStatusSnapshotController_get",
+        "parameters": [
+          {
+            "name": "buildingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": "2026-10-29",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "包含 snapshot 的对象；未捕获时 snapshot 为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomStatusHistoryDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "读取指定业务日房态；缺日返回 snapshot: null",
+        "tags": [
+          "RoomStatusSnapshot"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/public/buildings": {
       "get": {
         "operationId": "PublicController_listBuildings",
@@ -18436,6 +18537,69 @@
         "required": [
           "title",
           "body"
+        ]
+      },
+      "RoomStatusSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "buildingId": {
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "业务日期（数据库 date 的 UTC 零点）"
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total": {
+            "type": "number"
+          },
+          "vacant": {
+            "type": "number"
+          },
+          "reserved": {
+            "type": "number"
+          },
+          "occupied": {
+            "type": "number"
+          },
+          "maintenance": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "buildingId",
+          "businessDate",
+          "capturedAt",
+          "total",
+          "vacant",
+          "reserved",
+          "occupied",
+          "maintenance"
+        ]
+      },
+      "RoomStatusHistoryDto": {
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoomStatusSnapshotDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "snapshot"
         ]
       },
       "CreatePublicLeadDto": {

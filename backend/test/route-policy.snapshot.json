@@ -1033,6 +1033,22 @@
   },
   {
     "method": "GET",
+    "path": "/api/dashboard/room-status-history/:buildingId",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/dashboard/room-status-history/:buildingId/capture",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/dashboard/search",
     "public": false,
     "roles": [
