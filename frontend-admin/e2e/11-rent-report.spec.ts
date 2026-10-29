@@ -12,7 +12,7 @@ test('租金报表区分待核对与完整月份，并防止重复查询显示�
     else if (url.pathname.endsWith('/statistics/rent-report')) {
       requests++;
       await new Promise(resolve => setTimeout(resolve, 150));
-      body = { month: '2026-03', buildingId: 'synthetic-building', status: 'incomplete', rentIncome: null, netOperatingIncome: null, verifiedAllocationRentSubtotal: 60000, verifiedRefundSubtotal: 10000, verifiedCorrectionSubtotal: 0, unknownAllocationCount: 1, unknownAdjustmentCount: 0, paidExpenses: 5000, currentPrepayBalance: 40000, basis: '合成测试口径', limitations: ['测试警示'], hasRentAdjustments: true };
+      body = { details: [], undatedDetails: [], month: '2026-03', buildingId: 'synthetic-building', status: 'incomplete', rentIncome: null, netOperatingIncome: null, verifiedAllocationRentSubtotal: 60000, verifiedRefundSubtotal: 10000, verifiedCorrectionSubtotal: 0, unknownAllocationCount: 1, unknownAdjustmentCount: 0, paidExpenses: 5000, currentPrepayBalance: 40000, basis: '合成测试口径', limitations: ['测试警示'], hasRentAdjustments: true };
       if (url.searchParams.get('month')?.endsWith('-04')) body = { ...body, status: 'complete', rentIncome: -5000, netOperatingIncome: -10000, unknownAllocationCount: 0, verifiedCorrectionSubtotal: 5000 };
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });

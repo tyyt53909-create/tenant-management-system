@@ -18885,11 +18885,25 @@
           },
           "hasRentAdjustments": {
             "type": "boolean"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RentDetailDto"
+            }
+          },
+          "undatedDetails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RentDetailDto"
+            }
           }
         },
         "required": [
           "month",
           "buildingId",
+          "details",
+          "undatedDetails",
           "rentIncome",
           "verifiedAllocationRentSubtotal",
           "verifiedRefundSubtotal",
@@ -19172,6 +19186,70 @@
             "type": "string"
           }
         }
+      },
+      "RentDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "PAYMENT",
+              "REFUND",
+              "CORRECTION"
+            ],
+            "type": "string"
+          },
+          "businessDate": {
+            "type": "string",
+            "nullable": true
+          },
+          "billId": {
+            "type": "string"
+          },
+          "paymentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "refundId": {
+            "type": "string",
+            "nullable": true
+          },
+          "amount": {
+            "type": "number",
+            "nullable": true,
+            "description": "租金本金，分；退款和更正为负数，未知为 null"
+          },
+          "grossAmount": {
+            "type": "number",
+            "description": "原交易总额（分，可能包含滞纳金）"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "unknownReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentMethod": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "businessDate",
+          "billId",
+          "paymentId",
+          "refundId",
+          "amount",
+          "grossAmount",
+          "verified",
+          "unknownReason",
+          "paymentMethod"
+        ]
       }
     }
   }

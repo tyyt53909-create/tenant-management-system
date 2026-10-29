@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { RentReportDto } from './dto/rent-report.dto.js';
-import { RentReportResponseDto } from './dto/rent-report-response.dto.js';
+import { RentDetailDto, RentReportResponseDto } from './dto/rent-report-response.dto.js';
 import { QueryStatisticsDto } from './dto/query-statistics.dto.js';
 import { collectionRate, occupancyRate, sumAmounts } from '../../common/metrics/finance-metrics.js';
 
@@ -32,75 +32,93 @@ export class StatisticsService {
 
   /** 管理口径：原收款、成功退款及纯更正分别按其业务月归集。 */
   async rentReport(query: RentReportDto): Promise<RentReportResponseDto> {
-    const [year, month] = query.month.split('-').map(Number);
-    const start = new Date(Date.UTC(year, month - 1, 1) - 2 * 86400000);
-    const end = new Date(Date.UTC(year, month, 1) + 2 * 86400000);
-    const dateStart = this.clock.parseDateOnly(`${query.month}-01`)!;
-    const dateEnd = this.clock.addMonths(dateStart, 1);
-    const today = this.clock.todayUtc();
-    const rentBill = { billType: 'RENT' as const, contract: { buildingId: query.buildingId } };
-    const [payments, refunds, undatedRefunds, reversals, orphanVoids, rooms, paidExpenses] = await Promise.all([
-      this.prisma.paymentRecord.findMany({
-        where: { paidAt: { gte: start, lt: end }, status: { in: ['CONFIRMED', 'VOIDED'] }, bill: rentBill },
-        select: { paidAt: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true },
-      }),
-      this.prisma.refundRecord.findMany({
-        where: { status: 'SUCCESS', successAt: { gte: start, lt: end }, bill: rentBill },
-        select: { amount: true, successAt: true, paymentRecord: { select: { id: true, billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true } }, reversal: { select: { billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true } } },
-      }),
-      // 没有完成时间不能确定受影响月份；不可凭创建/更新时间猜测。
-      this.prisma.refundRecord.count({ where: { status: 'SUCCESS', successAt: null, bill: rentBill } }),
-      this.prisma.paymentRecord.findMany({
-        where: { status: 'REVERSAL', refundReversalId: null, paidAt: { gte: start, lt: end }, bill: rentBill },
-        select: { paidAt: true, amount: true, billPortion: true, lateFeePortion: true, reversalOf: { select: { billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true, refundRecords: { select: { id: true } } } }, billId: true },
-      }),
-      this.prisma.paymentRecord.findMany({ where: { status: 'VOIDED', reversal: null, bill: rentBill }, select: { voidedAt: true, amount: true, refundRecords: { where: { status: 'SUCCESS' }, select: { amount: true, reversal: { select: { amount: true, allocationVerified: true } } } } } }),
-      this.prisma.room.findMany({ where: { buildingId: query.buildingId }, select: { id: true } }),
-      this.prisma.expensePayment.aggregate({ where: { paidDate: { gte: dateStart, lt: dateEnd, lte: today }, expense: { buildingId: query.buildingId, cancelledAt: null } }, _sum: { amount: true } }),
-    ]);
-    const balance = await this.prisma.prepayAccount.aggregate({ where: { roomId: { in: rooms.map(room => room.id) } }, _sum: { balanceCache: true } });
-    const monthlyPayments = payments.filter(p => this.clock.monthKey(p.paidAt) === query.month);
-    const verifiedPayments = monthlyPayments.filter(p => p.allocationVerified === true && p.amount > 0 && p.billPortion >= 0 && p.lateFeePortion >= 0 && p.billPortion + p.lateFeePortion === p.amount);
-    const unknownAllocationCount = monthlyPayments.length - verifiedPayments.length;
-    const verifiedAllocationRentSubtotal = verifiedPayments.reduce((sum, p) => sum + p.billPortion, 0);
-    let verifiedRefundSubtotal = 0;
-    let verifiedCorrectionSubtotal = 0;
-    let unknownAdjustmentCount = undatedRefunds + orphanVoids.filter(p => {
-      const refundsAccountForVoid = p.refundRecords.length > 0 && p.refundRecords.every(r => r.reversal?.allocationVerified === true && r.reversal.amount === -r.amount) && p.refundRecords.reduce((sum, r) => sum + r.amount, 0) === p.amount;
-      return !refundsAccountForVoid && (!p.voidedAt || this.clock.monthKey(p.voidedAt) === query.month);
-    }).length;
-    for (const refund of refunds) {
-      if (!refund.successAt || this.clock.monthKey(refund.successAt) !== query.month) continue;
-      const r = refund.reversal;
-      if (!r || r.status !== 'REVERSAL' || r.billId !== refund.paymentRecord.billId || r.allocationVerified !== true || refund.paymentRecord.allocationVerified !== true || !['CONFIRMED', 'VOIDED'].includes(refund.paymentRecord.status) || r.amount !== -refund.amount || r.billPortion > 0 || r.lateFeePortion > 0 || r.billPortion + r.lateFeePortion !== r.amount || refund.amount > refund.paymentRecord.amount || refund.paymentRecord.billPortion < 0 || refund.paymentRecord.lateFeePortion < 0 || refund.paymentRecord.billPortion + refund.paymentRecord.lateFeePortion !== refund.paymentRecord.amount || -r.billPortion > refund.paymentRecord.billPortion || -r.lateFeePortion > refund.paymentRecord.lateFeePortion) { unknownAdjustmentCount++; continue; }
-      verifiedRefundSubtotal -= r.billPortion;
-    }
-    for (const r of reversals) {
-      if (this.clock.monthKey(r.paidAt) !== query.month) continue;
-      const original = r.reversalOf;
-      if (!original || original.billId !== r.billId || original.refundRecords.length > 0 || original.allocationVerified !== true || original.status !== 'VOIDED' || original.amount <= 0 || original.billPortion < 0 || original.lateFeePortion < 0 || original.billPortion + original.lateFeePortion !== original.amount || r.amount !== -original.amount || r.billPortion !== -original.billPortion || r.lateFeePortion !== -original.lateFeePortion) { unknownAdjustmentCount++; continue; }
-      verifiedCorrectionSubtotal -= r.billPortion;
-    }
-    const complete = unknownAllocationCount === 0 && unknownAdjustmentCount === 0;
-    const paidExpenseAmount = paidExpenses._sum.amount ?? 0;
-    const subtotal = verifiedAllocationRentSubtotal - verifiedRefundSubtotal - verifiedCorrectionSubtotal;
-    return {
-      month: query.month, buildingId: query.buildingId,
-      rentIncome: complete ? subtotal : null,
-      verifiedAllocationRentSubtotal, verifiedRefundSubtotal, verifiedCorrectionSubtotal,
-      unknownAllocationCount, unknownAdjustmentCount,
-      paidExpenses: paidExpenseAmount,
-      currentPrepayBalance: balance._sum.balanceCache ?? 0,
-      status: complete ? 'complete' : 'incomplete',
-      netOperatingIncome: complete ? subtotal - paidExpenseAmount : null,
-      basis: '管理口径：租金本金按实收或预付抵扣月，成功退款按完成月，更正按发生月；扣除实付支出',
-      limitations: [
-        ...(unknownAllocationCount ? ['存在来源未核实的收款分配'] : []),
-        ...(unknownAdjustmentCount ? ['存在退款或更正证据不足；无完成时间的退款可能影响任意月份'] : []),
-        '当前预付余额不是月末余额；此报表不是税务或法定会计口径',
-      ],
-      hasRentAdjustments: refunds.length > 0 || reversals.length > 0 || undatedRefunds > 0 || orphanVoids.length > 0,
-    };
+    return this.prisma.$transaction(async tx => {
+      const [year, month] = query.month.split('-').map(Number);
+      const start = new Date(Date.UTC(year, month - 1, 1) - 2 * 86400000);
+      const end = new Date(Date.UTC(year, month, 1) + 2 * 86400000);
+      const dateStart = this.clock.parseDateOnly(`${query.month}-01`)!;
+      const dateEnd = this.clock.addMonths(dateStart, 1);
+      const today = this.clock.todayUtc();
+      const rentBill = { billType: 'RENT' as const, contract: { buildingId: query.buildingId } };
+      const [payments, refunds, undatedRefunds, reversals, orphanVoids, rooms, paidExpenses] = await Promise.all([
+        tx.paymentRecord.findMany({
+          where: { paidAt: { gte: start, lt: end }, status: { in: ['CONFIRMED', 'VOIDED'] }, bill: rentBill },
+          take: 5001, select: { id: true, billId: true, paymentMethod: true, paidAt: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true },
+        }),
+        tx.refundRecord.findMany({
+          where: { status: 'SUCCESS', successAt: { gte: start, lt: end }, bill: rentBill },
+          take: 5001, select: { id: true, billId: true, paymentRecordId: true, amount: true, successAt: true, paymentRecord: { select: { id: true, billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true } }, reversal: { select: { billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true } } },
+        }),
+        // 没有完成时间不能确定受影响月份；不可凭创建/更新时间猜测。
+        tx.refundRecord.findMany({ where: { status: 'SUCCESS', successAt: null, bill: rentBill }, take: 5001, select: { id: true, billId: true, paymentRecordId: true, amount: true } }),
+        tx.paymentRecord.findMany({
+          where: { status: 'REVERSAL', refundReversalId: null, paidAt: { gte: start, lt: end }, bill: rentBill },
+          take: 5001, select: { id: true, reversalOfId: true, paidAt: true, amount: true, billPortion: true, lateFeePortion: true, reversalOf: { select: { billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true, refundRecords: { select: { id: true } } } }, billId: true },
+        }),
+        tx.paymentRecord.findMany({ where: { status: 'VOIDED', reversal: null, bill: rentBill }, take: 5001, select: { id: true, billId: true, voidedAt: true, amount: true, refundRecords: { where: { status: 'SUCCESS' }, select: { amount: true, reversal: { select: { amount: true, allocationVerified: true } } } } } }),
+        tx.room.findMany({ where: { buildingId: query.buildingId }, select: { id: true } }),
+        tx.expensePayment.aggregate({ where: { paidDate: { gte: dateStart, lt: dateEnd, lte: today }, expense: { buildingId: query.buildingId, cancelledAt: null } }, _sum: { amount: true } }),
+      ]);
+      const balance = await tx.prepayAccount.aggregate({ where: { roomId: { in: rooms.map(room => room.id) } }, _sum: { balanceCache: true } });
+      if ([payments, refunds, undatedRefunds, reversals, orphanVoids].reduce((count, rows) => count + rows.length, 0) > 5000) throw new BadRequestException('租金明细超过 5000 笔，请缩小查询范围');
+      const monthlyPayments = payments.filter(p => this.clock.monthKey(p.paidAt) === query.month);
+      const validPayment = (p: typeof payments[number]) => p.allocationVerified === true && p.amount > 0 && p.billPortion >= 0 && p.lateFeePortion >= 0 && p.billPortion + p.lateFeePortion === p.amount;
+      const verifiedPayments = monthlyPayments.filter(validPayment);
+      const unknownAllocationCount = monthlyPayments.length - verifiedPayments.length;
+      const verifiedAllocationRentSubtotal = verifiedPayments.reduce((sum, p) => sum + p.billPortion, 0);
+      let verifiedRefundSubtotal = 0;
+      let verifiedCorrectionSubtotal = 0;
+      const details: RentDetailDto[] = monthlyPayments.map(p => {
+        const verified = validPayment(p);
+        return { id: p.id, type: 'PAYMENT', businessDate: this.clock.formatDate(p.paidAt), billId: p.billId, paymentId: p.id, refundId: null, amount: verified ? p.billPortion : null, grossAmount: p.amount, verified, unknownReason: verified ? null : '收款分配未核实或金额不一致', paymentMethod: p.paymentMethod };
+      });
+      const undatedDetails: RentDetailDto[] = undatedRefunds.map(r => ({ id: r.id, type: 'REFUND', businessDate: null, billId: r.billId, paymentId: r.paymentRecordId, refundId: r.id, amount: null, grossAmount: r.amount, verified: false, unknownReason: '成功退款缺少完成时间，无法归月', paymentMethod: null }));
+      let unknownAdjustmentCount = undatedRefunds.length + orphanVoids.filter(p => {
+        const refundsAccountForVoid = p.refundRecords.length > 0 && p.refundRecords.every(r => r.reversal?.allocationVerified === true && r.reversal.amount === -r.amount) && p.refundRecords.reduce((sum, r) => sum + r.amount, 0) === p.amount;
+        const unknown = !refundsAccountForVoid && (!p.voidedAt || this.clock.monthKey(p.voidedAt) === query.month);
+        if (unknown) {
+          const item: RentDetailDto = { id: p.id, type: 'CORRECTION', businessDate: p.voidedAt ? this.clock.formatDate(p.voidedAt) : null, billId: p.billId, paymentId: p.id, refundId: null, amount: null, grossAmount: p.amount, verified: false, unknownReason: '作废缺少可核实的冲正或退款关联', paymentMethod: null };
+          (p.voidedAt ? details : undatedDetails).push(item);
+        }
+        return unknown;
+      }).length;
+      for (const refund of refunds) {
+        if (!refund.successAt || this.clock.monthKey(refund.successAt) !== query.month) continue;
+        const r = refund.reversal;
+        if (!r || refund.amount <= 0 || refund.paymentRecord.amount <= 0 || refund.billId !== refund.paymentRecord.billId || r.status !== 'REVERSAL' || r.billId !== refund.paymentRecord.billId || r.allocationVerified !== true || refund.paymentRecord.allocationVerified !== true || !['CONFIRMED', 'VOIDED'].includes(refund.paymentRecord.status) || r.amount !== -refund.amount || r.billPortion > 0 || r.lateFeePortion > 0 || r.billPortion + r.lateFeePortion !== r.amount || refund.amount > refund.paymentRecord.amount || refund.paymentRecord.billPortion < 0 || refund.paymentRecord.lateFeePortion < 0 || refund.paymentRecord.billPortion + refund.paymentRecord.lateFeePortion !== refund.paymentRecord.amount || -r.billPortion > refund.paymentRecord.billPortion || -r.lateFeePortion > refund.paymentRecord.lateFeePortion) { unknownAdjustmentCount++; details.push({ id: refund.id, type: 'REFUND', businessDate: this.clock.formatDate(refund.successAt), billId: refund.billId, paymentId: refund.paymentRecordId, refundId: refund.id, amount: null, grossAmount: refund.amount, verified: false, unknownReason: '退款、原收款或冲正分配关联不一致', paymentMethod: null }); continue; }
+        details.push({ id: refund.id, type: 'REFUND', businessDate: this.clock.formatDate(refund.successAt), billId: refund.billId, paymentId: refund.paymentRecordId, refundId: refund.id, amount: r.billPortion, grossAmount: refund.amount, verified: true, unknownReason: null, paymentMethod: null });
+        verifiedRefundSubtotal -= r.billPortion;
+      }
+      for (const r of reversals) {
+        if (this.clock.monthKey(r.paidAt) !== query.month) continue;
+        const original = r.reversalOf;
+        if (!original || original.billId !== r.billId || original.refundRecords.length > 0 || original.allocationVerified !== true || original.status !== 'VOIDED' || original.amount <= 0 || original.billPortion < 0 || original.lateFeePortion < 0 || original.billPortion + original.lateFeePortion !== original.amount || r.amount !== -original.amount || r.billPortion !== -original.billPortion || r.lateFeePortion !== -original.lateFeePortion) { unknownAdjustmentCount++; details.push({ id: r.id, type: 'CORRECTION', businessDate: this.clock.formatDate(r.paidAt), billId: r.billId, paymentId: r.reversalOfId, refundId: null, amount: null, grossAmount: r.amount, verified: false, unknownReason: '更正与原收款的关联或金额不一致', paymentMethod: null }); continue; }
+        details.push({ id: r.id, type: 'CORRECTION', businessDate: this.clock.formatDate(r.paidAt), billId: r.billId, paymentId: r.reversalOfId, refundId: null, amount: r.billPortion, grossAmount: r.amount, verified: true, unknownReason: null, paymentMethod: null });
+        verifiedCorrectionSubtotal -= r.billPortion;
+      }
+      const complete = unknownAllocationCount === 0 && unknownAdjustmentCount === 0;
+      const paidExpenseAmount = paidExpenses._sum.amount ?? 0;
+      const subtotal = verifiedAllocationRentSubtotal - verifiedRefundSubtotal - verifiedCorrectionSubtotal;
+      details.sort((a, b) => (a.businessDate ?? '').localeCompare(b.businessDate ?? '') || a.type.localeCompare(b.type) || a.id.localeCompare(b.id));
+      undatedDetails.sort((a, b) => a.type.localeCompare(b.type) || a.id.localeCompare(b.id));
+      return {
+        details, undatedDetails, month: query.month, buildingId: query.buildingId,
+        rentIncome: complete ? subtotal : null,
+        verifiedAllocationRentSubtotal, verifiedRefundSubtotal, verifiedCorrectionSubtotal,
+        unknownAllocationCount, unknownAdjustmentCount,
+        paidExpenses: paidExpenseAmount,
+        currentPrepayBalance: balance._sum.balanceCache ?? 0,
+        status: complete ? 'complete' : 'incomplete',
+        netOperatingIncome: complete ? subtotal - paidExpenseAmount : null,
+        basis: '管理口径：租金本金按实收或预付抵扣月，成功退款按完成月，更正按发生月；扣除实付支出',
+        limitations: [
+          ...(unknownAllocationCount ? ['存在来源未核实的收款分配'] : []),
+          ...(unknownAdjustmentCount ? ['存在退款或更正证据不足；无完成时间的退款可能影响任意月份'] : []),
+          '当前预付余额不是月末余额；此报表不是税务或法定会计口径',
+        ],
+        hasRentAdjustments: refunds.length > 0 || reversals.length > 0 || undatedRefunds.length > 0 || orphanVoids.length > 0,
+      };
+    }, { isolationLevel: 'RepeatableRead' });
   }
 
   /** 依 period（+自定义区间）解析出 [start, end) */

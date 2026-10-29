@@ -4596,6 +4596,8 @@ export interface components {
             basis: string;
             limitations: string[];
             hasRentAdjustments: boolean;
+            details: components["schemas"]["RentDetailDto"][];
+            undatedDetails: components["schemas"]["RentDetailDto"][];
         };
         UpdateLeadDto: {
             /** @enum {string} */
@@ -4677,6 +4679,22 @@ export interface components {
             message: string;
             details?: unknown;
             requestId: string;
+        };
+        RentDetailDto: {
+            id: string;
+            /** @enum {string} */
+            type: "PAYMENT" | "REFUND" | "CORRECTION";
+            businessDate: string | null;
+            billId: string;
+            paymentId: string | null;
+            refundId: string | null;
+            /** @description 租金本金，分；退款和更正为负数，未知为 null */
+            amount: number | null;
+            /** @description 原交易总额（分，可能包含滞纳金） */
+            grossAmount: number;
+            verified: boolean;
+            unknownReason: string | null;
+            paymentMethod: string | null;
         };
     };
     responses: never;

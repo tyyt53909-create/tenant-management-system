@@ -17,36 +17,54 @@
       <div><span>净收益</span><strong>{{ nullableMoney(report.netOperatingIncome) }}</strong></div>
       <div><span>当前预付余额（非月末）</span><strong>¥{{ money(report.currentPrepayBalance) }}</strong></div>
     </div>
-    <template v-if="report"><p>{{ report.basis }}</p><p v-for="item in report.limitations" :key="item">{{ item }}</p></template>
+    <template v-if="report"><p>{{ report.basis }}</p><p v-for="item in report.limitations" :key="item">{{ item }}</p>
+      <h3>租金逐笔明细</h3><p>金额单位：分；交易总额可能包含滞纳金。退款和更正的租金本金以负数显示。</p>
+      <el-table :data="report.details" empty-text="本月没有租金明细">
+        <el-table-column prop="businessDate" label="业务日期" />
+        <el-table-column label="类型"><template #default="{ row }">{{ labels[row.type as keyof typeof labels] }}</template></el-table-column>
+        <el-table-column label="租金本金（分）"><template #default="{ row }">{{ rentPrincipal(row.amount) }}</template></el-table-column>
+        <el-table-column prop="paymentMethod" label="收款方式" />
+        <el-table-column prop="grossAmount" label="交易总额（分，可能含滞纳金）" />
+        <el-table-column label="状态"><template #default="{ row }">{{ row.verified ? '已核实' : `待核对：${row.unknownReason}` }}</template></el-table-column>
+        <el-table-column label="追溯 ID" min-width="240"><template #default="{ row }"><div>账单：{{ row.billId }}</div><div v-if="row.paymentId">原收款：{{ row.paymentId }}</div><div v-if="row.refundId">退款：{{ row.refundId }}</div><div v-if="row.type === 'CORRECTION'">更正：{{ row.id }}</div></template></el-table-column>
+      </el-table>
+      <template v-if="report.undatedDetails.length"><h3>无法归月，待核对</h3><p>这些记录无法确定业务月份，可能影响任何月份的正式收入。</p>
+        <el-table :data="report.undatedDetails"><el-table-column label="类型"><template #default="{ row }">{{ labels[row.type as keyof typeof labels] }}</template></el-table-column><el-table-column prop="unknownReason" label="原因" /><el-table-column prop="grossAmount" label="交易总额（分，可能含滞纳金）" /><el-table-column label="追溯 ID" min-width="240"><template #default="{ row }"><div>账单：{{ row.billId }}</div><div>原收款：{{ row.paymentId }}</div><div v-if="row.refundId">退款：{{ row.refundId }}</div></template></el-table-column></el-table>
+      </template>
+    </template>
   </section>
 </template>
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { onBeforeUnmount, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { getRentReport, type RentReport } from '@/api/statistics';
 import { formatMoneyPlain } from '@/utils/money';
 import { notifyApiError } from '@/utils/notify';
+import { rentDetailLabels as labels, rentPrincipal } from './rentDetail';
 
 defineProps<{ buildings: { id: string; name: string }[] }>();
 const buildingId = ref('');
 const month = ref('');
 const loading = ref(false);
 const report = ref<RentReport | null>(null);
-watch([buildingId, month], () => { report.value = null; });
+let generation = 0;
+watch([buildingId, month], () => { generation++; report.value = null; loading.value = false; }, { flush: 'sync' });
+onBeforeUnmount(() => { generation++; });
 const money = (amount: number) => formatMoneyPlain(amount);
 const nullableMoney = (amount: number | null) => amount === null ? '待核对' : `¥${money(amount)}`;
 async function load() {
   if (!buildingId.value || !month.value) { ElMessage.warning('请选择楼栋和月份'); return; }
   if (loading.value) return;
+  const current = ++generation;
   loading.value = true;
   report.value = null;
   const selected = { buildingId: buildingId.value, month: month.value };
   try {
     const result = await getRentReport(selected);
-    if (buildingId.value === selected.buildingId && month.value === selected.month) report.value = result;
+    if (current === generation) report.value = result;
   }
-  catch (error) { notifyApiError(error, '获取租金收支报表失败'); }
-  finally { loading.value = false; }
+  catch (error) { if (current === generation) notifyApiError(error, '获取租金收支报表失败'); }
+  finally { if (current === generation) loading.value = false; }
 }
 </script>
 <style scoped>
