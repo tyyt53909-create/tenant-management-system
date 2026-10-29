@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('租金报表区分待核对与完整月份，并防止重复查询显示旧结果', async ({ page }) => {
   let requests = 0;
-  await page.route('**/api/**', async route => {
+  await page.route(url => url.pathname.startsWith('/api/'), async route => {
     const url = new URL(route.request().url());
     let body: object = {};
     if (url.pathname.endsWith('/auth/refresh')) body = { accessToken: 'synthetic-token' };
