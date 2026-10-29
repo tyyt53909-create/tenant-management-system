@@ -53,6 +53,6 @@ describe('T305 租金管理口径（暂未完成）', () => {
     const uncertain = await report('2026-02');
     expect(uncertain.body).toMatchObject({ verifiedAllocationRentSubtotal: 65000, unknownAllocationCount: 1, rentIncome: null, netOperatingIncome: null });
     await prisma.paymentRecord.updateMany({ where: { billId: bill.id }, data: { status: 'VOIDED' } });
-    expect((await report('2026-02')).body).toMatchObject({ status: 'incomplete', hasRentAdjustments: true });
+    expect((await report('2026-02')).body).toMatchObject({ status: 'incomplete', hasRentAdjustments: true, verifiedAllocationRentSubtotal: 65000, unknownAllocationCount: 1 });
   });
 });

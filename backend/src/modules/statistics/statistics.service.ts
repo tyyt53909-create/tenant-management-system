@@ -40,7 +40,7 @@ export class StatisticsService {
     const today = this.clock.todayUtc();
     const [payments, adjustments, rooms, paidExpenses] = await Promise.all([
       this.prisma.paymentRecord.findMany({
-        where: { paidAt: { gte: start, lt: end }, status: 'CONFIRMED', bill: { billType: 'RENT', contract: { buildingId: query.buildingId } } },
+        where: { paidAt: { gte: start, lt: end }, status: { in: ['CONFIRMED', 'VOIDED'] }, bill: { billType: 'RENT', contract: { buildingId: query.buildingId } } },
         select: { paidAt: true, billPortion: true, allocationVerified: true },
       }),
       // 在口径确定前，只要该楼栋存在租金退款/冲正，即不宣称完整。
