@@ -36,6 +36,7 @@
           <div class="occupancy-layout"><div class="occupancy-ring" :style="{ background: occupancyGradient }"><div><strong>{{ occupancy }}<small>%</small></strong><span>当前入住率</span></div></div><div class="occupancy-legend"><div v-for="item in roomStatus" :key="item.status"><span><i :style="{ background: statusMeta[item.status]?.color || '#cac1af' }" />{{ statusMeta[item.status]?.label || item.status }}</span><strong>{{ item.count }}</strong></div><div v-if="!roomStatus.length"><span>暂无房源记录</span></div></div></div>
           <div class="overview-summary"><span>活跃合同 <b>{{ stats.activeContracts }}</b></span><span>待缴账单 <b>{{ stats.pendingBills }}</b></span></div>
         </section>
+        <RoomStatusHistory />
         <section class="dashboard-card"><div class="section-heading"><h2>最近动态</h2><router-link to="/notifications">通知中心<el-icon><ArrowRight /></el-icon></router-link></div>
           <router-link v-for="notice in notifications" :key="notice.id" to="/notifications" class="activity-row"><span class="activity-icon notice-icon"><el-icon><Bell /></el-icon></span><div class="activity-copy"><strong>{{ notice.title }}</strong><span>{{ notice.body }}</span></div><span class="activity-date">{{ formatDateOnly(notice.createdAt).slice(5) }}</span></router-link>
           <el-empty v-if="!notifications.length && !loading" description="暂时没有新的通知" :image-size="50" />
@@ -55,6 +56,7 @@ import { useRouter } from 'vue-router';
 import { House, User, Wallet, Tools, Calendar, Plus, ArrowRight, ArrowLeft, Bell } from '@element-plus/icons-vue';
 import EChart from '@/components/common/EChart.vue';
 import UtilitiesOverviewCard from '@/components/dashboard/UtilitiesOverviewCard.vue';
+import RoomStatusHistory from '@/components/dashboard/RoomStatusHistory.vue';
 import type { EChartsOption } from 'echarts';
 import { getDashboardStats, getRevenueTrend, getRoomStatusDistribution } from '@/api/dashboard';
 import type { DashboardStats, RevenueData, RoomStatusData } from '@/api/dashboard';

@@ -34,14 +34,15 @@ describe('T307 immutable room history', () => {
     expect(await service.get(base.buildingId, '2026-10-28')).toEqual(rows[0]);
     await expect(service.capture('missing')).rejects.toThrow('楼栋不存在');
     await expect(service.get(base.buildingId, '2026-02-30')).rejects.toThrow();
-    await expect(prisma.$transaction(async tx => {
-      const rollbackClock = new BusinessClock(new ConfigService({ BUSINESS_TIMEZONE: 'UTC' }));
-      vi.spyOn(rollbackClock, 'now').mockReturnValue(new Date('2026-11-01T12:00:00Z'));
-      const transactional = new RoomStatusSnapshotService(tx as unknown as PrismaService, rollbackClock);
-      await transactional.capture(empty.id);
-      throw new Error('rollback');
-    })).rejects.toThrow('rollback');
     expect(await prisma.roomStatusSnapshot.count({ where: { buildingId: empty.id } })).toBe(1);
+  });
+  it('rolls back if capture work crosses the business-day boundary', async () => {
+    const base = await seedBase();
+    const clock = new BusinessClock(new ConfigService({ BUSINESS_TIMEZONE: 'Asia/Shanghai' }));
+    vi.spyOn(clock, 'now').mockReturnValueOnce(new Date('2026-10-28T15:59:59Z')).mockReturnValueOnce(new Date('2026-10-28T16:00:00Z'));
+    const service = new RoomStatusSnapshotService(prisma as PrismaService, clock);
+    await expect(service.capture(base.buildingId)).rejects.toThrow('捕获跨越业务日');
+    expect(await prisma.roomStatusSnapshot.count({ where: { buildingId: base.buildingId } })).toBe(0);
   });
   it('restricts capture and history to authenticated ADMIN and rejects backdating', async () => {
     const base = await seedBase();

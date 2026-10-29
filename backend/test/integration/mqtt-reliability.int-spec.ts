@@ -1,5 +1,5 @@
 import { createServer } from 'node:net';
-import Aedes from 'aedes';
+import { createBroker } from 'aedes';
 import { connect } from 'mqtt';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { ConfigService } from '@nestjs/config';
@@ -26,7 +26,7 @@ describe('MQTT QoS1 persistent-session reliability with Aedes', () => {
     const clock = new BusinessClock(new ConfigService());
     const price = new MeterPriceService(db, clock);
     const actual = new MeterReadingService(db, new MeterBillingService(db, clock, price), price);
-    const broker = new Aedes();
+    const broker = createBroker();
     const server = createServer(broker.handle);
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     const url = `mqtt://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -40,7 +40,7 @@ describe('MQTT QoS1 persistent-session reliability with Aedes', () => {
     broker.on('subscribe', (_subs, client) => { if (client.id.startsWith('t306-')) subscribed = true; });
     broker.on('client', client => { if (client.id.startsWith('t306-')) consumerConnected = true; });
     broker.on('clientDisconnect', client => { if (client.id.startsWith('t306-')) consumerConnected = false; });
-    broker.on('ack', (p, client) => { if (client.id.startsWith('t306-') && p?.payload) acked.push(JSON.parse(p.payload.toString()).messageId); });
+    broker.on('ack', (p, client) => { if (client.id.startsWith('t306-') && 'payload' in p && p.payload) acked.push(JSON.parse(p.payload.toString()).messageId); });
     const writer = { createReading: async (...args: Parameters<MeterReadingService['createReading']>) => {
       if (failWrites) {
         await prisma.$transaction(async tx => {
@@ -98,7 +98,7 @@ describe('MQTT QoS1 persistent-session reliability with Aedes', () => {
   it('stops after five real delayed retries when database transactions keep failing', async () => {
     const building = await prisma.building.create({ data: { name: 'retry', floors: 1 } });
     const meter = await prisma.meter.create({ data: { buildingId: building.id, meterNumber: 'W-RETRY', meterType: 'WATER', unitPrice: 100, priceEffectiveDate: new Date('2026-01-01') } });
-    const broker = new Aedes();
+    const broker = createBroker();
     const server = createServer(broker.handle);
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     const url = `mqtt://127.0.0.1:${(server.address() as { port: number }).port}`;

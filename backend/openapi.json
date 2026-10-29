@@ -13433,6 +13433,9 @@
               }
             }
           },
+          "409": {
+            "description": "捕获跨越业务日，已回滚，请重试"
+          },
           "default": {
             "description": "错误",
             "content": {

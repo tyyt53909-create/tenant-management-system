@@ -13387,6 +13387,13 @@ export interface operations {
                     "application/json": components["schemas"]["RoomStatusSnapshotDto"];
                 };
             };
+            /** @description 捕获跨越业务日，已回滚，请重试 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description 错误 */
             default: {
                 headers: {

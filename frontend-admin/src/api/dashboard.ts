@@ -34,3 +34,7 @@ export const getRevenueTrend = (months: number = 6): Promise<RevenueData[]> => {
 export const getRoomStatusDistribution = (): Promise<RoomStatusData[]> => {
   return request.get('/dashboard/room-status');
 };
+
+export const getRoomStatusHistory = (buildingId: string, date: string): Promise<import('@/types/api.generated').components['schemas']['RoomStatusHistoryDto']> => {
+  return request.get(`/dashboard/room-status-history/${encodeURIComponent(buildingId)}`, { params: { date }, silentError: true });
+};

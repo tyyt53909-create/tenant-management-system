@@ -69,6 +69,7 @@ declare module 'vue' {
     ReceiptModal: typeof import('./components/common/ReceiptModal.vue')['default']
     ResourceDrawer: typeof import('./components/common/ResourceDrawer.vue')['default']
     ResourcePanel: typeof import('./components/common/ResourcePanel.vue')['default']
+    RoomStatusHistory: typeof import('./components/dashboard/RoomStatusHistory.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SettlementVoucherModal: typeof import('./components/common/SettlementVoucherModal.vue')['default']

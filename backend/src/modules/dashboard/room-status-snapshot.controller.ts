@@ -15,6 +15,7 @@ export class RoomStatusSnapshotController {
   @Post(':buildingId/capture')
   @ApiOperation({ summary: '捕获当前业务日的房态；同日重试返回原快照' })
   @ApiResponse({ status: 201, description: '房态快照；只允许管理员', type: RoomStatusSnapshotDto })
+  @ApiResponse({ status: 409, description: '捕获跨越业务日，已回滚，请重试' })
   capture(@Param('buildingId') buildingId: string, @Body() body: unknown, @Query() query: Record<string, unknown>) {
     if (Object.keys(query).length > 0 || (body && (typeof body !== 'object' || Object.keys(body).length > 0))) throw new BadRequestException('捕获只支持当前业务日');
     return this.snapshots.capture(buildingId);
