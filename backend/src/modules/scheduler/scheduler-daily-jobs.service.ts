@@ -48,6 +48,10 @@ export class SchedulerDailyJobsService {
       // 续签激活：旧合同 ACTIVE + 新合同 DRAFT 共存时，必须先在同一事务内
       // 把旧合同置为 RENEWED，再激活新合同；否则会撞“每房间一份 ACTIVE”的部分唯一索引。
       const didActivate = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM rooms WHERE id = ${contract.roomId} FOR UPDATE`;
+        const current = await tx.contract.findUnique({ where: { id: contract.id }, select: { status: true, roomId: true, startDate: true, renewedFromId: true } });
+        if (!current || current.status !== 'DRAFT' || current.roomId !== contract.roomId || current.startDate.getTime() !== contract.startDate.getTime() || current.renewedFromId !== contract.renewedFromId || current.startDate > today) return false;
+        let originalToRenew: string | null = null;
         if (contract.renewedFromId) {
           const original = await tx.contract.findUnique({
             where: { id: contract.renewedFromId },
@@ -58,18 +62,21 @@ export class SchedulerDailyJobsService {
               // 日期重叠属于数据错误，留给人工处理，不静默产生两份 ACTIVE
               return false;
             }
-            await tx.contract.update({
-              where: { id: original.id },
-              data: { status: 'RENEWED' },
-            });
+            originalToRenew = original.id;
           }
         }
 
         const otherActive = await tx.contract.findFirst({
-          where: { roomId: contract.roomId, status: 'ACTIVE', id: { not: contract.id } },
+          where: { roomId: contract.roomId, status: 'ACTIVE', id: { notIn: [contract.id, ...(originalToRenew ? [originalToRenew] : [])] } },
           select: { id: true },
         });
         if (otherActive) return false;
+        const lockedRoom = await tx.room.findUnique({ where: { id: contract.roomId }, select: { status: true, cleanStatus: true } });
+        if (!lockedRoom || (lockedRoom.status === 'VACANT' && lockedRoom.cleanStatus === 'PENDING_CLEAN')) return false;
+        if (originalToRenew) {
+          const changed = await tx.contract.updateMany({ where: { id: originalToRenew, status: 'ACTIVE' }, data: { status: 'RENEWED' } });
+          if (!changed.count) return false;
+        }
 
         await tx.contract.update({
           where: { id: contract.id },
@@ -106,10 +113,11 @@ export class SchedulerDailyJobsService {
 
     let expired = 0;
     for (const contract of expiredContracts) {
-      await this.prisma.contract.update({
-        where: { id: contract.id },
+      const changed = await this.prisma.contract.updateMany({
+        where: { id: contract.id, status: 'ACTIVE', endDate: { lt: today } },
         data: { status: 'EXPIRED' },
       });
+      if (!changed.count) continue;
       expired++;
 
       if (contract.tenant?.userId) {

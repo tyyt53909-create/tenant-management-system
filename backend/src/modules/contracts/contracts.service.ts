@@ -348,6 +348,9 @@ export class ContractsService {
     if (dto.signStatus) updateData.signStatus = dto.signStatus;
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM rooms WHERE id = ${contract.roomId} FOR UPDATE`;
+      const current = await tx.contract.findUnique({ where: { id }, select: { status: true, roomId: true, startDate: true, endDate: true } });
+      if (!current || current.status !== contract.status || current.roomId !== contract.roomId || current.startDate?.getTime() !== contract.startDate?.getTime() || current.endDate?.getTime() !== contract.endDate?.getTime()) throw new ConflictException('合同状态或日期已变化，请重新查询');
       let renewedOldId: string | undefined;
       if (statusChanged && dto.status === 'ACTIVE') {
         const other = await this.findOtherOpenContract(tx, contract.roomId, id);
@@ -370,11 +373,14 @@ export class ContractsService {
         }
       }
 
+      if (statusChanged && dto.status === 'ACTIVE') {
+        const room = await tx.room.findUnique({ where: { id: contract.roomId }, select: { status: true, cleanStatus: true } });
+        if (!room || (room.status === 'VACANT' && room.cleanStatus === 'PENDING_CLEAN')) throw new ConflictException('房间待清洁，请重新核对入住状态');
+      }
+
       if (renewedOldId) {
-        await tx.contract.update({
-          where: { id: renewedOldId },
-          data: { status: 'RENEWED' },
-        });
+        const changed = await tx.contract.updateMany({ where: { id: renewedOldId, status: 'ACTIVE' }, data: { status: 'RENEWED' } });
+        if (!changed.count) throw new ConflictException('原合同状态已变化，请重新查询');
       }
 
       if (dto.coTenants !== undefined) {

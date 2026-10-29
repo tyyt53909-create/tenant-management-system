@@ -24,8 +24,10 @@ describe('SchedulerService（定时任务）', () => {
         findFirst: vi.fn().mockResolvedValue(null),
         findUnique: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       room: { findUnique: vi.fn(), update: vi.fn() },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(),
       bill: { findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
       lateFeeAccrual: { upsert: vi.fn().mockResolvedValue({ id: 'accrual-1' }) },
@@ -61,8 +63,9 @@ describe('SchedulerService（定时任务）', () => {
   describe('autoTransitionContracts', () => {
     it('DRAFT 生效日到达 → ACTIVE，预留房间随动 OCCUPIED（版本递增）', async () => {
       prisma.contract.findMany
-        .mockResolvedValueOnce([{ id: 'c-1', roomId: 'r-1' }]) // DRAFT
+        .mockResolvedValueOnce([{ id: 'c-1', roomId: 'r-1', startDate: new Date('2026-10-01'), renewedFromId: null }]) // DRAFT
         .mockResolvedValueOnce([]); // EXPIRED
+      prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', roomId: 'r-1', status: 'DRAFT', startDate: new Date('2026-10-01'), renewedFromId: null });
       prisma.room.findUnique.mockResolvedValue({ id: 'r-1', status: 'RESERVED' });
 
       const result = await service.autoTransitionContracts();
@@ -100,23 +103,19 @@ describe('SchedulerService（定时任务）', () => {
           {
             id: 'c-new',
             roomId: 'r-1',
-            startDate: new Date('2026-12-01T00:00:00.000Z'),
+            startDate: new Date('2026-10-12T00:00:00.000Z'),
             renewedFromId: 'c-old',
           },
         ])
         .mockResolvedValueOnce([]);
-      prisma.contract.findUnique.mockResolvedValue({
-        id: 'c-old',
-        status: 'ACTIVE',
-        endDate: new Date('2026-11-30T00:00:00.000Z'),
-      });
+      prisma.contract.findUnique.mockImplementation(async ({ where }: any) => where.id === 'c-new' ? { id: 'c-new', roomId: 'r-1', status: 'DRAFT', startDate: new Date('2026-10-12'), renewedFromId: 'c-old' } : { id: 'c-old', status: 'ACTIVE', endDate: new Date('2026-10-11') });
       prisma.room.findUnique.mockResolvedValue({ id: 'r-1', status: 'OCCUPIED' });
 
       const result = await service.autoTransitionContracts();
 
       expect(result.activated).toBe(1);
-      expect(prisma.contract.update).toHaveBeenCalledWith({
-        where: { id: 'c-old' },
+      expect(prisma.contract.updateMany).toHaveBeenCalledWith({
+        where: { id: 'c-old', status: 'ACTIVE' },
         data: { status: 'RENEWED' },
       });
       expect(prisma.contract.update).toHaveBeenCalledWith({
@@ -127,8 +126,9 @@ describe('SchedulerService（定时任务）', () => {
 
     it('房间非 RESERVED 时不随动（保护人工房态）', async () => {
       prisma.contract.findMany
-        .mockResolvedValueOnce([{ id: 'c-1', roomId: 'r-1' }])
+        .mockResolvedValueOnce([{ id: 'c-1', roomId: 'r-1', startDate: new Date('2026-10-01'), renewedFromId: null }])
         .mockResolvedValueOnce([]);
+      prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', roomId: 'r-1', status: 'DRAFT', startDate: new Date('2026-10-01'), renewedFromId: null });
       prisma.room.findUnique.mockResolvedValue({ id: 'r-1', status: 'VACANT' });
 
       await service.autoTransitionContracts();
@@ -146,7 +146,7 @@ describe('SchedulerService（定时任务）', () => {
 
       const result = await service.autoTransitionContracts();
 
-      expect(prisma.contract.update).toHaveBeenCalledTimes(2);
+      expect(prisma.contract.updateMany).toHaveBeenCalledTimes(2);
       expect(notifications.create).toHaveBeenCalledTimes(1);
       expect(notifications.create).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'u-1', title: '合同已到期' }),

@@ -14,6 +14,7 @@ describe('CheckoutService', () => {
   beforeEach(async () => {
     const prismaMock: any = {
       checkoutRecord: {
+        findFirst: vi.fn().mockResolvedValue(null),
         findUnique: vi.fn(),
         findUniqueOrThrow: vi.fn(),
         findMany: vi.fn(),
@@ -279,8 +280,8 @@ describe('CheckoutService', () => {
     });
 
     it('提供 items → 同事务内全量替换明细（先删后建）', async () => {
-      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId });
-      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId });
+      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId, roomId: 'room-1', contract: { roomId: 'room-1' } });
+      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId, roomId: 'room-1', contract: { roomId: 'room-1' } });
       prisma.checkoutItem.deleteMany.mockResolvedValue({ count: 1 });
       prisma.checkoutItem.createMany.mockResolvedValue({ count: 2 });
 
@@ -302,8 +303,8 @@ describe('CheckoutService', () => {
     });
 
     it('未提供 items → 不触碰明细表', async () => {
-      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId });
-      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId });
+      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId, roomId: 'room-1', contract: { roomId: 'room-1' } });
+      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId, roomId: 'room-1', contract: { roomId: 'room-1' } });
 
       await service.update(recordId, { notes: '仅备注' } as any);
 
@@ -312,8 +313,8 @@ describe('CheckoutService', () => {
     });
 
     it('提供空数组 → 清空全部明细', async () => {
-      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId });
-      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId });
+      prisma.checkoutRecord.findUnique.mockResolvedValue({ id: recordId, roomId: 'room-1', contract: { roomId: 'room-1' } });
+      prisma.checkoutRecord.update.mockResolvedValue({ id: recordId, roomId: 'room-1', contract: { roomId: 'room-1' } });
       prisma.checkoutItem.deleteMany.mockResolvedValue({ count: 3 });
 
       await service.update(recordId, { items: [] } as any);

@@ -6,7 +6,7 @@ import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth } 
 let app: INestApplication;
 
 beforeAll(async () => {
-  app = await createApp();
+  app = await createApp({ denyPayments: true });
 }, 30_000);
 
 afterAll(async () => {
@@ -116,7 +116,7 @@ describe('退租结算', () => {
       .set(auth(tenancy.adminToken));
     expect(ledgerAgain.body.balance).toBe(0);
     const different = await http(app).patch(`/checkout/${otherCheckout.body.id}`).set(auth(tenancy.adminToken)).send({ status: 'COMPLETED' });
-    expect(different.status).toBe(400);
+    expect(different.status).toBe(409);
     expect((await prisma.checkoutRecord.findUniqueOrThrow({ where: { id: otherCheckout.body.id } })).status).toBe('DRAFT');
     expect(await prisma.cleaningTask.count({ where: { roomId: tenancy.roomId } })).toBe(1);
   });

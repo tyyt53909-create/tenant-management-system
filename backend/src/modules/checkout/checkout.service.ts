@@ -174,6 +174,9 @@ export class CheckoutService {
     return this.prisma.$transaction(async (tx) => {
       // 锁定同一退租记录后再读取，等待并发事务提交后识别已完成重试。
       await tx.$queryRaw`SELECT id FROM checkout_records WHERE id = ${id} FOR UPDATE`;
+      // 一致顺序：退租单 → 房间 → 合同；合同启用也先锁房间。
+      await tx.$queryRaw`SELECT room.id FROM rooms room JOIN checkout_records r ON r."roomId" = room.id WHERE r.id = ${id} FOR UPDATE OF room`;
+      await tx.$queryRaw`SELECT c.id FROM contracts c JOIN checkout_records r ON r."contractId" = c.id WHERE r.id = ${id} FOR UPDATE OF c`;
       const record = await tx.checkoutRecord.findUnique({
         where: { id },
         include: {
@@ -183,9 +186,14 @@ export class CheckoutService {
         },
       });
       if (!record) throw new NotFoundException('退租记录不存在');
+      if (record.roomId !== record.contract.roomId) throw new ConflictException('退租单房间与合同不一致，请先核对');
 
       // 完成是终态；重复完成幂等返回，避免重复结算押金
       if (record.status === 'COMPLETED' && dto.status === 'COMPLETED') return record;
+      if (dto.status === 'COMPLETED') {
+        const otherCompleted = await tx.checkoutRecord.findFirst({ where: { contractId: record.contractId, id: { not: id }, status: 'COMPLETED' }, select: { id: true } });
+        if (otherCompleted || record.contract.status === 'TERMINATED') throw new ConflictException('该合同已完成退租，不能再次结算');
+      }
       if (
         (record.status === 'COMPLETED' || record.status === 'CANCELLED') &&
         (dto.totalRefund !== undefined || dto.items !== undefined || dto.checkoutDate !== undefined)

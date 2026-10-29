@@ -40,16 +40,19 @@ describe('ContractsService CRUD（T157）', () => {
         count: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         delete: vi.fn(),
       },
       building: { findUnique: vi.fn() },
       room: { findUnique: vi.fn(), update: vi.fn() },
       tenant: { findUnique: vi.fn() },
       bill: { count: vi.fn().mockResolvedValue(0) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       checkoutRecord: { count: vi.fn().mockResolvedValue(0) },
     };
     // update() 现在把状态流转与房间随动放进事务里
     prismaMock.$transaction = vi.fn(async (callback: any) => callback(prismaMock));
+    prismaMock.room.findUnique.mockResolvedValue({ status: 'RESERVED' });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { PAYMENT_PROVIDER } from '../../src/modules/bills/payment/payment-provider.js';
 import { AppModule } from '../../src/app.module.js';
 import { EmailOtpService } from '../../src/modules/auth/email-otp.service.js';
 import RedisImport from 'ioredis';
@@ -109,16 +110,19 @@ export async function seedBase(): Promise<SeedBase> {
   };
 }
 
-export async function createApp(): Promise<INestApplication> {
+export async function createApp(options?: { denyPayments?: boolean }): Promise<INestApplication> {
   const target = assertIntegrationEnvironment(process.env);
   if (process.env.DATABASE_URL !== target.databaseUrl) {
     throw new UnsafeIntegrationTargetError(
       '应用 DATABASE_URL 与 INTEGRATION_DATABASE_URL 不一致，拒绝启动。不会回退到开发库',
     );
   }
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
-  }).compile();
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+  if (options?.denyPayments) {
+    const deny = async () => { throw new Error('支付供应商在隔离退租测试中被禁止'); };
+    builder.overrideProvider(PAYMENT_PROVIDER).useValue({ name: 'blocked-test-provider', createOrder: async () => ({ orderId: 'synthetic-offline-order', status: 'RECORDED', provider: 'blocked-test-provider' }), queryOrder: deny, refund: deny, createJsapiOrder: deny, createRefund: deny, queryRefund: deny, downloadTradeBill: deny });
+  }
+  const moduleRef = await builder.compile();
 
   const app = moduleRef.createNestApplication();
   app.useWebSocketAdapter(new IoAdapter(app));
