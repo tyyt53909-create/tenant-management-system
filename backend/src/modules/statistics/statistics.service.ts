@@ -126,44 +126,56 @@ export class StatisticsService {
   async currentBalances(query: CurrentBalancesQueryDto): Promise<CurrentBalancesResponseDto> {
     return this.prisma.$transaction(async tx => {
       const capturedAt = this.clock.now();
-      const [building, rooms, accounts, ledgers, missing, prepayMovements, depositMovements] = await Promise.all([
-        tx.building.findUnique({ where: { id: query.buildingId }, select: { id: true } }),
-        tx.room.findMany({ take: 5001, select: { id: true, buildingId: true } }),
-        tx.prepayAccount.findMany({ take: 5001, select: { id: true, roomId: true, balanceCache: true } }),
-        tx.depositLedger.findMany({ take: 5001, select: { id: true, roomId: true, contractId: true, balance: true, contract: { select: { buildingId: true, roomId: true } } } }),
-        tx.bill.findMany({ take: 5001, where: { billType: 'DEPOSIT', OR: [{ paidAmount: { gt: 0 } }, { paymentRecords: { some: { status: { in: ['CONFIRMED', 'VOIDED'] }, amount: { gt: 0 } } } }], contract: { buildingId: query.buildingId, depositLedger: null } }, select: { id: true, contractId: true, contract: { select: { roomId: true } } } }),
-        tx.prepayTransaction.findMany({ take: 5001, orderBy: { createdAt: 'asc' }, select: { accountId: true, id: true, type: true, amount: true, balanceAfter: true, createdAt: true, relatedId: true, relatedType: true } }),
-        tx.depositTransaction.findMany({ take: 5001, orderBy: { createdAt: 'asc' }, select: { ledgerId: true, id: true, type: true, amount: true, balanceAfter: true, createdAt: true, relatedId: true, relatedType: true } }),
+      const buildingId = query.buildingId;
+      const building = buildingId ? await tx.building.findUnique({ where: { id: buildingId }, select: { id: true } }) : null;
+      if (buildingId && !building) throw new BadRequestException('楼栋不存在');
+      const rooms = await tx.room.findMany({ where: buildingId ? { buildingId } : {}, take: 5001, select: { id: true, buildingId: true } });
+      if (rooms.length > 5000) throw new BadRequestException('余额核对范围超过 5000 条');
+      const roomIds = rooms.map(r => r.id);
+      const [accounts, ledgers, missing, orphanCounts] = await Promise.all([
+        tx.prepayAccount.findMany({ where: { roomId: { in: roomIds } }, take: 5001, select: { id: true, roomId: true, balanceCache: true } }),
+        tx.depositLedger.findMany({ where: buildingId ? { OR: [{ contract: { buildingId } }, { roomId: { in: roomIds } }] } : {}, take: 5001, select: { id: true, roomId: true, contractId: true, balance: true, contract: { select: { buildingId: true, roomId: true } } } }),
+        tx.bill.findMany({ take: 5001, where: { billType: 'DEPOSIT', OR: [{ paidAmount: { gt: 0 } }, { paymentRecords: { some: { status: { in: ['CONFIRMED', 'VOIDED'] }, amount: { gt: 0 } } } }], contract: { ...(buildingId ? { buildingId } : {}), depositLedger: null } }, select: { id: true, contractId: true, contract: { select: { roomId: true, buildingId: true, room: { select: { buildingId: true } } } } } }),
+        tx.$queryRaw<Array<{ prepay: bigint; deposit: bigint }>>`SELECT (SELECT count(*) FROM prepay_accounts a LEFT JOIN rooms r ON r.id = a."roomId" WHERE r.id IS NULL) AS prepay, (SELECT count(*) FROM deposit_ledgers d JOIN contracts c ON c.id = d."contractId" LEFT JOIN rooms r ON r.id = d."roomId" WHERE r.id IS NULL OR d."roomId" <> c."roomId" OR r."buildingId" <> c."buildingId") AS deposit`,
       ]);
-      if (!building) throw new BadRequestException('楼栋不存在');
+      if (rooms.length + accounts.length + ledgers.length + missing.length > 5000) throw new BadRequestException('余额核对范围超过 5000 条');
+      const [prepayMovements, depositMovements] = await Promise.all([
+        tx.prepayTransaction.findMany({ where: { accountId: { in: accounts.map(a => a.id) } }, take: 5001, orderBy: { createdAt: 'asc' }, select: { accountId: true, id: true, type: true, amount: true, balanceAfter: true, createdAt: true, relatedId: true, relatedType: true } }),
+        tx.depositTransaction.findMany({ where: { ledgerId: { in: ledgers.map(l => l.id) } }, take: 5001, orderBy: { createdAt: 'asc' }, select: { ledgerId: true, id: true, type: true, amount: true, balanceAfter: true, createdAt: true, relatedId: true, relatedType: true } }),
+      ]);
       const size = rooms.length + accounts.length + ledgers.length + missing.length + prepayMovements.length + depositMovements.length;
       if (size > 5000) throw new BadRequestException('余额核对范围超过 5000 条');
       const roomBuildings = new Map(rooms.map(r => [r.id, r.buildingId]));
+      const unassignedPrepayCount = Number(orphanCounts[0].prepay); const unassignedDepositCount = Number(orphanCounts[0].deposit);
+      if (!Number.isSafeInteger(unassignedPrepayCount) || !Number.isSafeInteger(unassignedDepositCount)) throw new BadRequestException('归属异常数量超出安全整数范围');
       const deposit: BalanceItemDto[] = []; const prepay: BalanceItemDto[] = [];
       const arithmetic = (reasons: string[]): 'consistent' | 'inconsistent' | 'unknown' => reasons.some(r => r.includes('顺序不明确') || r.includes('无流水')) ? 'unknown' : reasons.length > 1 ? 'inconsistent' : 'consistent';
       for (const a of accounts) {
-        const owner = roomBuildings.get(a.roomId); if (owner && owner !== query.buildingId) continue;
+        const owner = roomBuildings.get(a.roomId); if (buildingId && owner && owner !== buildingId) continue;
         const movements = prepayMovements.filter(m => m.accountId === a.id);
         const reasons = verifyBalance('prepay', a.balanceCache, movements);
         const arithmeticStatus = arithmetic(reasons);
         if (!owner) reasons.push('账户房间无法确定当前楼栋');
-        prepay.push({ id: a.id, contractId: null, roomId: a.roomId, balance: a.balanceCache, arithmetic: arithmeticStatus, inScope: owner === query.buildingId, reasons, movements });
+        prepay.push({ id: a.id, contractId: null, roomId: a.roomId, balance: a.balanceCache, arithmetic: arithmeticStatus, inScope: !!owner && (!buildingId || owner === buildingId), reasons, movements });
       }
       for (const l of ledgers) {
-        const owner = roomBuildings.get(l.roomId); if (l.contract.buildingId !== query.buildingId && owner && owner !== query.buildingId) continue;
+        const owner = roomBuildings.get(l.roomId); if (buildingId && l.contract.buildingId !== buildingId && owner && owner !== buildingId) continue;
         const movements = depositMovements.filter(m => m.ledgerId === l.id);
         const reasons = verifyBalance('deposit', l.balance, movements);
         const arithmeticStatus = arithmetic(reasons);
         if (!owner || owner !== l.contract.buildingId || l.roomId !== l.contract.roomId) reasons.push('台账、合同或房间的当前归属不一致');
-        deposit.push({ id: l.id, contractId: l.contractId, roomId: l.roomId, balance: l.balance, arithmetic: arithmeticStatus, inScope: owner === query.buildingId && owner === l.contract.buildingId && l.roomId === l.contract.roomId, reasons, movements });
+        deposit.push({ id: l.id, contractId: l.contractId, roomId: l.roomId, balance: l.balance, arithmetic: arithmeticStatus, inScope: !!owner && (!buildingId || owner === buildingId) && owner === l.contract.buildingId && l.roomId === l.contract.roomId, reasons, movements });
       }
-      for (const b of missing) deposit.push({ id: b.id, contractId: b.contractId, roomId: b.contract.roomId, balance: null, arithmetic: 'unknown', inScope: true, reasons: ['押金账单已有收款但缺少台账'], movements: [] });
+      for (const b of missing) {
+        const consistent = b.contract.buildingId === b.contract.room.buildingId;
+        deposit.push({ id: b.id, contractId: b.contractId, roomId: b.contract.roomId, balance: null, arithmetic: 'unknown', inScope: consistent, reasons: ['押金账单已有收款但缺少台账', ...(!consistent ? ['合同与房间楼栋归属不一致'] : [])], movements: [] });
+      }
       const category = (items: BalanceItemDto[]) => {
         items.sort((a, b) => a.id.localeCompare(b.id));
         const bookSubtotal = items.reduce((sum, item) => { const next = sum + (item.inScope ? (item.balance ?? 0) : 0); if (!Number.isSafeInteger(next)) throw new BadRequestException('余额合计超出安全整数范围'); return next; }, 0);
         return { items, bookSubtotal, unknownCount: items.length, verifiedTotal: null };
       };
-      return { buildingId: query.buildingId, capturedAt, deposit: category(deposit), prepay: category(prepay), limitations: ['仅反映查询时当前归属与余额，非月末或历史负债；未开预付账户不是异常。', '缺押金台账仅检查已有收款的押金账单；无法确认的历史合同不在检查范围。', '历史流水完整性无法证明，账面小计不等于完整核实合计；无法归属的账户在各楼栋提示。'] };
+      return { buildingId: buildingId ?? null, capturedAt, unassignedPrepayCount, unassignedDepositCount, deposit: category(deposit), prepay: category(prepay), limitations: ['仅反映查询时当前归属与余额，非月末或历史负债；未开预付账户不是异常。', '缺押金台账仅检查已有收款的押金账单；无法确认的历史合同不在检查范围。', '历史流水完整性无法证明，账面小计不等于完整核实合计；全局无法归属记录数量另列，未计入楼栋账面小计。'] };
     }, { isolationLevel: 'RepeatableRead' });
   }
 

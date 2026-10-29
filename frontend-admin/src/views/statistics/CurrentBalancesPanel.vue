@@ -1,9 +1,9 @@
 <template>
   <section aria-label="当前余额核对">
     <h2>当前押金与预付余额核对</h2><p>仅当前余额和当前楼栋归属，非月末、会计负债或业主应付。账面小计不代表历史完整。</p>
-    <el-select v-model="buildingId" placeholder="选择核对楼栋"><el-option v-for="b in buildings" :key="b.id" :label="b.name" :value="b.id" /></el-select><el-button :loading="loading" @click="load">查询余额</el-button>
+    <el-select v-model="buildingId" clearable placeholder="全部楼栋"><el-option v-for="b in buildings" :key="b.id" :label="b.name" :value="b.id" /></el-select><el-button :loading="loading" @click="load">查询余额</el-button>
     <p v-if="error" role="alert">{{ error }}</p>
-    <template v-if="report"><p>提取时间：{{ report.capturedAt }}</p><p v-for="item in report.limitations" :key="item">{{ item }}</p>
+    <template v-if="report"><p>提取时间：{{ report.capturedAt }}；全局归属异常：预付 {{ report.unassignedPrepayCount }}、押金 {{ report.unassignedDepositCount }} 笔（不计楼栋小计）</p><p v-for="item in report.limitations" :key="item">{{ item }}</p>
       <section v-for="category in categories" :key="category.key"><h3>{{ category.label }}</h3><p>账面小计：¥{{ money(report[category.key].bookSubtotal) }}；待核对 {{ report[category.key].unknownCount }} 笔；完整核实合计：不可提供</p>
         <el-table :data="report[category.key].items" empty-text="当前无记录">
           <el-table-column label="账面余额（元）"><template #default="{ row }">{{ row.balance === null ? '待核对' : `¥${money(row.balance)}` }}</template></el-table-column>
@@ -29,9 +29,9 @@ const money = (amount: number) => formatMoneyPlain(amount);
 watch(buildingId, () => { generation++; report.value = null; error.value = ''; loading.value = false; }, { flush:'sync' });
 onBeforeUnmount(() => { generation++; });
 async function load() {
-  if (!buildingId.value) { error.value = '请选择楼栋'; return; } if (loading.value) return;
+  if (loading.value) return;
   const current = ++generation; loading.value = true; report.value = null; error.value = '';
-  try { const data = await request.get('/statistics/current-balances', { params: { buildingId: buildingId.value } }) as unknown as Report; if (current === generation) report.value = data; }
+  try { const data = await request.get('/statistics/current-balances', { params: buildingId.value ? { buildingId: buildingId.value } : {} }) as unknown as Report; if (current === generation) report.value = data; }
   catch (e) { if (current === generation) error.value = apiErrorMessage(e, '余额查询失败'); }
   finally { if (current === generation) loading.value = false; }
 }

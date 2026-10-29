@@ -49,5 +49,13 @@ describe('当前余额核对', () => {
     await prisma.prepayTransaction.createMany({ data: Array.from({ length: 5001 }, () => ({ accountId: account.id, type: 'ADJUSTMENT' as const, amount: 1, balanceAfter: 1, description: '合成', operatorId: base.adminId })) });
     const result = await http(app).get('/statistics/current-balances').query({ buildingId: base.buildingId }).set(auth(t.adminToken));
     expect(result.status).toBe(400);
+    await prisma.prepayAccount.create({ data: { tenantId: t.tenantId, roomId: 'missing-synthetic-room', balanceCache: 900 } });
+    const other = await prisma.building.create({ data: { name: '小楼', floors: 1 } });
+    const small = await http(app).get('/statistics/current-balances').query({ buildingId: other.id }).set(auth(t.adminToken));
+    expect(small.status).toBe(200);
+    expect(small.body.unassignedPrepayCount).toBe(1);
+    expect(small.body.prepay).toMatchObject({ bookSubtotal: 0, unknownCount: 0 });
+    const all = await http(app).get('/statistics/current-balances').set(auth(t.adminToken));
+    expect(all.status).toBe(400);
   });
 });

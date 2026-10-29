@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
-export class CurrentBalancesQueryDto { @IsString() @IsNotEmpty() buildingId!: string; }
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+export class CurrentBalancesQueryDto { @ApiPropertyOptional() @IsOptional() @IsString() @IsNotEmpty() buildingId?: string; }
 export class BalanceMovementDto {
   @ApiProperty() id!: string; @ApiProperty() type!: string; @ApiProperty() amount!: number;
   @ApiProperty() balanceAfter!: number; @ApiProperty() createdAt!: Date;
@@ -19,7 +19,7 @@ export class BalanceCategoryDto {
   @ApiProperty({ type: Number, nullable: true }) verifiedTotal!: number | null;
 }
 export class CurrentBalancesResponseDto {
-  @ApiProperty() buildingId!: string; @ApiProperty() capturedAt!: Date;
+  @ApiProperty({ type: String, nullable: true }) buildingId!: string | null; @ApiProperty() unassignedPrepayCount!: number; @ApiProperty() unassignedDepositCount!: number; @ApiProperty() capturedAt!: Date;
   @ApiProperty({ type: BalanceCategoryDto }) deposit!: BalanceCategoryDto;
   @ApiProperty({ type: BalanceCategoryDto }) prepay!: BalanceCategoryDto;
   @ApiProperty({ type: [String] }) limitations!: string[];

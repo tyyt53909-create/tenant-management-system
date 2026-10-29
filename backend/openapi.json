@@ -16019,7 +16019,7 @@
         "parameters": [
           {
             "name": "buildingId",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -19417,7 +19417,8 @@
         "type": "object",
         "properties": {
           "buildingId": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "capturedAt": {
             "format": "date-time",
@@ -19434,10 +19435,18 @@
             "items": {
               "type": "string"
             }
+          },
+          "unassignedPrepayCount": {
+            "type": "number"
+          },
+          "unassignedDepositCount": {
+            "type": "number"
           }
         },
         "required": [
           "buildingId",
+          "unassignedPrepayCount",
+          "unassignedDepositCount",
           "capturedAt",
           "deposit",
           "prepay",

@@ -4740,12 +4740,14 @@ export interface components {
             verifiedTotal: number | null;
         };
         CurrentBalancesResponseDto: {
-            buildingId: string;
+            buildingId: string | null;
             /** Format: date-time */
             capturedAt: string;
             deposit: components["schemas"]["BalanceCategoryDto"];
             prepay: components["schemas"]["BalanceCategoryDto"];
             limitations: string[];
+            unassignedPrepayCount: number;
+            unassignedDepositCount: number;
         };
     };
     responses: never;
@@ -14957,8 +14959,8 @@ export interface operations {
     };
     StatisticsController_currentBalances: {
         parameters: {
-            query: {
-                buildingId: string;
+            query?: {
+                buildingId?: string;
             };
             header?: never;
             path?: never;
