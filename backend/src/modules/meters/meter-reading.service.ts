@@ -5,7 +5,7 @@ import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
-import { buildReadingDedupKey, isSettledReading, isUniqueViolation } from './meter-dedup.util.js';
+import { buildReadingDedupKey, hasReservedReadingMarker, isSettledReading, isUniqueViolation } from './meter-dedup.util.js';
 import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -33,6 +33,9 @@ export class MeterReadingService {
     dto: Omit<CreateMeterReadingDto, 'source'> & { source?: 'MANUAL' | 'DEVICE' | 'SIMULATED' },
     operatorId: string,
   ) {
+    if (hasReservedReadingMarker(dto.notes) || hasReservedReadingMarker(dto.messageId)) {
+      throw new BadRequestException('备注或消息编号不得包含系统保留的结算标记');
+    }
     const readingTime = dto.readingTime ? new Date(dto.readingTime) : new Date();
     const source = dto.source || 'MANUAL';
     // 手工录入默认结算。设备上报和模拟器读数默认只采集。
