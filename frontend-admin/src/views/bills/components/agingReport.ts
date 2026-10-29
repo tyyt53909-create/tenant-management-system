@@ -16,3 +16,11 @@ export function isAgingReport(x: unknown): x is Report {
       return object(cell) && integer(cell.amount) && integer(cell.count) && strings(cell.billIds);
     }));
 }
+
+export function agingParams(billType: string, buildingId: string) {
+  return { ...(billType !== 'ALL' ? { billType } : {}), ...(buildingId ? { buildingId } : {}) };
+}
+export function requestGeneration() {
+  let version = 0;
+  return { next: () => ++version, isCurrent: (candidate: number) => candidate === version };
+}

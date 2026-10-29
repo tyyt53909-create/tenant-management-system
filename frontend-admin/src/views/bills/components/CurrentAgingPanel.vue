@@ -2,6 +2,7 @@
   <section class="aging-panel">
     <h3>当前账龄</h3>
     <p>按当前业务日计算，非历史截止日。金额为已核实小计；待核对记录不计入小计。滞纳金不分账龄。</p>
+    <EntitySelect :model-value="buildingId" resource="buildings" placeholder="全部楼栋" @update:model-value="selectBuilding" />
     <el-select v-model="billType" aria-label="账单类型" style="width: 150px" @change="load">
       <el-option label="全部类型" value="ALL" />
       <el-option v-for="item in types" :key="item.value" :label="item.label" :value="item.value" />
@@ -35,26 +36,30 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import request from '@/utils/request';
 import { apiErrorMessage } from '@/utils/apiError';
+import EntitySelect from '@/components/common/EntitySelect.vue';
 import { formatMoney } from '@/utils/table';
-import { isAgingReport, type Key, type Report } from './agingReport';
+import { isAgingReport, agingParams, requestGeneration, type Key, type Report } from './agingReport';
 defineEmits<{ open: [id: string] }>();
 const types = [{value:'RENT', label:'租金'}, {value:'UTILITY', label:'水电费'}, {value:'DEPOSIT', label:'押金'}, {value:'OTHER', label:'其他'}, {value:'MAINTENANCE', label:'维修费'}];
 const buckets: {key: Key; label: string}[] = [{key:'CURRENT',label:'未逾期'}, {key:'DAYS_1_30',label:'1–30 天'}, {key:'DAYS_31_60',label:'31–60 天'}, {key:'DAYS_61_90',label:'61–90 天'}, {key:'DAYS_91_PLUS',label:'91 天以上'}];
 const label = (type: string) => types.find(t => t.value === type)?.label ?? type;
 const money = (amount: number) => formatMoney(amount);
 const billType = ref('ALL');
+const buildingId = ref('');
+function selectBuilding(value: string) { buildingId.value = value; void load(); }
 const report = ref<Report | null>(null);
-const loading = ref(false); const error = ref(''); let version = 0;
+const loading = ref(false); const error = ref(''); const generation = requestGeneration();
 async function load() {
-  const current = ++version; loading.value = true; error.value = ''; report.value = null;
-  try { const data: unknown = await request.get('/bills/current-aging', {params: billType.value !== 'ALL' ? {billType: billType.value} : {}}); if (!isAgingReport(data)) throw new Error('invalid report'); if (current === version) report.value = data; }
-  catch (e) { if (current === version) error.value = apiErrorMessage(e, '账龄查询失败，请重试'); }
-  finally { if (current === version) loading.value = false; }
+  const current = generation.next(); loading.value = true; error.value = ''; report.value = null;
+  try { const data: unknown = await request.get('/bills/current-aging', {params: agingParams(billType.value, buildingId.value)}); if (!isAgingReport(data)) throw new Error('invalid report'); if (generation.isCurrent(current)) report.value = data; }
+  catch (e) { if (generation.isCurrent(current)) error.value = apiErrorMessage(e, '账龄查询失败，请重试'); }
+  finally { if (generation.isCurrent(current)) loading.value = false; }
 }
-onMounted(load); onUnmounted(() => { version++; });
+onMounted(load); onUnmounted(() => { generation.next(); });
 </script>
 <style scoped>
 .aging-panel { padding: 20px; margin-bottom: 20px; background: white; border: 1px solid #e4e7ed; border-radius: 8px; }
+.aging-panel :deep(.entity-select) { display: inline-block; width: 180px; margin-right: 8px; }
 .aging-panel p { color: #606266; }
 .aging-panel details { padding-top: 8px; }
 .aging-panel button { margin: 3px; }
