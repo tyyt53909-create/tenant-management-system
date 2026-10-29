@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
-import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth } from './harness.js';
+import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth, login } from './harness.js';
 
 let app: INestApplication;
 beforeAll(async () => { app = await createApp(); });
@@ -27,9 +27,9 @@ describe('T305 租金管理口径（暂未完成）', () => {
     expect(jan.body.verifiedAllocationRentSubtotal).toBe(0);
     expect(feb.body.verifiedAllocationRentSubtotal).toBe(60000);
     expect(feb.body.currentPrepayBalance).toBe(40000);
-    expect(feb.body.status).toBe('incomplete');
-    expect(feb.body.rentIncome).toBeNull();
-    expect(feb.body.netOperatingIncome).toBeNull();
+    expect(feb.body.status).toBe('complete');
+    expect(feb.body.rentIncome).toBe(60000);
+    expect(feb.body.netOperatingIncome).toBe(60000);
     const expense = await prisma.operatingExpense.create({ data: { buildingId: base.buildingId, category: '维修', description: '测试支出', amount: 5000, requestKey: 'test-paid', createdById: base.adminId } });
     await prisma.expensePayment.create({ data: { expenseId: expense.id, amount: 5000, paidDate: new Date('2026-02-02'), evidence: '测试凭证', requestKey: 'test-pay', recordedById: base.adminId } });
     await prisma.operatingExpense.create({ data: { buildingId: base.buildingId, category: '维修', description: '未付', amount: 7000, requestKey: 'test-unpaid', createdById: base.adminId } });
@@ -41,6 +41,10 @@ describe('T305 租金管理口径（暂未完成）', () => {
     expect((await report('2026-01')).body.paidExpenses).toBe(0);
     expect((await report('2026-02')).body.paidExpenses).toBe(5000);
     expect((await report('2026-02', base.buildingId, tenancy.tenantToken)).status).toBe(403);
+    const admin = await prisma.user.findUniqueOrThrow({ where: { id: base.adminId } });
+    await prisma.user.create({ data: { email: 'financial-report@example.invalid', passwordHash: admin.passwordHash, role: 'FINANCIAL', isActive: true } });
+    const financialToken = await login(app, 'financial-report@example.invalid', base.adminPassword);
+    expect((await report('2026-02', base.buildingId, financialToken)).status).toBe(403);
     const other = await prisma.building.create({ data: { name: '另一栋', floors: 1 } });
     expect((await report('2026-02', other.id)).body.verifiedAllocationRentSubtotal).toBe(0);
     const water = await prisma.bill.create({ data: { contractId: tenancy.contractId, billNumber: 'RPT-WATER', billType: 'UTILITY', period: '2026-02', amount: 10000, snapshot: {}, dueDate: new Date('2026-02-10') } });
@@ -55,4 +59,27 @@ describe('T305 租金管理口径（暂未完成）', () => {
     await prisma.paymentRecord.updateMany({ where: { billId: bill.id }, data: { status: 'VOIDED' } });
     expect((await report('2026-02')).body).toMatchObject({ status: 'incomplete', hasRentAdjustments: true, verifiedAllocationRentSubtotal: 65000, unknownAllocationCount: 1 });
   });
+  it('原收款、退款和纯更正按事件月归集；未知仅影响可定位月份', async () => {
+    const base = await seedBase();
+    const tenancy = await setupTenancy(app, base);
+    const bill = await prisma.bill.create({ data: { contractId: tenancy.contractId, billNumber: 'REPORT-EVENTS', billType: 'RENT', period: '2026-01', amount: 60000, snapshot: {}, dueDate: new Date('2026-02-10') } });
+    const payment = await prisma.paymentRecord.create({ data: { billId: bill.id, amount: 80000, billPortion: 60000, lateFeePortion: 20000, allocationVerified: true, paymentMethod: 'CASH', status: 'CONFIRMED', paidAt: new Date('2026-02-10T00:00:00Z'), confirmedBy: base.adminId } });
+    const refund = await prisma.refundRecord.create({ data: { paymentRecordId: payment.id, billId: bill.id, outRefundNo: 'REPORT-REFUND', amount: 15000, status: 'SUCCESS', successAt: new Date('2026-03-02T00:00:00Z'), operatorId: base.adminId } });
+    await prisma.paymentRecord.create({ data: { billId: bill.id, amount: -15000, billPortion: -10000, lateFeePortion: -5000, allocationVerified: true, refundReversalId: refund.id, status: 'REVERSAL', paymentMethod: 'CASH', paidAt: new Date('2026-03-02T00:00:00Z'), confirmedBy: base.adminId } });
+    const correctionSource = await prisma.paymentRecord.create({ data: { billId: bill.id, amount: 5000, billPortion: 5000, lateFeePortion: 0, allocationVerified: true, paymentMethod: 'CASH', status: 'VOIDED', paidAt: new Date('2026-01-15T00:00:00Z'), confirmedBy: base.adminId } });
+    await prisma.paymentRecord.create({ data: { billId: bill.id, amount: -5000, billPortion: -5000, lateFeePortion: 0, reversalOfId: correctionSource.id, status: 'REVERSAL', paymentMethod: 'CASH', paidAt: new Date('2026-04-02T00:00:00Z'), confirmedBy: base.adminId } });
+    const report = (month: string) => http(app).get('/statistics/rent-report').query({ buildingId: base.buildingId, month }).set(auth(tenancy.adminToken));
+    expect((await report('2026-02')).body).toMatchObject({ status: 'complete', rentIncome: 60000, verifiedRefundSubtotal: 0 });
+    expect((await report('2026-03')).body).toMatchObject({ status: 'complete', rentIncome: -10000, verifiedRefundSubtotal: 10000, verifiedCorrectionSubtotal: 0 });
+    expect((await report('2026-04')).body).toMatchObject({ status: 'complete', rentIncome: -5000, verifiedCorrectionSubtotal: 5000 });
+    await prisma.paymentRecord.update({ where: { id: payment.id }, data: { status: 'VOIDED', voidedAt: new Date('2026-03-03T00:00:00Z') } });
+    expect((await report('2026-03')).body).toMatchObject({ status: 'incomplete', rentIncome: null, unknownAdjustmentCount: 1 });
+    await prisma.paymentRecord.update({ where: { id: payment.id }, data: { status: 'CONFIRMED', voidedAt: null } });
+    await prisma.paymentRecord.create({ data: { billId: bill.id, amount: 1000, billPortion: 1000, lateFeePortion: 0, paymentMethod: 'CASH', paidAt: new Date('2026-05-03T00:00:00Z'), confirmedBy: base.adminId } });
+    expect((await report('2026-05')).body).toMatchObject({ status: 'incomplete', rentIncome: null, unknownAllocationCount: 1 });
+    expect((await report('2026-03')).body.status).toBe('complete');
+    await prisma.refundRecord.create({ data: { paymentRecordId: payment.id, billId: bill.id, outRefundNo: 'UNDATED-REFUND', amount: 1000, status: 'SUCCESS', operatorId: base.adminId } });
+    expect((await report('2026-03')).body).toMatchObject({ status: 'incomplete', rentIncome: null, unknownAdjustmentCount: 1 });
+  });
+
 });

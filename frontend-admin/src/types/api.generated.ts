@@ -4316,6 +4316,8 @@ export interface components {
             idempotencyKey?: string;
         };
         CreateRefundDto: {
+            /** @description 同一退款申请重试时必须使用同一请求键 */
+            requestKey: string;
             /** @description 退款金额（单位：分，可选；默认整笔未退金额） */
             amount?: number;
             /** @description 退款原因说明 */
@@ -4507,6 +4509,24 @@ export interface components {
             /** @default 1 */
             visitorsCount: number;
             notes?: string;
+        };
+        RentReportResponseDto: {
+            month: string;
+            buildingId: string;
+            rentIncome: number | null;
+            verifiedAllocationRentSubtotal: number;
+            verifiedRefundSubtotal: number;
+            verifiedCorrectionSubtotal: number;
+            unknownAllocationCount: number;
+            unknownAdjustmentCount: number;
+            paidExpenses: number;
+            currentPrepayBalance: number;
+            /** @enum {string} */
+            status: "complete" | "incomplete";
+            netOperatingIncome: number | null;
+            basis: string;
+            limitations: string[];
+            hasRentAdjustments: boolean;
         };
         UpdateLeadDto: {
             /** @enum {string} */
@@ -10935,22 +10955,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": Record<string, never>;
+                };
             };
             /** @description 错误 */
             default: {
@@ -13629,15 +13640,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 成功 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RentReportResponseDto"];
                 };
             };
             /** @description 错误 */

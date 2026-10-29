@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import type { components } from '@/types/api.generated';
 
 export type StatisticsPeriod = 'MONTH' | 'QUARTER' | 'YEAR' | 'CUSTOM';
 export type StatisticsDimension = 'BUILDING' | 'FLOOR';
@@ -51,3 +52,8 @@ export const getBuildingsForFilter = async (): Promise<{ id: string; name: strin
   })) as unknown as { data?: { id: string; name: string }[] };
   return res?.data ?? [];
 };
+
+export type RentReport = components['schemas']['RentReportResponseDto'];
+
+export const getRentReport = (params: { buildingId: string; month: string }): Promise<RentReport> =>
+  request.get('/statistics/rent-report', { params });

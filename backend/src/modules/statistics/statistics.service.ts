@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { RentReportDto } from './dto/rent-report.dto.js';
+import { RentReportResponseDto } from './dto/rent-report-response.dto.js';
 import { QueryStatisticsDto } from './dto/query-statistics.dto.js';
 import { collectionRate, occupancyRate, sumAmounts } from '../../common/metrics/finance-metrics.js';
 
@@ -29,41 +30,76 @@ export class StatisticsService {
     private readonly clock: BusinessClock,
   ) {}
 
-  /** 管理口径：预付抵扣按收款实际业务月；退款及历史分配待核对。 */
-  async rentReport(query: RentReportDto) {
+  /** 管理口径：原收款、成功退款及纯更正分别按其业务月归集。 */
+  async rentReport(query: RentReportDto): Promise<RentReportResponseDto> {
     const [year, month] = query.month.split('-').map(Number);
-    // 先取足以覆盖任何时区的候选区间，再由 BusinessClock 确认业务月。
     const start = new Date(Date.UTC(year, month - 1, 1) - 2 * 86400000);
     const end = new Date(Date.UTC(year, month, 1) + 2 * 86400000);
     const dateStart = this.clock.parseDateOnly(`${query.month}-01`)!;
     const dateEnd = this.clock.addMonths(dateStart, 1);
     const today = this.clock.todayUtc();
-    const [payments, adjustments, rooms, paidExpenses] = await Promise.all([
+    const rentBill = { billType: 'RENT' as const, contract: { buildingId: query.buildingId } };
+    const [payments, refunds, undatedRefunds, reversals, orphanVoids, rooms, paidExpenses] = await Promise.all([
       this.prisma.paymentRecord.findMany({
-        where: { paidAt: { gte: start, lt: end }, status: { in: ['CONFIRMED', 'VOIDED'] }, bill: { billType: 'RENT', contract: { buildingId: query.buildingId } } },
-        select: { paidAt: true, billPortion: true, allocationVerified: true },
+        where: { paidAt: { gte: start, lt: end }, status: { in: ['CONFIRMED', 'VOIDED'] }, bill: rentBill },
+        select: { paidAt: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true },
       }),
-      // 在口径确定前，只要该楼栋存在租金退款/冲正，即不宣称完整。
-      this.prisma.paymentRecord.count({
-        where: { bill: { billType: 'RENT', contract: { buildingId: query.buildingId } }, OR: [{ status: { in: ['VOIDED', 'REVERSAL'] } }, { refundRecords: { some: { status: { in: ['PROCESSING', 'SUCCESS'] } } } }] },
+      this.prisma.refundRecord.findMany({
+        where: { status: 'SUCCESS', successAt: { gte: start, lt: end }, bill: rentBill },
+        select: { amount: true, successAt: true, paymentRecord: { select: { id: true, billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true } }, reversal: { select: { billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true } } },
       }),
+      // 没有完成时间不能确定受影响月份；不可凭创建/更新时间猜测。
+      this.prisma.refundRecord.count({ where: { status: 'SUCCESS', successAt: null, bill: rentBill } }),
+      this.prisma.paymentRecord.findMany({
+        where: { status: 'REVERSAL', refundReversalId: null, paidAt: { gte: start, lt: end }, bill: rentBill },
+        select: { paidAt: true, amount: true, billPortion: true, lateFeePortion: true, reversalOf: { select: { billId: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true, status: true, refundRecords: { select: { id: true } } } }, billId: true },
+      }),
+      this.prisma.paymentRecord.findMany({ where: { status: 'VOIDED', reversal: null, bill: rentBill }, select: { voidedAt: true, amount: true, refundRecords: { where: { status: 'SUCCESS' }, select: { amount: true, reversal: { select: { amount: true, allocationVerified: true } } } } } }),
       this.prisma.room.findMany({ where: { buildingId: query.buildingId }, select: { id: true } }),
       this.prisma.expensePayment.aggregate({ where: { paidDate: { gte: dateStart, lt: dateEnd, lte: today }, expense: { buildingId: query.buildingId, cancelledAt: null } }, _sum: { amount: true } }),
     ]);
     const balance = await this.prisma.prepayAccount.aggregate({ where: { roomId: { in: rooms.map(room => room.id) } }, _sum: { balanceCache: true } });
     const monthlyPayments = payments.filter(p => this.clock.monthKey(p.paidAt) === query.month);
+    const verifiedPayments = monthlyPayments.filter(p => p.allocationVerified === true && p.amount > 0 && p.billPortion >= 0 && p.lateFeePortion >= 0 && p.billPortion + p.lateFeePortion === p.amount);
+    const unknownAllocationCount = monthlyPayments.length - verifiedPayments.length;
+    const verifiedAllocationRentSubtotal = verifiedPayments.reduce((sum, p) => sum + p.billPortion, 0);
+    let verifiedRefundSubtotal = 0;
+    let verifiedCorrectionSubtotal = 0;
+    let unknownAdjustmentCount = undatedRefunds + orphanVoids.filter(p => {
+      const refundsAccountForVoid = p.refundRecords.length > 0 && p.refundRecords.every(r => r.reversal?.allocationVerified === true && r.reversal.amount === -r.amount) && p.refundRecords.reduce((sum, r) => sum + r.amount, 0) === p.amount;
+      return !refundsAccountForVoid && (!p.voidedAt || this.clock.monthKey(p.voidedAt) === query.month);
+    }).length;
+    for (const refund of refunds) {
+      if (!refund.successAt || this.clock.monthKey(refund.successAt) !== query.month) continue;
+      const r = refund.reversal;
+      if (!r || r.status !== 'REVERSAL' || r.billId !== refund.paymentRecord.billId || r.allocationVerified !== true || refund.paymentRecord.allocationVerified !== true || !['CONFIRMED', 'VOIDED'].includes(refund.paymentRecord.status) || r.amount !== -refund.amount || r.billPortion > 0 || r.lateFeePortion > 0 || r.billPortion + r.lateFeePortion !== r.amount || refund.amount > refund.paymentRecord.amount || refund.paymentRecord.billPortion < 0 || refund.paymentRecord.lateFeePortion < 0 || refund.paymentRecord.billPortion + refund.paymentRecord.lateFeePortion !== refund.paymentRecord.amount || -r.billPortion > refund.paymentRecord.billPortion || -r.lateFeePortion > refund.paymentRecord.lateFeePortion) { unknownAdjustmentCount++; continue; }
+      verifiedRefundSubtotal -= r.billPortion;
+    }
+    for (const r of reversals) {
+      if (this.clock.monthKey(r.paidAt) !== query.month) continue;
+      const original = r.reversalOf;
+      if (!original || original.billId !== r.billId || original.refundRecords.length > 0 || original.allocationVerified !== true || original.status !== 'VOIDED' || original.amount <= 0 || original.billPortion < 0 || original.lateFeePortion < 0 || original.billPortion + original.lateFeePortion !== original.amount || r.amount !== -original.amount || r.billPortion !== -original.billPortion || r.lateFeePortion !== -original.lateFeePortion) { unknownAdjustmentCount++; continue; }
+      verifiedCorrectionSubtotal -= r.billPortion;
+    }
+    const complete = unknownAllocationCount === 0 && unknownAdjustmentCount === 0;
+    const paidExpenseAmount = paidExpenses._sum.amount ?? 0;
+    const subtotal = verifiedAllocationRentSubtotal - verifiedRefundSubtotal - verifiedCorrectionSubtotal;
     return {
       month: query.month, buildingId: query.buildingId,
-      rentIncome: null,
-      verifiedAllocationRentSubtotal: monthlyPayments.filter(p => p.allocationVerified === true).reduce((sum, p) => sum + p.billPortion, 0),
-      unknownAllocationCount: monthlyPayments.filter(p => p.allocationVerified !== true).length,
-      paidExpenses: paidExpenses._sum.amount ?? 0,
+      rentIncome: complete ? subtotal : null,
+      verifiedAllocationRentSubtotal, verifiedRefundSubtotal, verifiedCorrectionSubtotal,
+      unknownAllocationCount, unknownAdjustmentCount,
+      paidExpenses: paidExpenseAmount,
       currentPrepayBalance: balance._sum.balanceCache ?? 0,
-      status: 'incomplete',
-      netOperatingIncome: null,
-      basis: '管理口径：按租金本金实际收款或预付抵扣的业务月归集',
-      limitations: ['退款和冲正归期尚待确定', '来源未核实的收款未计入候选租金，须核对', '当前预付余额不是月末余额；不计算净收益'],
-      hasRentAdjustments: adjustments > 0,
+      status: complete ? 'complete' : 'incomplete',
+      netOperatingIncome: complete ? subtotal - paidExpenseAmount : null,
+      basis: '管理口径：租金本金按实收或预付抵扣月，成功退款按完成月，更正按发生月；扣除实付支出',
+      limitations: [
+        ...(unknownAllocationCount ? ['存在来源未核实的收款分配'] : []),
+        ...(unknownAdjustmentCount ? ['存在退款或更正证据不足；无完成时间的退款可能影响任意月份'] : []),
+        '当前预付余额不是月末余额；此报表不是税务或法定会计口径',
+      ],
+      hasRentAdjustments: refunds.length > 0 || reversals.length > 0 || undatedRefunds > 0 || orphanVoids.length > 0,
     };
   }
 

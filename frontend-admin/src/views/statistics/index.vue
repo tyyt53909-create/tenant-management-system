@@ -91,6 +91,7 @@
           </el-table-column>
         </el-table>
       </template>
+      <RentReportPanel :buildings="buildings" />
     </ResourcePanel>
   </div>
 </template>
@@ -107,6 +108,7 @@ import {
   type StatisticsDimension,
 } from '@/api/statistics';
 import ResourcePanel from '@/components/common/ResourcePanel.vue';
+import RentReportPanel from './RentReportPanel.vue';
 import { formatMoneyPlain } from '@/utils/money';
 import { notifyApiError } from '@/utils/notify';
 

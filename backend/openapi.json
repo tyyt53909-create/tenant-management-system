@@ -9454,19 +9454,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "object"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -13900,12 +13896,11 @@
         ],
         "responses": {
           "200": {
-            "description": "成功",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/RentReportResponseDto"
                 }
               }
             }
@@ -17837,6 +17832,12 @@
       "CreateRefundDto": {
         "type": "object",
         "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "同一退款申请重试时必须使用同一请求键",
+            "minLength": 1,
+            "maxLength": 128
+          },
           "amount": {
             "type": "number",
             "description": "退款金额（单位：分，可选；默认整笔未退金额）",
@@ -17846,7 +17847,10 @@
             "type": "string",
             "description": "退款原因说明"
           }
-        }
+        },
+        "required": [
+          "requestKey"
+        ]
       },
       "RunReconciliationDto": {
         "type": "object",
@@ -18523,6 +18527,82 @@
           "name",
           "phone",
           "appointmentTime"
+        ]
+      },
+      "RentReportResponseDto": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "buildingId": {
+            "type": "string"
+          },
+          "rentIncome": {
+            "type": "number",
+            "nullable": true
+          },
+          "verifiedAllocationRentSubtotal": {
+            "type": "number"
+          },
+          "verifiedRefundSubtotal": {
+            "type": "number"
+          },
+          "verifiedCorrectionSubtotal": {
+            "type": "number"
+          },
+          "unknownAllocationCount": {
+            "type": "number"
+          },
+          "unknownAdjustmentCount": {
+            "type": "number"
+          },
+          "paidExpenses": {
+            "type": "number"
+          },
+          "currentPrepayBalance": {
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "incomplete"
+            ],
+            "type": "string"
+          },
+          "netOperatingIncome": {
+            "type": "number",
+            "nullable": true
+          },
+          "basis": {
+            "type": "string"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hasRentAdjustments": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "month",
+          "buildingId",
+          "rentIncome",
+          "verifiedAllocationRentSubtotal",
+          "verifiedRefundSubtotal",
+          "verifiedCorrectionSubtotal",
+          "unknownAllocationCount",
+          "unknownAdjustmentCount",
+          "paidExpenses",
+          "currentPrepayBalance",
+          "status",
+          "netOperatingIncome",
+          "basis",
+          "limitations",
+          "hasRentAdjustments"
         ]
       },
       "UpdateLeadDto": {

@@ -1,4 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { ApiOkResponse } from '@nestjs/swagger';
+import { RentReportResponseDto } from './dto/rent-report-response.dto.js';
 import { StatisticsService } from './statistics.service.js';
 import { RentReportDto } from './dto/rent-report.dto.js';
 import { QueryStatisticsDto } from './dto/query-statistics.dto.js';
@@ -14,6 +16,7 @@ export class StatisticsController {
   constructor(private readonly statisticsService: StatisticsService) {}
 
   @Get('rent-report')
+  @ApiOkResponse({ type: RentReportResponseDto })
   rentReport(@Query() query: RentReportDto) {
     return this.statisticsService.rentReport(query);
   }
