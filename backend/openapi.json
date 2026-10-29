@@ -19373,6 +19373,12 @@
               "unknown"
             ],
             "type": "string"
+          },
+          "reasonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -19382,6 +19388,7 @@
           "balance",
           "arithmetic",
           "inScope",
+          "reasonCodes",
           "reasons",
           "movements"
         ]

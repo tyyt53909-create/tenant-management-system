@@ -35,7 +35,16 @@ describe('当前余额核对', () => {
     const target = await prisma.depositLedger.create({ data: { contractId: next.id, tenantId: t.tenantId, roomId: t.roomId, amount: 10000, balance: 10000 } });
     await prisma.depositTransaction.create({ data: { ledgerId: target.id, type: 'TRANSFER', amount: 10000, balanceAfter: 10000, operatorId: base.adminId } });
     const get = () => http(app).get('/statistics/current-balances').query({ buildingId: base.buildingId }).set(auth(t.adminToken));
-    expect((await get()).body.deposit).toMatchObject({ bookSubtotal: 10000, unknownCount: 2, verifiedTotal: null });
+    const transferred = (await get()).body.deposit;
+    expect(transferred).toMatchObject({ bookSubtotal: 10000, unknownCount: 2, verifiedTotal: null });
+    expect(transferred.items.find((item: { id: string }) => item.id === target.id).reasonCodes).toContain('TRANSFER_PAIR_UNPROVEN');
+    const other = await prisma.building.create({ data: { name: '跨楼合成', floors: 1 } });
+    const otherRoom = await prisma.room.create({ data: { buildingId: other.id, roomNumber: 'CROSS', floor: 1, roomType: 'SINGLE' } });
+    await prisma.depositLedger.update({ where: { id: target.id }, data: { roomId: otherRoom.id } });
+    const mismatch = (await get()).body;
+    expect(mismatch.unassignedDepositCount).toBe(1);
+    expect(mismatch.deposit.items.find((item: { id: string }) => item.id === target.id)).toMatchObject({ inScope: false, reasonCodes: expect.arrayContaining(['OWNERSHIP_UNKNOWN', 'TRANSFER_PAIR_UNPROVEN']) });
+    await prisma.depositLedger.update({ where: { id: target.id }, data: { roomId: t.roomId } });
     const missingContract = await prisma.contract.create({ data: { buildingId: original.buildingId, roomId: original.roomId, tenantId: original.tenantId, contractNumber: 'SYNTHETIC-MISSING', rentAmount: original.rentAmount, depositAmount: original.depositAmount, paymentCycle: original.paymentCycle, paymentDay: original.paymentDay, startDate: original.startDate, endDate: original.endDate, lateFeeRule: original.lateFeeRule as object } });
     const missingBill = await prisma.bill.create({ data: { contractId: missingContract.id, billNumber: 'SYNTHETIC-MISSING', billType: 'DEPOSIT', period: '2026-01', amount: 10000, snapshot: {}, dueDate: new Date('2026-01-10') } });
     await prisma.paymentRecord.create({ data: { billId: missingBill.id, amount: 1000, paymentMethod: 'CASH', paidAt: new Date('2026-01-05'), confirmedBy: base.adminId } });

@@ -149,26 +149,25 @@ export class StatisticsService {
       const unassignedPrepayCount = Number(orphanCounts[0].prepay); const unassignedDepositCount = Number(orphanCounts[0].deposit);
       if (!Number.isSafeInteger(unassignedPrepayCount) || !Number.isSafeInteger(unassignedDepositCount)) throw new BadRequestException('归属异常数量超出安全整数范围');
       const deposit: BalanceItemDto[] = []; const prepay: BalanceItemDto[] = [];
-      const arithmetic = (reasons: string[]): 'consistent' | 'inconsistent' | 'unknown' => reasons.some(r => r.includes('顺序不明确') || r.includes('无流水')) ? 'unknown' : reasons.length > 1 ? 'inconsistent' : 'consistent';
       for (const a of accounts) {
         const owner = roomBuildings.get(a.roomId); if (buildingId && owner && owner !== buildingId) continue;
         const movements = prepayMovements.filter(m => m.accountId === a.id);
-        const reasons = verifyBalance('prepay', a.balanceCache, movements);
-        const arithmeticStatus = arithmetic(reasons);
+        const check = verifyBalance('prepay', a.balanceCache, movements);
+        const reasons = [...check.reasons];
         if (!owner) reasons.push('账户房间无法确定当前楼栋');
-        prepay.push({ id: a.id, contractId: null, roomId: a.roomId, balance: a.balanceCache, arithmetic: arithmeticStatus, inScope: !!owner && (!buildingId || owner === buildingId), reasons, movements });
+        prepay.push({ id: a.id, contractId: null, roomId: a.roomId, balance: a.balanceCache, arithmetic: check.arithmetic, reasonCodes: [...check.codes, ...(!owner ? ['OWNERSHIP_UNKNOWN'] : [])], inScope: !!owner && (!buildingId || owner === buildingId), reasons, movements });
       }
       for (const l of ledgers) {
         const owner = roomBuildings.get(l.roomId); if (buildingId && l.contract.buildingId !== buildingId && owner && owner !== buildingId) continue;
         const movements = depositMovements.filter(m => m.ledgerId === l.id);
-        const reasons = verifyBalance('deposit', l.balance, movements);
-        const arithmeticStatus = arithmetic(reasons);
+        const check = verifyBalance('deposit', l.balance, movements);
+        const reasons = [...check.reasons];
         if (!owner || owner !== l.contract.buildingId || l.roomId !== l.contract.roomId) reasons.push('台账、合同或房间的当前归属不一致');
-        deposit.push({ id: l.id, contractId: l.contractId, roomId: l.roomId, balance: l.balance, arithmetic: arithmeticStatus, inScope: !!owner && (!buildingId || owner === buildingId) && owner === l.contract.buildingId && l.roomId === l.contract.roomId, reasons, movements });
+        deposit.push({ id: l.id, contractId: l.contractId, roomId: l.roomId, balance: l.balance, arithmetic: check.arithmetic, reasonCodes: [...check.codes, ...(!owner || owner !== l.contract.buildingId || l.roomId !== l.contract.roomId ? ['OWNERSHIP_UNKNOWN'] : [])], inScope: !!owner && (!buildingId || owner === buildingId) && owner === l.contract.buildingId && l.roomId === l.contract.roomId, reasons, movements });
       }
       for (const b of missing) {
         const consistent = b.contract.buildingId === b.contract.room.buildingId;
-        deposit.push({ id: b.id, contractId: b.contractId, roomId: b.contract.roomId, balance: null, arithmetic: 'unknown', inScope: consistent, reasons: ['押金账单已有收款但缺少台账', ...(!consistent ? ['合同与房间楼栋归属不一致'] : [])], movements: [] });
+        deposit.push({ id: b.id, contractId: b.contractId, roomId: b.contract.roomId, balance: null, arithmetic: 'unknown', reasonCodes: ['MISSING_LEDGER', ...(!consistent ? ['OWNERSHIP_UNKNOWN'] : [])], inScope: consistent, reasons: ['押金账单已有收款但缺少台账', ...(!consistent ? ['合同与房间楼栋归属不一致'] : [])], movements: [] });
       }
       const category = (items: BalanceItemDto[]) => {
         items.sort((a, b) => a.id.localeCompare(b.id));

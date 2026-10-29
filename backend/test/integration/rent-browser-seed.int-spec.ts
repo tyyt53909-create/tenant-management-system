@@ -21,7 +21,14 @@ await prisma.building.create({ data: { name: '空测试楼栋', floors: 1 } });
 const prepay = await prisma.prepayAccount.create({ data: { tenantId: tenancy.tenantId, roomId: tenancy.roomId, balanceCache: 12000 } });
 await prisma.prepayTransaction.create({ data: { accountId: prepay.id, type: 'RECHARGE', amount: 12000, balanceAfter: 12000, description: '合成', operatorId: base.adminId } });
 const ledger = await prisma.depositLedger.create({ data: { contractId: tenancy.contractId, tenantId: tenancy.tenantId, roomId: tenancy.roomId, amount: 30000, balance: 30000 } });
-await prisma.depositTransaction.create({ data: { ledgerId: ledger.id, type: 'COLLECT', amount: 30000, balanceAfter: 30000, operatorId: base.adminId } });
+await prisma.depositTransaction.create({ data: { ledgerId: ledger.id, type: 'COLLECT', amount: 20000, balanceAfter: 20000, operatorId: base.adminId, createdAt: new Date('2026-01-01') } });
+await prisma.depositTransaction.create({ data: { ledgerId: ledger.id, type: 'TRANSFER', amount: 10000, balanceAfter: 30000, operatorId: base.adminId, createdAt: new Date('2026-01-02') } });
+const original = await prisma.contract.findUniqueOrThrow({ where: { id: tenancy.contractId } });
+const mismatchContract = await prisma.contract.create({ data: { buildingId: original.buildingId, roomId: original.roomId, tenantId: original.tenantId, contractNumber: 'BROWSER-CROSS', rentAmount: original.rentAmount, depositAmount: original.depositAmount, paymentCycle: original.paymentCycle, paymentDay: original.paymentDay, startDate: original.startDate, endDate: original.endDate, lateFeeRule: original.lateFeeRule as object } });
+const crossBuilding = await prisma.building.create({ data: { name: '跨楼合成测试', floors: 1 } });
+const crossRoom = await prisma.room.create({ data: { buildingId: crossBuilding.id, floor: 1, roomNumber: 'CROSS', roomType: 'SINGLE' } });
+await prisma.depositLedger.create({ data: { contractId: mismatchContract.id, tenantId: tenancy.tenantId, roomId: crossRoom.id, amount: 1000, balance: 1000 } });
+await prisma.building.createMany({ data: Array.from({ length: 101 }, (_, i) => ({ name: `分页合成楼栋${i}`, floors: 1 })) });
 console.log(`SYNTHETIC_BROWSER_BUILDING=${base.buildingId}`);
 await app.close(); await redis.quit();
 

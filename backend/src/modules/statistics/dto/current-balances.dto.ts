@@ -10,7 +10,7 @@ export class BalanceMovementDto {
 export class BalanceItemDto {
   @ApiProperty() id!: string; @ApiProperty({ type: String, nullable: true }) contractId!: string | null;
   @ApiProperty() roomId!: string; @ApiProperty({ type: Number, nullable: true }) balance!: number | null;
-  @ApiProperty({ enum: ['consistent', 'inconsistent', 'unknown'] }) arithmetic!: 'consistent' | 'inconsistent' | 'unknown'; @ApiProperty() inScope!: boolean; @ApiProperty({ type: [String] }) reasons!: string[];
+  @ApiProperty({ enum: ['consistent', 'inconsistent', 'unknown'] }) arithmetic!: 'consistent' | 'inconsistent' | 'unknown'; @ApiProperty() inScope!: boolean; @ApiProperty({ type: [String] }) reasonCodes!: string[]; @ApiProperty({ type: [String] }) reasons!: string[];
   @ApiProperty({ type: [BalanceMovementDto] }) movements!: BalanceMovementDto[];
 }
 export class BalanceCategoryDto {

@@ -4732,6 +4732,7 @@ export interface components {
             inScope: boolean;
             /** @enum {string} */
             arithmetic: "consistent" | "inconsistent" | "unknown";
+            reasonCodes: string[];
         };
         BalanceCategoryDto: {
             items: components["schemas"]["BalanceItemDto"][];

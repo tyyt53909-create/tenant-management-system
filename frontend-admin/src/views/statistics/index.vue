@@ -37,6 +37,7 @@
         </el-form-item>
       </el-form>
 
+      <p v-if="buildingError" role="alert">楼栋列表加载失败 <el-button link @click="loadBuildings">重试</el-button></p>
       <el-alert
         v-if="query.period === 'CUSTOM' && (!customRange || customRange.length !== 2)"
         type="warning"
@@ -92,7 +93,7 @@
         </el-table>
       </template>
       <RentReportPanel :buildings="buildings" />
-      <CurrentBalancesPanel :buildings="buildings" />
+      <CurrentBalancesPanel />
     </ResourcePanel>
   </div>
 </template>
@@ -117,6 +118,8 @@ import { notifyApiError } from '@/utils/notify';
 const loading = ref(false);
 const data = ref<StatisticsOverview | null>(null);
 const buildings = ref<{ id: string; name: string }[]>([]);
+const buildingError = ref(false);
+async function loadBuildings() { try { buildings.value = await getBuildingsForFilter(); buildingError.value = false; } catch { buildingError.value = true; } }
 const customRange = ref<[string, string] | null>(null);
 
 const query = reactive<{
@@ -164,11 +167,7 @@ const fetchData = async () => {
 };
 
 onMounted(async () => {
-  try {
-    buildings.value = await getBuildingsForFilter();
-  } catch {
-    // 楼栋列表失败不阻断统计
-  }
+  await loadBuildings();
   fetchData();
 });
 </script>

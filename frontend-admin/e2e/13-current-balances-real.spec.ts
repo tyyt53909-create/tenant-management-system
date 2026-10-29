@@ -7,12 +7,15 @@ test('当前余额连接隔离 API，切换不显示旧楼栋', async ({ page })
   await page.waitForURL(url => !url.pathname.includes('login'));
   await page.goto('/statistics');
   const panel = page.getByRole('region', { name: '当前余额核对' });
+  await panel.getByRole('button', { name: '下一页' }).click();
   await panel.locator('.el-select').click();
   await page.getByText('集成测试楼栋', { exact: true }).last().click();
   await panel.getByRole('button', { name: '查询余额' }).click();
   await expect(panel).toContainText('¥300.00'); await expect(panel).toContainText('¥120.00');
   await expect(panel).toContainText('历史流水完整性无法证明'); await expect(panel).toContainText('一致（不证明完整）');
   await expect(panel).toContainText('完整核实合计：不可提供');
+  await expect(panel).toContainText('押金转移配对未核实');
+  await expect(panel).toContainText('台账、合同或房间的当前归属不一致');
   await panel.getByText('查看编号与流水').first().click();
   await expect(panel).toContainText('COLLECT');
   await page.route('**/api/statistics/current-balances?*', async route => {

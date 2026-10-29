@@ -1,0 +1,21 @@
+import { test, expect } from '@playwright/test';
+test('楼栋列表失败可重试，并能选择第 101 棟之后', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByPlaceholder('请输入邮箱或手机号').fill('integration-admin@example.com');
+  await page.getByPlaceholder('请输入密码').fill('Integration@123');
+  await page.getByRole('button', { name: '进入运营中心' }).click(); await page.waitForURL(url => !url.pathname.includes('login'));
+  let failures = 0;
+  await page.route('**/api/buildings?*', async route => { if (failures < 2) { failures++; await route.fulfill({ status: 503, body: '{}' }); } else await route.continue(); });
+  await page.goto('/statistics');
+  const panel = page.getByRole('region', { name: '当前余额核对' });
+  await expect(panel.getByText('楼栋加载失败')).toBeVisible();
+  await expect(page.getByText('楼栋列表加载失败')).toBeVisible();
+  await panel.getByRole('button', { name: '重试' }).click();
+  await page.getByText('楼栋列表加载失败').getByRole('button', { name: '重试' }).click();
+  await expect(panel.getByRole('button', { name: '下一页' })).toBeEnabled();
+  await panel.getByRole('button', { name: '下一页' }).click();
+  await panel.locator('.el-select').click();
+  await page.getByText('集成测试楼栋', { exact: true }).last().click();
+  await panel.getByRole('button', { name: '查询余额' }).click();
+  await expect(panel).toContainText('¥300.00');
+});
