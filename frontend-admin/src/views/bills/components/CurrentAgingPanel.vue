@@ -34,6 +34,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import request from '@/utils/request';
+import { apiErrorMessage } from '@/utils/apiError';
 import { formatMoney } from '@/utils/table';
 import { isAgingReport, type Key, type Report } from './agingReport';
 defineEmits<{ open: [id: string] }>();
@@ -47,7 +48,7 @@ const loading = ref(false); const error = ref(''); let version = 0;
 async function load() {
   const current = ++version; loading.value = true; error.value = ''; report.value = null;
   try { const data: unknown = await request.get('/bills/current-aging', {params: billType.value !== 'ALL' ? {billType: billType.value} : {}}); if (!isAgingReport(data)) throw new Error('invalid report'); if (current === version) report.value = data; }
-  catch { if (current === version) error.value = '账龄查询失败，请重试'; }
+  catch (e) { if (current === version) error.value = apiErrorMessage(e, '账龄查询失败，请重试'); }
   finally { if (current === version) loading.value = false; }
 }
 onMounted(load); onUnmounted(() => { version++; });

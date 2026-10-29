@@ -3,7 +3,7 @@ import { computeOverdue } from './bill-overdue.util.js';
 
 export const AGING_BUCKETS = ['CURRENT', 'DAYS_1_30', 'DAYS_31_60', 'DAYS_61_90', 'DAYS_91_PLUS'] as const;
 export type AgingBucket = typeof AGING_BUCKETS[number];
-type Payment = { status: 'CONFIRMED' | 'VOIDED' | 'REVERSAL'; allocationVerified: boolean | null; billPortion: number; lateFeePortion: number; amount: number };
+type Payment = { id?: string; reversalOfId?: string | null; refundReversalId?: string | null; refundRecords?: { id: string }[]; status: 'CONFIRMED' | 'VOIDED' | 'REVERSAL'; allocationVerified: boolean | null; billPortion: number; lateFeePortion: number; amount: number };
 type Fee = { confirmedAmount: number | null; settledAmount: number | null };
 export type AgingBill = { id: string; billNumber: string; billType: BillType; status: BillStatus; amount: number; paidAmount: number; dueDate: Date; paymentRecords: Payment[]; lateFees: Fee[] };
 type Cell = { amount: number; count: number; billIds: string[] };
@@ -32,7 +32,11 @@ export function calculateCurrentAging(bills: AgingBill[], today: Date) {
     const validAmounts = Number.isSafeInteger(bill.amount) && Number.isSafeInteger(bill.paidAmount) && bill.amount >= 0 && bill.paidAmount >= 0 && bill.paidAmount <= bill.amount;
     const validStatus = validAmounts && (bill.status === 'PAID' ? bill.paidAmount === bill.amount : bill.status === 'PENDING' ? bill.paidAmount === 0 && bill.amount > 0 : bill.status === 'PARTIAL' ? bill.paidAmount > 0 && bill.paidAmount < bill.amount : bill.paidAmount < bill.amount);
     const validDate = bill.dueDate instanceof Date && !Number.isNaN(bill.dueDate.getTime());
-    const validPayments = bill.paymentRecords.every(p => p.allocationVerified === true && Number.isSafeInteger(p.amount) && Number.isSafeInteger(p.billPortion) && Number.isSafeInteger(p.lateFeePortion) && p.billPortion + p.lateFeePortion === p.amount && (p.status === 'REVERSAL' ? p.amount < 0 && p.billPortion <= 0 && p.lateFeePortion <= 0 : p.amount > 0 && p.billPortion >= 0 && p.lateFeePortion >= 0));
+    const validPayments = bill.paymentRecords.every(p => {
+      const original = bill.paymentRecords.find(o => o.id && o.id === p.reversalOfId);
+      const trustedVoid = p.status === 'REVERSAL' && p.allocationVerified == null && p.refundReversalId == null && original?.status === 'VOIDED' && original.allocationVerified === true && original.refundRecords?.length === 0 && original.amount > 0 && original.billPortion >= 0 && original.lateFeePortion >= 0 && original.billPortion + original.lateFeePortion === original.amount && p.amount === -original.amount && p.billPortion === -original.billPortion && p.lateFeePortion === -original.lateFeePortion;
+      return (p.allocationVerified === true || trustedVoid) && Number.isSafeInteger(p.amount) && Number.isSafeInteger(p.billPortion) && Number.isSafeInteger(p.lateFeePortion) && p.billPortion + p.lateFeePortion === p.amount && (p.status === 'REVERSAL' ? p.amount < 0 && p.billPortion <= 0 && p.lateFeePortion <= 0 : p.amount > 0 && p.billPortion >= 0 && p.lateFeePortion >= 0);
+    });
     const allocated = bill.paymentRecords.reduce((sum, p) => safeAdd(sum, p.billPortion), 0);
     const verified = validAmounts && validStatus && validDate && validPayments && allocated === bill.paidAmount;
     if (!verified) { group.unknownPrincipalCount++; group.unknownPrincipalIds.push(bill.id); }
@@ -45,6 +49,7 @@ export function calculateCurrentAging(bills: AgingBill[], today: Date) {
     const allocatedFees = bill.paymentRecords.reduce((sum, p) => safeAdd(sum, p.lateFeePortion), 0);
     const settledFees = bill.lateFees.reduce((sum, fee) => safeAdd(sum, fee.settledAmount ?? 0), 0);
     const feesReconciled = validPayments && allocatedFees === settledFees;
+    if (!feesReconciled && !bill.lateFees.some(fee => fee.confirmedAmount !== null || (fee.settledAmount ?? 0) !== 0)) { group.unknownLateFeeCount++; group.unknownLateFeeIds.push(bill.id); }
     for (const fee of bill.lateFees) {
       if (fee.confirmedAmount === null) {
         if ((fee.settledAmount ?? 0) !== 0) { group.unknownLateFeeCount++; group.unknownLateFeeIds.push(bill.id); }

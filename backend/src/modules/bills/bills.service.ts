@@ -167,15 +167,17 @@ export class BillsService {
       const today = clock.todayUtc(started);
       const groups = await this.prisma.$transaction(async tx => {
         const bills = await tx.bill.findMany({
+          take: 5001,
           where: {
             ...(query.billType ? { billType: query.billType } : {}),
             ...(query.buildingId ? { contract: { room: { buildingId: query.buildingId } } } : {}),
           },
           select: { id: true, billNumber: true, billType: true, status: true, amount: true, paidAmount: true, dueDate: true,
-            paymentRecords: { select: { status: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true } },
+            paymentRecords: { select: { id: true, reversalOfId: true, refundReversalId: true, refundRecords: { select: { id: true } }, status: true, amount: true, billPortion: true, lateFeePortion: true, allocationVerified: true } },
             lateFees: { select: { confirmedAmount: true, settledAmount: true } },
           },
         });
+        if (bills.length > 5000) throw new BadRequestException('账单超过 5000 条，请缩小楼栋范围后重试');
         return calculateCurrentAging(bills, today).filter(group => !query.billType || group.billType === query.billType);
       }, { isolationLevel: 'RepeatableRead' });
       const totals = groups.reduce((acc, group) => {

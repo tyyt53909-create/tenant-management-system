@@ -42,4 +42,15 @@ describe('current aging calculation', () => {
     expect(rent.lateFee).toBe(0);
   });
 
+  it('recognizes only linked exact pure voids and flags missing fee rows', () => {
+    const original = {id:'p', status:'VOIDED' as const, amount:1100, billPortion:1000, lateFeePortion:100, allocationVerified:true, refundRecords:[]};
+    const reversal = {id:'r', status:'REVERSAL' as const, amount:-1100, billPortion:-1000, lateFeePortion:-100, allocationVerified:null, reversalOfId:'p', refundReversalId:null};
+    const known = calculateCurrentAging([bill(1, {paymentRecords:[original,reversal]})], today)[0];
+    expect(known.principal).toBe(1000);
+    const unknown = calculateCurrentAging([bill(1, {paymentRecords:[original,{...reversal,reversalOfId:null}]})], today)[0];
+    expect(unknown.unknownPrincipalCount).toBe(1);
+    const missing = calculateCurrentAging([bill(1, {paymentRecords:[{...original,status:'CONFIRMED',billPortion:0,amount:100}]})], today)[0];
+    expect(missing.unknownLateFeeCount).toBe(1);
+  });
+
 });

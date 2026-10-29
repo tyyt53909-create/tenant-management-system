@@ -70,4 +70,30 @@ describe('current aging API', () => {
     expect(result.body.groups[0].unknownLateFeeCount).toBe(0);
   });
 
+  it('recognizes a linked pure void but keeps legacy unknown allocation unknown', async () => {
+    const base = await seedBase(); const tenancy = await setupTenancy(app, base);
+    const b = await prisma.bill.create({data:{contractId:tenancy.contractId,billNumber:'VOID-AGE',billType:'OTHER',period:'V',amount:1000,dueDate:new Date('2026-01-01'),snapshot:{}}});
+    const payment = await http(app).post(`/bills/${b.id}/payments`).set(auth(tenancy.adminToken)).send({amount:500,paymentMethod:'CASH'});
+    expect(payment.status).toBe(201);
+    const voided = await http(app).post(`/bills/${b.id}/payments/${payment.body.payment.id}/void`).set(auth(tenancy.adminToken)).send({reason:'test'});
+    expect(voided.status).toBe(201);
+    const unknown = await prisma.bill.create({data:{contractId:tenancy.contractId,billNumber:'UNKNOWN-AGE',billType:'OTHER',period:'U',amount:1000,paidAmount:100,status:'PARTIAL',dueDate:new Date('2026-01-01'),snapshot:{}}});
+    const result = await http(app).get('/bills/current-aging?billType=OTHER').set(auth(tenancy.adminToken));
+    expect(result.status).toBe(200);
+    expect(result.body.groups[0].principal).toBe(1000);
+    expect(result.body.groups[0].unknownPrincipalIds).toContain(unknown.id);
+  });
+
+  it('reports missing fee records and rejects an oversized scope', async () => {
+    const base = await seedBase(); const tenancy = await setupTenancy(app, base);
+    const b = await prisma.bill.create({data:{contractId:tenancy.contractId,billNumber:'MISSING-FEE',billType:'OTHER',period:'M',amount:1000,dueDate:new Date('2026-01-01'),snapshot:{}}});
+    await prisma.paymentRecord.create({data:{billId:b.id,amount:100,billPortion:0,lateFeePortion:100,allocationVerified:true,paymentMethod:'CASH',paidAt:new Date(),confirmedBy:base.adminId}});
+    const r = await http(app).get('/bills/current-aging?billType=OTHER').set(auth(tenancy.adminToken));
+    expect(r.body.groups[0].unknownLateFeeIds).toContain(b.id);
+    await prisma.bill.createMany({data:Array.from({length:5001},(_,i)=>({contractId:tenancy.contractId,billNumber:`CAP-${i}`,billType:'OTHER' as const,period:'C',amount:1,dueDate:new Date('2026-01-01'),snapshot:{}}))});
+    const oversized = await http(app).get('/bills/current-aging?billType=OTHER').set(auth(tenancy.adminToken));
+    expect(oversized.status).toBe(400);
+    expect(oversized.body.groups).toBeUndefined();
+  });
+
 });
