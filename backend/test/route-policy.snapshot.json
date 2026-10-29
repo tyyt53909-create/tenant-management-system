@@ -1082,6 +1082,60 @@
   },
   {
     "method": "GET",
+    "path": "/api/expenses",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "FINANCIAL"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/expenses",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "FINANCIAL"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/expenses/:id",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "FINANCIAL"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/expenses/:id/cancel",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "FINANCIAL"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/expenses/:id/payments",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "FINANCIAL"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/expenses/buildings",
+    "public": false,
+    "roles": [
+      "ADMIN",
+      "FINANCIAL"
+    ]
+  },
+  {
+    "method": "GET",
     "path": "/api/files/:key",
     "public": false,
     "roles": []

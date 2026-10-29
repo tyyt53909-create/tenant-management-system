@@ -430,6 +430,7 @@ model Building {
   contracts          Contract[]
   meters             Meter[]
   publicUtilityBills PublicUtilityBill[]
+  operatingExpenses OperatingExpense[]
   floorPlans         FloorPlan[]
   staffAssignments   StaffBuildingAssignment[]
   cleaningTasks      CleaningTask[]
@@ -1619,6 +1620,7 @@ model PublicUtilityBill {
   updatedAt        DateTime @updatedAt
 
   allocations PublicUtilityAllocation[]
+  operatingExpense OperatingExpense?
 
   @@unique([buildingId, meterType, period])
   @@index([period])
@@ -2025,4 +2027,40 @@ model CleaningTask {
   @@index([cleanerId])
   @@index([status])
   @@map("cleaning_tasks")
+}
+
+// T305：应付支出及实际发生的付款记录；不提供删除接口。
+model OperatingExpense {
+  id String @id @default(cuid())
+  buildingId String
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  category String
+  description String
+  amount Int
+  sourceReference String?
+  publicUtilityBillId String? @unique
+  publicUtilityBill PublicUtilityBill? @relation(fields: [publicUtilityBillId], references: [id], onDelete: Restrict)
+  requestKey String @unique
+  createdById String
+  createdAt DateTime @default(now())
+  version Int @default(0)
+  cancelledAt DateTime?
+  cancelledById String?
+  payment ExpensePayment?
+  @@index([buildingId, createdAt])
+  @@map("operating_expenses")
+}
+
+model ExpensePayment {
+  id String @id @default(cuid())
+  expenseId String @unique
+  expense OperatingExpense @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  amount Int
+  paidDate DateTime @db.Date
+  evidence String
+  requestKey String @unique
+  recordedById String
+  createdAt DateTime @default(now())
+  @@index([paidDate])
+  @@map("expense_payments")
 }

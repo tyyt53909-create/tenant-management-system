@@ -68,6 +68,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/contracts/index.vue'),
         meta: { title: '合同管理', icon: 'Document', roles: ['ADMIN'] },
       },
+      { path: '/expenses', name: 'Expenses', component: () => import('@/views/expenses/index.vue'), meta: { title: '支出记录', roles: ['ADMIN', 'FINANCIAL'] } },
       {
         path: '/bills',
         name: 'Bills',

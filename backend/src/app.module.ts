@@ -52,6 +52,7 @@ import { LeadsModule } from './modules/leads/leads.module.js';
 import { AppointmentsModule } from './modules/appointments/appointments.module.js';
 import { InspectionsModule } from './modules/inspections/inspections.module.js';
 import { CleaningModule } from './modules/cleaning/cleaning.module.js';
+import { ExpensesModule } from './modules/expenses/expenses.module.js';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { CleaningModule } from './modules/cleaning/cleaning.module.js';
     RoomsModule,
     TenantsModule,
     PublicUtilitiesModule,
+    ExpensesModule,
     ImportsModule,
     TagsModule,
     BuildingsModule,

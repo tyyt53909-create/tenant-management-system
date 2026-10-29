@@ -35,7 +35,10 @@ export class StatisticsService {
     // 先取足以覆盖任何时区的候选区间，再由 BusinessClock 确认业务月。
     const start = new Date(Date.UTC(year, month - 1, 1) - 2 * 86400000);
     const end = new Date(Date.UTC(year, month, 1) + 2 * 86400000);
-    const [payments, adjustments, rooms] = await Promise.all([
+    const dateStart = this.clock.parseDateOnly(`${query.month}-01`)!;
+    const dateEnd = this.clock.addMonths(dateStart, 1);
+    const today = this.clock.todayUtc();
+    const [payments, adjustments, rooms, paidExpenses] = await Promise.all([
       this.prisma.paymentRecord.findMany({
         where: { paidAt: { gte: start, lt: end }, status: 'CONFIRMED', bill: { billType: 'RENT', contract: { buildingId: query.buildingId } } },
         select: { paidAt: true, billPortion: true },
@@ -45,16 +48,19 @@ export class StatisticsService {
         where: { bill: { billType: 'RENT', contract: { buildingId: query.buildingId } }, OR: [{ status: { in: ['VOIDED', 'REVERSAL'] } }, { refundRecords: { some: { status: { in: ['PROCESSING', 'SUCCESS'] } } } }] },
       }),
       this.prisma.room.findMany({ where: { buildingId: query.buildingId }, select: { id: true } }),
+      this.prisma.expensePayment.aggregate({ where: { paidDate: { gte: dateStart, lt: dateEnd, lte: today }, expense: { buildingId: query.buildingId, cancelledAt: null } }, _sum: { amount: true } }),
     ]);
     const balance = await this.prisma.prepayAccount.aggregate({ where: { roomId: { in: rooms.map(room => room.id) } }, _sum: { balanceCache: true } });
     return {
       month: query.month, buildingId: query.buildingId,
-      rentIncome: payments.filter(p => this.clock.monthKey(p.paidAt) === query.month).reduce((sum, p) => sum + p.billPortion, 0),
+      rentIncome: null,
+      provisionalRentIncome: payments.filter(p => this.clock.monthKey(p.paidAt) === query.month).reduce((sum, p) => sum + p.billPortion, 0),
+      paidExpenses: paidExpenses._sum.amount ?? 0,
       currentPrepayBalance: balance._sum.balanceCache ?? 0,
       status: 'incomplete',
       netOperatingIncome: null,
       basis: '管理口径：按租金本金实际收款或预付抵扣的业务月归集',
-      limitations: ['退款和冲正归期尚待确定', '历史收款本金分配可能包含滞纳金，须核对', '支出尚未接入；不计算净收益'],
+      limitations: ['退款和冲正归期尚待确定', '历史收款本金分配可能包含滞纳金，须核对', '当前预付余额不是月末余额；不计算净收益'],
       hasRentAdjustments: adjustments > 0,
     };
   }

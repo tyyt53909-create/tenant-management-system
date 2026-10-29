@@ -105,6 +105,7 @@ const allNavigation = [
   { path: '/space', title: '房源模型', icon: Grid, label: 'SPACE MODEL / 楼栋空间', description: '用 2D 剖面和 3D 等轴模型，查看一栋楼的真实占用状态。', roles: ['ADMIN', 'CLEANER'] as const },
   { path: '/tenants', title: '租客档案', icon: User, label: 'RESIDENTS / 租客资料', description: '从租客本人出发，快速关联房源、合同与收款。' },
   { path: '/contracts', title: '合同管理', icon: Document, label: 'AGREEMENTS / 租赁关系', description: '租赁期限、每月应收和续约提醒，在同一行核对。' },
+  { path: '/expenses', title: '支出记录', icon: Wallet, label: 'FINANCE / 支出记录', description: '记录已发生的支出及付款凭证。', roles: ['ADMIN', 'FINANCIAL'] as const },
   { path: '/bills', title: '账单与收款', icon: Wallet, label: 'FINANCE / 账务管理', description: '应收、已收和剩余欠款，放在清楚可核对的位置。' },
   { path: '/maintenance', title: '报修工单', icon: Tools, label: 'SERVICE / 报修协同', description: '按紧急程度和处理进度安排任务，让每个工单都有明确下一步。' },
   { path: '/cleaning', title: '保洁任务', icon: Brush, label: 'HOUSEKEEPING / 现场工作', description: '按空置房源的真实清洁状态组织工作，保留开始与完成操作。', roles: ['ADMIN', 'CLEANER'] as const },
