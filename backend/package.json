@@ -87,6 +87,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^7.0.0",
     "@vitest/coverage-v8": "^4.1.2",
+    "aedes": "^0.51.3",
     "openapi-typescript": "^7.13.0",
     "oxlint": "^1.58.0",
     "oxlint-tsgolint": "^7.0.2001",

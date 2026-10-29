@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import type { ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
@@ -39,6 +39,11 @@ export class MeterReadingService {
     const readingTime = dto.readingTime ? new Date(dto.readingTime) : new Date();
     const source = dto.source || 'MANUAL';
     const readingScope = source === 'SIMULATED' ? 'SIMULATED' as const : NOT_SIMULATED;
+    const assertSimulationReplay = (reading: { readingTime: Date; currentReading: unknown }) => {
+      if (source === 'SIMULATED' && (reading.readingTime.getTime() !== readingTime.getTime() || Number(reading.currentReading) !== dto.currentReading)) {
+        throw new ConflictException('模拟消息编号已被不同的读数或时间使用');
+      }
+    };
     // 手工录入默认结算。设备上报和模拟器读数默认只采集。
     const shouldAutoSettle = settlesByDefault(source, dto.autoSettle);
     // 业务去重键：messageId 优先，否则时间+读数+来源摘要（T274）
@@ -71,6 +76,7 @@ export class MeterReadingService {
         if ((existingDedupReading.source === 'SIMULATED') !== (source === 'SIMULATED')) {
           throw new BadRequestException('历史模拟读数的去重键与真实读数冲突，需人工核对');
         }
+        assertSimulationReplay(existingDedupReading);
         return {
           reading: existingDedupReading,
           deduction: { applied: false, reason: '重复读数（去重键已存在），已忽略并返回已有记录' },
@@ -88,6 +94,7 @@ export class MeterReadingService {
           },
         });
         if (existingMsgReading) {
+          assertSimulationReplay(existingMsgReading);
           return {
             reading: existingMsgReading,
             deduction: { applied: false, reason: '重复消息（messageId 已存在），已忽略并返回已有记录' },
@@ -315,6 +322,7 @@ export class MeterReadingService {
           if ((existing.source === 'SIMULATED') !== (source === 'SIMULATED')) {
             throw new BadRequestException('历史模拟读数的去重键与真实读数冲突，需人工核对');
           }
+          assertSimulationReplay(existing);
           return {
             reading: existing,
             deduction: { applied: false, reason: '重复读数（去重键已存在），已忽略并返回已有记录' },
