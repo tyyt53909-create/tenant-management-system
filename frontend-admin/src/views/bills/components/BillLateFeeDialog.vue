@@ -196,7 +196,7 @@ const lateFeeDueDateText = computed(() =>
 );
 
 const lateFeeOverdueDaysText = computed(() => {
-  const days = currentLateFee.value?.overdueDays ?? (currentBill.value ? overdueDaysOf(currentBill.value) : null);
+  const days = currentBill.value ? overdueDaysOf(currentBill.value) : null;
   return days === null ? '待确认' : days > 0 ? days + ' 天' : '未逾期';
 });
 

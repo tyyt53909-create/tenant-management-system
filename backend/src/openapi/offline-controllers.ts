@@ -27,6 +27,7 @@ export function findControllers(entry: string): Array<{ path: string; name: stri
         const object = call.arguments[0];
         if (!object || !ts.isObjectLiteralExpression(object)) throw new Error(`Unsupported module metadata: ${path}`);
         for (const property of object.properties) {
+          if (ts.isPropertyAssignment(property) && ts.isStringLiteral(property.name) && ['imports', 'controllers'].includes(property.name.text)) throw new Error(`Unsupported module metadata string key: ${path}`);
           if (ts.isSpreadAssignment(property) || (property.name && ts.isComputedPropertyName(property.name)) || (ts.isShorthandPropertyAssignment(property) && ['imports', 'controllers'].includes(property.name.text))) throw new Error(`Unsupported module metadata property: ${path}`);
           if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name) || !['imports', 'controllers'].includes(property.name.text)) continue;
           if (!ts.isArrayLiteralExpression(property.initializer)) throw new Error(`Unsupported ${property.name.text} metadata: ${path}`);
@@ -48,6 +49,7 @@ export function findControllers(entry: string): Array<{ path: string; name: stri
                 // Only inspect explicit literal import lists; never silently omit them.
                 const inspect = (node: ts.Node): void => {
                   if (ts.isSpreadAssignment(node)) throw new Error(`Unsupported dynamic options spread: ${path}`);
+                  if (ts.isPropertyAssignment(node) && ts.isStringLiteral(node.name) && node.name.text === 'imports') throw new Error(`Unsupported dynamic imports string key: ${path}`);
                   if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === 'imports') {
                     if (!ts.isArrayLiteralExpression(node.initializer)) throw new Error(`Unsupported dynamic imports: ${path}`);
                     for (const item of node.initializer.elements) {

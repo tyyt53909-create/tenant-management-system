@@ -53,3 +53,12 @@ test('check rejects changed route contract', () => {
   writeFileSync(file, JSON.stringify({ paths: { '/original': { get: {} } } }));
   assert.throws(() => assertSame(file, JSON.stringify({ paths: { '/changed': { get: {} } } }), 'openapi.json'), /不一致/);
 });
+
+test('string metadata and dynamic imports keys fail closed', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'offline-string-'));
+  const moduleFile = join(dir, 'app.module.ts');
+  writeFileSync(moduleFile, `import { Module } from '@nestjs/common'; @Module({ 'controllers': [] }) class AppModule {}`);
+  assert.throws(() => findControllers(moduleFile), /metadata string key/);
+  writeFileSync(moduleFile, `import { Module } from '@nestjs/common'; import { JwtModule } from '@nestjs/jwt'; @Module({ imports: [JwtModule.registerAsync({ 'imports': [] })] }) class AppModule {}`);
+  assert.throws(() => findControllers(moduleFile), /dynamic imports string key/);
+});

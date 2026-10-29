@@ -288,6 +288,10 @@ const {
   defaultQuery: { status: '', billType: '', overdue: '' },
   onSuccess: (data) => {
     applySummaries(data);
+    if (lateFeeDialogVisible.value && lateFeeBill.value) {
+      lateFeeBill.value = data.find((bill) => bill.id === lateFeeBill.value?.id)
+        ?? { ...lateFeeBill.value, currentOverdueDays: undefined };
+    }
   },
 });
 
