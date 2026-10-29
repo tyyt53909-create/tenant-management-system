@@ -30,7 +30,7 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
           createdAt: new Date(),
         })),
         findUnique: vi.fn(),
-        updateMany: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         update: vi.fn().mockImplementation(({ where, data }) => ({
           id: where.id,
           ...data,
@@ -41,6 +41,15 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
       },
     };
 
+    prisma.$transaction = vi.fn().mockImplementation(async (callback) => callback({
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      paymentRecord: prisma.paymentRecord,
+      refundRecord: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        aggregate: vi.fn().mockImplementation(async () => ({ _sum: { amount: (await prisma.refundRecord.findMany()).reduce((sum: number, item: any) => sum + item.amount, 0) } })),
+        create: prisma.refundRecord.create,
+      },
+    }));
     service = new PaymentRefundService(prisma, billPaymentService, paymentProvider);
   });
 
@@ -48,7 +57,7 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
     it('收款记录不存在抛出 NotFoundException', async () => {
       prisma.paymentRecord.findUnique.mockResolvedValue(null);
       await expect(
-        service.createRefund('b1', 'pay-none', {}, 'admin-1'),
+        service.createRefund('b1', 'pay-none', { requestKey: 'none' }, 'admin-1'),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -60,7 +69,7 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
         status: 'VOIDED',
       });
       await expect(
-        service.createRefund('b1', 'pay-voided', {}, 'admin-1'),
+        service.createRefund('b1', 'pay-voided', { requestKey: 'voided' }, 'admin-1'),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -76,7 +85,7 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
       ]);
 
       await expect(
-        service.createRefund('b1', 'pay-001', { amount: 60000 }, 'admin-1'),
+        service.createRefund('b1', 'pay-001', { requestKey: 'excess', amount: 60000 }, 'admin-1'),
       ).rejects.toThrow('退款金额超过可退余额');
     });
 
@@ -98,7 +107,7 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
       const res = await service.createRefund(
         'b1',
         'pay-001',
-        { reason: '租客多缴退款' },
+        { requestKey: 'success', reason: '租客多缴退款' },
         'admin-1',
       );
 
@@ -128,19 +137,19 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
         status: 'PROCESSING',
       });
 
-      paymentProvider.createRefund = vi.fn().mockResolvedValue({
-        outRefundNo: 'RF_PROC_001',
+      paymentProvider.createRefund = vi.fn().mockImplementation(async (request) => ({
+        outRefundNo: request.outRefundNo,
         refundId: 'WX_REF_PROC_001',
         status: 'PROCESSING',
         amount: 200000,
         userReceivedAccount: '建设银行(9999)',
-      });
+      }));
 
-      const res = await service.createRefund('b1', 'pay-proc', {}, 'admin-1');
+      const res = await service.createRefund('b1', 'pay-proc', { requestKey: 'processing' }, 'admin-1');
       expect(res.reversal).toBeNull();
-      expect(prisma.refundRecord.update).toHaveBeenCalledWith(
+      expect(prisma.refundRecord.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'ref-db-001' },
+          where: { id: 'ref-db-001', status: 'PROCESSING' },
           data: expect.objectContaining({
             refundId: 'WX_REF_PROC_001',
             userReceivedAccount: '建设银行(9999)',
@@ -158,7 +167,7 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
       });
       (paymentProvider as any).createRefund = undefined;
 
-      await expect(service.createRefund('b1', 'pay-001', {}, 'admin-1')).rejects.toThrow(
+      await expect(service.createRefund('b1', 'pay-001', { requestKey: 'unsupported' }, 'admin-1')).rejects.toThrow(
         '当前支付通道不支持退款操作',
       );
     });
@@ -243,7 +252,7 @@ describe('PaymentRefundService (T294 / PAY-02)', () => {
       const res = await service.handleRefundNotify({}, notifyBody);
       expect(res.code).toBe('SUCCESS');
       expect(prisma.refundRecord.updateMany).toHaveBeenCalledWith({
-        where: { id: 'r-fail', status: 'PROCESSING' },
+        where: { id: 'r-fail', status: 'PROCESSING', OR: [{ refundId: null }, { refundId: 'REF_WX_FAIL' }] },
         data: {
           status: 'FAILED',
           refundId: 'REF_WX_FAIL',

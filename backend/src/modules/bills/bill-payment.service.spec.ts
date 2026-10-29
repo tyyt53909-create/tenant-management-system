@@ -49,6 +49,7 @@ describe('BillPaymentService', () => {
       tenant: {
         findUnique: vi.fn(),
       },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(),
     };
     prisma.$transaction.mockImplementation((cb: any) => cb(prisma));
@@ -71,6 +72,13 @@ describe('BillPaymentService', () => {
       ],
     }).compile();
     service = module.get(BillPaymentService);
+  });
+
+  it('没有事务行锁能力时拒绝退款处理', async () => {
+    prisma.bill.findUnique.mockResolvedValue(bill());
+    prisma.$queryRaw = vi.fn().mockImplementationOnce(async () => { delete prisma.$queryRaw; return []; });
+    await expect(service.applyRefundReversal({ billId: 'b1', paymentId: 'p1', refundAmount: 100, outRefundNo: 'RF', operatorId: 'op' })).rejects.toThrow('收款事务缺少行锁能力');
+    expect(prisma.paymentRecord.create).not.toHaveBeenCalled();
   });
 
   it('rejects absent and immutable bills', async () => {
@@ -657,11 +665,12 @@ describe('BillPaymentService', () => {
           if (where.id === 'fee-1') {
             return Promise.resolve({
               id: 'fee-1',
+              billId: 'b1',
               confirmedAmount: 150,
               settledAmount: 150,
             });
           }
-          return Promise.resolve({ id: 'fee-not-found', confirmedAmount: 50, settledAmount: 50 });
+          return Promise.resolve({ id: 'fee-not-found', billId: 'b1', confirmedAmount: 50, settledAmount: 50 });
         });
 
         prisma.paymentRecord.create.mockResolvedValue({ id: 'rev-fee' });
@@ -702,6 +711,7 @@ describe('BillPaymentService', () => {
         });
         prisma.lateFee.findUnique = vi.fn().mockResolvedValue({
           id: 'fee-2',
+          billId: 'b1',
           confirmedAmount: 50,
           settledAmount: 150,
         });
@@ -744,6 +754,7 @@ describe('BillPaymentService', () => {
         });
         prisma.lateFee.findUnique = vi.fn().mockResolvedValue({
           id: 'fee-a',
+          billId: 'b1',
           confirmedAmount: 100,
           settledAmount: 100,
         });

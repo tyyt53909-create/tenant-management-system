@@ -44,6 +44,7 @@ describe('BillsService', () => {
         create: vi.fn(),
         update: vi.fn(),
       },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));

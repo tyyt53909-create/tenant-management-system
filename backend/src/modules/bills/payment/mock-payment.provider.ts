@@ -268,7 +268,7 @@ export class MockPaymentProvider implements PaymentProvider {
 
   private handleRefundNotifySuccess(data: any): WechatRefundNotifyResource {
     const outRefundNo = data.out_refund_no || data.outRefundNo;
-    const refundId = data.refund_id || data.refundId || `mock_ref_${randomUUID()}`;
+    const refundId = data.refund_id || data.refundId || '';
     const outTradeNo = data.out_trade_no || data.outTradeNo || '';
     const transactionId = data.transaction_id || data.transactionId || '';
     const totalAmount = Number(data.amount?.total ?? 0);
@@ -287,10 +287,10 @@ export class MockPaymentProvider implements PaymentProvider {
       outRefundNo,
       refundId,
       refundStatus,
-      successTime: data.success_time || new Date().toISOString(),
+      successTime: data.success_time || undefined,
       amount: {
-        total: totalAmount || (refund?.amount ?? refundAmount),
-        refund: refundAmount || (refund?.amount ?? 0),
+        total: totalAmount,
+        refund: refundAmount,
       },
       userReceivedAccount: data.user_received_account || '招商银行储蓄卡(0123)',
     };

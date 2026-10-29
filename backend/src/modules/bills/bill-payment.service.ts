@@ -367,6 +367,9 @@ export class BillPaymentService {
     reason?: string;
     successAt?: Date;
     userReceivedAccount?: string;
+    originalTransactionId?: string;
+    originalOutTradeNo?: string;
+    originalTotal?: number;
   }) {
     const { billId, paymentId, refundAmount, outRefundNo, refundId, operatorId, reason } = params;
     return this.prisma.$transaction(async (tx) => {
@@ -385,9 +388,20 @@ export class BillPaymentService {
       if (!refund || refund.paymentRecordId !== paymentId || refund.billId !== billId || refund.amount !== refundAmount) {
         throw new ConflictException('退款记录与收款不匹配');
       }
+      if (refundId && refund.refundId && refundId !== refund.refundId) throw new ConflictException('退款渠道编号与已有记录不一致');
+      if (params.originalTotal !== undefined && params.originalTotal !== payment.amount) throw new ConflictException('渠道原收款金额不一致，需要核对');
+      if (params.originalTransactionId && params.originalTransactionId !== payment.transactionNumber) throw new ConflictException('渠道原交易编号不一致，需要核对');
+      if (params.originalOutTradeNo && (!payment.idempotencyKey?.startsWith('wechat_pay_') || payment.idempotencyKey.slice('wechat_pay_'.length) !== params.originalOutTradeNo)) throw new ConflictException('渠道原商户单号不一致，需要核对');
+      if (params.successAt && Number.isNaN(params.successAt.getTime())) throw new ConflictException('渠道退款完成时间无效');
       if (refund.status === 'SUCCESS') {
-        if (refundId && refund.refundId && refundId !== refund.refundId) throw new ConflictException('退款渠道编号与已有记录不一致');
         if (!refund.reversal) throw new ConflictException('历史退款缺少可靠冲正关联，需要核对');
+        if (refund.successAt && params.successAt && refund.successAt.getTime() !== params.successAt.getTime()) throw new ConflictException('退款完成时间与已有记录不一致');
+        if ((!refund.refundId && refundId) || (!refund.successAt && params.successAt)) {
+          await tx.refundRecord.update({ where: { id: refund.id }, data: {
+            ...(!refund.refundId && refundId ? { refundId } : {}),
+            ...(!refund.successAt && params.successAt ? { successAt: params.successAt } : {}),
+          } });
+        }
         return { reversal: refund.reversal, bill };
       }
       if (refund.reversal) throw new ConflictException('退款状态与冲正记录不一致，需要核对');
@@ -421,12 +435,12 @@ export class BillPaymentService {
         let alreadyRolledBack = previousFees;
         for (const allocation of allocations) {
           if (remainingFeeRollback <= 0) break;
+          const fee = await tx.lateFee.findUnique({ where: { id: allocation.lateFeeId } });
+          if (!fee || fee.billId !== billId) throw new ConflictException('滞纳金分配记录缺失或不属于账单，需要核对');
           const skipped = Math.min(alreadyRolledBack, allocation.amount);
           alreadyRolledBack -= skipped;
           const available = allocation.amount - skipped;
           if (available <= 0) continue;
-          const fee = await tx.lateFee.findUnique({ where: { id: allocation.lateFeeId } });
-          if (!fee) continue;
           const rollbackAmount = Math.min(remainingFeeRollback, available);
           remainingFeeRollback -= rollbackAmount;
           if ((fee.settledAmount ?? 0) < rollbackAmount) throw new ConflictException('滞纳金已核销余额不足，退款需要核对');
@@ -527,16 +541,16 @@ export class BillPaymentService {
     return Math.max(0, (fee.confirmedAmount ?? 0) - (fee.settledAmount ?? 0));
   }
 
-  /** 悲观行锁；测试替身没有 $queryRaw 时跳过（生产 Prisma 一定有）。 */
+  /** 悲观行锁；事务缺少行锁能力时拒绝继续。 */
   private async lockBill(tx: Prisma.TransactionClient, billId: string): Promise<void> {
     const raw = tx as unknown as RawClient;
-    if (typeof raw.$queryRaw !== 'function') return;
+    if (typeof raw.$queryRaw !== 'function') throw new Error('账单事务缺少行锁能力');
     await raw.$queryRaw(Prisma.sql`SELECT id FROM bills WHERE id = ${billId} FOR UPDATE`);
   }
 
   private async lockPayment(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
     const raw = tx as unknown as RawClient;
-    if (typeof raw.$queryRaw !== 'function') return;
+    if (typeof raw.$queryRaw !== 'function') throw new Error('收款事务缺少行锁能力');
     await raw.$queryRaw(Prisma.sql`SELECT id FROM payment_records WHERE id = ${paymentId} FOR UPDATE`);
   }
 

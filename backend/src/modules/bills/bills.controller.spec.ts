@@ -87,6 +87,7 @@ describe('BillsController (T293 / T294 / PAY-01 / PAY-02)', () => {
   it('createRefund 委托 PaymentRefundService 申请退款', async () => {
     const userParam = { user: { id: 'admin-1', role: 'ADMIN' } } as any;
     const res = await controller.createRefund(userParam, 'b1', 'p1', {
+      requestKey: 'refund-1',
       amount: 10000,
       reason: '多缴退款',
     });
@@ -94,7 +95,7 @@ describe('BillsController (T293 / T294 / PAY-01 / PAY-02)', () => {
     expect(paymentRefundService.createRefund).toHaveBeenCalledWith(
       'b1',
       'p1',
-      { amount: 10000, reason: '多缴退款' },
+      { requestKey: 'refund-1', amount: 10000, reason: '多缴退款' },
       'admin-1',
     );
   });

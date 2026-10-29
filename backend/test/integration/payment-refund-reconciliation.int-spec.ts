@@ -164,7 +164,7 @@ describe('微信退款、对账与差异处理整合测试（T294 / PAY-02）', 
     const refundRes = await http(app)
       .post(`/bills/${data.billId}/payments/${paymentId}/refund`)
       .set(auth(data.adminToken))
-      .send({ reason: '租金折算退还' });
+      .send({ requestKey: 'integration-rent-refund', reason: '租金折算退还' });
 
     expect(refundRes.status).toBe(201);
     expect(refundRes.body.refund).toBeDefined();
@@ -176,7 +176,7 @@ describe('微信退款、对账与差异处理整合测试（T294 / PAY-02）', 
       .post('/payments/wechat/refund-notify')
       .send({
         out_refund_no: outRefundNo,
-        refund_id: '500000202610250001',
+        refund_id: refundRes.body.refund.refundId,
         refund_status: 'SUCCESS',
         amount: { total: 300000, refund: 300000 },
         user_received_account: '招商银行(0123)',
@@ -204,14 +204,14 @@ describe('微信退款、对账与差异处理整合测试（T294 / PAY-02）', 
 
     const refundRec = billAfterRefund?.refundRecords[0];
     expect(refundRec?.status).toBe('SUCCESS');
-    expect(refundRec?.refundId).toBe('500000202610250001');
+    expect(refundRec?.refundId).toBe(refundRes.body.refund.refundId);
 
     // 5. 重复推送相同退款通知，验证幂等性
     const notifyRes2 = await http(app)
       .post('/payments/wechat/refund-notify')
       .send({
         out_refund_no: outRefundNo,
-        refund_id: '500000202610250001',
+        refund_id: refundRes.body.refund.refundId,
         refund_status: 'SUCCESS',
         amount: { total: 300000, refund: 300000 },
       });
@@ -279,14 +279,14 @@ describe('微信退款、对账与差异处理整合测试（T294 / PAY-02）', 
     const refundRes = await http(app)
       .post(`/bills/${data.billId}/payments/${paymentId}/refund`)
       .set(auth(data.adminToken))
-      .send({ reason: '退租押金原路退还' });
+      .send({ requestKey: 'integration-deposit-refund', reason: '退租押金原路退还' });
     const outRefundNo = refundRes.body.refund.outRefundNo;
 
     await http(app)
       .post('/payments/wechat/refund-notify')
       .send({
         out_refund_no: outRefundNo,
-        refund_id: '500000_DEP_REF',
+        refund_id: refundRes.body.refund.refundId,
         refund_status: 'SUCCESS',
         amount: { total: 300000, refund: 300000 },
       });

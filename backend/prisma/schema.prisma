@@ -1435,6 +1435,8 @@ model RefundRecord {
   bill   Bill   @relation(fields: [billId], references: [id])
 
   outRefundNo String       @unique
+  requestKey String? @unique
+  requestFingerprint String?
   refundId    String?      @unique
   amount      Int // 退款金额（分）
   reason      String?      @db.Text
