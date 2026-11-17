@@ -57,30 +57,35 @@ export function expiredBackups(fileNames, { now = new Date(), retentionDays = 14
   });
 }
 
-/**
- * 数据库身份：忽略密码和 query（sslmode 等）。
- * 解析失败时退回去空白后的原串，避免把坏 URL 当成「不同库」而放行。
- */
+// 这些 libpq 参数可覆盖 URL 中的目标，不能参与静态同库比较。
+const ROUTING_PARAMETERS = ['host', 'hostaddr', 'port', 'dbname', 'service'];
+
 export function databaseIdentity(raw) {
-  const text = String(raw || '').trim();
-  if (!text) return '';
+  if (typeof raw !== 'string' || /[\s\\#]/.test(raw)) return null;
+  const parts = /^postgres(?:ql)?:\/\/[^/?]+(\/[^?]+)(?:\?.*)?$/.exec(raw);
+  if (!parts) return null;
   try {
-    const url = new URL(text);
-    const scheme = url.protocol.replace(':', '');
-    if (scheme !== 'postgres' && scheme !== 'postgresql') return text;
-    const port = url.port || '5432';
-    const database = decodeURIComponent(url.pathname.replace(/^\//, ''));
-    const user = decodeURIComponent(url.username || '');
-    return `${user}@${url.hostname.toLowerCase()}:${port}/${database}`;
+    const url = new URL(raw);
+    if (url.pathname !== parts[1]) return null;
+    if (!/^(?:[a-z0-9._-]+|\[[0-9a-f:]+\])$/i.test(url.hostname)) return null;
+    if (ROUTING_PARAMETERS.some((key) => url.searchParams.has(key))) return null;
+
+    const database = decodeURIComponent(url.pathname.slice(1));
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+    const port = url.port ? Number(url.port) : 5432;
+    if (!hostname || !database || database.includes('\0') || port === 0) return null;
+
+    // 登录账号、密码和非路由参数不改变数据库身份。
+    return JSON.stringify([hostname, port, database]);
   } catch {
-    return text;
+    return null;
   }
 }
 
 export function sameDatabaseTarget(left, right) {
   const a = databaseIdentity(left);
   const b = databaseIdentity(right);
-  return a !== '' && a === b;
+  return a === null || b === null ? null : a === b;
 }
 
 function isDirectRun() {
@@ -97,10 +102,12 @@ if (isDirectRun()) {
       process.stdout.write(`${name}\n`);
     }
   } else if (command === 'same-database') {
-    process.exit(sameDatabaseTarget(args[0], args[1]) ? 0 : 1);
+    const same = sameDatabaseTarget(process.env.REHEARSAL_DATABASE_URL, process.env.DATABASE_URL);
+    if (same === null) process.exit(2);
+    process.exit(same ? 0 : 3);
   } else {
     process.stderr.write('用法：backup-core.mjs expired <days> <file...>\n');
-    process.stderr.write('      backup-core.mjs same-database <url-a> <url-b>\n');
+    process.stderr.write('      backup-core.mjs same-database (读取 DATABASE_URL 和 REHEARSAL_DATABASE_URL)\n');
     process.exit(2);
   }
 }
