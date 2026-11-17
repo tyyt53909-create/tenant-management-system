@@ -51,3 +51,5 @@ export function sumCents(values: Array<number | null | undefined>): number {
     return sum + (Number.isFinite(n) ? Math.round(n) : 0);
   }, 0);
 }
+
+// T338 GitHub Actions path-filter validation.
