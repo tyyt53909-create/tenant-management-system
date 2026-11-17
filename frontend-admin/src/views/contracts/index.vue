@@ -89,6 +89,7 @@
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="renew" :disabled="!canRenew(row as Contract)">发起续签</el-dropdown-item>
+                    <el-dropdown-item command="utility-rules">水电规则与交接</el-dropdown-item>
                     <el-dropdown-item v-if="row.status === 'DRAFT'" command="confirm">确认租约</el-dropdown-item>
                     <el-dropdown-item command="edit" :disabled="row.status === 'DRAFT' && !!row.leaseConfirmedAt">编辑合同</el-dropdown-item>
                     <el-dropdown-item command="delete" divided style="color: var(--error-text)">删除合同</el-dropdown-item>
@@ -111,6 +112,7 @@
       </div>
     </ResourcePanel>
     <PropertyDetailPanel ref="detailPanel" v-model="detailVisible" kind="contracts" :id="detailId" :can-renew="row=>canRenew(row as Contract)" @edit="handleEdit($event as any)" @renew="handleRenew($event as any)" />
+    <UtilityRulesDrawer v-model="rulesVisible" :contract-id="rulesContractId" />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
@@ -221,6 +223,7 @@
 </template>
 
 <script setup lang="ts">
+import UtilityRulesDrawer from './UtilityRulesDrawer.vue';
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { formatDateOnly } from '@/utils/table';
@@ -245,6 +248,8 @@ import { centsToYuan, formatMoney } from '@/utils/money';
 import { notifyApiError } from '@/utils/notify';
 
 const loading = ref(false);
+const rulesVisible = ref(false);
+const rulesContractId = ref('');
 const loadError=ref('');const detailVisible=ref(false);const detailId=ref('');
 const detailPanel=ref<InstanceType<typeof PropertyDetailPanel>>();
 const route=useRoute();
@@ -402,7 +407,8 @@ async function handleConfirmLease(row: Contract) {
 }
 
 function handleContractCommand(command: string, row: Contract) {
-  if (command === 'renew') handleRenew(row);
+  if (command === 'utility-rules') { rulesContractId.value = row.id; rulesVisible.value = true; }
+  else if (command === 'renew') handleRenew(row);
   else if (command === 'confirm') void handleConfirmLease(row);
   else if (command === 'edit') handleEdit(row);
   else if (command === 'delete') void handleDelete(row);

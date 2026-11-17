@@ -30,7 +30,7 @@ export async function reviewUtility(
     return blocked('NO_READINGS', '本账期截止时点前缺少有效读数', '补录本账期内且不晚于截止时点的真实读数');
   }
   if (info.alreadySettled) return noChange('ALREADY_SETTLED', '截止时点内用量已处理');
-  if ('settlementBlock' in info) {
+  if ('settlementBlock' in info && info.settlementBlock) {
     const reason = info.settlementBlock;
     return blocked(reason.reasonCode, reason.reason, reason.retryCondition);
   }

@@ -51,6 +51,7 @@ describe('MetersService', () => {
         update: vi.fn(),
       },
       contract: { findMany: vi.fn().mockResolvedValue([]) },
+      utilityPolicyVersion: { findFirst: vi.fn().mockResolvedValue(null) },
       prepayAccount: {
         findUnique: vi.fn(),
         findUniqueOrThrow: vi.fn(),

@@ -36,20 +36,21 @@
 
 | 類別 | 數量 |
 |---|---|
-| 總任務數 | 172 |
+| 總任務數 | 173 |
 | 已驗證完成 | 64 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 12 |
+| 進行中 | 13 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
+- **T335 LINK-02 收费规则与责任就绪**（active，plan FIN-08，`feature/T335-utility-readiness`，证据见 `tasks/evidence/T335.md`）
 - **T304 保洁任务：自动建单、指派、验收（WRK-03）**（active，plan WRK-03，`feature/T304-cleaning-tasks`）
 - **T324 读数结算标记防伪**（active，plan FIN-08，`fix/T324-meter-marker-guard`）
 - **T325 ｜CORE-01 账单并发写入**（active，plan FIN-05，`fix/T325-bill-write-lock`）

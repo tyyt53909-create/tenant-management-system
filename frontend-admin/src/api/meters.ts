@@ -102,7 +102,7 @@ export interface UnsettledUsage {
     retryCondition?: string;
   };
   settlementBlock?: {
-    reasonCode: 'UNCONFIRMED_HANDOFF' | 'MISSING_RATE_BOUNDARY';
+    reasonCode: 'UNCONFIRMED_HANDOFF' | 'MISSING_RATE_BOUNDARY' | 'RULE_POSTING_NOT_ENABLED';
     reason: string;
     retryCondition: string;
   };

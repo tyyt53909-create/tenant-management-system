@@ -2312,5 +2312,37 @@
     "roles": [
       "TENANT"
     ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/utility-readiness/confirm",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/utility-readiness/contracts/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/utility-readiness/inventory",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/utility-readiness/preview",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
   }
 ]

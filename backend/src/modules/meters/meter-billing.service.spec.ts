@@ -20,6 +20,7 @@ describe('MeterBillingService', () => {
       meter: { findUnique: vi.fn(), findMany: vi.fn() },
       meterReading: { fields: { createdAt: Symbol('meterReading.createdAt') }, findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
       contract: { findMany: vi.fn().mockResolvedValue([]) },
+      utilityPolicyVersion: { findFirst: vi.fn().mockResolvedValue(null) },
       prepayAccount: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), updateMany: vi.fn() },
       prepayTransaction: { create: vi.fn() },
       bill: { create: vi.fn() },

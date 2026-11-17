@@ -2950,6 +2950,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/utility-readiness/contracts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["UtilityReadinessController_contract"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/utility-readiness/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["UtilityReadinessController_inventory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/utility-readiness/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["UtilityReadinessController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/utility-readiness/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["UtilityReadinessController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/checkout": {
         parameters: {
             query?: never;
@@ -4165,7 +4229,7 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY" | "RULE_POSTING_NOT_ENABLED";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
@@ -4234,7 +4298,7 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY" | "RULE_POSTING_NOT_ENABLED";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
@@ -4616,6 +4680,43 @@ export interface components {
         };
         ConfirmPeriodicChargeDto: {
             version: number;
+        };
+        ReviewUtilityRuleDto: {
+            meterId: string;
+            /** @enum {string} */
+            responsibility: "TENANT" | "OWNER";
+            contractId?: string;
+            openingReadingId: string;
+            closingReadingId: string;
+            /** @enum {string} */
+            collectionMode?: "PREPAY_WITH_SHORTFALL" | "POSTPAID" | "DIRECT_TO_PROVIDER";
+            /**
+             * @description 每单位费率，以分为单位，最多六位小数
+             * @example 61.7
+             */
+            rateCents?: string;
+            /** @description 已核对的规则及交接证据说明 */
+            evidence: string;
+        };
+        ConfirmUtilityRuleDto: {
+            meterId: string;
+            /** @enum {string} */
+            responsibility: "TENANT" | "OWNER";
+            contractId?: string;
+            openingReadingId: string;
+            closingReadingId: string;
+            /** @enum {string} */
+            collectionMode?: "PREPAY_WITH_SHORTFALL" | "POSTPAID" | "DIRECT_TO_PROVIDER";
+            /**
+             * @description 每单位费率，以分为单位，最多六位小数
+             * @example 61.7
+             */
+            rateCents?: string;
+            /** @description 已核对的规则及交接证据说明 */
+            evidence: string;
+            /** Format: uuid */
+            requestId: string;
+            reviewToken: string;
         };
         CheckoutItemDto: {
             /** @enum {string} */
@@ -8685,6 +8786,7 @@ export interface operations {
     ContractsController_findAll: {
         parameters: {
             query?: {
+                contractNumber?: string;
                 page?: number;
                 limit?: number;
                 status?: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED" | "RENEWED";
@@ -8755,6 +8857,7 @@ export interface operations {
     ContractsController_findMy: {
         parameters: {
             query?: {
+                contractNumber?: string;
                 page?: number;
                 limit?: number;
                 status?: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED" | "RENEWED";
@@ -12847,6 +12950,146 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    UtilityReadinessController_contract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    UtilityReadinessController_inventory: {
+        parameters: {
+            query?: {
+                buildingId?: string;
+                afterId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    UtilityReadinessController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewUtilityRuleDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    UtilityReadinessController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmUtilityRuleDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
             };
             /** @description 错误 */
             default: {

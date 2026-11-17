@@ -5656,6 +5656,15 @@
         "operationId": "ContractsController_findAll",
         "parameters": [
           {
+            "name": "contractNumber",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
@@ -5753,6 +5762,15 @@
       "get": {
         "operationId": "ContractsController_findMy",
         "parameters": [
+          {
+            "name": "contractNumber",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
           {
             "name": "page",
             "required": false,
@@ -12322,6 +12340,204 @@
         ]
       }
     },
+    "/api/utility-readiness/contracts/{id}": {
+      "get": {
+        "operationId": "UtilityReadinessController_contract",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "UtilityReadiness"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/utility-readiness/inventory": {
+      "get": {
+        "operationId": "UtilityReadinessController_inventory",
+        "parameters": [
+          {
+            "name": "buildingId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "UtilityReadiness"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/utility-readiness/preview": {
+      "post": {
+        "operationId": "UtilityReadinessController_preview",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewUtilityRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": ""
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "UtilityReadiness"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/utility-readiness/confirm": {
+      "post": {
+        "operationId": "UtilityReadinessController_confirm",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmUtilityRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "UtilityReadiness"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/checkout": {
       "post": {
         "operationId": "CheckoutController_create",
@@ -17293,7 +17509,8 @@
               "OCCUPANCY_UNCERTAIN",
               "VACANT_INTERVAL",
               "UNCONFIRMED_HANDOFF",
-              "MISSING_RATE_BOUNDARY"
+              "MISSING_RATE_BOUNDARY",
+              "RULE_POSTING_NOT_ENABLED"
             ],
             "type": "string"
           },
@@ -17512,7 +17729,8 @@
               "OCCUPANCY_UNCERTAIN",
               "VACANT_INTERVAL",
               "UNCONFIRMED_HANDOFF",
-              "MISSING_RATE_BOUNDARY"
+              "MISSING_RATE_BOUNDARY",
+              "RULE_POSTING_NOT_ENABLED"
             ],
             "type": "string"
           },
@@ -18822,6 +19040,126 @@
         },
         "required": [
           "version"
+        ]
+      },
+      "ReviewUtilityRuleDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "responsibility": {
+            "enum": [
+              "TENANT",
+              "OWNER"
+            ],
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "openingReadingId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "closingReadingId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "collectionMode": {
+            "enum": [
+              "PREPAY_WITH_SHORTFALL",
+              "POSTPAID",
+              "DIRECT_TO_PROVIDER"
+            ],
+            "type": "string"
+          },
+          "rateCents": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d{0,9})(\\.\\d{1,6})?$",
+            "description": "每单位费率，以分为单位，最多六位小数",
+            "example": "61.7"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 1000,
+            "pattern": "\\S",
+            "description": "已核对的规则及交接证据说明"
+          }
+        },
+        "required": [
+          "meterId",
+          "responsibility",
+          "openingReadingId",
+          "closingReadingId",
+          "evidence"
+        ]
+      },
+      "ConfirmUtilityRuleDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "responsibility": {
+            "enum": [
+              "TENANT",
+              "OWNER"
+            ],
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "openingReadingId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "closingReadingId": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "collectionMode": {
+            "enum": [
+              "PREPAY_WITH_SHORTFALL",
+              "POSTPAID",
+              "DIRECT_TO_PROVIDER"
+            ],
+            "type": "string"
+          },
+          "rateCents": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d{0,9})(\\.\\d{1,6})?$",
+            "description": "每单位费率，以分为单位，最多六位小数",
+            "example": "61.7"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 1000,
+            "pattern": "\\S",
+            "description": "已核对的规则及交接证据说明"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewToken": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "meterId",
+          "responsibility",
+          "openingReadingId",
+          "closingReadingId",
+          "evidence",
+          "requestId",
+          "reviewToken"
         ]
       },
       "CheckoutItemDto": {

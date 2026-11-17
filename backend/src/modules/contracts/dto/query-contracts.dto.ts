@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, IsString, IsEnum, Min, Max } from 'class-validator';
+import { IsOptional, IsInt, IsString, IsEnum, Min, Max, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 enum ContractStatus {
@@ -10,6 +10,11 @@ enum ContractStatus {
 }
 
 export class QueryContractsDto {
+  @IsString()
+  @MaxLength(100)
+  @IsOptional()
+  contractNumber?: string;
+
   @IsInt()
   @Min(1)
   @IsOptional()

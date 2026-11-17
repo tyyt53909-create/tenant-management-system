@@ -482,6 +482,7 @@ model Room {
   checkoutRequests    CheckoutRequest[]
   renewalOffers       RenewalOffer[]
   cleaningTasks       CleaningTask[]
+  meterResponsibilities MeterResponsibilityInterval[]
 
   @@unique([buildingId, floor, roomNumber])
   @@index([buildingId, status])
@@ -566,6 +567,8 @@ model Tenant {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  meterResponsibilities MeterResponsibilityInterval[]
 
   user   User?   @relation(fields: [userId], references: [id])
   userId String? @unique
@@ -711,6 +714,8 @@ model Contract {
   renewalIntents          RenewalIntent[]
   renewalOffers           RenewalOffer[]
   moveIn                  MoveInRequest?
+  utilityPolicyVersions   UtilityPolicyVersion[]
+  meterResponsibilities   MeterResponsibilityInterval[]
 
   @@index([buildingId, status])
   @@index([tenantId, status])
@@ -1043,6 +1048,7 @@ model Meter {
   readings           MeterReading[]
   priceHistory       MeterPriceHistory[]
   publicUtilityBills PublicUtilityBill[]
+  responsibilityIntervals MeterResponsibilityInterval[]
 
   @@unique([meterNumber])
   @@index([buildingId, meterType])
@@ -1088,9 +1094,84 @@ model MeterReading {
 
   createdAt DateTime @default(now())
 
+  openingResponsibilities MeterResponsibilityInterval[] @relation("ResponsibilityOpening")
+  closingResponsibilities MeterResponsibilityInterval[] @relation("ResponsibilityClosing")
+
   @@unique([meterId, dedupKey])
   @@index([meterId, readingTime])
   @@map("meter_readings")
+}
+
+enum UtilityCollectionMode {
+  PREPAY_WITH_SHORTFALL
+  POSTPAID
+  DIRECT_TO_PROVIDER
+}
+
+enum MeterResponsibilityType {
+  TENANT
+  OWNER
+}
+
+/// 已确认的合同水电规则。新版本追加，旧版本及其确认依据不覆盖。
+model UtilityPolicyVersion {
+  id             String @id @default(cuid())
+  contractId     String
+  contract       Contract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  feeType        MeterType
+  version        Int
+  collectionMode UtilityCollectionMode
+  calculationMode String @default("METER_DELTA_FLAT_RATE")
+  rateCents      Decimal @db.Decimal(16, 6)
+  unit           String
+  roundingRule   String @default("HALF_UP_CHARGE_V1")
+  effectiveFrom  DateTime
+  confirmedBy    String
+  confirmedAt    DateTime @default(now())
+  evidence       String @db.Text
+
+  @@unique([contractId, feeType, version])
+  @@unique([contractId, feeType, effectiveFrom])
+  @@map("utility_policy_versions")
+}
+
+/// 本阶段登记有真实起、终读数的闭合责任段，边界共享且用量不重叠。
+model MeterResponsibilityInterval {
+  id               String @id @default(cuid())
+  meterId          String
+  meter            Meter @relation(fields: [meterId], references: [id], onDelete: Restrict)
+  roomId           String
+  room             Room @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  contractId       String?
+  contract         Contract? @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  tenantId         String?
+  tenant           Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  responsibility   MeterResponsibilityType
+  startAt          DateTime
+  endAt            DateTime
+  openingReadingId String
+  openingReading   MeterReading @relation("ResponsibilityOpening", fields: [openingReadingId], references: [id], onDelete: Restrict)
+  closingReadingId String
+  closingReading   MeterReading @relation("ResponsibilityClosing", fields: [closingReadingId], references: [id], onDelete: Restrict)
+  confirmedBy      String
+  confirmedAt      DateTime @default(now())
+  evidence         String @db.Text
+
+  @@unique([meterId, openingReadingId, closingReadingId])
+  @@index([meterId, startAt, endAt])
+  @@index([contractId])
+  @@map("meter_responsibility_intervals")
+}
+
+/// 规则/责任核验请求的持久化重放结果，与审计及确认资料同事务提交。
+model UtilityRuleConfirmation {
+  requestId   String @id
+  payloadHash String
+  result      Json
+  confirmedBy String
+  confirmedAt DateTime @default(now())
+
+  @@map("utility_rule_confirmations")
 }
 
 // 15. MaintenanceRequest（报修工单）
