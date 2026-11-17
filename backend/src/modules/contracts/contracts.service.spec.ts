@@ -1,3 +1,4 @@
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   NotFoundException,
@@ -32,6 +33,7 @@ describe('ContractsService（租客隔离，T148）', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ContractsService,
+        { provide: BusinessClock, useValue: new BusinessClock({ get: () => 'Asia/Shanghai' } as never) },
         { provide: PrismaService, useValue: prismaMock },
         { provide: SchedulerMonthlyBillsService, useValue: { issueDueRentBills: vi.fn() } },
         {

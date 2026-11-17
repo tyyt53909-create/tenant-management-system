@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { BusinessClock } from '../../src/common/business-clock/business-clock.service.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth } from './harness.js';
 
@@ -269,13 +270,18 @@ describe('J6 续签（真实 DB）', () => {
       .send({ startDate: iso(nextStart), endDate: iso(nextEnd) });
     expect(again.status).toBe(409);
 
-    // 激活续签合同：同一事务内旧合同 RENEWED、新合同 ACTIVE
-    const activate = await http(app)
-      .patch(`/contracts/${renewed.body.id}`)
-      .set(auth(tenancy.adminToken))
-      .send({ status: 'ACTIVE' });
-    expect(activate.status, JSON.stringify(activate.body)).toBe(200);
-    expect(activate.body.status).toBe('ACTIVE');
+    const confirmation = await http(app).post(`/contracts/${renewed.body.id}/confirm`).set(auth(tenancy.adminToken));
+    expect(confirmation.status).toBe(201);
+    expect(confirmation.body).toMatchObject({ status: 'DRAFT', leaseConfirmedBy: base.adminId });
+
+    const businessTime = vi.spyOn(app.get(BusinessClock), 'now').mockReturnValue(nextStart);
+    try {
+      const activate = await http(app).post(`/contracts/${renewed.body.id}/confirm`).set(auth(tenancy.adminToken));
+      expect(activate.status, JSON.stringify(activate.body)).toBe(201);
+      expect(activate.body.status).toBe('ACTIVE');
+    } finally {
+      businessTime.mockRestore();
+    }
 
     const oldAfter = await http(app)
       .get(`/contracts/${tenancy.contractId}`)

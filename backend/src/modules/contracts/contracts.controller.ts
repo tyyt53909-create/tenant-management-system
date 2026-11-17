@@ -216,6 +216,13 @@ export class ContractsController {
     return this.contractsService.renew(id, renewContractDto);
   }
 
+  @Post(':id/confirm')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  confirmLease(@Param('id') id: string, @CurrentUser() auth: CurrentUserParam) {
+    return this.contractsService.confirmLease(id, resolveAuthUser(auth).userId);
+  }
+
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')

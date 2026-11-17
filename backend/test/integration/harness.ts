@@ -236,11 +236,16 @@ export async function setupTenancy(app: INestApplication, base: SeedBase): Promi
   }
 
   const activate = await http(app)
-    .patch(`/contracts/${contractId}`)
-    .set(auth(adminToken))
-    .send({ status: 'ACTIVE' });
-  if (activate.status !== 200) {
+    .post(`/contracts/${contractId}/confirm`)
+    .set(auth(adminToken));
+  if (activate.status !== 201 || activate.body.status !== 'ACTIVE') {
     throw new Error(`合同生效失败: ${activate.status} ${JSON.stringify(activate.body)}`);
+  }
+
+  const occupied = await http(app).patch(`/rooms/${roomId}/status`).set(auth(adminToken))
+    .send({ status: 'OCCUPIED', version: reserve.body.version });
+  if (occupied.status !== 200) {
+    throw new Error(`实际入住失败: ${occupied.status} ${JSON.stringify(occupied.body)}`);
   }
 
   return { roomId, tenantId, contractId, tenantToken, adminToken };

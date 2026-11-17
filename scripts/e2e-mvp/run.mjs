@@ -267,26 +267,21 @@ async function main() {
     expectStatus(reserved, 200, '流转至 RESERVED（草稿合同）');
     assert(reserved.data.status === 'RESERVED', '应为 RESERVED，实际 ' + reserved.data.status);
 
-    // 合同生效
-    const activated = await api('PATCH', '/contracts/' + contract.id, { token: adminToken, body: { status: 'ACTIVE' } });
-    expectStatus(activated, 200, '合同生效');
+    const activated = await api('POST', '/contracts/' + contract.id + '/confirm', { token: adminToken });
+    expectStatus(activated, 201, '合同确认');
     assert(activated.data.status === 'ACTIVE', '合同应为 ACTIVE，实际 ' + activated.data.status);
 
-    // 合同生效的副作用：按 docs/04 §2.3，房间随动 RESERVED+CLEAN -> OCCUPIED+CLEAN。
-    // T207 起 API 也实现该副作用（此前只有定时任务做），因此这里不再重复发一次房态流转
-    // —— 那会带着流转前的 version 撞乐观锁 409（T212 在 CI 上暴露）。改为断言副作用确实发生。
     const afterActivate = await api('GET', '/rooms/' + room.id, { token: adminToken });
     expectStatus(afterActivate, 200, '合同生效后读取房源');
-    assert(
-      afterActivate.data.status === 'OCCUPIED',
-      '合同生效后房间应随动为 OCCUPIED，实际 ' + afterActivate.data.status,
-    );
-    assert(
-      afterActivate.data.version > reserved.data.version,
-      '房间随动应使 version 递增，实际 ' + afterActivate.data.version + '（流转前 ' + reserved.data.version + '）',
-    );
-    room.version = afterActivate.data.version;
-    return { detail: 'DRAFT -> ACTIVE，房态随动 RESERVED -> OCCUPIED（version=' + afterActivate.data.version + '）' };
+    assert(afterActivate.data.status === 'RESERVED', '生效后尚未办理入住');
+    const occupied = await api('PATCH', '/rooms/' + room.id + '/status', {
+      token: adminToken,
+      body: { status: 'OCCUPIED', version: afterActivate.data.version },
+    });
+    expectStatus(occupied, 200, '实际入住');
+    assert(occupied.data.status === 'OCCUPIED', '实际入住后房态应为 OCCUPIED');
+    room.version = occupied.data.version;
+    return { detail: '确认合同、合同生效、实际入住' };
   });
 
   // ---------- 步骤 5：生成月度账单 ----------

@@ -1,3 +1,4 @@
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { ContractsService } from './contracts.service.js';
@@ -54,6 +55,7 @@ describe('ContractsService CRUD（T157）', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ContractsService,
+        { provide: BusinessClock, useValue: new BusinessClock({ get: () => 'Asia/Shanghai' } as never) },
         { provide: PrismaService, useValue: prismaMock },
         { provide: SchedulerMonthlyBillsService, useValue: { issueDueRentBills: vi.fn() } },
         {
@@ -240,11 +242,11 @@ describe('ContractsService CRUD（T157）', () => {
       prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'DRAFT', roomId: 'room-1' });
       prisma.contract.update.mockResolvedValue({ id: 'c-1' });
 
-      await service.update('c-1', { rentAmount: 350000, status: 'ACTIVE' } as any);
+      await service.update('c-1', { rentAmount: 350000 } as any);
 
       const data = prisma.contract.update.mock.calls[0][0].data;
       expect(data.rentAmount).toBe(350000);
-      expect(data.status).toBe('ACTIVE');
+      expect(data.status).toBeUndefined();
       expect(data.depositAmount).toBeUndefined();
       expect(data.paymentCycle).toBeUndefined();
       expect(data.startDate).toBeUndefined();
@@ -328,42 +330,10 @@ describe('ContractsService CRUD（T157）', () => {
       expect(prisma.contract.update).not.toHaveBeenCalled();
     });
 
-    it('update：同房源已有另一份未结束合同 → 409，不能提前把续签合同置为 ACTIVE（补 T207 缺口）', async () => {
-      prisma.contract.findUnique.mockResolvedValue({ id: 'c-new', status: 'DRAFT', roomId: 'room-1' });
-      // 续签场景：旧合同仍是 ACTIVE，新合同是 DRAFT
-      prisma.contract.findFirst.mockResolvedValue({ contractNumber: 'CN-OLD', status: 'ACTIVE' });
-
-      await expect(service.update('c-new', { status: 'ACTIVE' } as any)).rejects.toThrow(ConflictException);
-
+    it('禁止通过普通更新启用草稿', async () => {
+      prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'DRAFT', roomId: 'room-1' });
+      await expect(service.update('c-1', { status: 'ACTIVE' } as any)).rejects.toThrow(ConflictException);
       expect(prisma.contract.update).not.toHaveBeenCalled();
-      // 检查必须排除自己，否则任何合同都无法置为 ACTIVE
-      expect(prisma.contract.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ roomId: 'room-1', id: { not: 'c-new' } }),
-        }),
-      );
-    });
-
-    it('update：同房源没有别的未结束合同时，DRAFT → ACTIVE 正常', async () => {
-      prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'DRAFT', roomId: 'room-1' });
-      prisma.contract.findFirst.mockResolvedValue(null);
-      prisma.contract.update.mockResolvedValue({ id: 'c-1' });
-      prisma.room.findUnique.mockResolvedValue({ status: 'RESERVED' });
-
-      await expect(service.update('c-1', { status: 'ACTIVE' } as any)).resolves.toMatchObject({ id: 'c-1' });
-    });
-
-    it('update：DRAFT → ACTIVE 且房间为 RESERVED 时，房间随动为 OCCUPIED', async () => {
-      prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'DRAFT', roomId: 'room-1' });
-      prisma.contract.update.mockResolvedValue({ id: 'c-1' });
-      prisma.room.findUnique.mockResolvedValue({ status: 'RESERVED' });
-
-      await service.update('c-1', { status: 'ACTIVE' } as any);
-
-      expect(prisma.room.update).toHaveBeenCalledWith({
-        where: { id: 'room-1' },
-        data: { status: 'OCCUPIED', version: { increment: 1 } },
-      });
     });
 
     it('update：ACTIVE → TERMINATED 且房间为 OCCUPIED 时，房间变为 VACANT + PENDING_CLEAN', async () => {
@@ -377,17 +347,6 @@ describe('ContractsService CRUD（T157）', () => {
         where: { id: 'room-1' },
         data: { status: 'VACANT', cleanStatus: 'PENDING_CLEAN', version: { increment: 1 } },
       });
-    });
-
-    it('update：房态前置条件不满足时不强改房间', async () => {
-      prisma.contract.findUnique.mockResolvedValue({ id: 'c-1', status: 'DRAFT', roomId: 'room-1' });
-      prisma.contract.update.mockResolvedValue({ id: 'c-1' });
-      prisma.room.findUnique.mockResolvedValue({ status: 'MAINTENANCE' });
-
-      await service.update('c-1', { status: 'ACTIVE' } as any);
-
-      expect(prisma.contract.update).toHaveBeenCalled();
-      expect(prisma.room.update).not.toHaveBeenCalled();
     });
 
     it('update：不传 status 时不做流转校验，也不碰房间', async () => {

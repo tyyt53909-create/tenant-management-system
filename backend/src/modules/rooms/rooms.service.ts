@@ -1,3 +1,4 @@
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import {
   Injectable,
   NotFoundException,
@@ -28,6 +29,7 @@ export class RoomsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly clock: BusinessClock,
   ) {}
 
   async create(dto: CreateRoomDto) {
@@ -362,8 +364,9 @@ export class RoomsService {
         return !!draft;
       }
       case 'CONTRACT_STARTED': {
+        const today = this.clock.todayUtc();
         const contract = await this.prisma.contract.findFirst({
-          where: { roomId, status: { in: ['DRAFT', 'ACTIVE'] }, startDate: { lte: new Date() } },
+          where: { roomId, status: 'ACTIVE', startDate: { lte: today }, endDate: { gte: today } },
           select: { id: true },
         });
         return !!contract;

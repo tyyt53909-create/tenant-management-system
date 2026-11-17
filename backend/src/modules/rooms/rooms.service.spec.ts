@@ -1,3 +1,4 @@
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -20,6 +21,7 @@ describe('RoomsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RoomsService,
+        { provide: BusinessClock, useValue: new BusinessClock({ get: () => 'Asia/Shanghai' } as never) },
         {
           provide: PrismaService,
           useValue: {

@@ -17,6 +17,8 @@ export const updateContract = (id: string, data: Partial<Contract>) => {
   return request.patch(`/contracts/${id}`, data);
 };
 
+export const confirmLease = (id: string): Promise<Contract> => request.post(`/contracts/${id}/confirm`);
+
 export const deleteContract = (id: string) => {
   return request.delete(`/contracts/${id}`);
 };
