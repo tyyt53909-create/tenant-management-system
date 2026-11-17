@@ -11,7 +11,7 @@ import { ReviewUtilityRuleDto } from './utility-readiness.dto.js';
 describe('UtilityReadinessService rule decisions', () => {
   let db: any;
   let service: UtilityReadinessService;
-  let dto: ReviewUtilityRuleDto;
+  let dto: Pick<ReviewUtilityRuleDto, keyof ReviewUtilityRuleDto>;
   let meter: any;
   let lease: any;
   let readings: any[];
