@@ -34,6 +34,7 @@ describe('ContractsService CRUD（T157）', () => {
 
   beforeEach(async () => {
     const prismaMock: any = {
+      $queryRaw: vi.fn(),
       contract: {
         findUnique: vi.fn(),
         findFirst: vi.fn().mockResolvedValue(null), // T207：create 会检查同房源是否已有未结束合同
@@ -234,6 +235,29 @@ describe('ContractsService CRUD（T157）', () => {
       prisma.contract.findUnique.mockResolvedValue(null);
 
       await expect(service.findOne('nope')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('confirmLease', () => {
+    it('records the first confirmer and keeps a future draft from activating', async () => {
+      const future = new Date('2099-01-01');
+      const draft = { id: 'c-1', roomId: 'room-1', status: 'DRAFT', startDate: future, endDate: new Date('2100-01-01') };
+      const confirmed = { ...draft, leaseConfirmedAt: new Date(), leaseConfirmedBy: 'admin-1' };
+      prisma.contract.findUnique.mockResolvedValue(draft);
+      prisma.contract.update.mockResolvedValue(confirmed);
+      expect(await service.confirmLease('c-1', 'admin-1')).toEqual(confirmed);
+      expect(prisma.contract.update).toHaveBeenCalledTimes(1);
+      expect(prisma.contract.update).toHaveBeenCalledWith({
+        where: { id: 'c-1' }, data: { leaseConfirmedAt: expect.any(Date), leaseConfirmedBy: 'admin-1' },
+      });
+    });
+
+    it('rejects confirmation after expiry', async () => {
+      prisma.contract.findUnique.mockResolvedValue({
+        id: 'c-1', roomId: 'room-1', status: 'DRAFT', endDate: new Date('2000-01-01'),
+      });
+      await expect(service.confirmLease('c-1', 'admin-1')).rejects.toThrow(ConflictException);
+      expect(prisma.contract.update).not.toHaveBeenCalled();
     });
   });
 
