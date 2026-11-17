@@ -435,6 +435,8 @@ model Building {
   cleaningTasks      CleaningTask[]
 
   @@index([isActive])
+  periodicChargeBatches PeriodicChargeBatch[]
+
   @@map("buildings")
 }
 
@@ -2045,4 +2047,40 @@ model CleaningTask {
   @@index([cleanerId])
   @@index([status])
   @@map("cleaning_tasks")
+}
+
+model PeriodicChargeBatch {
+  id          String               @id @default(cuid())
+  buildingId  String
+  building    Building             @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  period      String
+  cutoff      DateTime
+  createdBy   String
+  confirmedBy String?
+  version     Int                  @default(0)
+  createdAt   DateTime             @default(now())
+  items       PeriodicChargeItem[]
+
+  @@map("periodic_charge_batches")
+}
+
+model PeriodicChargeItem {
+  id                 String              @id @default(cuid())
+  batchId            String
+  batch              PeriodicChargeBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  kind               String
+  targetId           String
+  label              String
+  state              String
+  attempts           Int                 @default(0)
+  review             Json
+  result             Json?
+  notificationState  String?
+  notificationUserId String?
+  notificationId     String?
+
+  @@unique([batchId, kind, targetId])
+  @@index([state, id])
+  @@index([notificationState])
+  @@map("periodic_charge_items")
 }

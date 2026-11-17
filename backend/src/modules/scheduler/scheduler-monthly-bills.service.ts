@@ -5,7 +5,8 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { NotificationPriority } from '../notifications/dto/create-notification.dto.js';
 import { BillType } from '../bills/dto/create-bill.dto.js';
 import { getBusinessDateParts, formatDate, formatAmount } from './scheduler.util.js';
-import { CYCLE_MONTHS, RENT_ROUNDING, dueAnchorMonths, quoteRentCycle } from './rent-charge.js';
+import { CYCLE_MONTHS, dueAnchorMonths } from './rent-charge.js';
+import { quoteScheduledRent } from './scheduled-rent.js';
 
 export interface MonthlyBillSummary {
   period: string;
@@ -58,69 +59,51 @@ export class SchedulerMonthlyBillsService {
           asOf: { year, month, day: 1 },
         });
         for (const anchor of anchors) {
-        const quote = quoteRentCycle({
-          monthlyRent: contract.rentAmount,
-          contractStart,
-          contractEnd,
-          anchorYear: anchor.year,
-          anchorMonth: anchor.month,
-          cycleMonths,
-        });
-        if (!quote) continue;
-        const { amount, period, periodStart, periodEnd } = quote;
-        // 逐个合同、逐个账期隔离。已有账单只跳过，不改已入账金额。
-        try {
-          // 幂等：同一合同同一账期已有租金账单则跳过
-          const existing = await this.prisma.bill.findFirst({
-            where: { contractId: contract.id, billType: 'RENT', period },
-            select: { id: true },
-          });
-          if (existing) {
-            summary.skipped++;
-            continue;
-          }
+          const quote = quoteScheduledRent(contract, anchor.year, anchor.month);
+          if (!quote) continue;
+          const { amount, period, dueDate, snapshot } = quote;
+          // 逐个合同、逐个账期隔离。已有账单只跳过，不改已入账金额。
+          try {
+            // 幂等：同一合同同一账期已有租金账单则跳过
+            const existing = await this.prisma.bill.findFirst({
+              where: { contractId: contract.id, billType: 'RENT', period },
+              select: { id: true },
+            });
+            if (existing) {
+              summary.skipped++;
+              continue;
+            }
 
-          const dueDate = new Date(Date.UTC(anchor.year, anchor.month - 1, Math.min(contract.paymentDay, 28)));
+            const bill = await this.billsService.create({
+              contractId: contract.id,
+              billType: BillType.RENT,
+              period,
+              amount,
+              dueDate: dueDate.toISOString(),
+              snapshot,
+            });
+            if (bill.alreadyExists) {
+              summary.skipped++;
+              continue;
+            }
+            summary.generated++;
 
-          const bill = await this.billsService.create({
-            contractId: contract.id,
-            billType: BillType.RENT,
-            period,
-            amount,
-            dueDate: dueDate.toISOString(),
-            snapshot: {
-              rentAmount: contract.rentAmount,
-              cycle: contract.paymentCycle,
-              periodStart,
-              periodEnd,
-              rounding: RENT_ROUNDING,
-              months: quote.months,
-              paymentDay: contract.paymentDay,
-              contractNumber: contract.contractNumber,
-            },
-          });
-          if (bill.alreadyExists) {
-            summary.skipped++;
-            continue;
+            if (contract.tenant?.userId) {
+              const delivered = await this.notify(
+                contract.tenant.userId,
+                '收租提醒',
+                `您有新的租金账单（${period}），金额 ¥${formatAmount(amount)}，请于 ${formatDate(dueDate)} 前缴纳`,
+                'NORMAL',
+                { billId: bill.id },
+                `RENT_BILL:${contract.tenant.userId}:${period}`,
+              );
+              if (delivered) summary.notified++;
+            }
+          } catch (error) {
+            const detail = `合同 ${contract.contractNumber ?? contract.id}：${(error as Error).message}`;
+            summary.errors.push(detail);
+            this.logger.error(`月度账单生成失败：${detail}`);
           }
-          summary.generated++;
-
-          if (contract.tenant?.userId) {
-            const delivered = await this.notify(
-              contract.tenant.userId,
-              '收租提醒',
-              `您有新的租金账单（${period}），金额 ¥${formatAmount(amount)}，请于 ${formatDate(dueDate)} 前缴纳`,
-              'NORMAL',
-              { billId: bill.id },
-              `RENT_BILL:${contract.tenant.userId}:${period}`,
-            );
-            if (delivered) summary.notified++;
-          }
-        } catch (error) {
-          const detail = `合同 ${contract.contractNumber ?? contract.id}：${(error as Error).message}`;
-          summary.errors.push(detail);
-          this.logger.error(`月度账单生成失败：${detail}`);
-        }
         }
       }
     this.logger.log(`月度账单生成完成：${JSON.stringify(summary)}`);
