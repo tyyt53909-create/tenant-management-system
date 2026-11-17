@@ -109,6 +109,8 @@
 - [T324-FIN-08-读数结算标记防伪.md](../tasks/T324-FIN-08-读数结算标记防伪.md)：拒绝备注和设备消息编号中的系统结算标记。
 - [T325-CORE-01-账单并发写入.md](../tasks/T325-CORE-01-账单并发写入.md)：收款、取消、改额与预付抵扣的账单锁及真实并发验收。
 - [T326-CORE-02-表计并发与结算游标.md](../tasks/T326-CORE-02-表计并发与结算游标.md)：单笔、批量和周期结算共用表计锁，历史截止时间不重复扣费。
+- [T337-发布链路P1修复.md](../tasks/T337-发布链路P1修复.md)：恢复演练保护、双镜像、生产 Worker 与 staging 冒烟。
+- [T338-共享源码CI路径过滤.md](../tasks/T338-共享源码CI路径过滤.md)：跟进共享源码变更的 CI 触发覆盖。
 - [T263-FIN-01-合同状态机与续签修复.md](../tasks/T263-FIN-01-合同状态机与续签修复.md)：FIN-01，续签唯一约束改为 ACTIVE-only、日期不重叠、激活事务先 RENEWED、定时任务同步。
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08，CI 统一 Node 22、生产依赖审计与镜像扫描门禁、staging 编排/部署 workflow/冒烟脚本。
