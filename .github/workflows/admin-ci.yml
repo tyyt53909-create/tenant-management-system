@@ -2,13 +2,13 @@ name: Admin CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'verify/T338-shared-push']
     paths:
       - 'frontend-admin/**'
       - 'shared/**'
       - '.github/workflows/admin-ci.yml'
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'verify/T338-shared-base']
     paths:
       - 'frontend-admin/**'
       - 'shared/**'

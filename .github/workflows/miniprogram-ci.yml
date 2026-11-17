@@ -2,13 +2,13 @@ name: Miniprogram Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'verify/T338-shared-push']
     paths:
       - 'miniprogram/**'
       - 'shared/**'
       - '.github/workflows/miniprogram-ci.yml'
   pull_request:
-    branches: [main, develop, 'feature/**']
+    branches: [main, develop, 'feature/**', 'verify/T338-shared-base']
     paths:
       - 'miniprogram/**'
       - 'shared/**'

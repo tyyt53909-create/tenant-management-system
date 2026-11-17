@@ -6,7 +6,7 @@ name: Status Check
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, 'verify/T338-shared-base']
     paths:
       - 'backend/**'
       - 'frontend-admin/**'
@@ -18,7 +18,7 @@ on:
       - 'STATUS.md'
       - '.github/workflows/status-check.yml'
   push:
-    branches: [develop, main]
+    branches: [develop, main, 'verify/T338-shared-push']
   workflow_dispatch:
 
 permissions:

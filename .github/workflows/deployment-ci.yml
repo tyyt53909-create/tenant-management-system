@@ -2,7 +2,7 @@ name: Deployment CI
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop, main, 'verify/T338-shared-base']
     paths:
       - 'backend/**'
       - 'frontend-admin/**'

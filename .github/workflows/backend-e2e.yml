@@ -4,7 +4,7 @@ name: Backend E2E
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'verify/T338-shared-push']
     paths:
       - 'backend/**'
       - 'shared/**'
@@ -12,7 +12,7 @@ on:
       - '.github/workflows/backend-e2e.yml'
 
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'verify/T338-shared-base']
     paths:
       - 'backend/**'
       - 'shared/**'
