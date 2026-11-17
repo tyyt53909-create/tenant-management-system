@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { MeterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { NOT_SIMULATED } from './meter-types.constants.js';
 import { MeterPriceService } from './meter-price.service.js';
+import { realMeterReadings } from './meter-reading-scope.js';
 
 export interface ReconcileQuery {
   buildingId?: string;
@@ -80,7 +80,7 @@ export class MeterReconciliationService {
     const meterIds = meters.map((meter) => meter.id);
     const priceBook = await this.priceService.loadPriceBook(meters);
     const readings = await this.prisma.meterReading.findMany({
-      where: { meterId: { in: meterIds }, readingTime: { gte: start, lt: end }, source: { not: NOT_SIMULATED } },
+      where: { meterId: { in: meterIds }, readingTime: { gte: start, lt: end }, ...realMeterReadings(this.prisma) },
       orderBy: [{ meterId: 'asc' }, { readingTime: 'asc' }],
       select: { id: true, meterId: true, currentReading: true, usage: true, readingTime: true },
     });

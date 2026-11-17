@@ -62,12 +62,6 @@
         <span style="margin-left: 10px; color: var(--text-muted); font-size: 13px">天（建议 30 天）</span>
       </el-form-item>
 
-      <el-form-item v-if="form.scenario !== 'ANOMALY_TEST'" label="结算模式">
-        <el-checkbox v-model="form.autoSettle">
-          开启自动实时扣费（未勾选时仅作为未结算用量留存，用于测试待结预览与周期批量结算）
-        </el-checkbox>
-      </el-form-item>
-
       <el-form-item v-if="form.scenario !== 'ANOMALY_TEST'" label="随机波动">
         <el-slider v-model="variancePercent" :min="5" :max="40" :format-tooltip="(v: number) => `±${v}%`" style="width: 300px" />
         <span style="margin-left: 15px; color: var(--text-muted); font-size: 13px">±{{ variancePercent }}% 随机扰动</span>
@@ -124,7 +118,7 @@
           <div class="summary-card">
             <div class="card-label">数据状态</div>
             <div class="card-val" style="color: var(--info-text)">
-              {{ form.autoSettle ? '已自动扣费' : '未结算待结' }}
+              仅模拟报告
             </div>
           </div>
         </div>
@@ -201,12 +195,10 @@ const form = ref<{
   scenario: 'DAILY_HOURLY' | 'TIME_TRAVEL_MONTH' | 'ANOMALY_TEST';
   meterId?: string;
   days: number;
-  autoSettle: boolean;
 }>({
   scenario: 'DAILY_HOURLY',
   meterId: undefined,
   days: 30,
-  autoSettle: false,
 });
 
 watch(
@@ -231,7 +223,6 @@ const handleRun = async () => {
       scenario: form.value.scenario,
       meterId: form.value.meterId || undefined,
       days: form.value.scenario === 'TIME_TRAVEL_MONTH' ? form.value.days : undefined,
-      autoSettle: form.value.autoSettle,
       variance: variancePercent.value / 100,
     };
 

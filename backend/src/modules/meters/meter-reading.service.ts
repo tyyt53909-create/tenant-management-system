@@ -7,6 +7,7 @@ import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker, isUniqueViolation } from './meter-dedup.util.js';
 import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { FUTURE_READING_MESSAGE, hasLegacySimulationNote, lookupMeterReading, realMeterReadings } from './meter-reading-scope.js';
 import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -34,20 +35,25 @@ export class MeterReadingService {
     dto: Omit<CreateMeterReadingDto, 'source'> & { source?: 'MANUAL' | 'DEVICE' | 'SIMULATED' },
     operatorId: string,
   ) {
-    if (hasReservedReadingMarker(dto.notes) || hasReservedReadingMarker(dto.messageId)) {
+    const source = dto.source || 'MANUAL';
+    if (hasReservedReadingMarker(dto.notes) || hasReservedReadingMarker(dto.messageId)
+      || hasLegacySimulationNote(source, dto.notes)) {
       throw new BadRequestException('备注或消息编号不得包含系统保留的结算标记');
     }
-    const readingTime = dto.readingTime ? new Date(dto.readingTime) : new Date();
-    const source = dto.source || 'MANUAL';
-    // 手工录入默认结算。设备上报和模拟器读数默认只采集。
+    const receivedAt = new Date();
+    const readingTime = dto.readingTime ? new Date(dto.readingTime) : receivedAt;
+    const simulated = source === 'SIMULATED';
+    if (!simulated && readingTime > receivedAt) {
+      throw new BadRequestException({ message: FUTURE_READING_MESSAGE, details: { reasonCode: 'FUTURE_READING' } });
+    }
     const shouldAutoSettle = settlesByDefault(source, dto.autoSettle);
-    // 业务去重键：messageId 优先，否则时间+读数+来源摘要（T274）
-    const dedupKey = buildReadingDedupKey({
+    const key = buildReadingDedupKey({
       messageId: dto.messageId,
       readingTime,
       currentReading: dto.currentReading,
       source,
     });
+    let dedupKey = key;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -63,9 +69,10 @@ export class MeterReadingService {
       }
 
       // 0. 数据库去重键命中：并发/重投直接返回已有记录（T274）
-      const existingDedupReading = await tx.meterReading.findUnique({
-        where: { meterId_dedupKey: { meterId, dedupKey } },
-      });
+      const scope = simulated ? { source: 'SIMULATED' as const } : realMeterReadings(tx);
+      const lookup = await lookupMeterReading(tx, meterId, key, simulated);
+      dedupKey = lookup.dedupKey;
+      const existingDedupReading = lookup.existing;
       if (existingDedupReading) {
         return {
           reading: existingDedupReading,
@@ -79,6 +86,7 @@ export class MeterReadingService {
         const existingMsgReading = await tx.meterReading.findFirst({
           where: {
             meterId,
+            ...scope,
             notes: { contains: msgTag },
           },
         });
@@ -92,7 +100,7 @@ export class MeterReadingService {
 
       // 查询当前最新读数记录
       const latestReadingRecord = await tx.meterReading.findFirst({
-        where: { meterId },
+        where: { meterId, ...scope },
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
@@ -102,7 +110,7 @@ export class MeterReadingService {
       const isInitialBaseline = dto.isInitial === true || (!latestReadingRecord && dto.isInitial !== false);
 
       if (isInitialBaseline) {
-        if (meter.roomId && latestReadingRecord && source !== 'SIMULATED') {
+        if (meter.roomId && latestReadingRecord && !simulated) {
           throw new BadRequestException('房间表已有读数，请登记普通交接读数并分段结算');
         }
         const tag = '[INITIAL]';
@@ -117,14 +125,17 @@ export class MeterReadingService {
             usage: 0,
             source: source as ReadingSource,
             readingTime,
+            createdAt: receivedAt,
             readBy: operatorId,
             notes,
             dedupKey,
             // 初始底数即结算基准，结构字段一并落库，避免后续把底数当未结算用量（T274）
-            settledAt: readingTime,
-            settledUsage: 0,
-            settledUnitPrice: meter.unitPrice,
-            settledAmount: 0,
+            ...(!simulated && {
+              settledAt: readingTime,
+              settledUsage: 0,
+              settledUnitPrice: meter.unitPrice,
+              settledAmount: 0,
+            }),
           },
         });
         return {
@@ -152,6 +163,7 @@ export class MeterReadingService {
         const duplicateHistorical = await tx.meterReading.findFirst({
           where: {
             meterId,
+            ...scope,
             readingTime,
             currentReading: dto.currentReading,
           },
@@ -167,6 +179,7 @@ export class MeterReadingService {
         const laterReadingWithLowerValue = await tx.meterReading.findFirst({
           where: {
             meterId,
+            ...scope,
             readingTime: { gte: readingTime },
             currentReading: { lt: dto.currentReading },
           },
@@ -180,6 +193,7 @@ export class MeterReadingService {
         const precedingRecord = await tx.meterReading.findFirst({
           where: {
             meterId,
+            ...scope,
             readingTime: { lte: readingTime },
           },
           orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
@@ -204,6 +218,7 @@ export class MeterReadingService {
             usage,
             source: source as ReadingSource,
             readingTime,
+            createdAt: receivedAt,
             readBy: operatorId,
             notes,
             dedupKey,
@@ -242,13 +257,17 @@ export class MeterReadingService {
           usage,
           source: source as ReadingSource,
           readingTime,
+          createdAt: receivedAt,
           readBy: operatorId,
           notes: notes || null,
           dedupKey,
         },
       });
 
-      let deduction: Record<string, unknown> = { applied: false, reason: '已采集读数，未开启自动扣费（等待周期结算）' };
+      let deduction: Record<string, unknown> = {
+        applied: false,
+        reason: simulated ? '模拟读数仅用于模拟报告' : '已采集读数，未开启自动扣费（等待周期结算）',
+      };
       if (shouldAutoSettle) {
         // 按读数业务日期取生效单价（T274）；缺历史时回落到表上当前价
         const unitPrice = await this.priceService.resolveUnitPrice(meter, readingTime, tx);
@@ -275,7 +294,8 @@ export class MeterReadingService {
     } catch (error) {
       // 并发重投：两个请求同时通过前置检查时由唯一约束兜底，返回先落库的那条
       if (isUniqueViolation(error, 'dedupKey')) {
-        const existing = await this.prisma.meterReading.findFirst({ where: { meterId, dedupKey } });
+        const scope = simulated ? { source: 'SIMULATED' as const } : realMeterReadings(this.prisma);
+        const existing = await this.prisma.meterReading.findFirst({ where: { meterId, dedupKey, ...scope } });
         if (existing) {
           return {
             reading: existing,
@@ -297,14 +317,15 @@ export class MeterReadingService {
     const { page = 1, limit = 20 } = query;
     const skip = (page - 1) * limit;
 
+    const where = { meterId, ...realMeterReadings(this.prisma) };
     const [data, total] = await Promise.all([
       this.prisma.meterReading.findMany({
-        where: { meterId },
+        where,
         skip,
         take: limit,
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       }),
-      this.prisma.meterReading.count({ where: { meterId } }),
+      this.prisma.meterReading.count({ where }),
     ]);
 
     return {

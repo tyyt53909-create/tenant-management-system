@@ -3917,7 +3917,7 @@ export interface components {
             buildingId?: string;
             /** @description 模拟天数（针对 TIME_TRAVEL_MONTH，默认 30 天，1~90） */
             days?: number;
-            /** @description 是否自动结算扣费（默认 false，仅上报未结算用量留存，待后续周期结算） */
+            /** @description 兼容旧客户端。模拟读数只进入模拟报告，此参数不会触发扣费 */
             autoSettle?: boolean;
             /** @description 异常测试类型列表（针对 ANOMALY_TEST，可选） */
             faultTypes?: string[];

@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { METRIC_CALIBERS, collectionRate, remainingAmount } from '../../common/metrics/finance-metrics.js';
+import { realMeterReadings } from '../meters/meter-reading-scope.js';
 
 function counts<T extends { _count: { _all: number } }>(rows:T[], field:keyof T) {
   return Object.fromEntries(rows.map(row=>[String(row[field]),row._count._all]));
@@ -23,7 +24,7 @@ export class ManagementSummaryService {
     const horizon=this.clock.addDays(today,30);
     const monthStart=this.clock.startOfMonth(today);
     const monthEnd=this.clock.addMonths(monthStart,1);
-    const readingRange={gte:monthStart,lt:monthEnd};
+    const readingScope={ ...realMeterReadings(this.prisma), readingTime:{gte:monthStart,lt:monthEnd} };
     const openStates=['SUBMITTED','ACKNOWLEDGED','ASSIGNED','IN_PROGRESS','PENDING_CONFIRM'] as const;
     const [roomRows,cleanRows,tenants,enabledTenants,residentTenants,draftTenants,unlinkedTenants,contractRows,expiring,billTotals,overdue,repairRows,urgentRepairs,prepayTotals,lowBalances,negativeBalances,zeroBalances,meterRows,readMeters,water,electricity,checkoutRows,pendingRefund,noticeRows,urgentNotices]=await Promise.all([
       this.prisma.room.groupBy({by:['status'],_count:{_all:true}}),
@@ -44,9 +45,9 @@ export class ManagementSummaryService {
       this.prisma.prepayAccount.count({where:{balanceCache:{lt:0}}}),
       this.prisma.prepayAccount.count({where:{balanceCache:0}}),
       this.prisma.meter.groupBy({by:['meterType'],where:{isActive:true},_count:{_all:true}}),
-      this.prisma.meterReading.groupBy({by:['meterId'],where:{readingTime:readingRange,meter:{isActive:true}},_count:{_all:true}}),
-      this.prisma.meterReading.aggregate({where:{readingTime:readingRange,meter:{meterType:'WATER'}},_sum:{usage:true}}),
-      this.prisma.meterReading.aggregate({where:{readingTime:readingRange,meter:{meterType:'ELECTRICITY'}},_sum:{usage:true}}),
+      this.prisma.meterReading.groupBy({by:['meterId'],where:{...readingScope,meter:{isActive:true}},_count:{_all:true}}),
+      this.prisma.meterReading.aggregate({where:{...readingScope,meter:{meterType:'WATER'}},_sum:{usage:true}}),
+      this.prisma.meterReading.aggregate({where:{...readingScope,meter:{meterType:'ELECTRICITY'}},_sum:{usage:true}}),
       this.prisma.checkoutRecord.groupBy({by:['status'],_count:{_all:true}}),
       this.prisma.checkoutRecord.aggregate({where:{status:{in:['DRAFT','PENDING']}},_sum:{totalRefund:true}}),
       this.prisma.notification.groupBy({by:['isRead'],where:{userId},_count:{_all:true}}),

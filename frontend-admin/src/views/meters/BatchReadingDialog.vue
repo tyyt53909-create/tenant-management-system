@@ -361,7 +361,9 @@ async function handleSubmitBatch() {
       const blockedDetails = blocked.map((item) =>
         `${item.meterNumber ?? item.meterId} · ${item.deductionBlocked?.reason}。${item.deductionBlocked?.retryCondition}。`,
       );
-      ElMessageBox.alert([summary, ...blockedDetails].join(' '), '批量抄表结果', {
+      const rejectedDetails = res.results.filter((item) => !item.success && item.error)
+        .map((item) => `${item.meterNumber ?? item.meterId} · ${item.error}。`);
+      ElMessageBox.alert([summary, ...rejectedDetails, ...blockedDetails].join(' '), '批量抄表结果', {
         type: 'warning',
       });
       // 清空成功项，保留失败项供排查

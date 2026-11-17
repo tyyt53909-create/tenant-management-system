@@ -7,6 +7,7 @@ import { isUniqueConstraintError } from '../../common/utils/prisma-error.js';
 import { allocateByArea, type AllocationBase } from './allocation.js';
 import { CreatePublicUtilityBillDto } from './dto/create-public-utility-bill.dto.js';
 import { QueryPublicUtilityBillDto } from './dto/query-public-utility-bill.dto.js';
+import { realMeterReadings } from '../meters/meter-reading-scope.js';
 
 const BILL_INCLUDE = {
   allocations: {
@@ -212,7 +213,7 @@ export class PublicUtilitiesService {
 
       const { start, end } = monthRange(dto.period);
       const readings = await this.prisma.meterReading.findMany({
-        where: { meterId: meter.id, readingTime: { gte: start, lt: end }, source: { not: 'SIMULATED' } },
+        where: { meterId: meter.id, readingTime: { gte: start, lt: end }, ...realMeterReadings(this.prisma) },
         orderBy: { readingTime: 'asc' },
         select: { currentReading: true, source: true },
       });

@@ -14,7 +14,7 @@ describe('V3 管理摘要：来源与聚合口径',()=>{
       maintenanceRequest:{groupBy:vi.fn().mockResolvedValue([]),count:vi.fn().mockResolvedValue(0)},
       prepayAccount:{fields:{lowBalanceThreshold:{field:'lowBalanceThreshold'}},aggregate:vi.fn().mockResolvedValue({_count:{_all:0},_sum:{balanceCache:null}}),count:vi.fn().mockResolvedValue(0)},
       meter:{groupBy:vi.fn().mockResolvedValue([])},
-      meterReading:{groupBy:vi.fn().mockResolvedValue([]),aggregate:vi.fn().mockResolvedValue({_sum:{usage:null}})},
+      meterReading:{fields:{createdAt:Symbol('meterReading.createdAt')},groupBy:vi.fn().mockResolvedValue([]),aggregate:vi.fn().mockResolvedValue({_sum:{usage:null}})},
       checkoutRecord:{groupBy:vi.fn().mockResolvedValue([]),aggregate:vi.fn().mockResolvedValue({_sum:{totalRefund:null}})},
       notification:{groupBy:vi.fn().mockResolvedValue([]),count:vi.fn().mockResolvedValue(0)},
     };

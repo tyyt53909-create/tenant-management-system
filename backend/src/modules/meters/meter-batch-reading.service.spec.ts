@@ -16,6 +16,7 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     const prismaMock: any = {
       meter: { findUnique: vi.fn(), findMany: vi.fn() },
       meterReading: {
+        fields: { createdAt: Symbol('meterReading.createdAt') },
         findUnique: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
@@ -78,6 +79,24 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
       ...overrides,
     };
   }
+
+  it('未来读数在批量结果逐行报告，且不写读数或账务', async () => {
+    prisma.meter.findUnique.mockResolvedValue(sheetMeter({ isActive: true }));
+    const result = await service.createBatchReadings({
+      readings: [
+        { meterId: 'meter-001', currentReading: 110, readingTime: '2090-01-01T00:00:00Z', autoSettle: true },
+        { meterId: 'meter-001', currentReading: 110, source: 'DEVICE', notes: '[ANOMALY] 模拟记录' },
+      ],
+    }, operatorId);
+    expect(result).toMatchObject({
+      successCount: 0, failureCount: 2, results: [
+        { meterId: 'meter-001', success: false, reasonCode: 'FUTURE_READING' },
+        { meterId: 'meter-001', success: false, error: expect.stringContaining('系统保留') },
+      ],
+    });
+    expect(prisma.meterReading.create).not.toHaveBeenCalled();
+    expect(billing.applyReadingDeduction).not.toHaveBeenCalled();
+  });
 
   it('底表：带全部筛选 + 预付余额命中', async () => {
     prisma.meter.findMany.mockResolvedValue([sheetMeter()]);

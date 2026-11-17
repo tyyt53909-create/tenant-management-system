@@ -37,7 +37,6 @@ async function main() {
   const days = options.days ? parseInt(options.days, 10) : 30;
   const meterId = options.meterId;
   const buildingId = options.buildingId;
-  const autoSettle = options.autoSettle === 'true';
 
   console.log('====================================================');
   console.log('⚡ 虚拟水电表模拟器 (Virtual Meter Simulator CLI)');
@@ -46,7 +45,7 @@ async function main() {
   if (meterId) console.log(`- 指定表计: ${meterId}`);
   if (buildingId) console.log(`- 指定楼栋: ${buildingId}`);
   if (scenario === SimulationScenario.TIME_TRAVEL_MONTH) console.log(`- 模拟天数: ${days} 天`);
-  console.log(`- 自动结算扣费: ${autoSettle ? '是' : '否（仅作为未结算用量留存）'}`);
+  console.log('- 模拟读数仅进入模拟报告');
   console.log('正在初始化应用上下文与数据库连接...');
 
   const app = await NestFactory.createApplicationContext(AppModule, {
@@ -61,7 +60,6 @@ async function main() {
         meterId,
         buildingId,
         days,
-        autoSettle,
       },
       'cli-simulator',
     );

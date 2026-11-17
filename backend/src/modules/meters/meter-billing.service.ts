@@ -5,11 +5,12 @@ import { BusinessClock } from '../../common/business-clock/business-clock.servic
 import { randomHex } from '../../common/utils/secure-random.js';
 import { SettleMeterBatchDto, SettleMeterDto } from './dto/settle-meter.dto.js';
 import type { MeterBatchSettlementItemDto, MeterSettlementResultDto } from './dto/settle-meter-result.dto.js';
-import { METER_TYPE_LABEL, NOT_SIMULATED } from './meter-types.constants.js';
+import { METER_TYPE_LABEL } from './meter-types.constants.js';
 import { MeterPriceService } from './meter-price.service.js';
 import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { resolveMeterUsageOwner } from './meter-usage-attribution.js';
 import { hasReservedReadingMarker } from './meter-dedup.util.js';
+import { realMeterReadings } from './meter-reading-scope.js';
 
 const OCCUPANCY_UNCERTAIN = {
   reasonCode: 'OCCUPANCY_UNCERTAIN',
@@ -173,13 +174,14 @@ export class MeterBillingService {
     });
     if (!meter) throw new NotFoundException('水电表不存在');
 
-    const settleUntil = settleUntilStr ? new Date(settleUntilStr) : new Date();
+    const now = this.clock.now();
+    const settleUntil = settleUntilStr ? new Date(Math.min(now.getTime(), Date.parse(settleUntilStr))) : now;
 
     const latestReading = await this.prisma.meterReading.findFirst({
       where: {
         meterId,
         readingTime: { lte: settleUntil },
-        source: NOT_SIMULATED,
+        ...realMeterReadings(this.prisma),
       },
       orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
     });
@@ -265,7 +267,8 @@ export class MeterBillingService {
     if (hasReservedReadingMarker(dto.notes)) {
       throw new BadRequestException('结算备注不得包含系统保留标记');
     }
-    const settleUntil = dto.settleUntil ? new Date(dto.settleUntil) : new Date();
+    const now = this.clock.now();
+    const settleUntil = dto.settleUntil ? new Date(Math.min(now.getTime(), Date.parse(dto.settleUntil))) : now;
 
     return this.prisma.$transaction(async (tx) => {
       await lockMeters(tx, [meterId]);
@@ -277,7 +280,7 @@ export class MeterBillingService {
         where: {
           meterId,
           readingTime: { lte: settleUntil },
-          source: NOT_SIMULATED,
+          ...realMeterReadings(tx),
         },
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
@@ -401,7 +404,8 @@ export class MeterBillingService {
 
     const settle = settleMeterFn ?? ((id: string, d: SettleMeterDto, op: string) => this.settleMeter(id, d, op));
     const results: Array<MeterBatchSettlementItemDto & Pick<MeterSettlement, 'deduction'>> = [];
-    const settleUntil = dto.settleUntil ?? new Date().toISOString();
+    const now = this.clock.now();
+    const settleUntil = dto.settleUntil && new Date(dto.settleUntil) <= now ? dto.settleUntil : now.toISOString();
     for (const id of meterIds) {
       try {
         const result = await settle(id, { settleUntil, notes: dto.notes }, operatorId);

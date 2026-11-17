@@ -10,7 +10,7 @@ describe('MeterAdapter', () => {
   };
 
   it('手动适配器只取 MANUAL 读数', async () => {
-    const prisma = { meterReading: { findFirst: vi.fn().mockResolvedValue(reading) } };
+    const prisma = { meterReading: { fields: { createdAt: Symbol('meterReading.createdAt') }, findFirst: vi.fn().mockResolvedValue(reading) } };
     const adapter = new ManualMeterAdapter(prisma as never);
 
     await expect(adapter.fetchReading('meter-1')).resolves.toMatchObject({
@@ -18,13 +18,13 @@ describe('MeterAdapter', () => {
       source: 'MANUAL',
     });
     expect(prisma.meterReading.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { meterId: 'meter-1', source: 'MANUAL' },
+      where: expect.objectContaining({ meterId: 'meter-1', source: 'MANUAL', AND: expect.any(Array) }),
     }));
   });
 
   it('模拟器适配器只取 DEVICE 读数', async () => {
     const prisma = {
-      meterReading: {
+      meterReading: { fields: { createdAt: Symbol('meterReading.createdAt') },
         findFirst: vi.fn().mockResolvedValue({ ...reading, source: 'DEVICE' }),
       },
     };
@@ -32,7 +32,7 @@ describe('MeterAdapter', () => {
 
     await expect(adapter.fetchReading('meter-1')).resolves.toMatchObject({ source: 'DEVICE' });
     expect(prisma.meterReading.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { meterId: 'meter-1', source: 'DEVICE' },
+      where: expect.objectContaining({ meterId: 'meter-1', source: 'DEVICE', AND: expect.any(Array) }),
     }));
   });
 });
