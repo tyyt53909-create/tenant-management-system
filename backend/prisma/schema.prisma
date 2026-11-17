@@ -708,6 +708,7 @@ model Contract {
   checkoutRequests        CheckoutRequest[]
   renewalIntents          RenewalIntent[]
   renewalOffers           RenewalOffer[]
+  moveIn                  MoveInRequest?
 
   @@index([buildingId, status])
   @@index([tenantId, status])
@@ -715,6 +716,18 @@ model Contract {
   @@index([status, endDate])
   @@index([signStatus])
   @@map("contracts")
+}
+
+model MoveInRequest {
+  requestId   String   @id
+  contractId  String   @unique
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  payloadHash String
+  occupiedAt  DateTime
+  operatorId  String
+  result      Json
+
+  @@map("move_in_requests")
 }
 
 // 7. ContractAttachment（合同附件）

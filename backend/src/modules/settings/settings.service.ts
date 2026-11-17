@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   SETTING_DEFINITIONS,
@@ -65,8 +66,8 @@ export class SettingsService {
   }
 
   /** 业务代码读取单个设置值（含默认值），不返回设置元信息。 */
-  async getValue<T>(key: SettingKey): Promise<T> {
-    const row = await this.prisma.systemSetting.findUnique({ where: { key } });
+  async getValue<T>(key: SettingKey, db: Pick<Prisma.TransactionClient, 'systemSetting'> = this.prisma): Promise<T> {
+    const row = await db.systemSetting.findUnique({ where: { key } });
     return (row?.value ?? getSettingDefinition(key).defaultValue) as T;
   }
 

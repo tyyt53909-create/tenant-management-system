@@ -1,3 +1,5 @@
+import { MoveInsController } from './move-ins.controller.js';
+import { MoveInsService } from './move-ins.service.js';
 import { Module } from '@nestjs/common';
 import { ContractsService } from './contracts.service.js';
 import { ContractsController } from './contracts.controller.js';
@@ -25,11 +27,13 @@ import { MockElectronicSignProvider } from './sign/mock-electronic-sign.provider
   ],
   controllers: [
     ContractsController,
+    MoveInsController,
     ContractAttachmentsController,
     ContractTemplatesController,
   ],
   providers: [
     ContractsService,
+    MoveInsService,
     ContractAttachmentsService,
     ContractTemplatesService,
     ContractRenewalsService,

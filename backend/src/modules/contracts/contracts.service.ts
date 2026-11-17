@@ -83,23 +83,31 @@ export class ContractsService {
       .toUpperCase();
   }
 
-  async create(dto: CreateContractDto) {
+  create(dto: CreateContractDto) {
+    return this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, dto.roomId);
+      return this.createDraft(dto, tx);
+    });
+  }
+
+  async createDraft(dto: CreateContractDto, db: Prisma.TransactionClient) {
     // 显式传入非空规则优先；空对象/未传则用设置中心的默认规则（T276）
     const lateFeeRule =
       dto.lateFeeRule && Object.keys(dto.lateFeeRule).length > 0
         ? dto.lateFeeRule
-        : await this.settings.getValue<Record<string, unknown>>('billing.defaultLateFeeRule');
+        : await this.settings.getValue<Record<string, unknown>>('billing.defaultLateFeeRule', db);
 
     // 验证关联数据存在
     const [building, room, tenant] = await Promise.all([
-      this.prisma.building.findUnique({ where: { id: dto.buildingId } }),
-      this.prisma.room.findUnique({ where: { id: dto.roomId } }),
-      this.prisma.tenant.findUnique({ where: { id: dto.tenantId } }),
+      db.building.findUnique({ where: { id: dto.buildingId } }),
+      db.room.findUnique({ where: { id: dto.roomId } }),
+      db.tenant.findUnique({ where: { id: dto.tenantId } }),
     ]);
 
     if (!building) throw new BadRequestException('楼栋不存在');
     if (!room) throw new BadRequestException('房源不存在');
     if (!tenant) throw new BadRequestException('租客不存在');
+    if (room.buildingId !== dto.buildingId) throw new BadRequestException('房源不属于指定楼栋');
 
     if (new Date(dto.endDate) <= new Date(dto.startDate)) {
       throw new BadRequestException('合同结束日期必须晚于开始日期');
@@ -107,7 +115,7 @@ export class ContractsService {
 
     // 同一房源同时只能有一份未结束的合同。否则两份 DRAFT 会被定时任务一起置为 ACTIVE，
     // 而月账单的幂等键是 contractId+period（不含 roomId）→ 同一房间同一月两笔租金账单（T207）。
-    const activeOnRoom = await this.findOtherOpenContract(this.prisma, dto.roomId);
+    const activeOnRoom = await this.findOtherOpenContract(db, dto.roomId);
     if (activeOnRoom) {
       throw new ConflictException(
         `该房源已有未结束的合同（${activeOnRoom.contractNumber}，状态 ${activeOnRoom.status}），请先处理后再签约`,
@@ -126,7 +134,7 @@ export class ContractsService {
       isSigner: c.isSigner ?? false,
     }));
 
-    const contract = await this.prisma.contract.create({
+    const contract = await db.contract.create({
       data: {
         buildingId: dto.buildingId,
         roomId: dto.roomId,

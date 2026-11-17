@@ -1963,6 +1963,22 @@
   },
   {
     "method": "POST",
+    "path": "/api/rooms/:roomId/move-in",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/rooms/:roomId/move-in/preview",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
     "path": "/api/scheduler/jobs/:name/run",
     "public": false,
     "roles": [

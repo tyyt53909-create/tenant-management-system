@@ -34,6 +34,7 @@ export async function resolveMeterUsageOwner(
       status: true,
       tenant: { select: { name: true } },
       room: { select: { status: true } },
+      moveIn: { select: { occupiedAt: true } },
       inspections: {
         where: { status: 'CONFIRMED' },
         select: { type: true, inspectedAt: true, tenantConfirmedAt: true, roomId: true, tenantId: true },
@@ -59,7 +60,7 @@ export async function resolveMeterUsageOwner(
   const windows = history.map((contract, index) => {
     const checkIns = contract.inspections.filter(({ type }) => type === 'CHECK_IN');
     const checkOuts = contract.inspections.filter(({ type }) => type === 'CHECK_OUT');
-    const entry = checkIns[0]?.inspectedAt;
+    const entry = contract.moveIn?.occupiedAt ?? checkIns[0]?.inspectedAt;
     const exit = checkOuts[0]?.inspectedAt;
     const checkoutDay = contract.checkoutRecords[0]?.checkoutDate;
     const hasConflictingEvidence = checkIns.length > 1 || checkOuts.length > 1

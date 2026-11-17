@@ -102,6 +102,7 @@
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item v-if="row.cleanStatus === 'CLEAN' && ['VACANT', 'RESERVED'].includes(row.status)" command="move-in">办理入住</el-dropdown-item>
                     <el-dropdown-item command="status">房态变更</el-dropdown-item>
                     <el-dropdown-item command="edit">编辑房源</el-dropdown-item>
                     <el-dropdown-item command="delete" divided style="color: var(--error-text)">删除房源</el-dropdown-item>
@@ -127,6 +128,8 @@
       </div>
     </ResourcePanel>
     <PropertyDetailPanel ref="detailPanel" v-model="detailVisible" kind="rooms" :id="detailId" @edit="handleEdit($event as any)" @status="handleStatus($event as any)" />
+
+    <MoveInDialog v-if="moveInRoom" :room="moveInRoom" @close="moveInRoom = null" @completed="moveInCompleted" />
 
     <!-- 新增/编辑对话框 -->
     <el-dialog
@@ -206,6 +209,7 @@ import ManagementMetrics from '@/components/common/ManagementMetrics.vue';
 import ExportCurrent from '@/components/common/ExportCurrent.vue';
 import PropertyDetailPanel from '@/components/common/PropertyDetailPanel.vue';
 import EntitySelect from '@/components/common/EntitySelect.vue';
+import MoveInDialog from './components/MoveInDialog.vue';
 import RoomStatusDialog from './components/RoomStatusDialog.vue';
 import RoomPhotoEditor from './components/RoomPhotoEditor.vue';
 import type { FormInstance, FormRules } from 'element-plus';
@@ -250,6 +254,7 @@ const currentVersion = ref(0);
 // 房态流转（乐观锁）
 const statusDialogVisible = ref(false);
 const statusRow = ref<Room | null>(null);
+const moveInRoom = ref<Room | null>(null);
 
 const queryForm = reactive<{
   roomNumber: string;
@@ -478,8 +483,15 @@ const handleDelete = async (row: Room) => {
 
 function handleRoomCommand(command: string, row: Room) {
   if (command === 'status') handleStatus(row);
+  else if (command === 'move-in') moveInRoom.value = row;
   else if (command === 'edit') handleEdit(row);
   else if (command === 'delete') void handleDelete(row);
+}
+
+function moveInCompleted() {
+  moveInRoom.value = null;
+  void fetchData();
+  void detailPanel.value?.reload();
 }
 
 const handleSubmit = async () => {
