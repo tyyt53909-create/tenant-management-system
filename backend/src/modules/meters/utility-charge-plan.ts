@@ -74,4 +74,3 @@ export async function reviewMeterCharge(
     providerAmount: policy?.collectionMode === 'DIRECT_TO_PROVIDER' ? amount : 0,
   };
 }
-

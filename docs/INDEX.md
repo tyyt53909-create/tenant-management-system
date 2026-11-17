@@ -2,10 +2,10 @@
 
 > 本文档是所有项目文档的唯一注册表
 > 最后更新: 2026-11-18
-> 文档总数: 201 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 122、draft 8、archived 71（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 213 份（含本索引与归档）
-> 任务书: 173 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 文档总数: 202 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 122、draft 8、archived 72（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 214 份（含本索引与归档）
+> 任务书: 174 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -21,9 +21,9 @@
 |------|------|------|------|----------|----------|----------|------|
 | [00-项目计划书.md](./00-项目计划书.md) | 项目计划书 | 过程类 | draft | human | 全项目 | - | 阶段划分、里程碑、风险清单 |
 | [01-架构设计.md](./01-架构设计.md) | 架构设计 | 事实来源类 | draft | strong | src/\*\* | - | 总体架构、模块边界、扩展点 |
-| [02-数据模型.md](./02-数据模型.md) | 数据模型 | 事实来源类 | active | strong | backend/prisma/schema.prisma | 2026-11-18 | Prisma 62 张表，含规则版本、责任段及核验重放模型 |
+| [02-数据模型.md](./02-数据模型.md) | 数据模型 | 事实来源类 | draft | strong | backend/prisma/schema.prisma | 2026-11-18 | Prisma 64 张表，含正式费用、规则责任与持久重放模型 |
 | [03-权限矩阵.md](./03-权限矩阵.md) | 权限矩阵 | 事实来源类 | draft | strong | src/common/guards/\*\* | 2026-10-15 | 角色权限、数据隔离、§7.3 租客账号能力开关与登入控制 (T173) |
-| [04-状态机.md](./04-状态机.md) | 状态机设计 | 事实来源类 | draft | strong | src/modules/\*\*/\*.service.ts | - | 5个核心状态机流转规则 |
+| [04-状态机.md](./04-状态机.md) | 状态机设计 | 事实来源类 | active | strong | src/modules/\*\*/\*.service.ts | - | 5个核心状态机流转规则 |
 | [05-接口规范.md](./05-接口规范.md) | 接口规范 | 事实来源类 | draft | strong | src/modules/\*\*/\*.controller.ts | 2026-10-25 | RESTful规范、错误码、接口清单；租客认领必须绑定指定档案 |
 | [06-安全与合规清单.md](./06-安全与合规清单.md) | 安全与合规 | 决策类 | draft | human | 全项目 | - | 个人信息保护、备份、合规要求 |
 | [07-测试策略.md](./07-测试策略.md) | 测试策略 | 决策类 | draft | strong | src/\*\*/\*.spec.ts | 2026-10-25 | 单元/集成/E2E测试策略；整合测试清空前必须通过库标记 |
@@ -53,7 +53,7 @@
 | [31-管理后台角色路由与组件拆分.md](./31-管理后台角色路由与组件拆分.md) | 管理后台角色路由与组件拆分 | 事实来源类 | active | strong | frontend-admin/src/router/index.ts、frontend-admin/src/utils/access.ts、frontend-admin/src/utils/billRow.ts | 2026-10-25 | T286：meta.roles 守卫、导航过滤、型别化结算 API、账单行纯函数 |
 | [32-小程序工程化.md](./32-小程序工程化.md) | 小程序工程化：分包、隐私、类型与页面测试 | 事实来源类 | active | strong | miniprogram/pages.json、miniprogram/packageA/**、miniprogram/utils/privacy.js | 2026-10-25 | T287：主包/分包划分、预下载、隐私授权、typecheck 与页面测试 |
 | [33-依赖注入与大服务拆分.md](./33-依赖注入与大服务拆分.md) | 依赖注入清理与大服务拆分 | 事实来源类 | active | strong | backend/src/modules/**、backend/src/common/dependency-hygiene.spec.ts | 2026-10-25 | T288：关键依赖必填、可选依赖白名单、RoomsService 拆分、静态防回归 |
-| [34-四个连接处实施契约.md](./34-四个连接处实施契约.md) | 四个连接处实施契约 | 事实来源类 | active | strong | backend/src/modules/utility-readiness/**、backend/prisma/schema.prisma、frontend-admin/src/views/contracts/UtilityRulesDrawer.vue | 2026-11-18 | T335 差异、任务映射、规则及责任核验、写入口与后续迁移 |
+| [34-四个连接处实施契约.md](./34-四个连接处实施契约.md) | 四个连接处实施契约 | 事实来源类 | active | strong | backend/src/modules/utility-readiness/**、backend/prisma/schema.prisma、frontend-admin/src/views/contracts/UtilityRulesDrawer.vue | 2026-11-18 | T335 核验与 T336 正式计费、三种模式、开放责任段及旧入口收口 |
 
 ---
 
@@ -70,8 +70,10 @@
 ## 3. 任务与交接
 
 - [2026-11-18-T335-收費規則與責任就緒.md](./handoff/2026-11-18-T335-收費規則與責任就緒.md)：规则版本、真实责任段、预览确认、迁移隔离及数据库/浏览器验收。
+- [2026-11-18-T336-正式计费与旧入口收口.md](./handoff/2026-11-18-T336-正式计费与旧入口收口.md)：统一正式费用、三种模式、责任封口、旧入口阻断及真实数据库/浏览器证据。
 
 - [T335-LINK-02-收費規則與責任就緒.md](../tasks/T335-LINK-02-收費規則與責任就緒.md)：收款模式、责任段、只读预览、存量盘点和确认重放。
+- [T336-LINK-02-正式计费与旧入口收口.md](../tasks/T336-LINK-02-正式计费与旧入口收口.md)：正式费用、三种收款模式、预览隔离、覆盖防重、责任封口及旧入口阻断。
 
 - [T304-WRK-03-保洁任务自动建单指派与验收.md](../tasks/T304-WRK-03-保洁任务自动建单指派与验收.md)：WRK-03，保洁任务自动建单、管家派工调度、保洁员开工完工与验收评分闭环。
 - [T300-LSE-03-入住退租验房与退租申请.md](../tasks/T300-LSE-03-入住退租验房与退租申请.md)：LSE-03，入住交付验房、退租交接验房、租客自主线上退租申请与退租单联动。
