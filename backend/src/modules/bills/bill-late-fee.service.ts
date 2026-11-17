@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { LateFeeRule, LateFeeUtil } from './utils/late-fee.util.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
+import { lockBillForWrite } from './bill-write-lock.js';
 
 @Injectable()
 export class BillLateFeeService {
@@ -19,6 +20,7 @@ export class BillLateFeeService {
    */
   async addLateFee(billId: string, dto: CreateLateFeeDto, operatorId: string, referenceDate?: Date) {
     return this.prisma.$transaction(async (tx) => {
+      await lockBillForWrite(tx, billId);
       const bill = await tx.bill.findUnique({
         where: { id: billId },
         include: { contract: { select: { lateFeeRule: true } } },

@@ -21,6 +21,8 @@ import { rentBillDedupKey } from '../../common/utils/duplicate-keys.js';
 import { BillPaymentService } from './bill-payment.service.js';
 import { BillLateFeeService } from './bill-late-fee.service.js';
 import { BillReceiptService } from './bill-receipt.service.js';
+import { AuditLogService } from '../audit/audit-log.service.js';
+import { lockBillForWrite } from './bill-write-lock.js';
 
 const BILL_TYPE_LABEL: Record<string, string> = {
   RENT: '租金',
@@ -110,6 +112,7 @@ export class BillsService {
     private readonly paymentService: BillPaymentService,
     private readonly lateFeeService: BillLateFeeService,
     private readonly receiptService: BillReceiptService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   async create(dto: CreateBillDto) {
@@ -233,40 +236,57 @@ export class BillsService {
     return bill;
   }
 
-  async update(id: string, dto: UpdateBillDto) {
-    const bill = await this.prisma.bill.findUnique({ where: { id } });
-    if (!bill) {
-      throw new NotFoundException('账单不存在');
-    }
-    if (dto.status && dto.status !== 'CANCELLED') {
-      throw apiError(ErrorCode.BILL_DERIVED_FIELD);
-    }
+  async update(id: string, dto: UpdateBillDto, operatorId?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await lockBillForWrite(tx, id);
+      const bill = await tx.bill.findUnique({ where: { id } });
+      if (!bill) {
+        throw new NotFoundException('账单不存在');
+      }
+      if (dto.status && dto.status !== 'CANCELLED') {
+        throw apiError(ErrorCode.BILL_DERIVED_FIELD);
+      }
 
-    const confirmedPayments = await this.confirmedPaymentCount(id);
-    if (dto.status === 'CANCELLED' && (bill.paidAmount > 0 || confirmedPayments > 0)) {
-      throw apiError(ErrorCode.BILL_CANNOT_CANCEL, '已有收款的账单必须先冲正，不能直接取消');
-    }
-    if (dto.amount !== undefined && dto.amount !== bill.amount && (bill.paidAmount > 0 || confirmedPayments > 0)) {
-      throw apiError(ErrorCode.BILL_AMOUNT_LOCKED);
-    }
+      const cancelling = dto.status === 'CANCELLED' && bill.status !== 'CANCELLED';
+      const amountChanged = dto.amount !== undefined && dto.amount !== bill.amount;
+      if (cancelling || amountChanged) {
+        const confirmed = await tx.paymentRecord.findFirst({
+          where: { billId: id, status: 'CONFIRMED', voidedAt: null, reversalOfId: null },
+          select: { id: true },
+        });
+        if (bill.paidAmount > 0 || confirmed) {
+          if (cancelling) {
+            throw apiError(ErrorCode.BILL_CANNOT_CANCEL, '已有收款的账单必须先冲正，不能直接取消');
+          }
+          throw apiError(ErrorCode.BILL_AMOUNT_LOCKED);
+        }
+        if (amountChanged && bill.status === 'CANCELLED') {
+          throw apiError(ErrorCode.BILL_AMOUNT_LOCKED);
+        }
+      }
 
-    const updateData: Prisma.BillUpdateInput = {};
-    if (dto.amount !== undefined) updateData.amount = dto.amount;
-    if (dto.status === 'CANCELLED') updateData.status = 'CANCELLED';
-    if (dto.dueDate) updateData.dueDate = new Date(dto.dueDate);
+      const data: Prisma.BillUpdateInput = {};
+      if (amountChanged) data.amount = dto.amount;
+      if (cancelling) data.status = 'CANCELLED';
+      if (dto.dueDate && new Date(dto.dueDate).getTime() !== bill.dueDate?.getTime()) {
+        data.dueDate = new Date(dto.dueDate);
+      }
+      if (Object.keys(data).length === 0) return bill;
 
-    return this.prisma.bill.update({
-      where: { id },
-      data: updateData,
+      const updated = await tx.bill.update({ where: { id }, data });
+      const snapshot = ({ amount, paidAmount, status, dueDate }: typeof bill) =>
+        ({ amount, paidAmount, status, dueDate: dueDate?.toISOString() });
+      await this.auditLog.recordEvent({
+        tx,
+        action: cancelling ? 'BILL_CANCEL' : 'BILL_UPDATE',
+        entityType: 'Bill',
+        entityId: id,
+        actorId: operatorId,
+        before: snapshot(bill),
+        after: snapshot(updated),
+      });
+      return updated;
     });
-  }
-
-  private async confirmedPaymentCount(billId: string): Promise<number> {
-    const payments = await this.prisma.paymentRecord.findMany({
-      where: { billId, status: 'CONFIRMED', voidedAt: null, reversalOfId: null },
-      select: { id: true },
-    });
-    return Array.isArray(payments) ? payments.length : 0;
   }
 
   async remove(id: string) {

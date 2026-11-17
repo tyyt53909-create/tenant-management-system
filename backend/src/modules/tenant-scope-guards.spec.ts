@@ -12,11 +12,11 @@ import { PrismaService } from './prisma/prisma.service.js';
 import { BillPaymentService } from './bills/bill-payment.service.js';
 import { BillLateFeeService } from './bills/bill-late-fee.service.js';
 import { BillReceiptService } from './bills/bill-receipt.service.js';
-import { OfflinePaymentProvider } from './bills/payment/offline-payment.provider.js';
 import { PAYMENT_PROVIDER } from './bills/payment/payment-provider.js';
 import { BusinessClock } from '../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
 import { NotificationDispatcher } from './notifications/channels/notification-dispatcher.js';
+import { OfflinePaymentProvider } from './bills/payment/offline-payment.provider.js';
 import { AuditLogService } from './audit/audit-log.service.js';
 import { CryptoService } from '../common/crypto/crypto.service.js';
 import { ContractTemplatesService } from './contracts/contract-templates.service.js';
@@ -77,7 +77,6 @@ describe('租客范围查询：身份缺失必须 403 且不查库', () => {
           useFactory: () =>
             new BillPaymentService(
               prismaMock as never,
-              new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
               { recordEvent: vi.fn(), log: vi.fn() } as never,
               { triggerLowBalanceAlertIfNeeded: vi.fn().mockResolvedValue(true) } as never,

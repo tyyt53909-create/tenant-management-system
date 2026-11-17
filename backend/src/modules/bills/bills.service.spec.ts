@@ -1,3 +1,4 @@
+import { AuditLogService } from '../audit/audit-log.service.js';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { BillsService } from './bills.service.js';
@@ -7,7 +8,6 @@ import { BillLateFeeService } from './bill-late-fee.service.js';
 import { BillReceiptService } from './bill-receipt.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
-import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 
 // 账单号必须走 crypto 随机串（AGENTS 14.4 禁止 Math.random）；固定返回值便于断言。
 vi.mock('../../common/utils/secure-random.js', () => ({
@@ -45,12 +45,14 @@ describe('BillsService', () => {
         update: vi.fn(),
       },
       $transaction: vi.fn(),
+      $queryRaw: vi.fn().mockResolvedValue([]),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BillsService,
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn() } },
         { provide: PrismaService, useValue: prismaMock },
         // QLT-02 / T288：依赖改为必填后，测试显式提供真实子服务（共享同一个 prismaMock），
         // 这样收款/滞纳金用例仍然断言底层 SQL 行为，而不是断言「有没有被调用」。
@@ -59,7 +61,6 @@ describe('BillsService', () => {
           useFactory: () =>
             new BillPaymentService(
               prismaMock as never,
-              new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
               { recordEvent: vi.fn(), log: vi.fn() } as never,
               { triggerLowBalanceAlertIfNeeded: vi.fn().mockResolvedValue(true) } as never,

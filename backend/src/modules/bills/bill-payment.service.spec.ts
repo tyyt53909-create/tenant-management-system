@@ -5,8 +5,6 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
-import { PAYMENT_PROVIDER } from './payment/payment-provider.js';
-import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrepayService } from '../prepay/prepay.service.js';
@@ -39,6 +37,7 @@ describe('BillPaymentService', () => {
         findUnique: vi.fn(),
       },
       $transaction: vi.fn(),
+      $queryRaw: vi.fn().mockResolvedValue([]),
     };
     prisma.$transaction.mockImplementation((cb: any) => cb(prisma));
     prisma.lateFee.findMany.mockResolvedValue([]);
@@ -48,8 +47,6 @@ describe('BillPaymentService', () => {
       providers: [
         BillPaymentService,
         { provide: PrismaService, useValue: prisma },
-        // QLT-02 / T288：依赖改为必填后，测试显式提供支付通道与业务时钟
-        { provide: PAYMENT_PROVIDER, useValue: new OfflinePaymentProvider() },
         { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })) },
         { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
         {
