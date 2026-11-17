@@ -81,6 +81,66 @@ describe('MeterBillingService', () => {
     expect(afterRenewal).toMatchObject({ applied: true, contractId: 'successor' });
   });
 
+  it.each([true, false])('以已确认入住为界处理空置用量（入住确认=%s）', async (confirmed) => {
+    const inspection = (type: 'CHECK_IN' | 'CHECK_OUT', inspectedAt: Date, tenantId: string) => ({
+      type, inspectedAt, tenantId, roomId: meter.roomId, tenantConfirmedAt: inspectedAt,
+    });
+    prisma.contract.findMany.mockResolvedValue([
+      {
+        ...meterTestContract('prior', 'old-tenant'),
+        status: 'TERMINATED',
+        endDate: new Date('2026-01-14'),
+        inspections: [inspection('CHECK_OUT', baseline.readingTime, 'old-tenant')],
+      },
+      {
+        ...meterTestContract('next', 'new-tenant'),
+        startDate: new Date('2026-01-15'),
+        inspections: confirmed ? [inspection('CHECK_IN', reading.readingTime, 'new-tenant')] : [],
+      },
+    ]);
+    prisma.meter.findUnique.mockResolvedValue(meter);
+    const latest = { ...reading, currentReading: 110, notes: null };
+    const cursor = { ...baseline, currentReading: 100, settledAt: baseline.readingTime };
+    prisma.meterReading.findFirst.mockResolvedValueOnce(latest).mockResolvedValueOnce(cursor)
+      .mockResolvedValueOnce(latest).mockResolvedValueOnce(cursor);
+
+    const reasonCode = confirmed ? 'VACANT_INTERVAL' : 'OCCUPANCY_UNCERTAIN';
+    expect(await service.getUnsettledUsage(meter.id)).toMatchObject({
+      unsettledUsage: 10, tenantName: null, estimatedAmount: confirmed ? 0 : 100,
+      attribution: { reasonCode },
+    });
+    expect(await service.settleMeter(meter.id, {}, 'op')).toMatchObject({
+      status: confirmed ? 'NO_CHANGE' : 'BLOCKED', reasonCode, settled: confirmed,
+      usage: 10, amount: confirmed ? 0 : 100,
+    });
+
+    expect(prisma.prepayAccount.findUnique).not.toHaveBeenCalled();
+    expect(prisma.bill.create).not.toHaveBeenCalled();
+    if (confirmed) {
+      expect(prisma.meterReading.update).toHaveBeenCalledWith({
+        where: { id: reading.id },
+        data: expect.objectContaining({ settledUsage: 10, settledAmount: 0, notes: '[SETTLED] [VACANT_USAGE]' }),
+      });
+    } else {
+      expect(prisma.meterReading.update).not.toHaveBeenCalled();
+    }
+  });
+
+  it('有效租住区间的零单价用量不进入资金账', async () => {
+    prisma.contract.findMany.mockResolvedValue([meterTestContract()]);
+    const result = await service.applyReadingDeduction(prisma, meter, reading, 1, 'op', baseline, 0);
+    expect(result).toMatchObject({ applied: false, reasonCode: 'ZERO_CHARGE' });
+    expect(prisma.prepayAccount.findUnique).not.toHaveBeenCalled();
+    expect(prisma.bill.create).not.toHaveBeenCalled();
+  });
+
+  it('拒绝在单笔和批量周期结算备注中写入空置标记', async () => {
+    const notes = '[VACANT_USAGE]';
+    await expect(service.settleMeter(meter.id, { notes }, 'op')).rejects.toThrow('系统保留标记');
+    await expect(service.settleBatch({ meterIds: [meter.id], notes }, 'op')).rejects.toThrow('系统保留标记');
+    expect(prisma.meterReading.update).not.toHaveBeenCalled();
+  });
+
   it('deducts available balance and bills shortfall, including failed conditional update and unknown label', async () => {
     const tx: any = prisma;
     tx.contract.findMany.mockResolvedValue([meterTestContract('contract-1', 'tenant-1')]);
