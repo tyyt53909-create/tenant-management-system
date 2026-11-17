@@ -75,6 +75,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '账单管理', icon: 'Tickets', roles: ['ADMIN'] },
       },
       {
+        path: '/periodic-charges',
+        name: 'PeriodicCharges',
+        component: () => import('@/views/periodic-charges/index.vue'),
+        meta: { title: '周期收费', icon: 'Tickets', roles: ['ADMIN'] },
+      },
+      {
         path: '/prepay',
         name: 'Prepay',
         component: () => import('@/views/prepay/index.vue'),

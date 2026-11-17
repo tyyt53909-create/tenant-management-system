@@ -106,6 +106,7 @@ const allNavigation = [
   { path: '/tenants', title: '租客档案', icon: User, label: 'RESIDENTS / 租客资料', description: '从租客本人出发，快速关联房源、合同与收款。' },
   { path: '/contracts', title: '合同管理', icon: Document, label: 'AGREEMENTS / 租赁关系', description: '租赁期限、每月应收和续约提醒，在同一行核对。' },
   { path: '/bills', title: '账单与收款', icon: Wallet, label: 'FINANCE / 账务管理', description: '应收、已收和剩余欠款，放在清楚可核对的位置。' },
+  { path: '/periodic-charges', title: '周期收费', icon: Tickets, label: 'BILLING / 周期收费', description: '采集读数、复核费用并跟进批次结果。' },
   { path: '/maintenance', title: '报修工单', icon: Tools, label: 'SERVICE / 报修协同', description: '按紧急程度和处理进度安排任务，让每个工单都有明确下一步。' },
   { path: '/cleaning', title: '保洁任务', icon: Brush, label: 'HOUSEKEEPING / 现场工作', description: '按空置房源的真实清洁状态组织工作，保留开始与完成操作。', roles: ['ADMIN', 'CLEANER'] as const },
   { path: '/notifications', title: '通知中心', icon: Bell, label: 'INBOX / 通知', description: '重要提醒与服务进展，都汇集在这里。' },
