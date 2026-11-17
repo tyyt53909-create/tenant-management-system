@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { isSettledReading } from './meter-dedup.util.js';
-import { NOT_SIMULATED } from './meter-types.constants.js';
+import type { MeterChargeSegment } from './meter-interval-quote.js';
+import { realMeterReadings } from './meter-reading-scope.js';
 
 /** 加锁后的查询必须看见上一事务刚提交的读数和结算状态。 */
 export const METER_WRITE_TRANSACTION = { isolationLevel: 'ReadCommitted' } as const;
@@ -22,7 +23,7 @@ export async function findMeterSettlementCursor(
   const reading = await db.meterReading.findFirst({
     where: {
       meterId,
-      source: NOT_SIMULATED,
+      ...realMeterReadings(db),
       OR: [
         { settledAt: { not: null } },
         { notes: { contains: '[SETTLED]' } },
@@ -32,4 +33,56 @@ export async function findMeterSettlementCursor(
     orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
   });
   return reading && isSettledReading(reading) ? reading : null;
+}
+
+/** Older imports can lack a marked cursor; preserve their earliest real reading as the baseline. */
+export async function findEarliestRealReading(
+  db: Pick<Prisma.TransactionClient, 'meterReading'>,
+  meterId: string,
+) {
+  return db.meterReading.findFirst({
+    where: { meterId, ...realMeterReadings(db) },
+    orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
+  });
+}
+
+/** 迟到的旧表读数仅与交接前的同一表段比较。 */
+export async function findNextConfirmedHandoff(tx: Prisma.TransactionClient, meterId: string, at: Date) {
+  const [handoff] = await tx.meterReading.findMany({
+    where: {
+      meterId, ...realMeterReadings(tx), readingTime: { gt: at },
+      handoffConfirmedAt: { not: null }, handoffPreviousFinal: { not: null },
+    },
+    select: { readingTime: true, handoffPreviousFinal: true },
+    orderBy: [{ readingTime: 'asc' }, { id: 'asc' }],
+    take: 1,
+  });
+  return handoff;
+}
+
+/** 写结构化结算字段，同时保留 [SETTLED] 备注供旧报表与历史逻辑识别。 */
+export async function markMeterReadingSettled(
+  tx: Prisma.TransactionClient,
+  reading: { id: string; notes: string | null },
+  usage: number,
+  unitPrice: number,
+  amount: number,
+  notes?: string,
+  vacancy = false,
+  segments: MeterChargeSegment[] = [],
+) {
+  const settledTag = `[SETTLED]${vacancy ? ' [VACANT_USAGE]' : ''}${notes ? ` 备注:${notes}` : ''}`;
+  const updatedNotes = reading.notes ? `${reading.notes} ${settledTag}` : settledTag;
+  await tx.meterReading.update({
+    where: { id: reading.id },
+    data: {
+      notes: updatedNotes,
+      settledAt: new Date(),
+      settledUsage: usage,
+      settledUnitPrice: segments.some((segment) => segment.usage > 0 && segment.unitPrice !== unitPrice) ? null : unitPrice,
+      settledAmount: amount,
+      ...(segments.length && { settledSegments: segments.map((segment) => ({ ...segment })) }),
+    },
+  });
+  return updatedNotes;
 }

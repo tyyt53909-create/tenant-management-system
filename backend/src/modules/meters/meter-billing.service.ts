@@ -3,10 +3,37 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { randomHex } from '../../common/utils/secure-random.js';
-import { SettleMeterDto } from './dto/settle-meter.dto.js';
-import { METER_TYPE_LABEL, NOT_SIMULATED } from './meter-types.constants.js';
+import { SettleMeterBatchDto, SettleMeterDto } from './dto/settle-meter.dto.js';
+import type { MeterBatchSettlementItemDto, MeterSettlementResultDto } from './dto/settle-meter-result.dto.js';
+import { METER_TYPE_LABEL } from './meter-types.constants.js';
 import { MeterPriceService } from './meter-price.service.js';
-import { findMeterSettlementCursor, lockMeters, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { resolveMeterUsageOwner } from './meter-usage-attribution.js';
+import { hasReservedReadingMarker } from './meter-dedup.util.js';
+import { quoteMeterInterval, type MeterIntervalQuote } from './meter-interval-quote.js';
+import { realMeterReadings } from './meter-reading-scope.js';
+
+const OCCUPANCY_UNCERTAIN = {
+  reasonCode: 'OCCUPANCY_UNCERTAIN',
+  reason: '读数区间的租住归属不明确，已保留读数并暂停扣费',
+  retryCondition: '核对入住及退租交接时间和表计读数，按可确认的区间截止时间分段重试',
+} as const;
+
+const VACANT_INTERVAL = {
+  reasonCode: 'VACANT_INTERVAL',
+  reason: '读数区间为已确认空置期，用量单独留存',
+} as const;
+
+class NoMeterReadingsException extends BadRequestException {
+  constructor() {
+    super('该水电表在指定结算时间前无任何读数记录');
+  }
+}
+
+type MeterSettlement = MeterSettlementResultDto & {
+  deduction?: Awaited<ReturnType<MeterBillingService['applyReadingDeduction']>>
+    | { applied: false; reason: string };
+};
 
 @Injectable()
 export class MeterBillingService {
@@ -19,8 +46,8 @@ export class MeterBillingService {
 
   /**
    * 讀數扣費：用量 × 生效單價
-   * - 有生效合同 + 預付帳戶：先扣盡可用餘額（條件更新防並發），差額 → UTILITY 補繳帳單
-   * - 無合同 / 無帳戶 / 公共區域 / 用量為 0：不扣費（返回原因）
+   * - 可归属合同 + 預付帳戶：先扣盡可用餘額（條件更新防並發），差額 → UTILITY 補繳帳單
+   * - 归属不明或缺账户时阻断；空置期、公区及零用量无租客扣费。
    *
    * `unitPrice` 由調用方按讀數業務日期解析後傳入（T274）；缺省時退回表上當前價，
    * 保持既有單元測試與舊調用方可編譯。
@@ -31,29 +58,42 @@ export class MeterBillingService {
     reading: { id: string; readingTime: Date },
     usage: number,
     operatorId: string,
+    baseline: { id: string; readingTime: Date } | null,
     unitPrice = meter.unitPrice,
+    quote?: MeterIntervalQuote,
   ) {
     if (!meter.roomId) {
-      return { applied: false, reason: '公共区域表按运营成本处理，不扣费', unitPrice };
+      return { applied: false as const, reasonCode: 'PUBLIC_AREA' as const, reason: '公共区域表按运营成本处理，不扣费', unitPrice };
     }
 
-    const amount = Math.round(usage * unitPrice);
+    if (usage <= 0) {
+      return { applied: false as const, reasonCode: 'ZERO_USAGE' as const, reason: '用量为 0，无扣费', unitPrice };
+    }
+
+    const owner = await resolveMeterUsageOwner(tx, this.clock, meter.roomId, baseline?.readingTime, reading.readingTime);
+    if (owner.kind === 'VACANT') {
+      return { applied: false as const, ...VACANT_INTERVAL, unitPrice };
+    }
+    if (owner.kind !== 'TENANT' || !baseline) {
+      return { applied: false as const, ...OCCUPANCY_UNCERTAIN, unitPrice };
+    }
+
+    const amount = quote?.amount ?? Math.round(usage * unitPrice);
     if (amount <= 0) {
-      return { applied: false, reason: '用量为 0，无扣费', unitPrice };
-    }
-
-    const contract = await tx.contract.findFirst({
-      where: { roomId: meter.roomId, status: 'ACTIVE' },
-    });
-    if (!contract) {
-      return { applied: false, reason: '未找到生效合同，未扣费', unitPrice };
+      return { applied: false as const, reasonCode: 'ZERO_CHARGE' as const, reason: '应收金额为 0，无扣费', unitPrice };
     }
 
     const account = await tx.prepayAccount.findUnique({
-      where: { tenantId_roomId: { tenantId: contract.tenantId, roomId: meter.roomId } },
+      where: { tenantId_roomId: { tenantId: owner.tenantId, roomId: meter.roomId } },
     });
     if (!account) {
-      return { applied: false, reason: '该房间租客无预付账户，未扣费', unitPrice };
+      return {
+        applied: false as const,
+        reasonCode: 'MISSING_PREPAY_ACCOUNT' as const,
+        reason: '该房间租客无预付账户，未扣费',
+        retryCondition: '为该房间及合同租客开立预付账户，核对费用归属后重试',
+        unitPrice,
+      };
     }
 
     // 先扣盡可用餘額（條件更新防並發透支）
@@ -68,7 +108,7 @@ export class MeterBillingService {
     }
 
     let prepayTransaction = null;
-    if (account && deducted > 0) {
+    if (deducted > 0) {
       const updatedAccount = await tx.prepayAccount.findUniqueOrThrow({
         where: { id: account.id },
       });
@@ -94,7 +134,7 @@ export class MeterBillingService {
 
       bill = await tx.bill.create({
         data: {
-          contractId: contract.id,
+          contractId: owner.contractId,
           billNumber: `B${Date.now()}${randomHex(3)}`,
           billType: 'UTILITY',
           period: this.formatPeriod(reading.readingTime),
@@ -105,18 +145,22 @@ export class MeterBillingService {
             meterNumber: meter.meterNumber,
             meterType: meter.meterType,
             readingId: reading.id,
+            baselineReadingId: baseline.id,
+            intervalStart: baseline.readingTime.toISOString(),
+            intervalEnd: reading.readingTime.toISOString(),
             usage,
-            unitPrice,
+            unitPrice: quote?.segments.some((segment) => segment.usage > 0 && segment.unitPrice !== unitPrice) ? null : unitPrice,
+            ...(quote?.segments.length && { segments: quote.segments.map((segment) => ({ ...segment })) }),
             totalAmount: amount,
             deducted,
             shortfall,
-            reason: account ? '预付账户余额不足，补缴差额' : '未开通预付账户，直接生成水电账单',
+            reason: '预付账户余额不足，补缴差额',
           },
         },
       });
     }
 
-    return { applied: true, amount, deducted, shortfall, prepayTransaction, bill, unitPrice };
+    return { applied: true as const, contractId: owner.contractId, amount, deducted, shortfall, prepayTransaction, bill, unitPrice };
   }
 
   private formatPeriod(date: Date): string {
@@ -129,27 +173,18 @@ export class MeterBillingService {
   async getUnsettledUsage(meterId: string, settleUntilStr?: string) {
     const meter = await this.prisma.meter.findUnique({
       where: { id: meterId },
-      include: {
-        room: {
-          include: {
-            contracts: {
-              where: { status: 'ACTIVE' },
-              take: 1,
-              include: { tenant: { select: { id: true, name: true, phone: true } } },
-            },
-          },
-        },
-      },
+      include: { room: { select: { roomNumber: true } } },
     });
     if (!meter) throw new NotFoundException('水电表不存在');
 
-    const settleUntil = settleUntilStr ? new Date(settleUntilStr) : new Date();
+    const now = this.clock.now();
+    const settleUntil = settleUntilStr ? new Date(Math.min(now.getTime(), Date.parse(settleUntilStr))) : now;
 
     const latestReading = await this.prisma.meterReading.findFirst({
       where: {
         meterId,
         readingTime: { lte: settleUntil },
-        source: NOT_SIMULATED,
+        ...realMeterReadings(this.prisma),
       },
       orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
     });
@@ -184,45 +219,40 @@ export class MeterBillingService {
       };
     }
 
-    let baselineVal = 0;
-    if (lastSettledReading) {
-      baselineVal = Number(lastSettledReading.currentReading);
-    } else {
-      const earliest = await this.prisma.meterReading.findFirst({
-        where: { meterId, source: NOT_SIMULATED },
-        orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
-      });
-      baselineVal = earliest ? Number(earliest.currentReading) : 0;
-    }
-
+    const baseline = lastSettledReading ?? await findEarliestRealReading(this.prisma, meterId);
+    const baselineVal = Number(baseline?.currentReading ?? 0);
     const currentVal = Number(latestReading.currentReading);
-    const unsettledUsage = Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100);
-    const unitPrice = await this.priceService.resolveUnitPrice(meter, latestReading.readingTime);
-    const estimatedAmount = Math.round(unsettledUsage * unitPrice);
+    const quote = await quoteMeterInterval(this.prisma, this.priceService, meter, baseline, latestReading, Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100));
+    const blocked = 'reasonCode' in quote;
+    const unsettledUsage = blocked ? 0 : quote.usage;
+    const owner = !blocked && meter.roomId && unsettledUsage > 0
+      ? await resolveMeterUsageOwner(this.prisma, this.clock, meter.roomId, baseline?.readingTime, latestReading.readingTime)
+      : null;
 
-    const activeContract = meter.room?.contracts?.[0];
     let prepayBalance: number | null = null;
-    if (meter.roomId && activeContract?.tenantId) {
+    if (meter.roomId && owner?.kind === 'TENANT') {
       const account = await this.prisma.prepayAccount.findUnique({
-        where: { tenantId_roomId: { tenantId: activeContract.tenantId, roomId: meter.roomId } },
+        where: { tenantId_roomId: { tenantId: owner.tenantId, roomId: meter.roomId } },
       });
-      prepayBalance = account ? account.balanceCache : null;
+      prepayBalance = account?.balanceCache ?? null;
     }
 
     return {
       meterId,
       meterNumber: meter.meterNumber,
       meterType: meter.meterType,
-      unitPrice,
+      ...(blocked ? { settlementBlock: quote } : { unitPrice: quote.unitPrice, segments: quote.segments }),
       roomNumber: meter.room?.roomNumber || '公共区域',
-      tenantName: activeContract?.tenant?.name || null,
+      tenantName: owner?.kind === 'TENANT' ? owner.tenantName : null,
+      attribution: owner?.kind === 'UNKNOWN' ? OCCUPANCY_UNCERTAIN
+        : owner?.kind === 'VACANT' ? VACANT_INTERVAL : undefined,
       prepayBalance,
       lastSettledReading: baselineVal,
       lastSettledTime: lastSettledReading?.readingTime ?? null,
       currentReading: currentVal,
       readingTime: latestReading.readingTime,
       unsettledUsage,
-      estimatedAmount,
+      estimatedAmount: blocked || owner?.kind === 'VACANT' ? 0 : quote.amount,
       targetReadingId: latestReading.id,
       hasReadings: true,
     };
@@ -237,8 +267,12 @@ export class MeterBillingService {
    * - 生效单价按读数业务日期解析，不再用「当前价」重算历史；
    * - 结算结果结构化落库（settledAt/Usage/UnitPrice/Amount），重复结算幂等。
    */
-  async settleMeter(meterId: string, dto: SettleMeterDto, operatorId: string) {
-    const settleUntil = dto.settleUntil ? new Date(dto.settleUntil) : new Date();
+  async settleMeter(meterId: string, dto: SettleMeterDto, operatorId: string): Promise<MeterSettlement> {
+    if (hasReservedReadingMarker(dto.notes)) {
+      throw new BadRequestException('结算备注不得包含系统保留标记');
+    }
+    const now = this.clock.now();
+    const settleUntil = dto.settleUntil ? new Date(Math.min(now.getTime(), Date.parse(dto.settleUntil))) : now;
 
     return this.prisma.$transaction(async (tx) => {
       await lockMeters(tx, [meterId]);
@@ -250,13 +284,13 @@ export class MeterBillingService {
         where: {
           meterId,
           readingTime: { lte: settleUntil },
-          source: NOT_SIMULATED,
+          ...realMeterReadings(tx),
         },
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
       if (!latestReading) {
-        throw new BadRequestException('该水电表在指定结算时间前无任何读数记录');
+        throw new NoMeterReadingsException();
       }
 
       const lastSettledReading = await findMeterSettlementCursor(tx, meterId);
@@ -267,6 +301,8 @@ export class MeterBillingService {
         return {
           meterId,
           settled: false,
+          status: 'NO_CHANGE',
+          reasonCode: 'ALREADY_SETTLED',
           usage: 0,
           amount: 0,
           reason: lastSettledReading.id === latestReading.id
@@ -275,31 +311,28 @@ export class MeterBillingService {
         };
       }
 
-      let baselineVal = 0;
-      if (lastSettledReading) {
-        baselineVal = Number(lastSettledReading.currentReading);
-      } else {
-        const earliest = await tx.meterReading.findFirst({
-          where: { meterId, source: NOT_SIMULATED },
-          orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
-        });
-        baselineVal = earliest ? Number(earliest.currentReading) : 0;
-      }
+      const baseline = lastSettledReading ?? await findEarliestRealReading(tx, meterId);
+      const baselineVal = Number(baseline?.currentReading ?? 0);
 
       const currentVal = Number(latestReading.currentReading);
-      const usage = Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100);
-      const unitPrice = await this.priceService.resolveUnitPrice(meter, latestReading.readingTime, tx);
-      const amount = Math.round(usage * unitPrice);
+      const quote = await quoteMeterInterval(tx, this.priceService, meter, baseline, latestReading, Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100));
+      if ('reasonCode' in quote) {
+        return { meterId, status: 'BLOCKED', settled: false, usage: 0, amount: 0, ...quote };
+      }
+      const { usage, unitPrice, amount, segments } = quote;
 
       if (usage <= 0) {
-        await this.markSettled(tx, latestReading, 0, unitPrice, 0, dto.notes);
+        await markMeterReadingSettled(tx, latestReading, 0, unitPrice, 0, dto.notes, false, segments);
         return {
           meterId,
           settled: true,
+          status: 'NO_CHANGE',
+          reasonCode: 'ZERO_USAGE',
+          reason: '周期内累计用量为 0',
           usage: 0,
           amount: 0,
           unitPrice,
-          deduction: { applied: false, reason: '周期内累计用量为 0' },
+          deduction: { applied: false as const, reason: '周期内累计用量为 0' },
         };
       }
 
@@ -309,35 +342,50 @@ export class MeterBillingService {
         latestReading,
         usage,
         operatorId,
+        baseline,
         unitPrice,
+        quote,
       );
 
       if (!deduction.applied) {
+        const vacancy = deduction.reasonCode === 'VACANT_INTERVAL';
+        if (vacancy) {
+          await markMeterReadingSettled(tx, latestReading, usage, unitPrice, 0, dto.notes, true, segments);
+        }
         return {
           meterId,
-          settled: false,
+          settled: vacancy,
+          status: deduction.retryCondition ? 'BLOCKED' : 'NO_CHANGE',
+          reasonCode: deduction.reasonCode,
+          retryCondition: deduction.retryCondition,
           baselineReading: baselineVal,
           currentReading: currentVal,
           usage,
-          amount,
+          amount: vacancy ? 0 : amount,
           unitPrice,
           deduction,
-          reason: deduction.reason || '扣费或账单生成未成功，未标记结算',
+          reason: deduction.reason,
         };
       }
 
       const settledAmount =
         (deduction.deducted ?? 0) + (deduction.shortfall ?? 0);
-      await this.markSettled(tx, latestReading, usage, unitPrice, settledAmount, dto.notes);
+      await markMeterReadingSettled(tx, latestReading, usage, unitPrice, settledAmount, dto.notes, false, segments);
 
       return {
         meterId,
         settled: true,
+        status: 'SETTLED',
+        reasonCode: 'SETTLED',
+        billId: deduction.bill?.id,
+        contractId: deduction.contractId,
+        prepayTransactionId: deduction.prepayTransaction?.id,
         baselineReading: baselineVal,
         currentReading: currentVal,
         usage,
         amount,
-        unitPrice,
+        unitPrice: segments.some((segment) => segment.usage > 0 && segment.unitPrice !== unitPrice) ? undefined : unitPrice,
+        segments,
         deduction,
       };
     }, METER_WRITE_TRANSACTION);
@@ -347,10 +395,13 @@ export class MeterBillingService {
    * 批量周期结算（如按楼栋或表列表）
    */
   async settleBatch(
-    dto: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string },
+    dto: SettleMeterBatchDto,
     operatorId: string,
-    settleMeterFn?: (meterId: string, dto: SettleMeterDto, operatorId: string) => Promise<Record<string, unknown>>,
+    settleMeterFn?: MeterBillingService['settleMeter'],
   ) {
+    if (hasReservedReadingMarker(dto.notes)) {
+      throw new BadRequestException('结算备注不得包含系统保留标记');
+    }
     let meterIds = dto.meterIds;
     if (!meterIds || meterIds.length === 0) {
       const where: Prisma.MeterWhereInput = { isActive: true };
@@ -360,45 +411,46 @@ export class MeterBillingService {
     }
 
     const settle = settleMeterFn ?? ((id: string, d: SettleMeterDto, op: string) => this.settleMeter(id, d, op));
-    const results: Array<{ meterId?: string; success: boolean; error?: string; [key: string]: unknown }> = [];
+    const results: Array<MeterBatchSettlementItemDto & Pick<MeterSettlement, 'deduction'>> = [];
+    const now = this.clock.now();
+    const settleUntil = dto.settleUntil && new Date(dto.settleUntil) <= now ? dto.settleUntil : now.toISOString();
     for (const id of meterIds) {
       try {
-        const res = await settle(id, { settleUntil: dto.settleUntil, notes: dto.notes }, operatorId);
-        results.push({ success: true, ...res });
+        const result = await settle(id, { settleUntil, notes: dto.notes }, operatorId);
+        results.push(Object.assign({ success: result.status === 'SETTLED' }, result));
       } catch (err: unknown) {
-        const error = err instanceof Error ? err.message : String(err);
-        results.push({ meterId: id, success: false, error });
+        const noReadings = err instanceof NoMeterReadingsException;
+        const missingMeter = err instanceof NotFoundException;
+        const reason = noReadings || missingMeter ? err.message : '结算执行失败';
+        results.push({
+          meterId: id,
+          status: noReadings ? 'BLOCKED' : 'FAILED',
+          reasonCode: noReadings ? 'NO_READINGS' : missingMeter ? 'METER_NOT_FOUND' : 'SETTLEMENT_FAILED',
+          settled: false,
+          success: false,
+          usage: 0,
+          amount: 0,
+          reason,
+          error: reason,
+          retryCondition: noReadings ? '补录截止时间内的有效读数后重试'
+            : missingMeter ? '核对水电表编号后重试' : '排查并排除结算故障后重试',
+        });
       }
     }
 
+    const counts = { SETTLED: 0, NO_CHANGE: 0, BLOCKED: 0, FAILED: 0 };
+    for (const result of results) counts[result.status] += 1;
+
     return {
+      settleUntil,
       total: results.length,
-      successCount: results.filter((r) => r.success).length,
-      failureCount: results.filter((r) => !r.success).length,
+      settledCount: counts.SETTLED,
+      noChangeCount: counts.NO_CHANGE,
+      blockedCount: counts.BLOCKED,
+      failedCount: counts.FAILED,
+      successCount: counts.SETTLED,
+      failureCount: counts.BLOCKED + counts.FAILED,
       results,
     };
-  }
-
-  /** 写结构化结算字段，同时保留 [SETTLED] 备注供旧报表与历史逻辑识别。 */
-  private async markSettled(
-    tx: Prisma.TransactionClient,
-    reading: { id: string; notes: string | null },
-    usage: number,
-    unitPrice: number,
-    amount: number,
-    notes?: string,
-  ) {
-    const settledTag = `[SETTLED]${notes ? ` 备注:${notes}` : ''}`;
-    const updatedNotes = reading.notes ? `${reading.notes} ${settledTag}` : settledTag;
-    await tx.meterReading.update({
-      where: { id: reading.id },
-      data: {
-        notes: updatedNotes,
-        settledAt: new Date(),
-        settledUsage: usage,
-        settledUnitPrice: unitPrice,
-        settledAmount: amount,
-      },
-    });
   }
 }

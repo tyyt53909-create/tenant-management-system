@@ -16,6 +16,7 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     const prismaMock: any = {
       meter: { findUnique: vi.fn(), findMany: vi.fn() },
       meterReading: {
+        fields: { createdAt: Symbol('meterReading.createdAt') },
         findUnique: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
@@ -30,6 +31,7 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
     prismaMock.meterPriceHistory.findMany.mockResolvedValue([]);
+    prismaMock.meterReading.findMany.mockResolvedValue([]);
     const billingMock: any = { applyReadingDeduction: vi.fn() };
     const providers: any[] = [
       MeterBatchReadingService,
@@ -78,6 +80,24 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
       ...overrides,
     };
   }
+
+  it('未来读数在批量结果逐行报告，且不写读数或账务', async () => {
+    prisma.meter.findUnique.mockResolvedValue(sheetMeter({ isActive: true }));
+    const result = await service.createBatchReadings({
+      readings: [
+        { meterId: 'meter-001', currentReading: 110, readingTime: '2090-01-01T00:00:00Z', autoSettle: true },
+        { meterId: 'meter-001', currentReading: 110, source: 'DEVICE', notes: '[ANOMALY] 模拟记录' },
+      ],
+    }, operatorId);
+    expect(result).toMatchObject({
+      successCount: 0, failureCount: 2, results: [
+        { meterId: 'meter-001', success: false, reasonCode: 'FUTURE_READING' },
+        { meterId: 'meter-001', success: false, error: expect.stringContaining('系统保留') },
+      ],
+    });
+    expect(prisma.meterReading.create).not.toHaveBeenCalled();
+    expect(billing.applyReadingDeduction).not.toHaveBeenCalled();
+  });
 
   it('底表：带全部筛选 + 预付余额命中', async () => {
     prisma.meter.findMany.mockResolvedValue([sheetMeter()]);
@@ -128,6 +148,8 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
   const baseMeterRow = {
     id: 'meter-001',
     meterNumber: 'M-001',
+    meterType: 'ELECTRICITY',
+    unitPrice: 50,
     isActive: true,
     roomId: 'room-001',
     room: { roomNumber: '101' },
@@ -336,6 +358,20 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     );
     expect(result.results[0]).toMatchObject({ success: false, previousReading: 200 });
     expect(result.results[0].error).toContain('不能小于上次读数');
+  });
+
+  it('批量采集已声明的换表读数，即便数值上升也暂停扣费', async () => {
+    prisma.meter.findUnique.mockResolvedValue(baseMeterRow);
+    prisma.meterReading.findFirst.mockResolvedValue({
+      id: 'last', currentReading: 100, readingTime: new Date('2026-01-19T02:00:00Z'), settledAt: new Date(),
+    });
+    prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({ id: 'reset', ...data }));
+    const batch = await service.createBatchReadings({
+      readings: [{ meterId: 'meter-001', currentReading: 110, readingTime: '2026-01-20T02:00:00Z', allowRollover: true }],
+    }, operatorId);
+    expect(batch.results[0]).toMatchObject({ success: true, deductionBlocked: { reasonCode: 'UNCONFIRMED_HANDOFF' } });
+    expect(prisma.meterReading.update).not.toHaveBeenCalled();
+    expect(billing.applyReadingDeduction).not.toHaveBeenCalled();
   });
 
   it('批量：显式 autoSettle + 备注 + messageId，结算成功后盖 SETTLED', async () => {

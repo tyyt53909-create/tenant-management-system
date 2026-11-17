@@ -3,11 +3,12 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
+import type { ConfirmMeterHandoffDto } from './dto/confirm-meter-handoff.dto.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
-import { SettleMeterDto } from './dto/settle-meter.dto.js';
+import { SettleMeterBatchDto, SettleMeterDto } from './dto/settle-meter.dto.js';
 import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
 import { SetMeterDefaultPriceDto } from './dto/set-meter-default-price.dto.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
@@ -98,6 +99,10 @@ export class MetersService {
     return this.readingService.createReading(meterId, dto, operatorId);
   }
 
+  async confirmMeterHandoff(meterId: string, readingId: string, dto: ConfirmMeterHandoffDto, operatorId: string) {
+    return this.readingService.confirmMeterHandoff(meterId, readingId, dto, operatorId);
+  }
+
   /** 讀數歷史 */
   async findReadings(meterId: string, query: QueryMeterReadingsDto) {
     return this.readingService.findReadings(meterId, query);
@@ -135,7 +140,7 @@ export class MetersService {
 
   /** 批量周期结算 */
   async settleBatch(
-    dto: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string },
+    dto: SettleMeterBatchDto,
     operatorId: string,
   ) {
     return this.billingService.settleBatch(dto, operatorId, (id, d, op) => this.settleMeter(id, d, op));

@@ -161,18 +161,25 @@ export interface Tenancy {
 let tenancySeq = 0;
 
 /** J1 的最小前置：预建租客 → 邀请码注册 → 房源 RESERVED → 合同 ACTIVE。 */
-export async function setupTenancy(app: INestApplication, base: SeedBase): Promise<Tenancy> {
+export async function setupTenancy(
+  app: INestApplication,
+  base: SeedBase,
+  options: { roomId?: string; startDate?: string } = {},
+): Promise<Tenancy> {
   const seq = ++tenancySeq;
   const adminToken = await login(app, base.adminEmail, base.adminPassword);
 
-  const roomResponse = await http(app)
-    .post('/rooms')
-    .set(auth(adminToken))
-    .send({ buildingId: base.buildingId, roomNumber: `IT-${Date.now()}-${seq}`, floor: 1, roomType: 'SINGLE', area: 25 });
-  if (roomResponse.status !== 201) {
-    throw new Error(`创建房源失败: ${roomResponse.status} ${JSON.stringify(roomResponse.body)}`);
+  let roomId = options.roomId;
+  if (!roomId) {
+    const roomResponse = await http(app)
+      .post('/rooms')
+      .set(auth(adminToken))
+      .send({ buildingId: base.buildingId, roomNumber: `IT-${Date.now()}-${seq}`, floor: 1, roomType: 'SINGLE', area: 25 });
+    if (roomResponse.status !== 201) {
+      throw new Error(`创建房源失败: ${roomResponse.status} ${JSON.stringify(roomResponse.body)}`);
+    }
+    roomId = roomResponse.body.id as string;
   }
-  const roomId = roomResponse.body.id as string;
 
   const phone = `139${String(Date.now() + seq).slice(-8)}`;
   const tenantEmail = `tenant-${Date.now()}-${seq}@example.com`;
@@ -218,7 +225,7 @@ export async function setupTenancy(app: INestApplication, base: SeedBase): Promi
       depositAmount: 300000,
       paymentCycle: 'MONTHLY',
       paymentDay: 1,
-      startDate: start.toISOString().slice(0, 10),
+      startDate: options.startDate ?? start.toISOString().slice(0, 10),
       endDate: end.toISOString().slice(0, 10),
     });
   if (contractResponse.status !== 201) {

@@ -26,3 +26,18 @@ export function meterTestProviders(prisma: unknown) {
     { provide: MeterPriceService, useValue: testPriceService(prisma) },
   ];
 }
+
+/** Legacy occupied lease used by tests that are unrelated to room handover. */
+export function meterTestContract(id = 'contract-1', tenantId = 'tenant-1', name = '租客') {
+  return {
+    id,
+    tenantId,
+    startDate: new Date('2025-01-01'),
+    endDate: new Date('2099-12-31'),
+    status: 'ACTIVE',
+    tenant: { name },
+    room: { status: 'OCCUPIED' },
+    inspections: [],
+    checkoutRecords: [],
+  };
+}

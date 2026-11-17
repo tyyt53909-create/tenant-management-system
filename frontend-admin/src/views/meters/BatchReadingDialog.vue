@@ -334,7 +334,7 @@ async function handleSubmitBatch() {
 
   try {
     await ElMessageBox.confirm(
-      `确定提交本次填报的 ${toSubmit.length} 间水电表读数？系统将自动核算用量并从预付账户扣费（不足生成补缴账单）。`,
+      `确定提交本次填报的 ${toSubmit.length} 间水电表读数？系统将按预付账户结算。余额不足会生成差额账单，缺账户或跨租住区间的读数会保留待结算。`,
       '批量抄表确认',
       {
         confirmButtonText: '确定提交',
@@ -349,16 +349,23 @@ async function handleSubmitBatch() {
   submitting.value = true;
   try {
     const res = await submitBatchReadings(toSubmit);
-    if (res.failureCount === 0) {
-      ElMessage.success(`批量抄表成功！共登记 ${res.successCount} 条读数并扣费`);
+    const blocked = res.results.filter((item) => item.deductionBlocked);
+    const vacantCount = res.results.filter((item) => item.vacantUsage !== undefined).length;
+    if (res.failureCount === 0 && blocked.length === 0) {
+      const vacancy = vacantCount ? `，其中 ${vacantCount} 条空置期用量已留存` : '';
+      ElMessage.success(`批量抄表成功！共登记 ${res.successCount} 条读数${vacancy}`);
       visible.value = false;
       emit('success');
     } else {
-      ElMessageBox.alert(
-        `批量抄表完成：成功 ${res.successCount} 间，失败 ${res.failureCount} 间。\n失败详情可在控制台或界面查看。`,
-        '处理结果',
-        { type: 'warning' }
+      const summary = `登记成功 ${res.successCount} 条，失败 ${res.failureCount} 条。`;
+      const blockedDetails = blocked.map((item) =>
+        `${item.meterNumber ?? item.meterId} · ${item.deductionBlocked?.reason}。${item.deductionBlocked?.retryCondition}。`,
       );
+      const rejectedDetails = res.results.filter((item) => !item.success && item.error)
+        .map((item) => `${item.meterNumber ?? item.meterId} · ${item.error}。`);
+      ElMessageBox.alert([summary, ...rejectedDetails, ...blockedDetails].join(' '), '批量抄表结果', {
+        type: 'warning',
+      });
       // 清空成功项，保留失败项供排查
       for (const item of res.results) {
         if (item.success) {

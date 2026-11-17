@@ -36,14 +36,14 @@
 
 | 類別 | 數量 |
 |---|---|
-| 總任務數 | 165 |
+| 總任務數 | 169 |
 | 已驗證完成 | 64 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 5 |
+| 進行中 | 9 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -54,6 +54,10 @@
 - **T324 读数结算标记防伪**（active，plan FIN-08，`fix/T324-meter-marker-guard`）
 - **T325 ｜CORE-01 账单并发写入**（active，plan FIN-05，`fix/T325-bill-write-lock`）
 - **T326 ｜CORE-02 表计并发与结算游标**（active，plan FIN-08，`fix/T326-meter-settlement-lock`）
+- **T327 ｜CORE-02 批量结算结果与缺账户**（active，plan FIN-08，`fix/T327-meter-batch-results`）
+- **T328 ｜CORE-02 用量区间归属**（active，plan FIN-08，`fix/T328-meter-usage-attribution`）
+- **T329 ｜CORE-02 异常与模拟读数隔离**（active，plan FIN-08，`fix/T329-meter-reading-isolation`）
+- **T330 ｜CORE-02 换表、读数回退与分段计费**（active，plan FIN-08，`fix/T330-meter-segmented-settlement`）
 
 - **T331 ｜CORE-03 租约确认与生效**（active，plan FIN-01，`fix/T331-contract-confirmation`）
 
@@ -109,7 +113,7 @@
 ## 統計
 
 - 資料模型：**56** 張表
-- OpenAPI 路由：**281** 條
+- OpenAPI 路由：**282** 條
 - 後端程式碼：**32450** 行
 - 管理後台程式碼：**33210** 行
 - 小程序程式碼：**8510** 行

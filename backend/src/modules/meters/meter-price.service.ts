@@ -225,14 +225,47 @@ export class MeterPriceBook {
     private readonly timeZone: string = 'Asia/Shanghai',
   ) {}
 
+  private rateOn(meter: MeterPriceInput, day: Date) {
+    return latestAtOrBefore(this.byMeter.get(meter.id), day)
+      ?? latestAtOrBefore(this.byType.get(meter.meterType), day);
+  }
+
+  hasUnpricedHistory(meter: MeterPriceInput, at: Date): boolean {
+    const hasHistory = this.byMeter.has(meter.id) || this.byType.has(meter.meterType);
+    return hasHistory && !this.rateOn(meter, businessDayUtc(at, this.timeZone));
+  }
+
+  /** 仅比较实际适用的费率。表级价格覆盖期间，类型默认价变更不切段。 */
+  changesBetween(meter: MeterPriceInput, start: Date, end: Date) {
+    const left = businessDayUtc(start, this.timeZone).getTime();
+    const right = businessDayUtc(end, this.timeZone).getTime();
+    const days = new Set<number>();
+    for (const row of [...(this.byMeter.get(meter.id) ?? []), ...(this.byType.get(meter.meterType) ?? [])]) {
+      const day = startOfUtcDay(row.effectiveDate).getTime();
+      if (day > left && day <= right) days.add(day);
+    }
+    return [...days].sort((a, b) => a - b).flatMap((day) => {
+      const previous = this.rateOn(meter, new Date(day - 1));
+      const next = this.rateOn(meter, new Date(day));
+      if (!next || previous?.unitPrice === next.unitPrice) return [];
+      const at = this.boundaryTime(day, start.getTime(), end.getTime());
+      return [{ at, unitPrice: next.unitPrice, hasPriorRate: previous !== undefined }];
+    });
+  }
+
+  private boundaryTime(day: number, lower: number, upper: number): number | null {
+    while (upper - lower > 1) {
+      const middle = Math.floor((lower + upper) / 2);
+      if (businessDayUtc(new Date(middle), this.timeZone).getTime() >= day) upper = middle;
+      else lower = middle;
+    }
+    return businessDayUtc(new Date(upper), this.timeZone).getTime() === day ? upper : null;
+  }
+
   priceFor(meter: MeterPriceInput, at: Date): number {
     if (!(at instanceof Date) || Number.isNaN(at.getTime())) return meter.unitPrice;
     const day = businessDayUtc(at, this.timeZone);
-    const own = latestAtOrBefore(this.byMeter.get(meter.id), day);
-    if (own) return own.unitPrice;
-    const typeDefault = latestAtOrBefore(this.byType.get(meter.meterType), day);
-    if (typeDefault) return typeDefault.unitPrice;
-    return meter.unitPrice;
+    return this.rateOn(meter, day)?.unitPrice ?? meter.unitPrice;
   }
 }
 

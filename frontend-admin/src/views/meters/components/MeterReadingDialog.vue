@@ -26,6 +26,7 @@
         <el-radio-group v-model="form.mode">
           <el-radio label="NORMAL">日常抄表</el-radio>
           <el-radio label="INITIAL">登记初始底数（不计费）</el-radio>
+          <el-radio label="HANDOFF">采集换表或回零读数</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="当前读数" prop="currentReading">
@@ -39,7 +40,6 @@
           v-model="form.readingTime"
           type="datetime"
           placeholder="缺省为当前时间"
-          value-format="YYYY-MM-DDTHH:mm:ss"
         />
       </el-form-item>
       <el-form-item label="备注">
@@ -87,7 +87,7 @@ const form = reactive({
   mode: 'NORMAL',
   currentReading: 0,
   autoSettle: true,
-  readingTime: '',
+  readingTime: null as Date | null,
   notes: '',
 });
 
@@ -102,7 +102,7 @@ watch(
       form.mode = 'NORMAL';
       form.currentReading = 0;
       form.autoSettle = true;
-      form.readingTime = '';
+      form.readingTime = null;
       form.notes = '';
       readingResultText.value = '';
     }
@@ -122,15 +122,19 @@ const handleSubmit = async () => {
       const result = await createMeterReading(meter.id, {
         currentReading: form.currentReading,
         isInitial,
-        autoSettle: isInitial ? false : form.autoSettle,
-        readingTime: form.readingTime || undefined,
+        allowRollover: form.mode === 'HANDOFF',
+        autoSettle: form.mode === 'NORMAL' && form.autoSettle,
+        readingTime: form.readingTime?.toISOString(),
         notes: form.notes || undefined,
       });
 
       const usage = Number(result.reading.usage).toFixed(2);
       const deduction = result.deduction;
-      if (!deduction.applied) {
-        readingResultText.value = `登记成功（用量 ${usage}）；扣费提示：${deduction.reason}`;
+      if (form.mode === 'HANDOFF') {
+        readingResultText.value = '交接读数已保存。请在读数记录中确认旧表末数和新表底数，再发起周期结算。';
+        readingResultType.value = 'warning';
+      } else if (!deduction.applied) {
+        readingResultText.value = `登记成功（用量 ${usage}）；扣费提示：${[deduction.reason, deduction.retryCondition].filter(Boolean).join('。')}`;
         readingResultType.value = 'warning';
       } else if (deduction.shortfall > 0) {
         readingResultText.value = `用量 ${usage}；已扣费 ${formatMoney(deduction.deducted)}；余额不足，已生成补缴账单 ${formatMoney(deduction.shortfall)}`;

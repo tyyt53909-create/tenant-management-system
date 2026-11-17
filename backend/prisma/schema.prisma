@@ -1055,6 +1055,13 @@ model MeterReading {
   /// 业务去重键：messageId 或 readingTime+读数+来源摘要；同一块表内唯一
   dedupKey String?
 
+  /// 换表或回零交接的旧表末数，currentReading 为新表底数
+  handoffRequired     Boolean @default(false)
+  handoffPreviousFinal Decimal? @db.Decimal(10, 2)
+  handoffConfirmedBy  String?
+  handoffConfirmedAt  DateTime?
+  settledSegments     Json?
+
   /// 结算落账时间；为空表示尚未结算（兼容历史 [SETTLED] 备注）
   settledAt        DateTime?
   /// 本次结算覆盖的累计用量

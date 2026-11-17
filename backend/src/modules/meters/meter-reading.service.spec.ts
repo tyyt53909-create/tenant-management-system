@@ -26,6 +26,7 @@ describe('MeterReadingService (T196 coverage)', () => {
     const prismaMock: any = {
       meter: { findUnique: vi.fn() },
       meterReading: {
+        fields: { createdAt: Symbol('meterReading.createdAt') },
         findUnique: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
@@ -39,6 +40,7 @@ describe('MeterReadingService (T196 coverage)', () => {
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
     prismaMock.meterPriceHistory.findMany.mockResolvedValue([]);
+    prismaMock.meterReading.findMany.mockResolvedValue([]);
     const billingMock: any = { applyReadingDeduction: vi.fn() };
     return { prismaMock, billingMock };
   }
@@ -67,9 +69,101 @@ describe('MeterReadingService (T196 coverage)', () => {
     vi.restoreAllMocks();
   });
 
+  describe('确认换表或回零', () => {
+    const reading = {
+      id: 'handoff-reading', meterId, currentReading: 10, readingTime: new Date('2026-01-20T02:00:00Z'),
+    };
+    const request = { newOpening: 10, previousFinal: 120 };
+    const confirm = (input = request) => service.confirmMeterHandoff(meterId, reading.id, input, operatorId);
+
+    it('确认保存旧表末数和经办人，不推进游标', async () => {
+      prisma.meterReading.findFirst.mockResolvedValueOnce(reading).mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ currentReading: 100 });
+      prisma.meterReading.count.mockResolvedValue(0);
+      await confirm();
+      expect(prisma.meterReading.update).toHaveBeenCalledWith({
+        where: { id: reading.id },
+        data: expect.objectContaining({
+          handoffRequired: true, handoffPreviousFinal: 120, handoffConfirmedBy: operatorId,
+          previousReading: 100, usage: 20,
+        }),
+      });
+    });
+
+    it('重复确认幂等，但已确认的末数不可覆盖', async () => {
+      const confirmed = { ...reading, handoffConfirmedAt: new Date(), handoffPreviousFinal: 120 };
+      prisma.meterReading.findFirst.mockResolvedValue(confirmed);
+      await expect(confirm()).resolves.toEqual(confirmed);
+      await expect(confirm({ ...request, previousFinal: 121 })).rejects.toThrow('不可覆盖');
+      expect(prisma.meterReading.update).not.toHaveBeenCalled();
+    });
+
+    it('拒绝无证据、底数不符、已结算和同刻冲突的交接', async () => {
+      prisma.meterReading.findFirst.mockResolvedValueOnce(null);
+      await expect(confirm()).rejects.toThrow('找不到');
+      prisma.meterReading.findFirst.mockResolvedValueOnce(reading);
+      await expect(confirm({ ...request, newOpening: 11 })).rejects.toThrow('一致');
+      prisma.meterReading.findFirst.mockResolvedValueOnce(reading)
+        .mockResolvedValueOnce({ ...reading, settledAt: reading.readingTime });
+      await expect(confirm()).rejects.toThrow('已结算');
+      prisma.meterReading.findFirst.mockResolvedValueOnce(reading).mockResolvedValueOnce(null);
+      prisma.meterReading.count.mockResolvedValueOnce(1);
+      await expect(confirm()).rejects.toThrow('同一时刻');
+
+      for (const preceding of [null, { currentReading: 121 }]) {
+        prisma.meterReading.count.mockResolvedValueOnce(0);
+        prisma.meterReading.findFirst.mockResolvedValueOnce(reading).mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(preceding);
+        await expect(confirm()).rejects.toThrow('旧表底数');
+      }
+      expect(prisma.meterReading.update).not.toHaveBeenCalled();
+    });
+  });
+
+  it('单笔采集回退后保留读数，阻断即时扣费和结算标记', async () => {
+    const last = { id: 'last', currentReading: 100, readingTime: new Date('2026-01-19T02:00:00Z'), settledAt: new Date() };
+    prisma.meterReading.findFirst.mockResolvedValue(last);
+    prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({ id: 'reset', ...data }));
+    const result = await service.createReading(meterId, {
+      currentReading: 5, readingTime: '2026-01-20T02:00:00Z', allowRollover: true,
+    }, operatorId);
+    expect(result.deduction).toMatchObject({ applied: false, reasonCode: 'UNCONFIRMED_HANDOFF' });
+    expect(billing.applyReadingDeduction).not.toHaveBeenCalled();
+    expect(prisma.meterReading.update).not.toHaveBeenCalled();
+  });
+
+  it('拒绝未来真实读数且不启动事务', async () => {
+    await expect(service.createReading(meterId, {
+      currentReading: 100, source: 'DEVICE', autoSettle: true, readingTime: '2090-01-01T00:00:00.000Z',
+    }, operatorId)).rejects.toThrow('读数时间不能晚于服务器接收时间');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('模拟读数使用独立时间线且始终不入账（初始=%s）', async (isInitial) => {
+    const readingTime = '2090-01-02T00:00:00.000Z';
+    prisma.meterReading.findFirst.mockResolvedValue(isInitial
+      ? null : { currentReading: 100, readingTime: new Date('2090-01-01T00:00:00.000Z') });
+    prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({ id: 'simulated-reading', ...data }));
+
+    const result = await service.createReading(meterId, {
+      currentReading: 110, source: 'SIMULATED', autoSettle: true, isInitial, readingTime,
+    }, operatorId);
+    expect(result.deduction).toMatchObject({ applied: false });
+    expect(result.reading).toMatchObject({
+      source: 'SIMULATED', previousReading: isInitial ? 110 : 100, usage: isInitial ? 0 : 10,
+    });
+    expect(result.reading.settledAt).toBeUndefined();
+    expect(prisma.meterReading.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { meterId, source: 'SIMULATED' },
+    }));
+    expect(billing.applyReadingDeduction).not.toHaveBeenCalled();
+    expect(prisma.meterReading.update).not.toHaveBeenCalled();
+  });
+
   it.each([
     { notes: '[SETTLED]' },
     { messageId: '[INITIAL]' },
+    { source: 'DEVICE' as const, notes: '[ANOMALY] 旧模拟数据不能走设备入口' },
   ])('带系统结算标记的读数不会进入事务：%j', async (input) => {
     await expect(service.createReading(meterId, { currentReading: 20, ...input }, operatorId))
       .rejects.toThrow('系统保留的结算标记');

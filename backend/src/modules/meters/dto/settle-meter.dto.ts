@@ -1,4 +1,4 @@
-import { IsOptional, IsDateString, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsDateString, IsString } from 'class-validator';
 
 export class SettleMeterDto {
   /** 结算截止时间（默认当前时间） */
@@ -10,4 +10,15 @@ export class SettleMeterDto {
   @IsString()
   @IsOptional()
   notes?: string;
+}
+
+export class SettleMeterBatchDto extends SettleMeterDto {
+  @IsString()
+  @IsOptional()
+  buildingId?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  meterIds?: string[];
 }

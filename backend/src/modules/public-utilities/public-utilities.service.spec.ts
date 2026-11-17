@@ -23,7 +23,7 @@ describe('PublicUtilitiesService', () => {
     prisma = {
       building: { findUnique: vi.fn().mockResolvedValue({ id: 'building-001' }) },
       meter: { findFirst: vi.fn() },
-      meterReading: { findMany: vi.fn() },
+      meterReading: { fields: { createdAt: Symbol('meterReading.createdAt') }, findMany: vi.fn() },
       meterPriceHistory: { findMany: vi.fn().mockResolvedValue([]) },
       contract: { findMany: vi.fn().mockResolvedValue([]), findUniqueOrThrow: vi.fn() },
       room: { findMany: vi.fn().mockResolvedValue([]) },

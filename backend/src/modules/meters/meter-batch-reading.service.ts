@@ -5,7 +5,9 @@ import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-rea
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker } from './meter-dedup.util.js';
-import { findMeterSettlementCursor, lockMeters, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { findEarliestRealReading, findMeterSettlementCursor, findNextConfirmedHandoff, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { FUTURE_READING_MESSAGE, hasLegacySimulationNote, lookupMeterReading, realMeterReadings } from './meter-reading-scope.js';
+import { quoteMeterInterval, type MeterIntervalBlock } from './meter-interval-quote.js';
 import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -54,6 +56,7 @@ export class MeterBatchReadingService {
           },
         },
         readings: {
+          where: realMeterReadings(this.prisma),
           orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
           take: 1,
           select: {
@@ -143,13 +146,20 @@ export class MeterBatchReadingService {
       amount?: number;
       deducted?: number;
       shortfall?: number;
+      vacantUsage?: number;
+      deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
       error?: string;
+      reasonCode?: 'FUTURE_READING';
     }> = [];
 
+    const receivedAt = new Date();
     await this.prisma.$transaction(async (tx) => {
+      const scope = realMeterReadings(tx);
       await lockMeters(tx, dto.readings.map(({ meterId }) => meterId));
       for (const item of dto.readings) {
-        if (hasReservedReadingMarker(item.notes) || hasReservedReadingMarker(item.messageId)) {
+        const source = item.source || 'MANUAL';
+        if (hasReservedReadingMarker(item.notes) || hasReservedReadingMarker(item.messageId)
+          || hasLegacySimulationNote(source, item.notes)) {
           results.push({ meterId: item.meterId, success: false, error: '备注或消息编号不得包含系统保留的结算标记' });
           continue;
         }
@@ -178,9 +188,12 @@ export class MeterBatchReadingService {
           continue;
         }
 
-        const readingTime = item.readingTime ? new Date(item.readingTime) : new Date();
-        const source = item.source || 'MANUAL';
-        const dedupKey = buildReadingDedupKey({
+        const readingTime = item.readingTime ? new Date(item.readingTime) : receivedAt;
+        if (readingTime > receivedAt) {
+          results.push({ meterId: item.meterId, success: false, reasonCode: 'FUTURE_READING', error: FUTURE_READING_MESSAGE });
+          continue;
+        }
+        const key = buildReadingDedupKey({
           messageId: item.messageId,
           readingTime,
           currentReading: item.currentReading,
@@ -188,9 +201,7 @@ export class MeterBatchReadingService {
         });
 
         // 幂等去重 0: 数据库去重键（T274）
-        const existingDedupReading = await tx.meterReading.findUnique({
-          where: { meterId_dedupKey: { meterId: item.meterId, dedupKey } },
-        });
+        const { dedupKey, existing: existingDedupReading } = await lookupMeterReading(tx, item.meterId, key, false);
         if (existingDedupReading) {
           results.push({
             meterId: item.meterId,
@@ -210,6 +221,7 @@ export class MeterBatchReadingService {
           const existingMsgReading = await tx.meterReading.findFirst({
             where: {
               meterId: item.meterId,
+              ...scope,
               notes: { contains: msgTag },
             },
           });
@@ -228,13 +240,17 @@ export class MeterBatchReadingService {
         }
 
         const latestReadingRecord = await tx.meterReading.findFirst({
-          where: { meterId: item.meterId },
+          where: { meterId: item.meterId, ...scope },
           orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
         });
 
         // 初始底数处理
         const isInitialBaseline = item.isInitial === true || (!latestReadingRecord && item.isInitial !== false);
         if (isInitialBaseline) {
+          if (meter.roomId && latestReadingRecord) {
+            results.push({ meterId: meter.id, success: false, error: '房间表已有读数，请登记普通交接读数并分段结算' });
+            continue;
+          }
           let notes = `[INITIAL]${item.notes ? ` ${item.notes}` : ' 登记初始底数'}`;
           if (item.messageId) notes += ` [msgId:${item.messageId}]`;
 
@@ -246,6 +262,7 @@ export class MeterBatchReadingService {
               usage: 0,
               source: source as ReadingSource,
               readingTime,
+              createdAt: receivedAt,
               readBy: operatorId,
               notes,
               dedupKey,
@@ -292,10 +309,16 @@ export class MeterBatchReadingService {
 
         // 乱序延迟上传防护
         if (latestReadingRecord && readingTime < latestReadingRecord.readingTime) {
+          const handoff = await findNextConfirmedHandoff(tx, item.meterId, readingTime);
+          if (handoff && item.currentReading > Number(handoff.handoffPreviousFinal) && !item.allowRollover) {
+            results.push({ meterId: item.meterId, success: false, error: '乱序读数异常：当前读数高于旧表交接末数' });
+            continue;
+          }
           const laterReadingWithLowerValue = await tx.meterReading.findFirst({
             where: {
               meterId: item.meterId,
-              readingTime: { gte: readingTime },
+              ...scope,
+              readingTime: { gte: readingTime, ...(handoff && { lt: handoff.readingTime }) },
               currentReading: { lt: item.currentReading },
             },
           });
@@ -314,6 +337,7 @@ export class MeterBatchReadingService {
           const precedingRecord = await tx.meterReading.findFirst({
             where: {
               meterId: item.meterId,
+              ...scope,
               readingTime: { lte: readingTime },
             },
             orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
@@ -344,6 +368,8 @@ export class MeterBatchReadingService {
               usage,
               source: source as ReadingSource,
               readingTime,
+              createdAt: receivedAt,
+              handoffRequired: item.allowRollover === true,
               readBy: operatorId,
               notes,
               dedupKey,
@@ -383,14 +409,9 @@ export class MeterBatchReadingService {
         const usage = Math.round((item.currentReading - previousReading) * 100) / 100;
         const shouldAutoSettle = settlesByDefault(source, item.autoSettle);
 
-        let billableUsage = usage;
-        if (shouldAutoSettle) {
-          const lastSettledReading = await findMeterSettlementCursor(tx, item.meterId);
-          const settleBaseline = lastSettledReading
-            ? Number(lastSettledReading.currentReading)
-            : previousReading;
-          billableUsage = Math.max(0, Math.round((item.currentReading - settleBaseline) * 100) / 100);
-        }
+        const baseline = shouldAutoSettle
+          ? (await findMeterSettlementCursor(tx, meter.id)) ?? await findEarliestRealReading(tx, meter.id)
+          : null;
 
         let notes = item.notes || '';
         if (item.messageId) notes = notes ? `${notes} [msgId:${item.messageId}]` : `[msgId:${item.messageId}]`;
@@ -403,36 +424,34 @@ export class MeterBatchReadingService {
             usage,
             source: source as ReadingSource,
             readingTime,
+            createdAt: receivedAt,
+            handoffRequired: item.allowRollover === true,
             readBy: operatorId,
             notes: notes || null,
             dedupKey,
           },
         });
 
-        let deduction: { applied?: boolean; amount?: number; deducted?: number; shortfall?: number; reason?: string } = { applied: false, amount: 0, deducted: 0, shortfall: 0 };
+        let deduction: Awaited<ReturnType<MeterBillingService['applyReadingDeduction']>> | undefined;
+        let intervalBlock: MeterIntervalBlock | undefined;
+        let billableUsage = 0;
         if (shouldAutoSettle) {
-          const unitPrice = await this.priceService.resolveUnitPrice(meter, readingTime, tx);
-          deduction = await this.billingService.applyReadingDeduction(
-            tx,
-            meter,
-            reading,
-            billableUsage,
-            operatorId,
-            unitPrice,
-          );
-          if (deduction.applied || billableUsage === 0) {
-            const settledNotes = reading.notes ? `${reading.notes} [SETTLED]` : '[SETTLED]';
-            await tx.meterReading.update({
-              where: { id: reading.id },
-              data: {
-                notes: settledNotes,
-                settledAt: new Date(),
-                settledUsage: billableUsage,
-                settledUnitPrice: unitPrice,
-                settledAmount: (deduction.deducted ?? 0) + (deduction.shortfall ?? 0),
-              },
-            });
-            reading.notes = settledNotes;
+          const quote = await quoteMeterInterval(tx, this.priceService, meter, baseline, {
+            ...reading, currentReading: item.currentReading, readingTime,
+          }, Math.max(0, usage));
+          if ('reasonCode' in quote) {
+            intervalBlock = quote;
+          } else {
+            billableUsage = quote.usage;
+            deduction = await this.billingService.applyReadingDeduction(
+              tx, meter, reading, billableUsage, operatorId, baseline, quote.unitPrice, quote,
+            );
+            const vacancy = deduction.reasonCode === 'VACANT_INTERVAL';
+            if (deduction.applied || vacancy || billableUsage === 0) {
+              await markMeterReadingSettled(
+                tx, reading, billableUsage, quote.unitPrice, deduction.amount ?? 0, undefined, vacancy, quote.segments,
+              );
+            }
           }
         }
 
@@ -444,9 +463,18 @@ export class MeterBatchReadingService {
           currentReading: item.currentReading,
           previousReading,
           usage,
-          amount: deduction.amount || 0,
-          deducted: deduction.deducted || 0,
-          shortfall: deduction.shortfall || 0,
+          amount: deduction?.amount ?? 0,
+          deducted: deduction?.deducted ?? 0,
+          shortfall: deduction?.shortfall ?? 0,
+          ...(deduction?.reasonCode === 'VACANT_INTERVAL' && { vacantUsage: billableUsage }),
+          ...(intervalBlock && { deductionBlocked: intervalBlock }),
+          ...(deduction?.retryCondition && {
+            deductionBlocked: {
+              reasonCode: deduction.reasonCode,
+              reason: deduction.reason,
+              retryCondition: deduction.retryCondition,
+            },
+          }),
         });
       }
     }, METER_WRITE_TRANSACTION);

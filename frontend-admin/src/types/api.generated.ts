@@ -1091,6 +1091,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/meters/{id}/readings/{readingId}/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MetersController_confirmMeterHandoff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/meters/{id}/settle": {
         parameters: {
             query?: never;
@@ -3933,7 +3949,7 @@ export interface components {
             buildingId?: string;
             /** @description 模拟天数（针对 TIME_TRAVEL_MONTH，默认 30 天，1~90） */
             days?: number;
-            /** @description 是否自动结算扣费（默认 false，仅上报未结算用量留存，待后续周期结算） */
+            /** @description 兼容旧客户端。模拟读数只进入模拟报告，此参数不会触发扣费 */
             autoSettle?: boolean;
             /** @description 异常测试类型列表（针对 ANOMALY_TEST，可选） */
             faultTypes?: string[];
@@ -3981,6 +3997,63 @@ export interface components {
         BatchMeterReadingsDto: {
             readings: components["schemas"]["SingleMeterReadingItemDto"][];
         };
+        SettleMeterBatchDto: {
+            buildingId?: string;
+            meterIds?: string[];
+            /** @description 结算截止时间（默认当前时间） */
+            settleUntil?: string;
+            /** @description 结算备注 */
+            notes?: string;
+        };
+        MeterChargeSegmentDto: {
+            startReadingId: string;
+            endReadingId: string;
+            startAt: string;
+            endAt: string;
+            startReading: number;
+            endReading: number;
+            usage: number;
+            unitPrice: number;
+            nextOpeningReading?: number;
+        };
+        MeterBatchSettlementItemDto: {
+            meterId: string;
+            /** @enum {string} */
+            status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
+            /** @enum {string} */
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY";
+            /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
+            settled: boolean;
+            usage: number;
+            /** @description 整数分。未处理的读数可能返回预计应收金额，实际入账以 status 和凭证为准。 */
+            amount: number;
+            segments?: components["schemas"]["MeterChargeSegmentDto"][];
+            unitPrice?: number;
+            baselineReading?: number;
+            currentReading?: number;
+            reason?: string;
+            retryCondition?: string;
+            billId?: string;
+            contractId?: string;
+            prepayTransactionId?: string;
+            /** @description 仅 SETTLED 为 true。 */
+            success: boolean;
+            error?: string;
+        };
+        MeterBatchSettlementResultDto: {
+            /** @description 本批使用的结算截止时间，可用于按原范围重试。 */
+            settleUntil: string;
+            total: number;
+            settledCount: number;
+            noChangeCount: number;
+            blockedCount: number;
+            failedCount: number;
+            /** @description 兼容字段，等于 settledCount。 */
+            successCount: number;
+            /** @description 兼容字段，等于 blockedCount + failedCount。 */
+            failureCount: number;
+            results: components["schemas"]["MeterBatchSettlementItemDto"][];
+        };
         CreateMeterReadingDto: {
             currentReading: number;
             /** @description 读数时间（缺省为当前时间） */
@@ -4000,11 +4073,38 @@ export interface components {
             allowRollover?: boolean;
             notes?: string;
         };
+        ConfirmMeterHandoffDto: {
+            /** @description 交接时旧表末数或回零前末数 */
+            previousFinal: number;
+            /** @description 同一交接时刻的新表底数，必须等于该条已采集的读数 */
+            newOpening: number;
+        };
         SettleMeterDto: {
             /** @description 结算截止时间（默认当前时间） */
             settleUntil?: string;
             /** @description 结算备注 */
             notes?: string;
+        };
+        MeterSettlementResultDto: {
+            meterId: string;
+            /** @enum {string} */
+            status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
+            /** @enum {string} */
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY";
+            /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
+            settled: boolean;
+            usage: number;
+            /** @description 整数分。未处理的读数可能返回预计应收金额，实际入账以 status 和凭证为准。 */
+            amount: number;
+            segments?: components["schemas"]["MeterChargeSegmentDto"][];
+            unitPrice?: number;
+            baselineReading?: number;
+            currentReading?: number;
+            reason?: string;
+            retryCondition?: string;
+            billId?: string;
+            contractId?: string;
+            prepayTransactionId?: string;
         };
         SetMeterPriceDto: {
             unitPrice: number;
@@ -7343,24 +7443,19 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
-        responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettleMeterBatchDto"];
             };
+        };
+        responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MeterBatchSettlementResultDto"];
+                };
             };
             /** @description 错误 */
             default: {
@@ -7518,6 +7613,50 @@ export interface operations {
             };
         };
     };
+    MetersController_confirmMeterHandoff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                readingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMeterHandoffDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     MetersController_settleMeter: {
         parameters: {
             query?: never;
@@ -7538,7 +7677,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MeterSettlementResultDto"];
                 };
             };
             /** @description 错误 */

@@ -6,8 +6,9 @@ import { formatBusinessDateTime } from '../../common/business-clock/business-clo
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { generateCsv, CsvColumn } from '../../common/utils/csv.util.js';
 import { centsToYuanString } from '../../common/utils/currency.util.js';
-import { METER_TYPE_LABEL, NOT_SIMULATED } from './meter-types.constants.js';
+import { METER_TYPE_LABEL } from './meter-types.constants.js';
 import { MeterPriceService, type MeterPriceBook } from './meter-price.service.js';
+import { realMeterReadings } from './meter-reading-scope.js';
 
 export interface ExportMeterReadingsQuery {
   meterId?: string;
@@ -27,7 +28,7 @@ export class MeterUsageQueryService {
   ) {}
 
   async exportReadings(query: ExportMeterReadingsQuery) {
-    const where: Prisma.MeterReadingWhereInput = {};
+    const where = realMeterReadings(this.prisma);
     if (query.meterId) where.meterId = query.meterId;
     const meterWhere: Prisma.MeterWhereInput = {};
     if (query.meterType) meterWhere.meterType = query.meterType;
@@ -122,7 +123,7 @@ export class MeterUsageQueryService {
             where: {
               meterId: { in: activeMeterIds },
               readingTime: { gte: monthStart, lt: monthEnd },
-              source: NOT_SIMULATED,
+              ...realMeterReadings(this.prisma),
             },
             select: {
               meterId: true,
@@ -138,7 +139,7 @@ export class MeterUsageQueryService {
             where: {
               meterId: { in: activeMeterIds },
               readingTime: { gte: prevMonthStart, lt: prevMonthEnd },
-              source: NOT_SIMULATED,
+              ...realMeterReadings(this.prisma),
             },
             select: {
               meterId: true,
@@ -214,7 +215,7 @@ export class MeterUsageQueryService {
             where: {
               meterId: { in: activeMeterIds },
               readingTime: { gte: trendStart, lt: trendEnd },
-              source: NOT_SIMULATED,
+              ...realMeterReadings(this.prisma),
             },
             select: {
               meterId: true,
