@@ -5,11 +5,13 @@ on:
     branches: [main, develop]
     paths:
       - 'frontend-admin/**'
+      - 'shared/**'
       - '.github/workflows/admin-ci.yml'
   pull_request:
     branches: [main, develop]
     paths:
       - 'frontend-admin/**'
+      - 'shared/**'
       - '.github/workflows/admin-ci.yml'
   workflow_dispatch:
 

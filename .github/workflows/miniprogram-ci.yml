@@ -5,11 +5,13 @@ on:
     branches: [main, develop]
     paths:
       - 'miniprogram/**'
+      - 'shared/**'
       - '.github/workflows/miniprogram-ci.yml'
   pull_request:
     branches: [main, develop, 'feature/**']
     paths:
       - 'miniprogram/**'
+      - 'shared/**'
       - '.github/workflows/miniprogram-ci.yml'
 
 jobs:

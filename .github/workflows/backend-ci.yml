@@ -5,12 +5,14 @@ on:
     branches: [main, develop]
     paths:
       - 'backend/**'
+      - 'shared/**'
       - '.github/workflows/backend-ci.yml'
   
   pull_request:
     branches: [main, develop]
     paths:
       - 'backend/**'
+      - 'shared/**'
       - '.github/workflows/backend-ci.yml'
 
   # 允许手动触发

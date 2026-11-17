@@ -7,6 +7,7 @@ on:
     branches: [main, develop]
     paths:
       - 'backend/**'
+      - 'shared/**'
       - 'scripts/e2e-mvp/**'
       - '.github/workflows/backend-e2e.yml'
 
@@ -14,6 +15,7 @@ on:
     branches: [main, develop]
     paths:
       - 'backend/**'
+      - 'shared/**'
       - 'scripts/e2e-mvp/**'
       - '.github/workflows/backend-e2e.yml'
 
