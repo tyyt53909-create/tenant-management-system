@@ -51,5 +51,5 @@ export function isUniqueViolation(error: unknown, field?: string): boolean {
 
 /** 保留历史结算标记供读取旧记录，禁止外部输入伪造。 */
 export function hasReservedReadingMarker(value?: string | null): boolean {
-  return value?.includes('[SETTLED]') === true || value?.includes('[INITIAL]') === true;
+  return value?.includes('[SETTLED]') === true || value?.includes('[INITIAL]') === true || value?.includes('[VACANT_USAGE]') === true;
 }

@@ -16660,7 +16660,9 @@
               "MISSING_PREPAY_ACCOUNT",
               "NO_READINGS",
               "METER_NOT_FOUND",
-              "SETTLEMENT_FAILED"
+              "SETTLEMENT_FAILED",
+              "OCCUPANCY_UNCERTAIN",
+              "VACANT_INTERVAL"
             ],
             "type": "string"
           },
@@ -16691,6 +16693,9 @@
             "type": "string"
           },
           "billId": {
+            "type": "string"
+          },
+          "contractId": {
             "type": "string"
           },
           "prepayTransactionId": {
@@ -16845,7 +16850,9 @@
               "MISSING_PREPAY_ACCOUNT",
               "NO_READINGS",
               "METER_NOT_FOUND",
-              "SETTLEMENT_FAILED"
+              "SETTLEMENT_FAILED",
+              "OCCUPANCY_UNCERTAIN",
+              "VACANT_INTERVAL"
             ],
             "type": "string"
           },
@@ -16876,6 +16883,9 @@
             "type": "string"
           },
           "billId": {
+            "type": "string"
+          },
+          "contractId": {
             "type": "string"
           },
           "prepayTransactionId": {

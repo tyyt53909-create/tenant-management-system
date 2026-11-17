@@ -6,7 +6,7 @@ import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker, isUniqueViolation } from './meter-dedup.util.js';
-import { findMeterSettlementCursor, lockMeters, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -102,6 +102,9 @@ export class MeterReadingService {
       const isInitialBaseline = dto.isInitial === true || (!latestReadingRecord && dto.isInitial !== false);
 
       if (isInitialBaseline) {
+        if (meter.roomId && latestReadingRecord && source !== 'SIMULATED') {
+          throw new BadRequestException('房间表已有读数，请登记普通交接读数并分段结算');
+        }
         const tag = '[INITIAL]';
         let notes = dto.notes ? `${tag} ${dto.notes}` : `${tag} 登记初始底数`;
         if (dto.messageId) notes += ` [msgId:${dto.messageId}]`;
@@ -226,14 +229,10 @@ export class MeterReadingService {
       if (dto.messageId) notes = notes ? `${notes} [msgId:${dto.messageId}]` : `[msgId:${dto.messageId}]`;
 
       // 统一结算基准：若开启自动结算，结算基准应为上次已结算读数（避免设备采集后人工抄表漏计前段用量）
-      let billableUsage = usage;
-      if (shouldAutoSettle) {
-        const lastSettledReading = await findMeterSettlementCursor(tx, meterId);
-        const settleBaseline = lastSettledReading
-          ? Number(lastSettledReading.currentReading)
-          : previousReading;
-        billableUsage = Math.max(0, Math.round((dto.currentReading - settleBaseline) * 100) / 100);
-      }
+      const baseline = shouldAutoSettle
+        ? (await findMeterSettlementCursor(tx, meterId)) ?? await findEarliestRealReading(tx, meterId)
+        : null;
+      const billableUsage = Math.max(0, Math.round((dto.currentReading - Number(baseline?.currentReading ?? previousReading)) * 100) / 100);
 
       const reading = await tx.meterReading.create({
         data: {
@@ -253,30 +252,21 @@ export class MeterReadingService {
       if (shouldAutoSettle) {
         // 按读数业务日期取生效单价（T274）；缺历史时回落到表上当前价
         const unitPrice = await this.priceService.resolveUnitPrice(meter, readingTime, tx);
-        deduction = await this.billingService.applyReadingDeduction(
+        const charge = await this.billingService.applyReadingDeduction(
           tx,
           meter,
           reading,
           billableUsage,
           operatorId,
+          baseline,
           unitPrice,
         );
-        // 统一入账基准：仅当扣费或生成账单成功时，才正式盖印结算字段
-        if (deduction.applied || billableUsage === 0) {
-          const settledNotes = reading.notes ? `${reading.notes} [SETTLED]` : '[SETTLED]';
-          const deducted = Number(deduction.deducted ?? 0);
-          const shortfall = Number(deduction.shortfall ?? 0);
-          await tx.meterReading.update({
-            where: { id: reading.id },
-            data: {
-              notes: settledNotes,
-              settledAt: new Date(),
-              settledUsage: billableUsage,
-              settledUnitPrice: unitPrice,
-              settledAmount: deducted + shortfall,
-            },
-          });
-          reading.notes = settledNotes;
+        deduction = charge;
+        const vacancy = charge.reasonCode === 'VACANT_INTERVAL';
+        if (charge.applied || vacancy || billableUsage === 0) {
+          reading.notes = await markMeterReadingSettled(
+            tx, reading, billableUsage, unitPrice, charge.amount ?? 0, undefined, vacancy,
+          );
         }
       }
 

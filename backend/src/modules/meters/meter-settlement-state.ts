@@ -33,3 +33,39 @@ export async function findMeterSettlementCursor(
   });
   return reading && isSettledReading(reading) ? reading : null;
 }
+
+/** Older imports can lack a marked cursor; preserve their earliest real reading as the baseline. */
+export async function findEarliestRealReading(
+  db: Pick<Prisma.TransactionClient, 'meterReading'>,
+  meterId: string,
+) {
+  return db.meterReading.findFirst({
+    where: { meterId, source: NOT_SIMULATED },
+    orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
+  });
+}
+
+/** 写结构化结算字段，同时保留 [SETTLED] 备注供旧报表与历史逻辑识别。 */
+export async function markMeterReadingSettled(
+  tx: Prisma.TransactionClient,
+  reading: { id: string; notes: string | null },
+  usage: number,
+  unitPrice: number,
+  amount: number,
+  notes?: string,
+  vacancy = false,
+) {
+  const settledTag = `[SETTLED]${vacancy ? ' [VACANT_USAGE]' : ''}${notes ? ` 备注:${notes}` : ''}`;
+  const updatedNotes = reading.notes ? `${reading.notes} ${settledTag}` : settledTag;
+  await tx.meterReading.update({
+    where: { id: reading.id },
+    data: {
+      notes: updatedNotes,
+      settledAt: new Date(),
+      settledUsage: usage,
+      settledUnitPrice: unitPrice,
+      settledAmount: amount,
+    },
+  });
+  return updatedNotes;
+}
