@@ -86,6 +86,11 @@ export interface UnsettledUsage {
   unitPrice?: number;
   roomNumber?: string;
   tenantName?: string | null;
+  attribution?: {
+    reasonCode: 'OCCUPANCY_UNCERTAIN' | 'VACANT_INTERVAL';
+    reason: string;
+    retryCondition?: string;
+  };
   prepayBalance?: number | null;
   lastSettledReading: number;
   lastSettledTime: string | null;
@@ -177,6 +182,7 @@ export interface BatchReadingResponse {
     amount?: number;
     deducted?: number;
     shortfall?: number;
+    vacantUsage?: number;
     deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
     error?: string;
   }>;

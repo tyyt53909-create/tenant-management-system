@@ -104,13 +104,13 @@
           <el-descriptions-item label="表号">{{ currentMeter?.meterNumber }}</el-descriptions-item>
           <el-descriptions-item label="类型">{{ meterTypeMap[currentMeter?.meterType || ''] }}</el-descriptions-item>
           <el-descriptions-item label="房源">{{ unsettledInfo?.roomNumber || '公共区域' }}</el-descriptions-item>
-          <el-descriptions-item label="签约租客">{{ unsettledInfo?.tenantName || '无生效合同' }}</el-descriptions-item>
+          <el-descriptions-item label="区间归属">{{ unsettledInfo?.tenantName || (unsettledInfo?.attribution?.reasonCode === 'VACANT_INTERVAL' ? '空置期' : '—') }}</el-descriptions-item>
           <el-descriptions-item label="单价">{{ formatMoney(currentMeter?.unitPrice || 0) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
           <el-descriptions-item label="预付余额">
-            <span v-if="unsettledInfo && unsettledInfo.prepayBalance !== null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? 'var(--error-text)' : 'var(--success-text)', fontWeight: 'bold' }">
+            <span v-if="unsettledInfo && typeof unsettledInfo.prepayBalance === 'number'" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? 'var(--error-text)' : 'var(--success-text)', fontWeight: 'bold' }">
               {{ formatMoney(unsettledInfo.prepayBalance) }}
             </span>
-            <span v-else style="color: var(--text-muted)">无预付账户</span>
+            <span v-else style="color: var(--text-muted)">{{ unsettledInfo?.tenantName ? '无预付账户' : '—' }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="起步结算底数">{{ unsettledInfo?.lastSettledReading ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="当前最新读数">{{ unsettledInfo?.currentReading ?? '-' }}</el-descriptions-item>
@@ -121,12 +121,29 @@
           </el-descriptions-item>
           <el-descriptions-item label="预估结算金额">
             <span style="font-size: 15px; font-weight: bold; color: var(--warning-text)">
-              {{ formatMoney(unsettledInfo?.estimatedAmount || 0) }}
+              {{ unsettledInfo?.attribution?.reasonCode === 'OCCUPANCY_UNCERTAIN' ? '—' : formatMoney(unsettledInfo?.estimatedAmount || 0) }}
             </span>
           </el-descriptions-item>
         </el-descriptions>
 
+        <el-alert
+          v-if="unsettledInfo?.attribution"
+          :title="unsettledInfo.attribution.reason"
+          :description="unsettledInfo.attribution.retryCondition"
+          :type="unsettledInfo.attribution.reasonCode === 'OCCUPANCY_UNCERTAIN' ? 'warning' : 'info'"
+          :closable="false"
+          style="margin-bottom: 16px"
+        />
         <el-form label-width="80px">
+          <el-form-item label="结算截止">
+            <el-date-picker
+              v-model="settleCutoff"
+              type="datetime"
+              placeholder="默认当前时间"
+              :disabled="settleSubmitLoading"
+              @change="loadSettlementPreview"
+            />
+          </el-form-item>
           <el-form-item label="结算备注">
             <el-input v-model="settleNotes" placeholder="例如：2026年10月结账" />
           </el-form-item>
@@ -138,7 +155,7 @@
         <el-button
           type="primary"
           :loading="settleSubmitLoading"
-          :disabled="!unsettledInfo || unsettledInfo.unsettledUsage <= 0"
+          :disabled="settleDataLoading || !unsettledInfo || unsettledInfo.unsettledUsage <= 0 || unsettledInfo.attribution?.reasonCode === 'OCCUPANCY_UNCERTAIN'"
           @click="handleConfirmSettle"
         >
           立即结算
@@ -208,6 +225,7 @@ import {
   deleteMeter,
   getMeterReadings,
   getUnsettledUsage,
+  type UnsettledUsage,
   settleMeter,
   type MeterReading,
 } from '@/api/meters';
@@ -242,7 +260,9 @@ const settleDialogVisible = ref(false);
 const settleDataLoading = ref(false);
 const settleSubmitLoading = ref(false);
 const settleNotes = ref('');
-const unsettledInfo = ref<any>(null);
+const settleCutoff = ref<Date | null>(null);
+const unsettledInfo = ref<UnsettledUsage | null>(null);
+let settlePreviewRequest = 0;
 
 const meterTypeMap: Record<string, string> = {
   ELECTRICITY: '电表',
@@ -332,20 +352,28 @@ const handleReading = (row: Meter) => {
   readingDialogVisible.value = true;
 };
 
-const handleOpenSettle = async (row: Meter) => {
-  currentMeter.value = row;
-  settleNotes.value = '';
+const loadSettlementPreview = async () => {
+  const meter = currentMeter.value;
+  if (!meter) return;
+  const request = ++settlePreviewRequest;
   unsettledInfo.value = null;
-  settleDialogVisible.value = true;
   settleDataLoading.value = true;
   try {
-    const res = await getUnsettledUsage(row.id);
-    unsettledInfo.value = res;
-  } catch (err: any) {
-    ElMessage.error(apiErrorMessage(err, '获取未结算用量失败'));
+    const res = await getUnsettledUsage(meter.id, { settleUntil: settleCutoff.value?.toISOString() });
+    if (request === settlePreviewRequest) unsettledInfo.value = res;
+  } catch (err: unknown) {
+    if (request === settlePreviewRequest) ElMessage.error(apiErrorMessage(err, '获取未结算用量失败'));
   } finally {
-    settleDataLoading.value = false;
+    if (request === settlePreviewRequest) settleDataLoading.value = false;
   }
+};
+
+const handleOpenSettle = (row: Meter) => {
+  currentMeter.value = row;
+  settleNotes.value = '';
+  settleCutoff.value = null;
+  settleDialogVisible.value = true;
+  void loadSettlementPreview();
 };
 
 const handleConfirmSettle = async () => {
@@ -353,9 +381,13 @@ const handleConfirmSettle = async () => {
   if (!meter) return;
   settleSubmitLoading.value = true;
   try {
-    const res = await settleMeter(meter.id, { notes: settleNotes.value || undefined });
+    const res = await settleMeter(meter.id, {
+      notes: settleNotes.value || undefined,
+      settleUntil: settleCutoff.value?.toISOString(),
+    });
     if (res.status === 'BLOCKED') {
       ElMessage.warning([res.reason, res.retryCondition].filter(Boolean).join('。'));
+      if (res.reasonCode === 'OCCUPANCY_UNCERTAIN') void loadSettlementPreview();
       return;
     }
     if (res.status === 'NO_CHANGE' || !res.settled) {

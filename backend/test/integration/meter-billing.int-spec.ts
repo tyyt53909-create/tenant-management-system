@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { INestApplication } from '@nestjs/common';
 import type { Response } from 'supertest';
 import { MeterBillingService } from '../../src/modules/meters/meter-billing.service.js';
-import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth } from './harness.js';
+import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth, type SeedBase } from './harness.js';
 
 /** FIN-08 / T274：抄表去重、生效单价与结算幂等（真实 DB） */
 let app: INestApplication;
@@ -43,7 +43,7 @@ async function createMeter(
   return response.body.id as string;
 }
 
-async function preparePrepay(adminToken: string, tenantId: string, roomId: string) {
+async function preparePrepay(adminToken: string, tenantId: string, roomId: string, amount = 100000) {
   const account = await http(app)
     .post('/prepay-accounts')
     .set(auth(adminToken))
@@ -53,7 +53,7 @@ async function preparePrepay(adminToken: string, tenantId: string, roomId: strin
   const recharge = await http(app)
     .post(`/prepay-accounts/${account.body.id}/transactions`)
     .set(auth(adminToken))
-    .send({ type: 'RECHARGE', amount: 100000, description: '集成测试充值' });
+    .send({ type: 'RECHARGE', amount, description: '集成测试充值' });
   expect(recharge.status).toBe(201);
   return account.body.id as string;
 }
@@ -62,11 +62,148 @@ function readingBody(currentReading: number, readingTime: string, extra: Record<
   return { currentReading, readingTime, ...extra };
 }
 
+function setupMeterTenancy(base: SeedBase) {
+  // Historical reads in these fixtures must start inside the recorded lease.
+  return setupTenancy(app, base, { startDate: '2026-01-01' });
+}
+
 describe('抄表与计价（FIN-08）', () => {
+  it('退租、空置、入住按实测界点分账；缺交接或跨区间时所有入口都保留待结算', async () => {
+    const base = await seedBase();
+    const oldTenant = await setupMeterTenancy(base);
+    const { adminToken, roomId } = oldTenant;
+    const meterId = await createMeter(adminToken, base.buildingId, roomId, 100, 100);
+    const oldAccount = await preparePrepay(adminToken, oldTenant.tenantId, roomId, 300);
+    const checkoutTime = '2026-04-10T02:00:00.000Z';
+    const checkinTime = '2026-04-12T02:00:00.000Z';
+    const latestTime = '2026-04-14T02:00:00.000Z';
+    const reading = (value: number, time: string, autoSettle: boolean) =>
+      http(app).post(`/meters/${meterId}/readings`).set(auth(adminToken)).send(readingBody(value, time, { autoSettle }));
+    const settle = (settleUntil: string) =>
+      http(app).post(`/meters/${meterId}/settle`).set(auth(adminToken)).send({ settleUntil });
+    const batch = (settleUntil: string) =>
+      http(app).post('/meters/settle-batch').set(auth(adminToken)).send({ meterIds: [meterId], settleUntil });
+    const inspect = async (contractId: string, type: string, inspectedAt: string) => {
+      const res = await http(app).post('/inspections').set(auth(adminToken))
+        .send({ contractId, type, inspectedAt, inspectorName: '集成测试验房' });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+    const confirm = async (id: string, tenantToken: string) => {
+      const res = await http(app).post(`/inspections/${id}/confirm`).set(auth(tenantToken)).send({ agree: true });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('CONFIRMED');
+    };
+
+    const finalOldReading = await reading(110, checkoutTime, false);
+    expect(finalOldReading.status).toBe(201);
+    const checkoutInspection = await inspect(oldTenant.contractId, 'CHECK_OUT', checkoutTime);
+    await confirm(checkoutInspection, oldTenant.tenantToken);
+    await prisma.depositLedger.create({
+      data: { contractId: oldTenant.contractId, tenantId: oldTenant.tenantId, roomId, amount: 300000, balance: 0 },
+    });
+    const checkout = await http(app).post('/checkout').set(auth(adminToken)).send({
+      contractId: oldTenant.contractId, roomId, checkoutDate: '2026-04-10',
+      processedBy: 'integration-admin', totalRefund: 0, inspectionId: checkoutInspection,
+      items: [{ itemType: 'OTHER_FEE', description: '验房交接', amount: 0 }],
+    });
+    expect(checkout.status).toBe(201);
+    const completed = await http(app).patch(`/checkout/${checkout.body.id}`).set(auth(adminToken))
+      .send({ status: 'COMPLETED' });
+    expect(completed.status, JSON.stringify(completed.body)).toBe(200);
+    expect(await prisma.contract.findUniqueOrThrow({ where: { id: oldTenant.contractId } }))
+      .toMatchObject({ status: 'TERMINATED' });
+
+    const releasedRoom = await prisma.room.findUniqueOrThrow({ where: { id: roomId } });
+    expect(releasedRoom.status).toBe('VACANT');
+    const cleaning = await http(app).patch(`/rooms/${roomId}/status`).set(auth(adminToken))
+      .send({ cleanStatus: 'CLEANING', version: releasedRoom.version });
+    expect(cleaning.status).toBe(200);
+    const cleaned = await http(app).patch(`/rooms/${roomId}/status`).set(auth(adminToken))
+      .send({ cleanStatus: 'CLEAN', version: cleaning.body.version });
+    expect(cleaned.status).toBe(200);
+
+    const incoming = await setupTenancy(app, base, { roomId, startDate: '2026-04-12' });
+    const newAccount = await preparePrepay(adminToken, incoming.tenantId, roomId);
+    const checkin = await inspect(incoming.contractId, 'CHECK_IN', checkinTime);
+    const vacancyEnd = await reading(114, checkinTime, false);
+    expect(vacancyEnd.status).toBe(201);
+
+    const single = await reading(120, '2026-04-13T02:00:00.000Z', true);
+    expect(single.status).toBe(201);
+    expect(single.body.deduction).toMatchObject({ applied: false, reasonCode: 'OCCUPANCY_UNCERTAIN' });
+    const captured = await http(app).post('/meters/batch-readings').set(auth(adminToken))
+      .send({ readings: [{ meterId, currentReading: 124, readingTime: latestTime }] });
+    expect(captured.status).toBe(201);
+    expect(captured.body.results[0]).toMatchObject({
+      success: true, deductionBlocked: { reasonCode: 'OCCUPANCY_UNCERTAIN' },
+    });
+    const reset = await http(app).post(`/meters/${meterId}/readings`).set(auth(adminToken))
+      .send(readingBody(124, latestTime, { isInitial: true, messageId: 'replacement-baseline' }));
+    expect(reset.status).toBe(400);
+
+    const blockedBeforeConfirmation = await batch(checkinTime);
+    expect(blockedBeforeConfirmation.body).toMatchObject({
+      blockedCount: 1, results: [{ status: 'BLOCKED', reasonCode: 'OCCUPANCY_UNCERTAIN' }],
+    });
+    expect(await prisma.bill.count({ where: { billType: 'UTILITY' } })).toBe(0);
+    expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(0);
+    expect(await prisma.meterReading.count({ where: { meterId, settledAt: { not: null } } })).toBe(1);
+
+    const oldPreview = await http(app).get(`/meters/${meterId}/unsettled-usage`).set(auth(adminToken))
+      .query({ settleUntil: checkoutTime });
+    expect(oldPreview.body).toMatchObject({ unsettledUsage: 10, estimatedAmount: 1000, prepayBalance: 300 });
+    const tail = await settle(checkoutTime);
+    expect(tail.status).toBe(201);
+    expect(tail.body).toMatchObject({
+      status: 'SETTLED', contractId: oldTenant.contractId, usage: 10, amount: 1000,
+    });
+
+    const pendingVacancy = await settle(checkinTime);
+    expect(pendingVacancy.body).toMatchObject({
+      status: 'BLOCKED', reasonCode: 'OCCUPANCY_UNCERTAIN', usage: 4,
+    });
+    expect(await prisma.meterReading.findUniqueOrThrow({ where: { id: vacancyEnd.body.reading.id } }))
+      .toMatchObject({ settledAt: null });
+
+    await confirm(checkin, incoming.tenantToken);
+    const blocked = await batch(latestTime);
+    expect(blocked.body).toMatchObject({
+      blockedCount: 1, settledCount: 0,
+      results: [{ status: 'BLOCKED', reasonCode: 'OCCUPANCY_UNCERTAIN', usage: 14 }],
+    });
+    const vacancy = await settle(checkinTime);
+    expect(vacancy.body).toMatchObject({
+      status: 'NO_CHANGE', reasonCode: 'VACANT_INTERVAL', settled: true, usage: 4, amount: 0,
+    });
+    const next = await settle(latestTime);
+    expect(next.body).toMatchObject({
+      status: 'SETTLED', contractId: incoming.contractId, usage: 10, amount: 1000,
+    });
+
+    const bills = await prisma.bill.findMany({ where: { billType: 'UTILITY' } });
+    expect(bills).toMatchObject([{ contractId: oldTenant.contractId, amount: 700, snapshot: {
+      readingId: finalOldReading.body.reading.id,
+      intervalEnd: checkoutTime,
+    } }]);
+    const ledger = await prisma.prepayTransaction.findMany({
+      where: { type: 'DEDUCTION' }, orderBy: { createdAt: 'asc' },
+    });
+    expect(ledger).toMatchObject([
+      { accountId: oldAccount, amount: -300, relatedId: finalOldReading.body.reading.id },
+      { accountId: newAccount, amount: -1000 },
+    ]);
+    const vacantReading = await prisma.meterReading.findUniqueOrThrow({ where: { id: vacancyEnd.body.reading.id } });
+    expect(vacantReading).toMatchObject({ settledAmount: 0, notes: expect.stringContaining('[VACANT_USAGE]') });
+    expect(Number(vacantReading.settledUsage)).toBe(4);
+    expect((await batch(latestTime)).body).toMatchObject({ settledCount: 0, noChangeCount: 1 });
+    expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(2);
+  });
+
   it('批量结算区分四类结果；缺账户补办、余额不足和失败重试均可核账', async () => {
     const base = await seedBase();
-    const blockedTenancy = await setupTenancy(app, base);
-    const fundedTenancy = await setupTenancy(app, base);
+    const blockedTenancy = await setupMeterTenancy(base);
+    const fundedTenancy = await setupMeterTenancy(base);
     const { adminToken } = blockedTenancy;
     const fundedAccount = await preparePrepay(adminToken, fundedTenancy.tenantId, fundedTenancy.roomId);
     const blocked = await createMeter(adminToken, base.buildingId, blockedTenancy.roomId, 100, 100);
@@ -160,7 +297,7 @@ describe('抄表与计价（FIN-08）', () => {
 
   it('调价跨月后按读数业务日的生效价结算，历史读数不被新价重算', async () => {
     const base = await seedBase();
-    const tenancy = await setupTenancy(app, base);
+    const tenancy = await setupMeterTenancy(base);
     await preparePrepay(tenancy.adminToken, tenancy.tenantId, tenancy.roomId);
     const meterId = await createMeter(tenancy.adminToken, base.buildingId, tenancy.roomId, 100);
 
@@ -210,7 +347,7 @@ describe('抄表与计价（FIN-08）', () => {
 
   it('同一 messageId 重复上报只落一条读数，重复请求幂等返回', async () => {
     const base = await seedBase();
-    const tenancy = await setupTenancy(app, base);
+    const tenancy = await setupMeterTenancy(base);
     const meterId = await createMeter(tenancy.adminToken, base.buildingId, tenancy.roomId, 100);
 
     const payload = readingBody(88.5, '2026-03-10T02:00:00.000Z', {
@@ -239,7 +376,7 @@ describe('抄表与计价（FIN-08）', () => {
 
   it('并发结算同一块表只扣一次费', async () => {
     const base = await seedBase();
-    const tenancy = await setupTenancy(app, base);
+    const tenancy = await setupMeterTenancy(base);
     await preparePrepay(tenancy.adminToken, tenancy.tenantId, tenancy.roomId);
     const meterId = await createMeter(tenancy.adminToken, base.buildingId, tenancy.roomId, 100);
 
@@ -280,7 +417,7 @@ describe('抄表与计价（FIN-08）', () => {
 
   it('采集备注中的保留标记不能使未结算读数被视为已结算', async () => {
     const base = await seedBase();
-    const tenancy = await setupTenancy(app, base);
+    const tenancy = await setupMeterTenancy(base);
     await preparePrepay(tenancy.adminToken, tenancy.tenantId, tenancy.roomId);
     const meterId = await createMeter(tenancy.adminToken, base.buildingId, tenancy.roomId, 100);
     const reading = await http(app).post(`/meters/${meterId}/readings`)
@@ -319,7 +456,7 @@ describe('水电结算并发和历史截止时间（CORE-02）', () => {
 
   async function prepare() {
     const base = await seedBase();
-    const tenancy = await setupTenancy(app, base);
+    const tenancy = await setupMeterTenancy(base);
     const accountId = await preparePrepay(tenancy.adminToken, tenancy.tenantId, tenancy.roomId);
     const meterId = await createMeter(tenancy.adminToken, base.buildingId, tenancy.roomId, 100, 100);
     const post = (path: string) => http(app).post(path).set(auth(tenancy.adminToken));

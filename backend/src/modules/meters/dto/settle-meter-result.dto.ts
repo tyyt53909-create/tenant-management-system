@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 const SETTLEMENT_REASON_CODES = [
   'SETTLED', 'ALREADY_SETTLED', 'ZERO_USAGE', 'ZERO_CHARGE', 'PUBLIC_AREA',
   'NO_ACTIVE_CONTRACT', 'MISSING_PREPAY_ACCOUNT', 'NO_READINGS', 'METER_NOT_FOUND',
-  'SETTLEMENT_FAILED',
+  'SETTLEMENT_FAILED', 'OCCUPANCY_UNCERTAIN', 'VACANT_INTERVAL',
 ] as const;
 
 export class MeterSettlementResultDto {
@@ -42,6 +42,9 @@ export class MeterSettlementResultDto {
 
   @ApiPropertyOptional()
   billId?: string;
+
+  @ApiPropertyOptional()
+  contractId?: string;
 
   @ApiPropertyOptional()
   prepayTransactionId?: string;

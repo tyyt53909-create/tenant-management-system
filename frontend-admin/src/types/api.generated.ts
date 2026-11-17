@@ -3978,7 +3978,7 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
@@ -3990,6 +3990,7 @@ export interface components {
             reason?: string;
             retryCondition?: string;
             billId?: string;
+            contractId?: string;
             prepayTransactionId?: string;
             /** @description 仅 SETTLED 为 true。 */
             success: boolean;
@@ -4039,7 +4040,7 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
@@ -4051,6 +4052,7 @@ export interface components {
             reason?: string;
             retryCondition?: string;
             billId?: string;
+            contractId?: string;
             prepayTransactionId?: string;
         };
         SetMeterPriceDto: {

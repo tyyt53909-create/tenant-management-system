@@ -5,7 +5,7 @@ import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-rea
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker } from './meter-dedup.util.js';
-import { findMeterSettlementCursor, lockMeters, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -143,6 +143,7 @@ export class MeterBatchReadingService {
       amount?: number;
       deducted?: number;
       shortfall?: number;
+      vacantUsage?: number;
       deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
       error?: string;
     }> = [];
@@ -236,6 +237,10 @@ export class MeterBatchReadingService {
         // 初始底数处理
         const isInitialBaseline = item.isInitial === true || (!latestReadingRecord && item.isInitial !== false);
         if (isInitialBaseline) {
+          if (meter.roomId && latestReadingRecord) {
+            results.push({ meterId: meter.id, success: false, error: '房间表已有读数，请登记普通交接读数并分段结算' });
+            continue;
+          }
           let notes = `[INITIAL]${item.notes ? ` ${item.notes}` : ' 登记初始底数'}`;
           if (item.messageId) notes += ` [msgId:${item.messageId}]`;
 
@@ -384,14 +389,10 @@ export class MeterBatchReadingService {
         const usage = Math.round((item.currentReading - previousReading) * 100) / 100;
         const shouldAutoSettle = settlesByDefault(source, item.autoSettle);
 
-        let billableUsage = usage;
-        if (shouldAutoSettle) {
-          const lastSettledReading = await findMeterSettlementCursor(tx, item.meterId);
-          const settleBaseline = lastSettledReading
-            ? Number(lastSettledReading.currentReading)
-            : previousReading;
-          billableUsage = Math.max(0, Math.round((item.currentReading - settleBaseline) * 100) / 100);
-        }
+        const baseline = shouldAutoSettle
+          ? (await findMeterSettlementCursor(tx, meter.id)) ?? await findEarliestRealReading(tx, meter.id)
+          : null;
+        const billableUsage = Math.max(0, Math.round((item.currentReading - Number(baseline?.currentReading ?? previousReading)) * 100) / 100);
 
         let notes = item.notes || '';
         if (item.messageId) notes = notes ? `${notes} [msgId:${item.messageId}]` : `[msgId:${item.messageId}]`;
@@ -419,21 +420,14 @@ export class MeterBatchReadingService {
             reading,
             billableUsage,
             operatorId,
+            baseline,
             unitPrice,
           );
-          if (deduction.applied || billableUsage === 0) {
-            const settledNotes = reading.notes ? `${reading.notes} [SETTLED]` : '[SETTLED]';
-            await tx.meterReading.update({
-              where: { id: reading.id },
-              data: {
-                notes: settledNotes,
-                settledAt: new Date(),
-                settledUsage: billableUsage,
-                settledUnitPrice: unitPrice,
-                settledAmount: (deduction.deducted ?? 0) + (deduction.shortfall ?? 0),
-              },
-            });
-            reading.notes = settledNotes;
+          const vacancy = deduction.reasonCode === 'VACANT_INTERVAL';
+          if (deduction.applied || vacancy || billableUsage === 0) {
+            await markMeterReadingSettled(
+              tx, reading, billableUsage, unitPrice, deduction.amount ?? 0, undefined, vacancy,
+            );
           }
         }
 
@@ -448,7 +442,8 @@ export class MeterBatchReadingService {
           amount: deduction?.amount ?? 0,
           deducted: deduction?.deducted ?? 0,
           shortfall: deduction?.shortfall ?? 0,
-          ...(deduction?.reasonCode === 'MISSING_PREPAY_ACCOUNT' && {
+          ...(deduction?.reasonCode === 'VACANT_INTERVAL' && { vacantUsage: billableUsage }),
+          ...(deduction?.retryCondition && {
             deductionBlocked: {
               reasonCode: deduction.reasonCode,
               reason: deduction.reason,
