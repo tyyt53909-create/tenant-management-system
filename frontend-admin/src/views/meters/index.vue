@@ -105,7 +105,10 @@
           <el-descriptions-item label="类型">{{ meterTypeMap[currentMeter?.meterType || ''] }}</el-descriptions-item>
           <el-descriptions-item label="房源">{{ unsettledInfo?.roomNumber || '公共区域' }}</el-descriptions-item>
           <el-descriptions-item label="区间归属">{{ unsettledInfo?.tenantName || (unsettledInfo?.attribution?.reasonCode === 'VACANT_INTERVAL' ? '空置期' : '—') }}</el-descriptions-item>
-          <el-descriptions-item label="单价">{{ formatMoney(currentMeter?.unitPrice || 0) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
+          <el-descriptions-item label="结算单价">
+            {{ unsettledInfo?.settlementBlock ? '—' : (unsettledInfo?.segments?.length ?? 0) > 1 ? '见分段明细'
+              : formatMoney(unsettledInfo?.unitPrice ?? currentMeter?.unitPrice ?? 0) + '/' + (unitMap[currentMeter?.meterType || ''] || '') }}
+          </el-descriptions-item>
           <el-descriptions-item label="预付余额">
             <span v-if="unsettledInfo && typeof unsettledInfo.prepayBalance === 'number'" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? 'var(--error-text)' : 'var(--success-text)', fontWeight: 'bold' }">
               {{ formatMoney(unsettledInfo.prepayBalance) }}
@@ -116,16 +119,33 @@
           <el-descriptions-item label="当前最新读数">{{ unsettledInfo?.currentReading ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="待结算用量">
             <span style="font-size: 15px; font-weight: bold; color: var(--info-text)">
-              {{ unsettledInfo?.unsettledUsage ?? 0 }} {{ unitMap[currentMeter?.meterType || ''] || '' }}
+              {{ unsettledInfo?.settlementBlock ? '—' : unsettledInfo?.unsettledUsage ?? 0 }} {{ unitMap[currentMeter?.meterType || ''] || '' }}
             </span>
           </el-descriptions-item>
           <el-descriptions-item label="预估结算金额">
             <span style="font-size: 15px; font-weight: bold; color: var(--warning-text)">
-              {{ unsettledInfo?.attribution?.reasonCode === 'OCCUPANCY_UNCERTAIN' ? '—' : formatMoney(unsettledInfo?.estimatedAmount || 0) }}
+              {{ unsettledInfo?.settlementBlock || unsettledInfo?.attribution?.reasonCode === 'OCCUPANCY_UNCERTAIN' ? '—' : formatMoney(unsettledInfo?.estimatedAmount || 0) }}
             </span>
           </el-descriptions-item>
         </el-descriptions>
 
+        <el-alert
+          v-if="unsettledInfo?.settlementBlock"
+          :title="unsettledInfo.settlementBlock.reason"
+          :description="unsettledInfo.settlementBlock.retryCondition"
+          type="warning"
+          :closable="false"
+          style="margin-bottom: 16px"
+        />
+        <el-table v-if="(unsettledInfo?.segments?.length ?? 0) > 1" :data="unsettledInfo?.segments" size="small">
+          <el-table-column label="区间截止时间">
+            <template #default="{ row }">{{ new Date(row.endAt).toLocaleString() }}</template>
+          </el-table-column>
+          <el-table-column prop="usage" label="分段用量" />
+          <el-table-column label="分段单价">
+            <template #default="{ row }">{{ formatMoney(row.unitPrice) }}</template>
+          </el-table-column>
+        </el-table>
         <el-alert
           v-if="unsettledInfo?.attribution"
           :title="unsettledInfo.attribution.reason"
@@ -155,7 +175,7 @@
         <el-button
           type="primary"
           :loading="settleSubmitLoading"
-          :disabled="settleDataLoading || !unsettledInfo || unsettledInfo.unsettledUsage <= 0 || unsettledInfo.attribution?.reasonCode === 'OCCUPANCY_UNCERTAIN'"
+          :disabled="settleDataLoading || !unsettledInfo || !!unsettledInfo.settlementBlock || unsettledInfo.unsettledUsage <= 0 || unsettledInfo.attribution?.reasonCode === 'OCCUPANCY_UNCERTAIN'"
           @click="handleConfirmSettle"
         >
           立即结算
@@ -176,7 +196,18 @@
           <template #default="{ row }">{{ Number(row.currentReading).toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="用量" width="90">
-          <template #default="{ row }">{{ Number(row.usage).toFixed(2) }}</template>
+          <template #default="{ row }">
+            {{ row.handoffRequired && !row.handoffConfirmedAt ? '待确认' : Number(row.usage).toFixed(2) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="交接" width="100">
+          <template #default="{ row }">
+            <span v-if="row.handoffConfirmedAt">已确认</span>
+            <el-button
+              v-else-if="!row.settledAt && (row.handoffRequired || Number(row.currentReading) < Number(row.previousReading))"
+              link type="primary" @click="handleConfirmHandoff(row as MeterReading)"
+            >确认交接</el-button>
+          </template>
         </el-table-column>
         <el-table-column prop="notes" label="备注" show-overflow-tooltip />
       </el-table>
@@ -224,6 +255,7 @@ import {
   getMeters,
   deleteMeter,
   getMeterReadings,
+  confirmMeterHandoff,
   getUnsettledUsage,
   type UnsettledUsage,
   settleMeter,
@@ -387,7 +419,7 @@ const handleConfirmSettle = async () => {
     });
     if (res.status === 'BLOCKED') {
       ElMessage.warning([res.reason, res.retryCondition].filter(Boolean).join('。'));
-      if (res.reasonCode === 'OCCUPANCY_UNCERTAIN') void loadSettlementPreview();
+      void loadSettlementPreview();
       return;
     }
     if (res.status === 'NO_CHANGE' || !res.settled) {
@@ -426,6 +458,29 @@ const loadReadings = async () => {
     // Handled by request interceptor
   } finally {
     readingsLoading.value = false;
+  }
+};
+
+const handleConfirmHandoff = async (row: MeterReading) => {
+  const meter = currentMeter.value;
+  if (!meter) return;
+  let previousFinal: number;
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `新表底数为 ${row.currentReading}，请输入同一时刻的旧表末数。`,
+      '确认换表或回零',
+      { inputPattern: /^\d{1,8}(\.\d{1,2})?$/, inputErrorMessage: '请输入非负读数，最多两位小数' },
+    );
+    previousFinal = Number(value);
+  } catch {
+    return;
+  }
+  try {
+    await confirmMeterHandoff(meter.id, row.id, { previousFinal, newOpening: Number(row.currentReading) });
+    ElMessage.success('交接已确认，可以发起周期结算');
+    await loadReadings();
+  } catch (error) {
+    notifyApiError(error, '确认交接失败');
   }
 };
 

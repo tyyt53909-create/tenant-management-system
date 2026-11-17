@@ -5,8 +5,9 @@ import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-rea
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker } from './meter-dedup.util.js';
-import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { findEarliestRealReading, findMeterSettlementCursor, findNextConfirmedHandoff, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { FUTURE_READING_MESSAGE, hasLegacySimulationNote, lookupMeterReading, realMeterReadings } from './meter-reading-scope.js';
+import { quoteMeterInterval, type MeterIntervalBlock } from './meter-interval-quote.js';
 import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -308,11 +309,16 @@ export class MeterBatchReadingService {
 
         // 乱序延迟上传防护
         if (latestReadingRecord && readingTime < latestReadingRecord.readingTime) {
+          const handoff = await findNextConfirmedHandoff(tx, item.meterId, readingTime);
+          if (handoff && item.currentReading > Number(handoff.handoffPreviousFinal) && !item.allowRollover) {
+            results.push({ meterId: item.meterId, success: false, error: '乱序读数异常：当前读数高于旧表交接末数' });
+            continue;
+          }
           const laterReadingWithLowerValue = await tx.meterReading.findFirst({
             where: {
               meterId: item.meterId,
               ...scope,
-              readingTime: { gte: readingTime },
+              readingTime: { gte: readingTime, ...(handoff && { lt: handoff.readingTime }) },
               currentReading: { lt: item.currentReading },
             },
           });
@@ -363,6 +369,7 @@ export class MeterBatchReadingService {
               source: source as ReadingSource,
               readingTime,
               createdAt: receivedAt,
+              handoffRequired: item.allowRollover === true,
               readBy: operatorId,
               notes,
               dedupKey,
@@ -405,7 +412,6 @@ export class MeterBatchReadingService {
         const baseline = shouldAutoSettle
           ? (await findMeterSettlementCursor(tx, meter.id)) ?? await findEarliestRealReading(tx, meter.id)
           : null;
-        const billableUsage = Math.max(0, Math.round((item.currentReading - Number(baseline?.currentReading ?? previousReading)) * 100) / 100);
 
         let notes = item.notes || '';
         if (item.messageId) notes = notes ? `${notes} [msgId:${item.messageId}]` : `[msgId:${item.messageId}]`;
@@ -419,6 +425,7 @@ export class MeterBatchReadingService {
             source: source as ReadingSource,
             readingTime,
             createdAt: receivedAt,
+            handoffRequired: item.allowRollover === true,
             readBy: operatorId,
             notes: notes || null,
             dedupKey,
@@ -426,22 +433,25 @@ export class MeterBatchReadingService {
         });
 
         let deduction: Awaited<ReturnType<MeterBillingService['applyReadingDeduction']>> | undefined;
+        let intervalBlock: MeterIntervalBlock | undefined;
+        let billableUsage = 0;
         if (shouldAutoSettle) {
-          const unitPrice = await this.priceService.resolveUnitPrice(meter, readingTime, tx);
-          deduction = await this.billingService.applyReadingDeduction(
-            tx,
-            meter,
-            reading,
-            billableUsage,
-            operatorId,
-            baseline,
-            unitPrice,
-          );
-          const vacancy = deduction.reasonCode === 'VACANT_INTERVAL';
-          if (deduction.applied || vacancy || billableUsage === 0) {
-            await markMeterReadingSettled(
-              tx, reading, billableUsage, unitPrice, deduction.amount ?? 0, undefined, vacancy,
+          const quote = await quoteMeterInterval(tx, this.priceService, meter, baseline, {
+            ...reading, currentReading: item.currentReading, readingTime,
+          }, Math.max(0, usage));
+          if ('reasonCode' in quote) {
+            intervalBlock = quote;
+          } else {
+            billableUsage = quote.usage;
+            deduction = await this.billingService.applyReadingDeduction(
+              tx, meter, reading, billableUsage, operatorId, baseline, quote.unitPrice, quote,
             );
+            const vacancy = deduction.reasonCode === 'VACANT_INTERVAL';
+            if (deduction.applied || vacancy || billableUsage === 0) {
+              await markMeterReadingSettled(
+                tx, reading, billableUsage, quote.unitPrice, deduction.amount ?? 0, undefined, vacancy, quote.segments,
+              );
+            }
           }
         }
 
@@ -457,6 +467,7 @@ export class MeterBatchReadingService {
           deducted: deduction?.deducted ?? 0,
           shortfall: deduction?.shortfall ?? 0,
           ...(deduction?.reasonCode === 'VACANT_INTERVAL' && { vacantUsage: billableUsage }),
+          ...(intervalBlock && { deductionBlocked: intervalBlock }),
           ...(deduction?.retryCondition && {
             deductionBlocked: {
               reasonCode: deduction.reasonCode,

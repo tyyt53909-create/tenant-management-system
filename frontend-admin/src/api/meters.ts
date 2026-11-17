@@ -33,6 +33,10 @@ export interface MeterReading {
   source: 'MANUAL' | 'DEVICE';
   readingTime: string;
   readBy: string | null;
+  handoffRequired?: boolean;
+  handoffPreviousFinal?: number | string | null;
+  handoffConfirmedAt?: string | null;
+  settledAt?: string | null;
   notes: string | null;
   createdAt: string;
 }
@@ -73,6 +77,12 @@ export const createMeterReading = (
   return request.post(`/meters/${meterId}/readings`, data);
 };
 
+export const confirmMeterHandoff = (
+  meterId: string,
+  readingId: string,
+  data: components['schemas']['ConfirmMeterHandoffDto'],
+): Promise<MeterReading> => request.post(`/meters/${meterId}/readings/${readingId}/handoff`, data);
+
 /** 水电结算结果（后端 `meter-billing.service.ts` 的返回形状） */
 export type MeterSettleResult = components['schemas']['MeterSettlementResultDto'] & {
   deduction?: ReadingDeduction;
@@ -91,6 +101,12 @@ export interface UnsettledUsage {
     reason: string;
     retryCondition?: string;
   };
+  settlementBlock?: {
+    reasonCode: 'UNCONFIRMED_HANDOFF' | 'MISSING_RATE_BOUNDARY';
+    reason: string;
+    retryCondition: string;
+  };
+  segments?: components['schemas']['MeterChargeSegmentDto'][];
   prepayBalance?: number | null;
   lastSettledReading: number;
   lastSettledTime: string | null;

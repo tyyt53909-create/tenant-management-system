@@ -6,8 +6,10 @@ import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker, isUniqueViolation } from './meter-dedup.util.js';
-import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { findEarliestRealReading, findMeterSettlementCursor, findNextConfirmedHandoff, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { FUTURE_READING_MESSAGE, hasLegacySimulationNote, lookupMeterReading, realMeterReadings } from './meter-reading-scope.js';
+import { quoteMeterInterval } from './meter-interval-quote.js';
+import type { ConfirmMeterHandoffDto } from './dto/confirm-meter-handoff.dto.js';
 import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -176,11 +178,15 @@ export class MeterReadingService {
         }
 
         // 检查是否存在逻辑矛盾：在此时间点之后的历史记录，其读数居然低于当前新上报读数（除非允许翻转）
+        const handoff = simulated ? undefined : await findNextConfirmedHandoff(tx, meterId, readingTime);
+        if (handoff && dto.currentReading > Number(handoff.handoffPreviousFinal) && !dto.allowRollover) {
+          throw new BadRequestException('乱序读数异常：当前读数高于旧表交接末数');
+        }
         const laterReadingWithLowerValue = await tx.meterReading.findFirst({
           where: {
             meterId,
             ...scope,
-            readingTime: { gte: readingTime },
+            readingTime: { gte: readingTime, ...(handoff && { lt: handoff.readingTime }) },
             currentReading: { lt: dto.currentReading },
           },
         });
@@ -219,6 +225,7 @@ export class MeterReadingService {
             source: source as ReadingSource,
             readingTime,
             createdAt: receivedAt,
+            handoffRequired: !simulated && dto.allowRollover === true,
             readBy: operatorId,
             notes,
             dedupKey,
@@ -247,7 +254,6 @@ export class MeterReadingService {
       const baseline = shouldAutoSettle
         ? (await findMeterSettlementCursor(tx, meterId)) ?? await findEarliestRealReading(tx, meterId)
         : null;
-      const billableUsage = Math.max(0, Math.round((dto.currentReading - Number(baseline?.currentReading ?? previousReading)) * 100) / 100);
 
       const reading = await tx.meterReading.create({
         data: {
@@ -258,6 +264,7 @@ export class MeterReadingService {
           source: source as ReadingSource,
           readingTime,
           createdAt: receivedAt,
+          handoffRequired: !simulated && dto.allowRollover === true,
           readBy: operatorId,
           notes: notes || null,
           dedupKey,
@@ -269,22 +276,20 @@ export class MeterReadingService {
         reason: simulated ? '模拟读数仅用于模拟报告' : '已采集读数，未开启自动扣费（等待周期结算）',
       };
       if (shouldAutoSettle) {
-        // 按读数业务日期取生效单价（T274）；缺历史时回落到表上当前价
-        const unitPrice = await this.priceService.resolveUnitPrice(meter, readingTime, tx);
+        const quote = await quoteMeterInterval(tx, this.priceService, meter, baseline, {
+          ...reading, currentReading: dto.currentReading, readingTime,
+        }, Math.max(0, usage));
+        if ('reasonCode' in quote) {
+          return { reading, deduction: { applied: false, ...quote } };
+        }
         const charge = await this.billingService.applyReadingDeduction(
-          tx,
-          meter,
-          reading,
-          billableUsage,
-          operatorId,
-          baseline,
-          unitPrice,
+          tx, meter, reading, quote.usage, operatorId, baseline, quote.unitPrice, quote,
         );
         deduction = charge;
         const vacancy = charge.reasonCode === 'VACANT_INTERVAL';
-        if (charge.applied || vacancy || billableUsage === 0) {
+        if (charge.applied || vacancy || quote.usage === 0) {
           reading.notes = await markMeterReadingSettled(
-            tx, reading, billableUsage, unitPrice, charge.amount ?? 0, undefined, vacancy,
+            tx, reading, quote.usage, quote.unitPrice, charge.amount ?? 0, undefined, vacancy, quote.segments,
           );
         }
       }
@@ -305,6 +310,52 @@ export class MeterReadingService {
       }
       throw error;
     }
+  }
+
+  async confirmMeterHandoff(meterId: string, readingId: string, dto: ConfirmMeterHandoffDto, operatorId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await lockMeters(tx, [meterId]);
+      const scope = realMeterReadings(tx);
+      const reading = await tx.meterReading.findFirst({ where: { id: readingId, meterId, ...scope } });
+      if (!reading) throw new NotFoundException('找不到该表计的真实交接读数');
+      if (Number(reading.currentReading) !== dto.newOpening) {
+        throw new BadRequestException('新表底数必须与这条交接读数一致');
+      }
+      if (reading.handoffConfirmedAt) {
+        if (Number(reading.handoffPreviousFinal) !== dto.previousFinal) {
+          throw new BadRequestException('已确认交接，不可覆盖旧表末数');
+        }
+        return reading;
+      }
+      const cursor = await findMeterSettlementCursor(tx, meterId);
+      if (cursor && cursor.readingTime >= reading.readingTime) {
+        throw new BadRequestException('不能修改已结算区间的交接证据');
+      }
+      const duplicates = await tx.meterReading.count({ where: {
+        meterId, ...scope, readingTime: reading.readingTime, id: { not: readingId },
+      } });
+      if (duplicates > 0) throw new BadRequestException('同一时刻存在多条真实读数，须先核对交接证据');
+      const previous = await tx.meterReading.findFirst({
+        where: { meterId, ...scope, readingTime: { lt: reading.readingTime } },
+        orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
+      });
+      if (!previous || dto.previousFinal < Number(previous.currentReading)) {
+        throw new BadRequestException('缺少旧表底数，或旧表末数低于交接前读数');
+      }
+
+      const previousReading = Number(previous.currentReading);
+      return tx.meterReading.update({
+        where: { id: reading.id },
+        data: {
+          handoffRequired: true,
+          handoffPreviousFinal: dto.previousFinal,
+          handoffConfirmedBy: operatorId,
+          handoffConfirmedAt: new Date(),
+          previousReading,
+          usage: (Math.round(dto.previousFinal * 100) - Math.round(previousReading * 100)) / 100,
+        },
+      });
+    }, METER_WRITE_TRANSACTION);
   }
 
   /**

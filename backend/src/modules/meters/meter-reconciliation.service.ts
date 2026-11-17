@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { MeterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MeterPriceService } from './meter-price.service.js';
+import type { MeterChargeSegment } from './meter-interval-quote.js';
 import { realMeterReadings } from './meter-reading-scope.js';
 
 export interface ReconcileQuery {
@@ -82,7 +83,7 @@ export class MeterReconciliationService {
     const readings = await this.prisma.meterReading.findMany({
       where: { meterId: { in: meterIds }, readingTime: { gte: start, lt: end }, ...realMeterReadings(this.prisma) },
       orderBy: [{ meterId: 'asc' }, { readingTime: 'asc' }],
-      select: { id: true, meterId: true, currentReading: true, usage: true, readingTime: true },
+      select: { id: true, meterId: true, currentReading: true, usage: true, readingTime: true, settledSegments: true },
     });
 
     const readingsByMeter = groupBy(readings, (reading) => reading.meterId);
@@ -92,7 +93,8 @@ export class MeterReconciliationService {
       const meterReadings = readingsByMeter.get(meter.id) ?? [];
       const opening = meterReadings.length ? Number(meterReadings[0].currentReading) : null;
       const closing = meterReadings.length ? Number(meterReadings[meterReadings.length - 1].currentReading) : null;
-      const readingUsage = opening !== null && closing !== null ? round2(closing - opening) : 0;
+      const segmented = reconcileSettledSegments(meterReadings);
+      const readingUsage = segmented?.usage ?? (opening !== null && closing !== null ? round2(closing - opening) : 0);
       const recordedUsage = round2(meterReadings.reduce((sum, reading) => sum + Number(reading.usage), 0));
 
       const readingIds = meterReadings.map((reading) => reading.id);
@@ -110,7 +112,7 @@ export class MeterReconciliationService {
         ? meterReadings[meterReadings.length - 1].readingTime
         : end;
       const unitPrice = priceBook.priceFor(meter, pricingAt);
-      const readingAmount = Math.round(readingUsage * unitPrice);
+      const readingAmount = segmented?.amount ?? Math.round(readingUsage * unitPrice);
       const difference = chargedAmount + billAmount - readingAmount;
 
       const issues: string[] = [];
@@ -154,6 +156,31 @@ export class MeterReconciliationService {
     `;
     return Number(bills[0]?.total ?? 0);
   }
+}
+
+/** 仅在分段证据连续覆盖首末读数时替代旧版期末价估算。 */
+function reconcileSettledSegments(readings: Array<{ id: string; settledSegments: unknown }>) {
+  let covered = readings[0]?.id;
+  let usageHundredths = 0;
+  let amount = 0;
+  for (const reading of readings.slice(1)) {
+    if (!Array.isArray(reading.settledSegments)) continue;
+    const segments = reading.settledSegments as MeterChargeSegment[];
+    if (segments[0]?.startReadingId !== covered
+      || segments.at(-1)?.endReadingId !== reading.id) continue;
+
+    let segmentAmount = 0n;
+    for (const segment of segments) {
+      const units = Math.round(segment.usage * 100);
+      usageHundredths += units;
+      segmentAmount += BigInt(units) * BigInt(segment.unitPrice);
+    }
+    amount += Number((segmentAmount + 50n) / 100n);
+    covered = reading.id;
+  }
+  return readings.length > 1 && covered === readings.at(-1)?.id
+    ? { amount, usage: usageHundredths / 100 }
+    : null;
 }
 
 function summarize(rows: ReconciliationRow[]) {

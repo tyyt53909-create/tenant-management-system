@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
+import type { ConfirmMeterHandoffDto } from './dto/confirm-meter-handoff.dto.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
@@ -96,6 +97,10 @@ export class MetersService {
     operatorId: string,
   ) {
     return this.readingService.createReading(meterId, dto, operatorId);
+  }
+
+  async confirmMeterHandoff(meterId: string, readingId: string, dto: ConfirmMeterHandoffDto, operatorId: string) {
+    return this.readingService.confirmMeterHandoff(meterId, readingId, dto, operatorId);
   }
 
   /** 讀數歷史 */

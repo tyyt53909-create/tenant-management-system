@@ -1483,6 +1483,14 @@
   },
   {
     "method": "POST",
+    "path": "/api/meters/:id/readings/:readingId/handoff",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
     "path": "/api/meters/:id/settle",
     "public": false,
     "roles": [

@@ -6,6 +6,7 @@ import { MetersSimulatorService } from './meters-simulator.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
 import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
+import { ConfirmMeterHandoffDto } from './dto/confirm-meter-handoff.dto.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
@@ -164,6 +165,19 @@ export class MetersController {
   ) {
     const user = resolveAuthUser(userParam);
     return this.metersService.createReading(id, dto, user.userId);
+  }
+
+  @Post(':id/readings/:readingId/handoff')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  confirmMeterHandoff(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Param('readingId') readingId: string,
+    @Body() dto: ConfirmMeterHandoffDto,
+  ) {
+    const user = resolveAuthUser(userParam);
+    return this.metersService.confirmMeterHandoff(id, readingId, dto, user.userId);
   }
 
   // 讀數歷史（分頁）
