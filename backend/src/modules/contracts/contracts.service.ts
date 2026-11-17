@@ -248,7 +248,7 @@ export class ContractsService {
   }
 
   async findAll(query: QueryContractsDto) {
-    const { page = 1, limit = 20, status, tenantId, roomId, buildingId } = query;
+    const { page = 1, limit = 20, status, tenantId, roomId, buildingId, contractNumber } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.ContractWhereInput = {};
@@ -256,6 +256,7 @@ export class ContractsService {
     if (tenantId) where.tenantId = tenantId;
     if (roomId) where.roomId = roomId;
     if (buildingId) where.buildingId = buildingId;
+    if (contractNumber) where.contractNumber = { contains: contractNumber, mode: 'insensitive' };
 
     const [data, total] = await Promise.all([
       this.prisma.contract.findMany({
@@ -477,6 +478,7 @@ export class ContractsService {
 
     const where: any = scopedWhere(tenantId);
     if (status) where.status = status;
+    if (query.contractNumber) where.contractNumber = { contains: query.contractNumber, mode: 'insensitive' };
 
     const [data, total] = await Promise.all([
       this.prisma.contract.findMany({

@@ -20,6 +20,7 @@ describe('MeterBillingService', () => {
       meter: { findUnique: vi.fn(), findMany: vi.fn() },
       meterReading: { fields: { createdAt: Symbol('meterReading.createdAt') }, findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
       contract: { findMany: vi.fn().mockResolvedValue([]) },
+      utilityPolicyVersion: { findFirst: vi.fn().mockResolvedValue(null) },
       prepayAccount: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), updateMany: vi.fn() },
       prepayTransaction: { create: vi.fn() },
       bill: { create: vi.fn() },
@@ -55,6 +56,15 @@ describe('MeterBillingService', () => {
     expect(await service.applyReadingDeduction(tx, meter, reading, 1, 'op', baseline)).toMatchObject({ applied: false, reasonCode: 'MISSING_PREPAY_ACCOUNT' });
     expect(tx.bill.create).not.toHaveBeenCalled();
     expect(tx.prepayTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('blocks reviewed policy posting before the legacy price and account logic', async () => {
+    prisma.contract.findMany.mockResolvedValue([meterTestContract()]);
+    prisma.utilityPolicyVersion.findFirst.mockResolvedValue({ id: 'policy' });
+    expect(await service.applyReadingDeduction(prisma, { ...meter, unitPrice: 0 }, reading, 10, 'admin', baseline))
+      .toMatchObject({ applied: false, reasonCode: 'RULE_POSTING_NOT_ENABLED' });
+    expect(prisma.prepayAccount.findUnique).not.toHaveBeenCalled();
+    expect(prisma.bill.create).not.toHaveBeenCalled();
   });
 
   it('连续续租可沿用同一租客的入住依据，同时阻断跨合同累计扣费', async () => {

@@ -16,6 +16,9 @@ export const ERROR_CATALOG = {
   COMMON_BAD_REQUEST: { status: 400, description: '请求参数有误' },
   COMMON_RESOURCE_NOT_FOUND: { status: 404, description: '资源不存在' },
   COMMON_CONFLICT: { status: 409, description: '数据冲突，请刷新后重试' },
+  PREVIEW_STALE: { status: 409, description: '核验来源已变化，需重新预览确认' },
+  IDEMPOTENCY_CONFLICT: { status: 409, description: '同一请求编号提交了不同资料' },
+  UTILITY_RULE_BLOCKED: { status: 409, description: '收费规则或交接责任未通过核验' },
   COMMON_INTERNAL_ERROR: { status: 500, description: '服务器内部错误' },
   COMMON_RATE_LIMIT_EXCEEDED: { status: 429, description: '请求过于频繁，请稍后再试' },
 

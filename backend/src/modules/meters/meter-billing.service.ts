@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { randomHex } from '../../common/utils/secure-random.js';
@@ -22,6 +22,12 @@ const OCCUPANCY_UNCERTAIN = {
 const VACANT_INTERVAL = {
   reasonCode: 'VACANT_INTERVAL',
   reason: '读数区间为已确认空置期，用量单独留存',
+} as const;
+
+const RULE_POSTING_NOT_ENABLED = {
+  reasonCode: 'RULE_POSTING_NOT_ENABLED',
+  reason: '该合同已核验新的收款规则，正式费用接入尚待完成',
+  retryCondition: '完成新规则与统一费用的切换验收后，重新预览并确认结算',
 } as const;
 
 class NoMeterReadingsException extends BadRequestException {
@@ -76,6 +82,10 @@ export class MeterBillingService {
     }
     if (owner.kind !== 'TENANT' || !baseline) {
       return { applied: false as const, ...OCCUPANCY_UNCERTAIN, unitPrice };
+    }
+
+    if (await this.hasReviewedRule(tx, owner.contractId, meter.meterType)) {
+      return { applied: false as const, ...RULE_POSTING_NOT_ENABLED, unitPrice };
     }
 
     const amount = quote?.amount ?? Math.round(usage * unitPrice);
@@ -167,6 +177,12 @@ export class MeterBillingService {
     return this.clock.monthKey(date);
   }
 
+  private async hasReviewedRule(db: Prisma.TransactionClient, contractId: string, meterType: string) {
+    return Boolean(await db.utilityPolicyVersion.findFirst({
+      where: { contractId, feeType: meterType as MeterType }, select: { id: true },
+    }));
+  }
+
   /**
    * 查看水电表未结算用量与预估金额（预览）
    */
@@ -229,6 +245,7 @@ export class MeterBillingService {
     const owner = !blocked && meter.roomId && unsettledUsage > 0
       ? await resolveMeterUsageOwner(db, this.clock, meter.roomId, baseline?.readingTime, latestReading.readingTime)
       : null;
+    const reviewedRule = owner?.kind === 'TENANT' && await this.hasReviewedRule(db, owner.contractId, meter.meterType);
 
     let prepayBalance: number | null = null;
     if (meter.roomId && owner?.kind === 'TENANT') {
@@ -243,6 +260,7 @@ export class MeterBillingService {
       meterNumber: meter.meterNumber,
       meterType: meter.meterType,
       ...(blocked ? { settlementBlock: quote } : { unitPrice: quote.unitPrice, segments: quote.segments }),
+      ...(reviewedRule && { settlementBlock: RULE_POSTING_NOT_ENABLED }),
       roomNumber: meter.room?.roomNumber || '公共区域',
       tenantName: owner?.kind === 'TENANT' ? owner.tenantName : null,
       contractId: owner?.kind === 'TENANT' ? owner.contractId : null,

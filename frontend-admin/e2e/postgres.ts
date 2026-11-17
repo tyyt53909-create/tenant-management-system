@@ -85,3 +85,22 @@ export function readBatch(batch: string) {
     FROM periodic_charge_items WHERE "batchId" = :'batch';
   `, { batch });
 }
+
+export function readRuleEvidence(contract: string, meter: string) {
+  return query<{
+    policies: Array<{ id: string; version: number; collectionMode: string; rateCents: number }>;
+    intervals: Array<{ id: string; contractId: string; tenantId: string; openingReadingId: string; closingReadingId: string }>;
+    confirmations: number;
+  }>(`
+    SELECT json_build_object(
+      'policies', coalesce((SELECT json_agg(row_to_json(p) ORDER BY version) FROM
+        (SELECT id, version, "collectionMode", "rateCents" FROM utility_policy_versions WHERE "contractId" = :'contract') p), '[]'),
+      'intervals', coalesce((SELECT json_agg(row_to_json(i) ORDER BY i.id) FROM
+        (SELECT id, "contractId", "tenantId", "openingReadingId", "closingReadingId"
+         FROM meter_responsibility_intervals WHERE "contractId" = :'contract' AND "meterId" = :'meter') i), '[]'),
+      'confirmations', (SELECT count(*) FROM utility_rule_confirmations c
+        JOIN meter_responsibility_intervals i ON c.result->>'responsibilityIntervalId' = i.id
+        WHERE i."contractId" = :'contract' AND i."meterId" = :'meter')
+    );
+  `, { contract, meter });
+}

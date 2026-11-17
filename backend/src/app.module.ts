@@ -29,6 +29,7 @@ import { DepositsModule } from './modules/deposits/deposits.module.js';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module.js';
 import { MetersModule } from './modules/meters/meters.module.js';
 import { PeriodicChargesModule } from './modules/periodic-charges/periodic-charges.module.js';
+import { UtilityReadinessModule } from './modules/utility-readiness/utility-readiness.module.js';
 
 import { PrepayModule } from './modules/prepay/prepay.module.js';
 import { CheckoutModule } from './modules/checkout/checkout.module.js';
@@ -98,6 +99,7 @@ import { CleaningModule } from './modules/cleaning/cleaning.module.js';
     MaintenanceModule,
     MetersModule,
     PeriodicChargesModule,
+    UtilityReadinessModule,
 
     PrepayModule,
     CheckoutModule,
