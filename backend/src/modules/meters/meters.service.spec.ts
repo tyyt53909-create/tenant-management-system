@@ -911,7 +911,7 @@ describe('MetersService', () => {
 
       expect(result.unsettledUsage).toBe(120); // 320 - 200
       expect(result.estimatedAmount).toBe(12000); // 120 * 100
-      expect(result.prepayBalance).toBe(15000);
+      expect(result).toMatchObject({ prepayBalance: 15000 });
       expect(result.lastSettledReading).toBe(200);
       expect(result.currentReading).toBe(320);
     });

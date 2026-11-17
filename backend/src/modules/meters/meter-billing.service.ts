@@ -10,6 +10,7 @@ import { MeterPriceService } from './meter-price.service.js';
 import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { resolveMeterUsageOwner } from './meter-usage-attribution.js';
 import { hasReservedReadingMarker } from './meter-dedup.util.js';
+import { quoteMeterInterval, type MeterIntervalQuote } from './meter-interval-quote.js';
 import { realMeterReadings } from './meter-reading-scope.js';
 
 const OCCUPANCY_UNCERTAIN = {
@@ -59,6 +60,7 @@ export class MeterBillingService {
     operatorId: string,
     baseline: { id: string; readingTime: Date } | null,
     unitPrice = meter.unitPrice,
+    quote?: MeterIntervalQuote,
   ) {
     if (!meter.roomId) {
       return { applied: false as const, reasonCode: 'PUBLIC_AREA' as const, reason: '公共区域表按运营成本处理，不扣费', unitPrice };
@@ -76,7 +78,7 @@ export class MeterBillingService {
       return { applied: false as const, ...OCCUPANCY_UNCERTAIN, unitPrice };
     }
 
-    const amount = Math.round(usage * unitPrice);
+    const amount = quote?.amount ?? Math.round(usage * unitPrice);
     if (amount <= 0) {
       return { applied: false as const, reasonCode: 'ZERO_CHARGE' as const, reason: '应收金额为 0，无扣费', unitPrice };
     }
@@ -147,7 +149,8 @@ export class MeterBillingService {
             intervalStart: baseline.readingTime.toISOString(),
             intervalEnd: reading.readingTime.toISOString(),
             usage,
-            unitPrice,
+            unitPrice: quote?.segments.some((segment) => segment.usage > 0 && segment.unitPrice !== unitPrice) ? null : unitPrice,
+            ...(quote?.segments.length && { segments: quote.segments.map((segment) => ({ ...segment })) }),
             totalAmount: amount,
             deducted,
             shortfall,
@@ -219,9 +222,10 @@ export class MeterBillingService {
     const baseline = lastSettledReading ?? await findEarliestRealReading(this.prisma, meterId);
     const baselineVal = Number(baseline?.currentReading ?? 0);
     const currentVal = Number(latestReading.currentReading);
-    const unsettledUsage = Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100);
-    const unitPrice = await this.priceService.resolveUnitPrice(meter, latestReading.readingTime);
-    const owner = meter.roomId && unsettledUsage > 0
+    const quote = await quoteMeterInterval(this.prisma, this.priceService, meter, baseline, latestReading, Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100));
+    const blocked = 'reasonCode' in quote;
+    const unsettledUsage = blocked ? 0 : quote.usage;
+    const owner = !blocked && meter.roomId && unsettledUsage > 0
       ? await resolveMeterUsageOwner(this.prisma, this.clock, meter.roomId, baseline?.readingTime, latestReading.readingTime)
       : null;
 
@@ -237,7 +241,7 @@ export class MeterBillingService {
       meterId,
       meterNumber: meter.meterNumber,
       meterType: meter.meterType,
-      unitPrice,
+      ...(blocked ? { settlementBlock: quote } : { unitPrice: quote.unitPrice, segments: quote.segments }),
       roomNumber: meter.room?.roomNumber || '公共区域',
       tenantName: owner?.kind === 'TENANT' ? owner.tenantName : null,
       attribution: owner?.kind === 'UNKNOWN' ? OCCUPANCY_UNCERTAIN
@@ -248,7 +252,7 @@ export class MeterBillingService {
       currentReading: currentVal,
       readingTime: latestReading.readingTime,
       unsettledUsage,
-      estimatedAmount: owner?.kind === 'VACANT' ? 0 : Math.round(unsettledUsage * unitPrice),
+      estimatedAmount: blocked || owner?.kind === 'VACANT' ? 0 : quote.amount,
       targetReadingId: latestReading.id,
       hasReadings: true,
     };
@@ -311,12 +315,14 @@ export class MeterBillingService {
       const baselineVal = Number(baseline?.currentReading ?? 0);
 
       const currentVal = Number(latestReading.currentReading);
-      const usage = Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100);
-      const unitPrice = await this.priceService.resolveUnitPrice(meter, latestReading.readingTime, tx);
-      const amount = Math.round(usage * unitPrice);
+      const quote = await quoteMeterInterval(tx, this.priceService, meter, baseline, latestReading, Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100));
+      if ('reasonCode' in quote) {
+        return { meterId, status: 'BLOCKED', settled: false, usage: 0, amount: 0, ...quote };
+      }
+      const { usage, unitPrice, amount, segments } = quote;
 
       if (usage <= 0) {
-        await markMeterReadingSettled(tx, latestReading, 0, unitPrice, 0, dto.notes);
+        await markMeterReadingSettled(tx, latestReading, 0, unitPrice, 0, dto.notes, false, segments);
         return {
           meterId,
           settled: true,
@@ -338,12 +344,13 @@ export class MeterBillingService {
         operatorId,
         baseline,
         unitPrice,
+        quote,
       );
 
       if (!deduction.applied) {
         const vacancy = deduction.reasonCode === 'VACANT_INTERVAL';
         if (vacancy) {
-          await markMeterReadingSettled(tx, latestReading, usage, unitPrice, 0, dto.notes, true);
+          await markMeterReadingSettled(tx, latestReading, usage, unitPrice, 0, dto.notes, true, segments);
         }
         return {
           meterId,
@@ -363,7 +370,7 @@ export class MeterBillingService {
 
       const settledAmount =
         (deduction.deducted ?? 0) + (deduction.shortfall ?? 0);
-      await markMeterReadingSettled(tx, latestReading, usage, unitPrice, settledAmount, dto.notes);
+      await markMeterReadingSettled(tx, latestReading, usage, unitPrice, settledAmount, dto.notes, false, segments);
 
       return {
         meterId,
@@ -377,7 +384,8 @@ export class MeterBillingService {
         currentReading: currentVal,
         usage,
         amount,
-        unitPrice,
+        unitPrice: segments.some((segment) => segment.usage > 0 && segment.unitPrice !== unitPrice) ? undefined : unitPrice,
+        segments,
         deduction,
       };
     }, METER_WRITE_TRANSACTION);

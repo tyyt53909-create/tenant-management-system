@@ -1091,6 +1091,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/meters/{id}/readings/{readingId}/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MetersController_confirmMeterHandoff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/meters/{id}/settle": {
         parameters: {
             query?: never;
@@ -3973,17 +3989,29 @@ export interface components {
             /** @description 结算备注 */
             notes?: string;
         };
+        MeterChargeSegmentDto: {
+            startReadingId: string;
+            endReadingId: string;
+            startAt: string;
+            endAt: string;
+            startReading: number;
+            endReading: number;
+            usage: number;
+            unitPrice: number;
+            nextOpeningReading?: number;
+        };
         MeterBatchSettlementItemDto: {
             meterId: string;
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
             /** @description 整数分。未处理的读数可能返回预计应收金额，实际入账以 status 和凭证为准。 */
             amount: number;
+            segments?: components["schemas"]["MeterChargeSegmentDto"][];
             unitPrice?: number;
             baselineReading?: number;
             currentReading?: number;
@@ -4029,6 +4057,12 @@ export interface components {
             allowRollover?: boolean;
             notes?: string;
         };
+        ConfirmMeterHandoffDto: {
+            /** @description 交接时旧表末数或回零前末数 */
+            previousFinal: number;
+            /** @description 同一交接时刻的新表底数，必须等于该条已采集的读数 */
+            newOpening: number;
+        };
         SettleMeterDto: {
             /** @description 结算截止时间（默认当前时间） */
             settleUntil?: string;
@@ -4040,12 +4074,13 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
             /** @description 整数分。未处理的读数可能返回预计应收金额，实际入账以 status 和凭证为准。 */
             amount: number;
+            segments?: components["schemas"]["MeterChargeSegmentDto"][];
             unitPrice?: number;
             baselineReading?: number;
             currentReading?: number;
@@ -7531,6 +7566,50 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateMeterReadingDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MetersController_confirmMeterHandoff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                readingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMeterHandoffDto"];
             };
         };
         responses: {

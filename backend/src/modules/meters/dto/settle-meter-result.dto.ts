@@ -3,8 +3,20 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 const SETTLEMENT_REASON_CODES = [
   'SETTLED', 'ALREADY_SETTLED', 'ZERO_USAGE', 'ZERO_CHARGE', 'PUBLIC_AREA',
   'NO_ACTIVE_CONTRACT', 'MISSING_PREPAY_ACCOUNT', 'NO_READINGS', 'METER_NOT_FOUND',
-  'SETTLEMENT_FAILED', 'OCCUPANCY_UNCERTAIN', 'VACANT_INTERVAL',
+  'SETTLEMENT_FAILED', 'OCCUPANCY_UNCERTAIN', 'VACANT_INTERVAL', 'UNCONFIRMED_HANDOFF', 'MISSING_RATE_BOUNDARY',
 ] as const;
+
+export class MeterChargeSegmentDto {
+  @ApiProperty() startReadingId!: string;
+  @ApiProperty() endReadingId!: string;
+  @ApiProperty() startAt!: string;
+  @ApiProperty() endAt!: string;
+  @ApiProperty() startReading!: number;
+  @ApiProperty() endReading!: number;
+  @ApiProperty() usage!: number;
+  @ApiProperty() unitPrice!: number;
+  @ApiPropertyOptional() nextOpeningReading?: number;
+}
 
 export class MeterSettlementResultDto {
   @ApiProperty()
@@ -24,6 +36,9 @@ export class MeterSettlementResultDto {
 
   @ApiProperty({ description: '整数分。未处理的读数可能返回预计应收金额，实际入账以 status 和凭证为准。' })
   amount!: number;
+
+  @ApiPropertyOptional({ type: [MeterChargeSegmentDto] })
+  segments?: MeterChargeSegmentDto[];
 
   @ApiPropertyOptional()
   unitPrice?: number;

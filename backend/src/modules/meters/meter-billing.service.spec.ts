@@ -157,6 +157,27 @@ describe('MeterBillingService', () => {
     }
   });
 
+  it('历史区间跨越费率而缺少生效时刻读数时，预览和执行一致阻断', async () => {
+    const latest = { ...reading, currentReading: 110, notes: null };
+    const cursor = { ...baseline, currentReading: 100, settledAt: baseline.readingTime };
+    prisma.meter.findUnique.mockResolvedValue(meter);
+    prisma.meterReading.findFirst.mockResolvedValueOnce(latest).mockResolvedValueOnce(cursor)
+      .mockResolvedValueOnce(latest).mockResolvedValueOnce(cursor);
+    prisma.meterPriceHistory.findMany.mockResolvedValue([
+      { meterId: meter.id, meterType: meter.meterType, unitPrice: 20, effectiveDate: new Date('2026-01-15') },
+      { meterId: meter.id, meterType: meter.meterType, unitPrice: 10, effectiveDate: new Date('2026-01-01') },
+    ]);
+
+    expect(await service.getUnsettledUsage(meter.id)).toMatchObject({
+      settlementBlock: { reasonCode: 'MISSING_RATE_BOUNDARY' },
+    });
+    expect(await service.settleMeter(meter.id, {}, 'op')).toMatchObject({
+      status: 'BLOCKED', settled: false, reasonCode: 'MISSING_RATE_BOUNDARY',
+    });
+    expect(prisma.meterReading.update).not.toHaveBeenCalled();
+    expect(prisma.bill.create).not.toHaveBeenCalled();
+  });
+
   it('deducts available balance and bills shortfall, including failed conditional update and unknown label', async () => {
     const tx: any = prisma;
     tx.contract.findMany.mockResolvedValue([meterTestContract('contract-1', 'tenant-1')]);
