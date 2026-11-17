@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupActiveContract, createMeter, postReading, loginAsAdmin, ensurePrepayFunded, confirmUtilityRuleFixture } from './fixtures';
+import { setupActiveContract, createMeter, postReading, loginAsAdmin, ensurePrepayFunded, confirmUtilityRuleFixture, apiContext } from './fixtures';
 
 /** 流程4：批量抄表 → 周期结算 */
 test.describe('批量抄表并结算', () => {
@@ -39,11 +39,19 @@ test.describe('批量抄表并结算', () => {
     await ensurePrepayFunded(seed.tenant.id, seed.room.id);
     await page.getByRole('row', { name: new RegExp(meterNumber) }).getByRole('button', { name: '结算' }).click();
     await expect(settleButton).toBeEnabled();
+    await settleDialog.getByPlaceholder('例如：2026年10月结账').fill('Playwright 结算备注');
     const succeeded = page.waitForResponse((response) => response.url().endsWith('/utility-charges/confirm') && response.request().method() === 'POST');
     await settleButton.click();
-    expect(await (await succeeded).json()).toMatchObject({
+    const confirmation = await succeeded;
+    expect(confirmation.request().postDataJSON()).toMatchObject({ notes: 'Playwright 结算备注' });
+    expect(await confirmation.json()).toMatchObject({
       status: 'SETTLED', usage: 50, amount: 5000, prepayTransactionId: expect.any(String),
     });
+    const { req, headers } = await apiContext();
+    try {
+      const history = await req.get(`meters/${meter.id}/readings`, { headers });
+      expect((await history.json()).data[0].notes).toContain('备注:Playwright 结算备注');
+    } finally { await req.dispose(); }
     await expect(settleDialog).toBeHidden();
     await expect(page.getByText(/周期结算成功/).first()).toBeVisible();
   });

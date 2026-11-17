@@ -4390,6 +4390,7 @@ export interface components {
         ConfirmUtilityChargeDto: {
             meterId: string;
             settleUntil?: string;
+            notes?: string;
             requestId: string;
             reviewToken: string;
         };

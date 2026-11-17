@@ -18028,6 +18028,9 @@
           "settleUntil": {
             "type": "string"
           },
+          "notes": {
+            "type": "string"
+          },
           "requestId": {
             "type": "string"
           },

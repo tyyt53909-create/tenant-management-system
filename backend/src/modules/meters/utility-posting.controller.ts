@@ -12,6 +12,7 @@ export class PreviewUtilityChargeDto {
   @ApiPropertyOptional() @IsOptional() @IsDateString() settleUntil?: string;
 }
 export class ConfirmUtilityChargeDto extends PreviewUtilityChargeDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) notes?: string;
   @ApiProperty() @IsUUID('4') requestId!: string;
   @ApiProperty() @IsString() @Matches(/^[a-f0-9]{64}$/) reviewToken!: string;
 }

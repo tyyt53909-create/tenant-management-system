@@ -127,7 +127,7 @@ describe('MeterBillingService unified posting', () => {
     expect(db.utilityCharge.create).not.toHaveBeenCalled();
   });
   it('clamps future cutoff, keeps structured batch outcomes, and refuses reserved notes', async () => {
-    for (const call of [() => service.settleMeter('meter', { notes: '[SETTLED]' }, 'op'), () => service.settleBatch({ notes: '[INITIAL]' }, 'op')]) await expect(call()).rejects.toBeInstanceOf(BadRequestException);
+    for (const call of [() => service.settleMeter('meter', { notes: '[SETTLED]' }, 'op'), () => service.settleBatch({ notes: '[INITIAL]' }, 'op'), () => service.confirmCharge('meter', { requestId: 'r', reviewToken: 'token', notes: '[SETTLED]' }, 'op')]) await expect(call()).rejects.toBeInstanceOf(BadRequestException);
     db.meterReading.findFirst.mockResolvedValue(null);
     const batch = await service.settleBatch({ meterIds: ['meter'], settleUntil: '2090-01-01' }, 'op');
     expect(batch).toMatchObject({ blockedCount: 1, results: [{ reasonCode: 'NO_READINGS' }] });
@@ -141,10 +141,11 @@ describe('MeterBillingService unified posting', () => {
   });
   it('requires the preview token, stores and replays the original confirmation, and rejects key conflicts', async () => {
     const info = await service.getUnsettledUsage('meter');
-    const command = { requestId: 'request', reviewToken: ('reviewToken' in info ? info.reviewToken : '') };
+    const command = { requestId: 'request', notes: 'approved', reviewToken: ('reviewToken' in info ? info.reviewToken : '') };
     await expect(service.confirmCharge('meter', { ...command, reviewToken: 'stale' }, 'op')).rejects.toMatchObject({ response: { code: 'PREVIEW_STALE' } });
     const result = await service.confirmCharge('meter', command, 'op');
     expect(db.utilityPostingConfirmation.create).toHaveBeenCalled();
+    expect(db.meterReading.update).toHaveBeenCalledWith({ where: { id: target.id }, data: expect.objectContaining({ notes: expect.stringContaining('备注:approved') }) });
     const saved = db.utilityPostingConfirmation.create.mock.calls[0][0].data;
     db.utilityPostingConfirmation.findUnique.mockResolvedValue(saved);
     expect(await service.confirmCharge('meter', command, 'op')).toEqual(result);

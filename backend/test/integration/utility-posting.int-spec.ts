@@ -56,7 +56,7 @@ it.each([
   const preview = await f.preview();
   expect(preview.body).toMatchObject({ estimatedAmount: 617, prepayApplied: prepay, receivableAmount: receivable, providerAmount: provider });
   expect(await financial()).toEqual(before);
-  const command = { meterId: f.meter.id, requestId: randomUUID(), reviewToken: preview.body.reviewToken };
+  const command = { meterId: f.meter.id, requestId: randomUUID(), reviewToken: preview.body.reviewToken, notes: '正式费用核对' };
   const [a, b] = await Promise.all([f.send('/utility-charges/confirm', command), f.send('/utility-charges/confirm', command)]);
   expect(a.status, JSON.stringify(a.body)).toBe(201);
   expect(b.body).toEqual(a.body);
@@ -69,7 +69,7 @@ it.each([
   expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(prepay > 0 ? 1 : 0);
   expect(await prisma.paymentRecord.count()).toBe(before.payments.length);
   if (f.account) expect((await prisma.prepayAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balanceCache).toBe(balance - prepay);
-  expect((await prisma.meterReading.findUniqueOrThrow({ where: { id: f.target.id } })).settledAmount).toBe(617);
+  expect(await prisma.meterReading.findUniqueOrThrow({ where: { id: f.target.id } })).toMatchObject({ settledAmount: 617, notes: expect.stringContaining('备注:正式费用核对') });
   expect(await prisma.room.findMany({ orderBy: { id: 'asc' } })).toEqual(before.rooms);
   const reconciliation = await http(app).get('/meters/reconciliation').set(auth(f.adminToken)).query({ period: '2026-06', buildingId: f.buildingId });
   expect(reconciliation.status).toBe(200);
@@ -120,7 +120,7 @@ it('locks one shared account across different meters so concurrent charges use i
 it('rolls back balance, ledger, receivable, charge, cursor and request result when final persistence fails, then retries once', async () => {
   const f = await fixture();
   const preview = await f.preview();
-  const command = { meterId: f.meter.id, requestId: randomUUID(), reviewToken: preview.body.reviewToken };
+  const command = { meterId: f.meter.id, requestId: randomUUID(), reviewToken: preview.body.reviewToken, notes: '正式费用核对' };
   const before = await financial();
   await prisma.$executeRaw`ALTER TABLE utility_posting_confirmations ADD CONSTRAINT injected_posting_failure CHECK (false) NOT VALID`;
   try { expect((await f.send('/utility-charges/confirm', command)).status).toBe(500); }

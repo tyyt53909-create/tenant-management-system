@@ -323,7 +323,7 @@ export const runMeterSimulator = (
 };
 
 
-export interface UtilityChargeCommand { meterId: string; requestId: string; reviewToken: string; settleUntil?: string }
+export interface UtilityChargeCommand { meterId: string; requestId: string; reviewToken: string; settleUntil?: string; notes?: string }
 export const confirmUtilityCharge = (data: UtilityChargeCommand): Promise<MeterSettleResult> => request.post('/utility-charges/confirm', data);
 
 export const previewUtilityCharge = (meterId: string): Promise<UnsettledUsage> => request.post('/utility-charges/preview', { meterId });

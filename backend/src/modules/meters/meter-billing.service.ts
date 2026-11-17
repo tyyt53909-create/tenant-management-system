@@ -126,8 +126,9 @@ export class MeterBillingService {
   }
 
   /** A response-loss retry replays the original result, including already-processed items. */
-  async confirmCharge(meterId: string, dto: { requestId: string; reviewToken: string; settleUntil?: string }, operatorId: string) {
-    const payloadHash = digest([meterId, dto.reviewToken, dto.settleUntil ?? null]);
+  async confirmCharge(meterId: string, dto: { requestId: string; reviewToken: string; settleUntil?: string; notes?: string }, operatorId: string) {
+    if (hasReservedReadingMarker(dto.notes)) throw new BadRequestException('结算备注不得包含系统保留标记');
+    const payloadHash = digest([meterId, dto.reviewToken, dto.settleUntil ?? null, ...(dto.notes === undefined ? [] : [dto.notes])]);
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT true FROM pg_advisory_xact_lock(hashtextextended(${dto.requestId}, 0))`;
       const existing = await tx.utilityPostingConfirmation.findUnique({ where: { requestId: dto.requestId } });
@@ -140,7 +141,7 @@ export class MeterBillingService {
       if (!('reviewToken' in preview) || preview.reviewToken !== dto.reviewToken) throw apiError(ErrorCode.PREVIEW_STALE);
       if ('settlementBlock' in preview && preview.settlementBlock) throw apiError(ErrorCode.UTILITY_RULE_BLOCKED, preview.settlementBlock.reason);
       const now = this.clock.now();
-      const result = await this.settleMeterInTransaction(tx, meterId, dto.settleUntil ? new Date(Math.min(now.getTime(), Date.parse(dto.settleUntil))) : now, operatorId);
+      const result = await this.settleMeterInTransaction(tx, meterId, dto.settleUntil ? new Date(Math.min(now.getTime(), Date.parse(dto.settleUntil))) : now, operatorId, dto.notes);
       await tx.utilityPostingConfirmation.create({ data: { requestId: dto.requestId, payloadHash, result: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue, confirmedBy: operatorId } });
       return result;
     }, METER_WRITE_TRANSACTION);

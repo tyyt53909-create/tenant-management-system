@@ -419,6 +419,7 @@ const handleConfirmSettle = async () => {
     if (!unsettledInfo.value?.reviewToken) return;
     const res = await confirmUtilityCharge({
       meterId: meter.id, requestId: crypto.randomUUID(), reviewToken: unsettledInfo.value.reviewToken,
+      notes: settleNotes.value || undefined,
       settleUntil: settleCutoff.value?.toISOString(),
     });
     if (res.status === 'BLOCKED') {
