@@ -8,7 +8,6 @@ import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker, isUniqueViolation } from './meter-dedup.util.js';
 import { findEarliestRealReading, findMeterSettlementCursor, findNextConfirmedHandoff, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { FUTURE_READING_MESSAGE, hasLegacySimulationNote, lookupMeterReading, realMeterReadings } from './meter-reading-scope.js';
-import { quoteMeterInterval } from './meter-interval-quote.js';
 import type { ConfirmMeterHandoffDto } from './dto/confirm-meter-handoff.dto.js';
 import { settlesByDefault } from './meter-types.constants.js';
 
@@ -276,9 +275,9 @@ export class MeterReadingService {
         reason: simulated ? '模拟读数仅用于模拟报告' : '已采集读数，未开启自动扣费（等待周期结算）',
       };
       if (shouldAutoSettle) {
-        const quote = await quoteMeterInterval(tx, this.priceService, meter, baseline, {
+        const quote = await this.billingService.quoteInterval(tx, meter, baseline, {
           ...reading, currentReading: dto.currentReading, readingTime,
-        }, Math.max(0, usage));
+        });
         if ('reasonCode' in quote) {
           return { reading, deduction: { applied: false, ...quote } };
         }

@@ -16,8 +16,11 @@ export class ReviewUtilityRuleDto {
   @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(100)
   openingReadingId!: string;
 
-  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(100)
-  closingReadingId!: string;
+  @ApiPropertyOptional({ description: '留空登记开放责任段；结束时以真实终读数封口' }) @IsOptional() @IsString() @IsNotEmpty() @MaxLength(100)
+  closingReadingId?: string;
+
+  @ApiPropertyOptional({ description: '封口已有开放责任段的编号' }) @IsOptional() @IsString() @IsNotEmpty() @MaxLength(100)
+  responsibilityIntervalId?: string;
 
   @ApiPropertyOptional({ enum: UtilityCollectionMode })
   @ValidateIf((dto: ReviewUtilityRuleDto) => dto.responsibility === 'TENANT' || dto.collectionMode !== undefined) @IsEnum(UtilityCollectionMode)

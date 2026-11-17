@@ -4,7 +4,8 @@ const SETTLEMENT_REASON_CODES = [
   'SETTLED', 'ALREADY_SETTLED', 'ZERO_USAGE', 'ZERO_CHARGE', 'PUBLIC_AREA',
   'NO_ACTIVE_CONTRACT', 'MISSING_PREPAY_ACCOUNT', 'NO_READINGS', 'METER_NOT_FOUND',
   'SETTLEMENT_FAILED', 'OCCUPANCY_UNCERTAIN', 'VACANT_INTERVAL', 'UNCONFIRMED_HANDOFF', 'MISSING_RATE_BOUNDARY',
-  'RULE_POSTING_NOT_ENABLED',
+  'RULE_POSTING_NOT_ENABLED', 'LEGACY_REVIEW_REQUIRED', 'OWNERSHIP_UNRESOLVED', 'BALANCE_REVIEW_REQUIRED',
+  'UTILITY_COVERAGE_CONFLICT', 'POLICY_BOUNDARY_REQUIRED', 'AMOUNT_OUT_OF_RANGE',
 ] as const;
 
 export class MeterChargeSegmentDto {
@@ -16,6 +17,8 @@ export class MeterChargeSegmentDto {
   @ApiProperty() endReading!: number;
   @ApiProperty() usage!: number;
   @ApiProperty() unitPrice!: number;
+  @ApiPropertyOptional() rateCents?: string;
+  @ApiPropertyOptional() policyVersionId?: string;
   @ApiPropertyOptional() nextOpeningReading?: number;
 }
 
@@ -55,6 +58,12 @@ export class MeterSettlementResultDto {
 
   @ApiPropertyOptional()
   retryCondition?: string;
+
+  @ApiPropertyOptional() chargeId?: string;
+  @ApiPropertyOptional({ enum: ['PREPAY_WITH_SHORTFALL', 'POSTPAID', 'DIRECT_TO_PROVIDER'] }) collectionMode?: string;
+  @ApiPropertyOptional() prepayApplied?: number;
+  @ApiPropertyOptional() receivableAmount?: number;
+  @ApiPropertyOptional() providerAmount?: number;
 
   @ApiPropertyOptional()
   billId?: string;

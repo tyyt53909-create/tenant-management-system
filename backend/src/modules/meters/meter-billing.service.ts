@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Prisma, type MeterType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { randomHex } from '../../common/utils/secure-random.js';
@@ -10,8 +10,11 @@ import { MeterPriceService } from './meter-price.service.js';
 import { findEarliestRealReading, findMeterSettlementCursor, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { resolveMeterUsageOwner } from './meter-usage-attribution.js';
 import { hasReservedReadingMarker } from './meter-dedup.util.js';
-import { quoteMeterInterval, type MeterIntervalQuote } from './meter-interval-quote.js';
+import { type MeterIntervalQuote, type IntervalReading } from './meter-interval-quote.js';
 import { realMeterReadings } from './meter-reading-scope.js';
+import { reviewMeterCharge } from './utility-charge-plan.js';
+import { createHash } from 'node:crypto';
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 
 const OCCUPANCY_UNCERTAIN = {
   reasonCode: 'OCCUPANCY_UNCERTAIN',
@@ -22,12 +25,6 @@ const OCCUPANCY_UNCERTAIN = {
 const VACANT_INTERVAL = {
   reasonCode: 'VACANT_INTERVAL',
   reason: '读数区间为已确认空置期，用量单独留存',
-} as const;
-
-const RULE_POSTING_NOT_ENABLED = {
-  reasonCode: 'RULE_POSTING_NOT_ENABLED',
-  reason: '该合同已核验新的收款规则，正式费用接入尚待完成',
-  retryCondition: '完成新规则与统一费用的切换验收后，重新预览并确认结算',
 } as const;
 
 class NoMeterReadingsException extends BadRequestException {
@@ -50,137 +47,104 @@ export class MeterBillingService {
     private readonly priceService: MeterPriceService,
   ) {}
 
-  /**
-   * 讀數扣費：用量 × 生效單價
-   * - 可归属合同 + 預付帳戶：先扣盡可用餘額（條件更新防並發），差額 → UTILITY 補繳帳單
-   * - 归属不明或缺账户时阻断；空置期、公区及零用量无租客扣费。
-   *
-   * `unitPrice` 由調用方按讀數業務日期解析後傳入（T274）；缺省時退回表上當前價，
-   * 保持既有單元測試與舊調用方可編譯。
-   */
+  previewCharge(meterId: string, settleUntil?: string) {
+    return this.prisma.$transaction(async (tx) => ({
+      ...await this.getUnsettledUsage(meterId, settleUntil, tx), financialEffect: 'NONE' as const,
+    }), { isolationLevel: 'RepeatableRead' });
+  }
+
+  async charge(id: string) {
+    const charge = await this.prisma.utilityCharge.findUnique({ where: { id } });
+    if (!charge) throw new NotFoundException('费用不存在');
+    return charge;
+  }
+
+  /** Shared read-only quotation; confirmed responsibility and immutable policies are mandatory. */
+  quoteInterval(tx: Prisma.TransactionClient, meter: Parameters<typeof reviewMeterCharge>[3], baseline: IntervalReading | null, target: IntervalReading) {
+    return reviewMeterCharge(tx, this.clock, this.priceService, meter, baseline, target);
+  }
+
+  /** Caller owns room/meter locks and the transaction. Re-read the account under its row lock. */
   async applyReadingDeduction(
     tx: Prisma.TransactionClient,
     meter: { id: string; meterType: string; meterNumber: string; unitPrice: number; roomId: string | null },
-    reading: { id: string; readingTime: Date },
-    usage: number,
-    operatorId: string,
-    baseline: { id: string; readingTime: Date } | null,
-    unitPrice = meter.unitPrice,
-    quote?: MeterIntervalQuote,
+    reading: IntervalReading & { source?: string }, _usage: number, operatorId: string,
+    baseline: IntervalReading | null, _unitPrice = meter.unitPrice, _quote?: MeterIntervalQuote,
   ) {
-    if (!meter.roomId) {
-      return { applied: false as const, reasonCode: 'PUBLIC_AREA' as const, reason: '公共区域表按运营成本处理，不扣费', unitPrice };
+    // These rows come from the caller's locked real-reading query or real-reading insert.
+    // Never quote from the cached previousReading/usage fields supplied by old importers.
+    const actualMeter = meter as Parameters<typeof reviewMeterCharge>[3];
+    const target = reading;
+    const opening = baseline;
+    if (reading.source === 'SIMULATED' || reading.readingTime > this.clock.now()) throw apiError(ErrorCode.UTILITY_RULE_BLOCKED, '正式计费只接受有效真实读数');
+    let plan = await this.quoteInterval(tx, actualMeter, opening, target);
+    if ('reasonCode' in plan) return { applied: false as const, ...plan, unitPrice: meter.unitPrice };
+    if (plan.account) {
+      await tx.$queryRaw`SELECT id FROM prepay_accounts WHERE id = ${plan.account.id} FOR UPDATE`;
+      plan = await this.quoteInterval(tx, actualMeter, opening, target);
+      if ('reasonCode' in plan) return { applied: false as const, ...plan, unitPrice: meter.unitPrice };
     }
-
-    if (usage <= 0) {
-      return { applied: false as const, reasonCode: 'ZERO_USAGE' as const, reason: '用量为 0，无扣费', unitPrice };
-    }
-
-    const owner = await resolveMeterUsageOwner(tx, this.clock, meter.roomId, baseline?.readingTime, reading.readingTime);
-    if (owner.kind === 'VACANT') {
-      return { applied: false as const, ...VACANT_INTERVAL, unitPrice };
-    }
-    if (owner.kind !== 'TENANT' || !baseline) {
-      return { applied: false as const, ...OCCUPANCY_UNCERTAIN, unitPrice };
-    }
-
-    if (await this.hasReviewedRule(tx, owner.contractId, meter.meterType)) {
-      return { applied: false as const, ...RULE_POSTING_NOT_ENABLED, unitPrice };
-    }
-
-    const amount = quote?.amount ?? Math.round(usage * unitPrice);
-    if (amount <= 0) {
-      return { applied: false as const, reasonCode: 'ZERO_CHARGE' as const, reason: '应收金额为 0，无扣费', unitPrice };
-    }
-
-    const account = await tx.prepayAccount.findUnique({
-      where: { tenantId_roomId: { tenantId: owner.tenantId, roomId: meter.roomId } },
-    });
-    if (!account) {
-      return {
-        applied: false as const,
-        reasonCode: 'MISSING_PREPAY_ACCOUNT' as const,
-        reason: '该房间租客无预付账户，未扣费',
-        retryCondition: '为该房间及合同租客开立预付账户，核对费用归属后重试',
-        unitPrice,
-      };
-    }
-
-    // 先扣盡可用餘額（條件更新防並發透支）
-    let deducted = 0;
-    if (account.balanceCache > 0) {
-      const candidate = Math.min(account.balanceCache, amount);
-      const result = await tx.prepayAccount.updateMany({
-        where: { id: account.id, balanceCache: { gte: candidate } },
-        data: { balanceCache: { decrement: candidate } },
-      });
-      deducted = result.count > 0 ? candidate : 0;
-    }
-
+    const { amount, prepayApplied: deducted, receivableAmount: shortfall, providerAmount, responsibility, policy, account } = plan;
     let prepayTransaction = null;
-    if (deducted > 0) {
-      const updatedAccount = await tx.prepayAccount.findUniqueOrThrow({
-        where: { id: account.id },
-      });
-      const typeLabel = METER_TYPE_LABEL[meter.meterType] ?? '水电费';
-      prepayTransaction = await tx.prepayTransaction.create({
-        data: {
-          accountId: account.id,
-          type: 'DEDUCTION',
-          amount: -deducted,
-          balanceAfter: updatedAccount.balanceCache,
-          relatedId: reading.id,
-          relatedType: 'METER_READING',
-          description: `${this.formatPeriod(reading.readingTime)} ${typeLabel}扣费（${meter.meterNumber}）`,
-          operatorId,
-        },
-      });
+    if (deducted > 0 && account) {
+      const updated = await tx.prepayAccount.update({ where: { id: account.id }, data: { balanceCache: { decrement: deducted } } });
+      prepayTransaction = await tx.prepayTransaction.create({ data: {
+        accountId: account.id, type: 'DEDUCTION', amount: -deducted, balanceAfter: updated.balanceCache,
+        relatedId: target.id, relatedType: 'METER_READING',
+        description: `${this.clock.monthKey(target.readingTime)} ${METER_TYPE_LABEL[meter.meterType] ?? '水电费'}扣费（${meter.meterNumber}）`, operatorId,
+      } });
     }
-
-    const shortfall = amount - deducted;
-    let bill = null;
-    if (shortfall > 0) {
-      const dueDate = this.clock.addDays(this.clock.todayUtc(reading.readingTime), 7);
-
-      bill = await tx.bill.create({
-        data: {
-          contractId: owner.contractId,
-          billNumber: `B${Date.now()}${randomHex(3)}`,
-          billType: 'UTILITY',
-          period: this.formatPeriod(reading.readingTime),
-          amount: shortfall,
-          dueDate,
-          snapshot: {
-            meterId: meter.id,
-            meterNumber: meter.meterNumber,
-            meterType: meter.meterType,
-            readingId: reading.id,
-            baselineReadingId: baseline.id,
-            intervalStart: baseline.readingTime.toISOString(),
-            intervalEnd: reading.readingTime.toISOString(),
-            usage,
-            unitPrice: quote?.segments.some((segment) => segment.usage > 0 && segment.unitPrice !== unitPrice) ? null : unitPrice,
-            ...(quote?.segments.length && { segments: quote.segments.map((segment) => ({ ...segment })) }),
-            totalAmount: amount,
-            deducted,
-            shortfall,
-            reason: '预付账户余额不足，补缴差额',
-          },
-        },
-      });
-    }
-
-    return { applied: true as const, contractId: owner.contractId, amount, deducted, shortfall, prepayTransaction, bill, unitPrice };
+    const snapshot = {
+      meterId: meter.id, meterNumber: meter.meterNumber, meterType: meter.meterType,
+      readingId: target.id, baselineReadingId: opening!.id,
+      intervalStart: opening!.readingTime.toISOString(), intervalEnd: target.readingTime.toISOString(),
+      usage: plan.usage, unitPrice: Number.isInteger(plan.unitPrice) && !plan.segments.some((segment) => segment.unitPrice !== plan.unitPrice) ? plan.unitPrice : null,
+      segments: plan.segments.map((segment) => ({ ...segment })),
+      policyVersions: plan.policies.map((p) => ({ id: p.id, version: p.version, rateCents: p.rateCents.toString(), effectiveFrom: p.effectiveFrom.toISOString(), evidence: p.evidence })),
+      responsibility: { id: responsibility.id, contractId: responsibility.contractId, tenantId: responsibility.tenantId, evidence: responsibility.evidence },
+      responsibilityIntervals: plan.responsibilities.map((r) => ({ id: r.id, startAt: r.startAt.toISOString(), endAt: r.endAt?.toISOString() ?? null, evidence: r.evidence })),
+      collectionMode: plan.collectionMode, totalAmount: amount, deducted, shortfall, providerAmount,
+      reason: plan.collectionMode === 'PREPAY_WITH_SHORTFALL' ? '预付账户抵扣及差额补缴' : plan.collectionMode === 'POSTPAID' ? '后付全额应收' : plan.collectionMode === 'DIRECT_TO_PROVIDER' ? '直缴供应商参考费用，不产生房东应收' : '已确认空置用量',
+    };
+    const bill = shortfall > 0 ? await tx.bill.create({ data: {
+      contractId: responsibility.contractId!, billNumber: `B${Date.now()}${randomHex(3)}`, billType: 'UTILITY',
+      period: this.clock.monthKey(target.readingTime), amount: shortfall,
+      dueDate: this.clock.addDays(this.clock.todayUtc(target.readingTime), 7), snapshot,
+      dedupKey: `UTILITY:METER:${meter.id}:${opening!.id}:${target.id}`,
+    } }) : null;
+    const charge = await tx.utilityCharge.create({ data: {
+      meterId: meter.id, roomId: actualMeter.roomId!, contractId: responsibility.contractId, tenantId: responsibility.tenantId,
+      responsibilityIntervalId: responsibility.id, policyVersionId: policy?.id ?? null,
+      baselineReadingId: opening!.id, targetReadingId: target.id, startAt: opening!.readingTime, endAt: target.readingTime,
+      collectionMode: plan.collectionMode, usage: plan.usage, totalAmount: amount, prepayApplied: deducted,
+      receivableAmount: shortfall, providerAmount, billId: bill?.id, prepayTransactionId: prepayTransaction?.id, snapshot, operatorId,
+      notificationState: responsibility.tenantId ? 'PENDING' : 'NOT_REQUIRED',
+    } });
+    return { applied: true as const, reason: undefined, retryCondition: undefined, reasonCode: responsibility.responsibility === 'OWNER' ? 'VACANT_INTERVAL' as const : 'SETTLED' as const,
+      contractId: responsibility.contractId ?? undefined, amount, usage: plan.usage, deducted, shortfall, providerAmount, collectionMode: plan.collectionMode,
+      prepayTransaction, bill, chargeId: charge.id, unitPrice: plan.unitPrice, segments: plan.segments };
   }
 
-  private formatPeriod(date: Date): string {
-    return this.clock.monthKey(date);
-  }
-
-  private async hasReviewedRule(db: Prisma.TransactionClient, contractId: string, meterType: string) {
-    return Boolean(await db.utilityPolicyVersion.findFirst({
-      where: { contractId, feeType: meterType as MeterType }, select: { id: true },
-    }));
+  /** A response-loss retry replays the original result, including already-processed items. */
+  async confirmCharge(meterId: string, dto: { requestId: string; reviewToken: string; settleUntil?: string; notes?: string }, operatorId: string) {
+    if (hasReservedReadingMarker(dto.notes)) throw new BadRequestException('结算备注不得包含系统保留标记');
+    const payloadHash = digest([meterId, dto.reviewToken, dto.settleUntil ?? null, ...(dto.notes === undefined ? [] : [dto.notes])]);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT true FROM pg_advisory_xact_lock(hashtextextended(${dto.requestId}, 0))`;
+      const existing = await tx.utilityPostingConfirmation.findUnique({ where: { requestId: dto.requestId } });
+      if (existing) {
+        if (existing.payloadHash !== payloadHash) throw apiError(ErrorCode.IDEMPOTENCY_CONFLICT);
+        return existing.result;
+      }
+      await lockMeters(tx, [meterId]);
+      const preview = await this.getUnsettledUsage(meterId, dto.settleUntil, tx);
+      if (!('reviewToken' in preview) || preview.reviewToken !== dto.reviewToken) throw apiError(ErrorCode.PREVIEW_STALE);
+      if ('settlementBlock' in preview && preview.settlementBlock) throw apiError(ErrorCode.UTILITY_RULE_BLOCKED, preview.settlementBlock.reason);
+      const now = this.clock.now();
+      const result = await this.settleMeterInTransaction(tx, meterId, dto.settleUntil ? new Date(Math.min(now.getTime(), Date.parse(dto.settleUntil))) : now, operatorId, dto.notes);
+      await tx.utilityPostingConfirmation.create({ data: { requestId: dto.requestId, payloadHash, result: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue, confirmedBy: operatorId } });
+      return result;
+    }, METER_WRITE_TRANSACTION);
   }
 
   /**
@@ -239,13 +203,13 @@ export class MeterBillingService {
     const baseline = lastSettledReading ?? await findEarliestRealReading(db, meterId);
     const baselineVal = Number(baseline?.currentReading ?? 0);
     const currentVal = Number(latestReading.currentReading);
-    const quote = await quoteMeterInterval(db, this.priceService, meter, baseline, latestReading, Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100));
+    const quote = await this.quoteInterval(db, meter, baseline, latestReading);
     const blocked = 'reasonCode' in quote;
     const unsettledUsage = blocked ? 0 : quote.usage;
     const owner = !blocked && meter.roomId && unsettledUsage > 0
       ? await resolveMeterUsageOwner(db, this.clock, meter.roomId, baseline?.readingTime, latestReading.readingTime)
       : null;
-    const reviewedRule = owner?.kind === 'TENANT' && await this.hasReviewedRule(db, owner.contractId, meter.meterType);
+
 
     let prepayBalance: number | null = null;
     if (meter.roomId && owner?.kind === 'TENANT') {
@@ -260,7 +224,8 @@ export class MeterBillingService {
       meterNumber: meter.meterNumber,
       meterType: meter.meterType,
       ...(blocked ? { settlementBlock: quote } : { unitPrice: quote.unitPrice, segments: quote.segments }),
-      ...(reviewedRule && { settlementBlock: RULE_POSTING_NOT_ENABLED }),
+      ...(!blocked && { collectionMode: quote.collectionMode, prepayApplied: quote.prepayApplied, receivableAmount: quote.receivableAmount, providerAmount: quote.providerAmount }),
+      reviewToken: digest([meter, baseline, latestReading, quote]),
       roomNumber: meter.room?.roomNumber || '公共区域',
       tenantName: owner?.kind === 'TENANT' ? owner.tenantName : null,
       contractId: owner?.kind === 'TENANT' ? owner.contractId : null,
@@ -346,26 +311,11 @@ export class MeterBillingService {
     const baselineVal = Number(baseline?.currentReading ?? 0);
 
     const currentVal = Number(latestReading.currentReading);
-    const quote = await quoteMeterInterval(tx, this.priceService, meter, baseline, latestReading, Math.max(0, Math.round((currentVal - baselineVal) * 100) / 100));
+    const quote = await this.quoteInterval(tx, meter, baseline, latestReading);
     if ('reasonCode' in quote) {
       return { meterId, status: 'BLOCKED', settled: false, usage: 0, amount: 0, ...quote };
     }
     const { usage, unitPrice, amount, segments } = quote;
-
-    if (usage <= 0) {
-      await markMeterReadingSettled(tx, latestReading, 0, unitPrice, 0, notes, false, segments);
-      return {
-        meterId,
-        settled: true,
-        status: 'NO_CHANGE',
-        reasonCode: 'ZERO_USAGE',
-        reason: '周期内累计用量为 0',
-        usage: 0,
-        amount: 0,
-        unitPrice,
-        deduction: { applied: false as const, reason: '周期内累计用量为 0' },
-      };
-    }
 
     const deduction = await this.applyReadingDeduction(
       tx,
@@ -379,20 +329,16 @@ export class MeterBillingService {
     );
 
     if (!deduction.applied) {
-      const vacancy = deduction.reasonCode === 'VACANT_INTERVAL';
-      if (vacancy) {
-        await markMeterReadingSettled(tx, latestReading, usage, unitPrice, 0, notes, true, segments);
-      }
       return {
         meterId,
-        settled: vacancy,
-        status: deduction.retryCondition ? 'BLOCKED' : 'NO_CHANGE',
+        settled: false,
+        status: 'BLOCKED',
         reasonCode: deduction.reasonCode,
         retryCondition: deduction.retryCondition,
         baselineReading: baselineVal,
         currentReading: currentVal,
         usage,
-        amount: vacancy ? 0 : amount,
+        amount,
         unitPrice,
         deduction,
         reason: deduction.reason,
@@ -400,14 +346,17 @@ export class MeterBillingService {
     }
 
     const settledAmount =
-      (deduction.deducted ?? 0) + (deduction.shortfall ?? 0);
-    await markMeterReadingSettled(tx, latestReading, usage, unitPrice, settledAmount, notes, false, segments);
+      deduction.amount;
+    await markMeterReadingSettled(tx, latestReading, usage, unitPrice, settledAmount, notes, deduction.reasonCode === 'VACANT_INTERVAL', segments);
 
     return {
       meterId,
       settled: true,
-      status: 'SETTLED',
-      reasonCode: 'SETTLED',
+      status: deduction.reasonCode === 'VACANT_INTERVAL' || usage === 0 ? 'NO_CHANGE' : 'SETTLED',
+      reasonCode: deduction.reasonCode === 'VACANT_INTERVAL' ? 'VACANT_INTERVAL' : usage === 0 ? 'ZERO_USAGE' : 'SETTLED',
+      chargeId: deduction.chargeId,
+      collectionMode: deduction.collectionMode ?? undefined,
+      prepayApplied: deduction.deducted, receivableAmount: deduction.shortfall, providerAmount: deduction.providerAmount,
       billId: deduction.bill?.id,
       contractId: deduction.contractId,
       prepayTransactionId: deduction.prepayTransaction?.id,
@@ -485,3 +434,5 @@ export class MeterBillingService {
     };
   }
 }
+
+function digest(value: unknown) { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }

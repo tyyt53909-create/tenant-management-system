@@ -1,3 +1,4 @@
+import { lockLeaseRoom } from '../contracts/contract-activation.js';
 import {
   Injectable,
   NotFoundException,
@@ -169,7 +170,7 @@ export class CheckoutService {
 
   async update(id: string, dto: UpdateCheckoutDto) {
     return this.prisma.$transaction(async (tx) => {
-      const record = await tx.checkoutRecord.findUnique({
+      let record = await tx.checkoutRecord.findUnique({
         where: { id },
         include: {
           items: true,
@@ -178,6 +179,13 @@ export class CheckoutService {
         },
       });
       if (!record) throw new NotFoundException('退租记录不存在');
+      await lockLeaseRoom(tx, record.roomId);
+      await tx.$queryRaw`SELECT id FROM contracts WHERE id = ${record.contractId} FOR UPDATE`;
+      record = await tx.checkoutRecord.findUnique({
+        where: { id }, include: { items: true, contract: { select: { id: true, status: true, roomId: true } }, room: { select: { id: true, status: true } } },
+      });
+      if (!record) throw new NotFoundException('退租记录不存在');
+
 
       // 完成是终态；重复完成幂等返回，避免重复结算押金
       if (record.status === 'COMPLETED' && dto.status === 'COMPLETED') return record;

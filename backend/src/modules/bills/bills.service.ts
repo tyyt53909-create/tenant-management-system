@@ -116,6 +116,7 @@ export class BillsService {
   ) {}
 
   async create(dto: CreateBillDto) {
+    if (dto.billType === 'UTILITY') throw apiError(ErrorCode.UTILITY_RULE_BLOCKED, '水电应收须由已确认规则、责任归属与来源费用产生，请使用统一水电结算');
     // 验证合同存在
     const contract = await this.prisma.contract.findUnique({
       where: { id: dto.contractId },
@@ -243,6 +244,7 @@ export class BillsService {
       if (!bill) {
         throw new NotFoundException('账单不存在');
       }
+      if (bill.billType === 'UTILITY' && dto.amount !== undefined && dto.amount !== bill.amount) throw apiError(ErrorCode.BILL_AMOUNT_LOCKED, '水电费用金额来自原费用，须通过更正凭证处理');
       if (dto.status && dto.status !== 'CANCELLED') {
         throw apiError(ErrorCode.BILL_DERIVED_FIELD);
       }

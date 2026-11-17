@@ -11,6 +11,7 @@ describe('MeterReconciliationService', () => {
 
   beforeEach(async () => {
     prisma = {
+      utilityCharge: { findMany: vi.fn().mockResolvedValue([]) },
       meter: { findMany: vi.fn() },
       meterReading: { fields: { createdAt: Symbol('meterReading.createdAt') }, findMany: vi.fn() },
       meterPriceHistory: { findMany: vi.fn().mockResolvedValue([]) },
@@ -73,7 +74,7 @@ describe('MeterReconciliationService', () => {
     const row = result.rows[0];
 
     expect(row.difference).toBe(-1500);
-    expect(row.issues).toContain('扣费+账单 1500 分 ≠ 应收 3000 分');
+    expect(row.issues).toContain('扣费+账单+外部参考 1500 分 ≠ 费用 3000 分');
     expect(result.summary.withIssues).toBe(1);
   });
 

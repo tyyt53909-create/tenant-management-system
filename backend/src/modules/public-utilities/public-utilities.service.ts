@@ -1,3 +1,4 @@
+import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { MeterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -153,53 +154,7 @@ export class PublicUtilitiesService {
       throw new BadRequestException('该单据的补缴账单已生成');
     }
 
-    const dueDate = new Date(Date.UTC(Number(bill.period.slice(0, 4)), Number(bill.period.slice(5, 7)), 10));
-    let created = 0;
-
-    await this.prisma.$transaction(async (tx) => {
-      for (const allocation of bill.allocations) {
-        if (allocation.amount <= 0) continue;
-        const existing = await tx.bill.findUnique({
-          where: { dedupKey: `UTILITY:ALLOC:${allocation.id}` },
-          select: { id: true },
-        });
-        if (existing) continue;
-
-        const contract = await tx.contract.findUniqueOrThrow({
-          where: { id: allocation.contractId },
-          select: { id: true, roomId: true, room: { select: { roomNumber: true } } },
-        });
-        await tx.bill.create({
-          data: {
-            contractId: contract.id,
-            billNumber: `PU-${bill.period}-${contract.room.roomNumber}-${allocation.id.slice(-6)}`,
-            billType: 'UTILITY',
-            period: bill.period,
-            amount: allocation.amount,
-            paidAmount: 0,
-            snapshot: {
-              source: 'PUBLIC_UTILITY_ALLOCATION',
-              publicUtilityBillId: bill.id,
-              allocationId: allocation.id,
-              meterType: bill.meterType,
-              period: bill.period,
-              totalAmount: bill.totalAmount,
-            },
-            dueDate,
-            status: 'PENDING',
-            dedupKey: `UTILITY:ALLOC:${allocation.id}`,
-          },
-        });
-        created++;
-      }
-      await tx.publicUtilityBill.update({
-        where: { id: bill.id },
-        data: { billsGeneratedAt: new Date() },
-      });
-    });
-
-    await this.audit(actor, 'GENERATE_BILLS', id, { created });
-    return { message: `已生成 ${created} 笔补缴账单`, created };
+    throw apiError(ErrorCode.UTILITY_RULE_BLOCKED, '公共费用分摊尚无已确认的分摊规则版本和历史责任来源，保留单据，阻断生成租客应收');
   }
 
   /** 计算总额：给了 meterId 就按当月用量 × 单价，否则用直接录入的总额 */

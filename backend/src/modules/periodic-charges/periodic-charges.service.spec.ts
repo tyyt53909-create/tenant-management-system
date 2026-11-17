@@ -109,7 +109,7 @@ describe('PeriodicChargesService', () => {
       [{ alreadySettled: true }, 'ALREADY_SETTLED'],
       [{ settlementBlock: { reasonCode: 'UNCONFIRMED_HANDOFF', reason: '待确认', retryCondition: '核对' } }, 'UNCONFIRMED_HANDOFF'],
       [{ attribution: { reasonCode: 'OCCUPANCY_UNCERTAIN', reason: '归属不明', retryCondition: '核对' } }, 'OCCUPANCY_UNCERTAIN'],
-      [{ prepayBalance: null }, 'MISSING_PREPAY_ACCOUNT'],
+      [{ prepayBalance: null, collectionMode: 'PREPAY_WITH_SHORTFALL' }, 'MISSING_PREPAY_ACCOUNT'],
     ] as const) {
       billing.getUnsettledUsage.mockResolvedValueOnce({ ...meterPreview, ...result });
       expect((await preview())[1]).toMatchObject({ review: { reasonCode: code } });

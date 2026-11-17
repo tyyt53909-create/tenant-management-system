@@ -76,7 +76,7 @@ it.each(['PREPAY_WITH_SHORTFALL', 'POSTPAID', 'DIRECT_TO_PROVIDER'])('previews %
   const data = { ...f.dto, collectionMode: mode };
   const preview = await f.preview(data);
   expect(preview.status, JSON.stringify(preview.body)).toBe(201);
-  expect(preview.body).toMatchObject({ ready: true, billingIssues: [], financialPostingEnabled: false, financialPreview: {
+  expect(preview.body).toMatchObject({ ready: true, billingIssues: [], financialPostingEnabled: true, financialPreview: {
     usage: '10', rateCents: '61.7', totalAmount: 617, financialEffect: 'NONE',
     prepayApplied: mode === 'PREPAY_WITH_SHORTFALL' ? 100 : 0,
     receivableAmount: mode === 'DIRECT_TO_PROVIDER' ? 0 : mode === 'PREPAY_WITH_SHORTFALL' ? 517 : 617,
@@ -119,29 +119,22 @@ it('keeps missing-account prepay blocked while allowing postpaid and provider ru
     .toMatchObject([{ code: 'BALANCE_REVIEW_REQUIRED' }]);
 });
 
-it('fences reviewed rules from legacy automatic, batch and periodic meter posting until the migration is enabled', async () => {
+it('applies a confirmed provider rule through legacy settlement without landlord receivables', async () => {
   const f = await fixture();
   const preview = await f.preview({ ...f.dto, collectionMode: 'DIRECT_TO_PROVIDER' });
   expect((await f.confirm({ ...f.dto, collectionMode: 'DIRECT_TO_PROVIDER', requestId: randomUUID(), reviewToken: preview.body.reviewToken })).status).toBe(201);
   const before = await financialSnapshot();
   const settled = await http(app).post(`/meters/${f.meter.id}/settle`).set(auth(f.adminToken)).send({});
-  expect(settled.status).toBe(201);
-  expect(settled.body).toMatchObject({ status: 'BLOCKED', reasonCode: 'RULE_POSTING_NOT_ENABLED', settled: false });
-  const batch = await http(app).post('/meters/settle-batch').set(auth(f.adminToken)).send({ meterIds: [f.meter.id] });
-  expect(batch.body.results).toMatchObject([{ status: 'BLOCKED', reasonCode: 'RULE_POSTING_NOT_ENABLED' }]);
-  const periodic = await http(app).post('/periodic-charges/preview').set(auth(f.adminToken))
-    .send({ buildingId: f.base.buildingId, cutoff: f.closing.readingTime.toISOString() });
-  expect(periodic.status, JSON.stringify(periodic.body)).toBe(201);
-  expect(periodic.body.items.find((row: { targetId: string }) => row.targetId === f.meter.id))
-    .toMatchObject({ state: 'BLOCKED', result: { reasonCode: 'RULE_POSTING_NOT_ENABLED' } });
-  expect(await financialSnapshot()).toEqual(before);
-  const captured = await http(app).post(`/meters/${f.meter.id}/readings`).set(auth(f.adminToken))
-    .send({ currentReading: 111, readingTime: app.get(BusinessClock).now().toISOString(), autoSettle: true });
-  expect(captured.status, JSON.stringify(captured.body)).toBe(201);
-  expect(captured.body.deduction).toMatchObject({ applied: false, reasonCode: 'RULE_POSTING_NOT_ENABLED' });
-  expect((await prisma.meterReading.findUniqueOrThrow({ where: { id: captured.body.reading.id } })).settledAt).toBeNull();
+  expect(settled.body).toMatchObject({ status: 'SETTLED', amount: 617, providerAmount: 617, receivableAmount: 0, prepayApplied: 0 });
   const after = await financialSnapshot();
   expect({ ...after, readings: before.readings }).toEqual(before);
+  expect(await prisma.utilityCharge.count()).toBe(1);
+  const batch = await http(app).post('/meters/settle-batch').set(auth(f.adminToken)).send({ meterIds: [f.meter.id] });
+  expect(batch.body.results).toMatchObject([{ status: 'NO_CHANGE', reasonCode: 'ALREADY_SETTLED' }]);
+  const captured = await http(app).post(`/meters/${f.meter.id}/readings`).set(auth(f.adminToken))
+    .send({ currentReading: 111, readingTime: app.get(BusinessClock).now().toISOString(), autoSettle: true });
+  expect(captured.body.deduction).toMatchObject({ applied: false, reasonCode: 'OWNERSHIP_UNRESOLVED' });
+  expect((await prisma.meterReading.findUniqueOrThrow({ where: { id: captured.body.reading.id } })).settledAt).toBeNull();
 });
 
 it('invalidates review when a handover confirmation changes while ownership still resolves to the same tenant', async () => {

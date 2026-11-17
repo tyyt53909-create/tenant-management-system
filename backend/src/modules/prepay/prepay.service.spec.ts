@@ -93,6 +93,10 @@ describe('PrepayService', () => {
   });
 
   describe('recordTransaction', () => {
+    it('手工流水不能伪装成表计计费绕过已确认收款模式', async () => {
+      await expect(service.recordTransaction('account', { type: 'DEDUCTION', amount: 100, description: 'water', relatedType: 'METER_READING' } as any, 'admin')).rejects.toMatchObject({ response: { code: 'UTILITY_RULE_BLOCKED' } });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
     it('充值：余额增加，流水金额为正', async () => {
       prisma.prepayAccount.findUnique.mockResolvedValue({ id: accountId, balanceCache: 10000 });
       prisma.prepayAccount.update.mockResolvedValue({ id: accountId, balanceCache: 30000 });

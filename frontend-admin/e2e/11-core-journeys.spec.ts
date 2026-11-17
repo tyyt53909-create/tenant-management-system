@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test, type APIResponse, type Locator, type Page } from '@playwright/test';
-import { apiContext, loginAsAdmin, postReading, ensurePrepayFunded } from './fixtures';
+import { apiContext, loginAsAdmin, postReading, ensurePrepayFunded, confirmUtilityRuleFixture } from './fixtures';
 import { assertMarkedPostgres, readBatch, readLedger } from './postgres';
 
 type Auth = Awaited<ReturnType<typeof apiContext>>;
@@ -90,6 +90,7 @@ async function activateWithoutAccount({ req, headers }: Auth, s: Subject) {
     headers, data: { status: 'OCCUPIED', version: reserved.version },
   }), 200);
   await postReading(s.meter.id, 100, { autoSettle: false });
+  await confirmUtilityRuleFixture(s.meter.id, s.contract.id);
 }
 
 async function selectBuilding(page: Page, site: Building) {
@@ -192,7 +193,7 @@ for (const layout of [
         const repairRow = page.getByRole('row').filter({ hasText: repair.meter.meterNumber });
         await expect(goodRow).toContainText('待确认');
         await expect(goodRow).toContainText('5.00');
-        await expect(repairRow).toContainText('缺预付账户');
+        await expect(repairRow).toContainText('缺少预付账户');
         const before = [ledger(good), ledger(repair)];
         expect(before.map((s) => [s.bills.map((b) => b.billType), s.debits.length, s.readings.at(-1)?.settledAmount]))
           .toEqual([[['RENT'], 0, null], [['RENT'], 0, null]]);
@@ -208,7 +209,7 @@ for (const layout of [
         await expect(goodRow).toContainText('待确认');
         await approveCharges(page, id, '5.00');
         await expect(goodRow).toContainText('已处理', { timeout: 30_000 });
-        await expect(repairRow).toContainText('缺预付账户');
+        await expect(repairRow).toContainText('缺少预付账户');
         const first = ledger(good);
         expect(first).toMatchObject({
           room: { status: 'OCCUPIED' }, lease: { tenantId: good.tenant.id }, payments: 0,

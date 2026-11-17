@@ -1,3 +1,4 @@
+import { confirmedMeterFixture } from './utility-fixtures.js';
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
@@ -69,6 +70,7 @@ it('writes all check-in records once under concurrent requests and replays the p
   expect(await prisma.room.findUniqueOrThrow({ where: { id: room.id } }))
     .toMatchObject({ status: 'OCCUPIED', version: room.version + 1 });
 
+  await confirmedMeterFixture(meter.id, first.body.contractId);
   const reading = await http(app).post(`/meters/${meter.id}/readings`).set(admin)
     .send({ currentReading: 16.2, autoSettle: true });
   expect(reading.status, JSON.stringify(reading.body)).toBe(201);

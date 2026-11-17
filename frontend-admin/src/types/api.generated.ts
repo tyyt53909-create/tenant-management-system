@@ -1187,6 +1187,54 @@ export interface paths {
         patch: operations["MetersController_update"];
         trace?: never;
     };
+    "/api/utility-charges/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["UtilityPostingController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/utility-charges/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["UtilityPostingController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/utility-charges/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["UtilityPostingController_charge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/imports/{entity}/template": {
         parameters: {
             query?: never;
@@ -4222,6 +4270,8 @@ export interface components {
             endReading: number;
             usage: number;
             unitPrice: number;
+            rateCents?: string;
+            policyVersionId?: string;
             nextOpeningReading?: number;
         };
         MeterBatchSettlementItemDto: {
@@ -4229,7 +4279,7 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY" | "RULE_POSTING_NOT_ENABLED";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY" | "RULE_POSTING_NOT_ENABLED" | "LEGACY_REVIEW_REQUIRED" | "OWNERSHIP_UNRESOLVED" | "BALANCE_REVIEW_REQUIRED" | "UTILITY_COVERAGE_CONFLICT" | "POLICY_BOUNDARY_REQUIRED" | "AMOUNT_OUT_OF_RANGE";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
@@ -4241,6 +4291,12 @@ export interface components {
             currentReading?: number;
             reason?: string;
             retryCondition?: string;
+            chargeId?: string;
+            /** @enum {string} */
+            collectionMode?: "PREPAY_WITH_SHORTFALL" | "POSTPAID" | "DIRECT_TO_PROVIDER";
+            prepayApplied?: number;
+            receivableAmount?: number;
+            providerAmount?: number;
             billId?: string;
             contractId?: string;
             prepayTransactionId?: string;
@@ -4298,7 +4354,7 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY" | "RULE_POSTING_NOT_ENABLED";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED" | "OCCUPANCY_UNCERTAIN" | "VACANT_INTERVAL" | "UNCONFIRMED_HANDOFF" | "MISSING_RATE_BOUNDARY" | "RULE_POSTING_NOT_ENABLED" | "LEGACY_REVIEW_REQUIRED" | "OWNERSHIP_UNRESOLVED" | "BALANCE_REVIEW_REQUIRED" | "UTILITY_COVERAGE_CONFLICT" | "POLICY_BOUNDARY_REQUIRED" | "AMOUNT_OUT_OF_RANGE";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
@@ -4310,6 +4366,12 @@ export interface components {
             currentReading?: number;
             reason?: string;
             retryCondition?: string;
+            chargeId?: string;
+            /** @enum {string} */
+            collectionMode?: "PREPAY_WITH_SHORTFALL" | "POSTPAID" | "DIRECT_TO_PROVIDER";
+            prepayApplied?: number;
+            receivableAmount?: number;
+            providerAmount?: number;
             billId?: string;
             contractId?: string;
             prepayTransactionId?: string;
@@ -4320,6 +4382,17 @@ export interface components {
         };
         UpdateMeterDto: {
             isActive?: boolean;
+        };
+        PreviewUtilityChargeDto: {
+            meterId: string;
+            settleUntil?: string;
+        };
+        ConfirmUtilityChargeDto: {
+            meterId: string;
+            settleUntil?: string;
+            notes?: string;
+            requestId: string;
+            reviewToken: string;
         };
         CreateTagDto: {
             name: string;
@@ -4687,7 +4760,10 @@ export interface components {
             responsibility: "TENANT" | "OWNER";
             contractId?: string;
             openingReadingId: string;
-            closingReadingId: string;
+            /** @description 留空登记开放责任段；结束时以真实终读数封口 */
+            closingReadingId?: string;
+            /** @description 封口已有开放责任段的编号 */
+            responsibilityIntervalId?: string;
             /** @enum {string} */
             collectionMode?: "PREPAY_WITH_SHORTFALL" | "POSTPAID" | "DIRECT_TO_PROVIDER";
             /**
@@ -4704,7 +4780,10 @@ export interface components {
             responsibility: "TENANT" | "OWNER";
             contractId?: string;
             openingReadingId: string;
-            closingReadingId: string;
+            /** @description 留空登记开放责任段；结束时以真实终读数封口 */
+            closingReadingId?: string;
+            /** @description 封口已有开放责任段的编号 */
+            responsibilityIntervalId?: string;
             /** @enum {string} */
             collectionMode?: "PREPAY_WITH_SHORTFALL" | "POSTPAID" | "DIRECT_TO_PROVIDER";
             /**
@@ -8182,6 +8261,103 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateMeterDto"];
             };
         };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    UtilityPostingController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewUtilityChargeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    UtilityPostingController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmUtilityChargeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    UtilityPostingController_charge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description 成功 */
             200: {

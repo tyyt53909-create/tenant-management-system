@@ -2,11 +2,11 @@
   <el-drawer v-model="visible" title="水电规则与交接" size="min(100%, 660px)" append-to-body destroy-on-close>
     <el-skeleton v-if="loading" :rows="6" animated />
     <el-result v-else-if="loadError" icon="error" title="资料加载失败" :sub-title="loadError">
-      <template #extra><el-button @click="load">重试加载</el-button></template>
+      <template #extra><el-button @click="load()">重试加载</el-button></template>
     </el-result>
     <template v-else-if="data">
       <p>{{ data.contract.contractNumber }} · {{ data.contract.tenant.name }}</p>
-      <el-alert type="info" :closable="false" title="金额为规则试算；确认保存规则与交接证据。正式费用接入将另行启用。" />
+      <el-alert type="info" :closable="false" title="确认规则只保存依据，不扣款。正式计费请在下方另行预览并确认。" />
       <el-alert v-if="pending" class="review-section" type="warning" :closable="false" title="上次确认结果待核对，可重试原请求。">
         <el-button :loading="busy" @click="retryPending">重试上次确认</el-button>
       </el-alert>
@@ -26,13 +26,19 @@
               <el-radio-button value="OWNER">房东空置期</el-radio-button>
             </el-radio-group>
           </el-form-item>
+          <el-form-item label="责任段范围">
+            <el-radio-group v-model="scope" aria-label="责任段范围">
+              <el-radio-button value="CLOSED">有真实终读数</el-radio-button>
+              <el-radio-button value="OPEN" :disabled="form.responsibility === 'OWNER'">持续使用，交接时封口</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
           <div class="reading-fields">
             <el-form-item label="起点读数">
               <el-select v-model="form.openingReadingId" aria-label="起点读数" placeholder="选择真实起点" filterable>
                 <el-option v-for="row in selected.readings" :key="row.id" :value="row.id" :label="readingLabel(row)" />
               </el-select>
             </el-form-item>
-            <el-form-item label="终点读数">
+            <el-form-item v-if="scope === 'CLOSED'" label="终点读数">
               <el-select v-model="form.closingReadingId" aria-label="终点读数" placeholder="选择真实终点" filterable>
                 <el-option v-for="row in selected.readings" :key="row.id" :value="row.id" :label="readingLabel(row)" />
               </el-select>
@@ -69,15 +75,18 @@
         <h3>已确认责任段</h3>
         <article v-for="row in selected.responsibilityIntervals" :key="row.id" class="confirmed-interval">
           <strong>{{ row.responsibility === 'OWNER' ? '房东空置期' : row.contractId === contractId ? '本合同租客' : '其他历史合同' }}</strong>
-          <p>{{ time(row.startAt) }} 至 {{ time(row.endAt) }}</p>
+          <p>{{ time(row.startAt) }} 至 {{ row.endAt ? time(row.endAt) : '开放，待真实交接封口' }}</p>
           <p>{{ row.evidence }}</p>
+          <el-button v-if="!row.endAt && row.contractId === contractId" @click="prepareClosing(row)">填写封口终读数</el-button>
         </article>
       </section>
+      <UtilityChargePanel v-if="selected" :key="selected.id" :meter-id="selected.id" @posted="load(true)" />
     </template>
   </el-drawer>
 </template>
 
 <script setup lang="ts">
+import UtilityChargePanel from './UtilityChargePanel.vue';
 import { computed, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
@@ -98,23 +107,27 @@ const busy = ref(false);
 const review = ref<UtilityRulePreview>();
 const pending = ref<RuleConfirmation>();
 let loadSequence = 0;
+const scope = ref('CLOSED');
+const closingIntervalId = ref<string>();
 const form = reactive({ meterId: '', responsibility: 'TENANT' as 'TENANT' | 'OWNER', openingReadingId: '', closingReadingId: '', collectionMode: '' as CollectionMode | '', rateCents: '', evidence: '' });
 const selected = computed(() => data.value?.meters.find((meter) => meter.id === form.meterId));
 const modeLabel = { PREPAY_WITH_SHORTFALL: '预付余额抵扣，不足补缴', POSTPAID: '后付，由房东收取', DIRECT_TO_PROVIDER: '租客直接缴给供应商' };
 const typeLabel: Record<string, string> = { WATER: '水表', ELECTRICITY: '电表', GAS: '燃气表' };
-const complete = computed(() => Boolean(form.meterId && form.openingReadingId && form.closingReadingId && form.evidence.trim()
+const complete = computed(() => Boolean(form.meterId && form.openingReadingId && (scope.value === 'OPEN' || form.closingReadingId) && form.evidence.trim()
   && (form.responsibility === 'OWNER' || (form.collectionMode && /^(0|[1-9]\d{0,9})(\.\d{1,6})?$/.test(form.rateCents)))));
 const storageKey = () => `utility-rule-confirm:${props.contractId}`;
 const time = (value: string) => new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 const readingLabel = (row: { readingTime: string; currentReading: string }) => `${row.currentReading} · ${time(row.readingTime)}`;
 const amount = (value: number | null) => value === null ? '待核验' : formatMoney(value);
 
-watch(form, () => { review.value = undefined; });
-watch(() => form.meterId, () => { form.openingReadingId = ''; form.closingReadingId = ''; });
+watch([form, scope, closingIntervalId], () => { review.value = undefined; });
+watch(() => form.responsibility, (value) => { if (value === 'OWNER') scope.value = 'CLOSED'; });
+watch(() => form.meterId, () => { form.openingReadingId = ''; form.closingReadingId = ''; closingIntervalId.value = undefined; });
 watch([visible, () => props.contractId], async ([open]) => {
   if (!open || !props.contractId) return;
   review.value = undefined;
   pending.value = undefined;
+  scope.value = 'CLOSED'; closingIntervalId.value = undefined;
   Object.assign(form, { meterId: '', responsibility: 'TENANT', openingReadingId: '', closingReadingId: '', collectionMode: '', rateCents: '', evidence: '' });
   const raw = sessionStorage.getItem(storageKey());
   if (raw) {
@@ -126,16 +139,16 @@ watch([visible, () => props.contractId], async ([open]) => {
   await load();
 });
 
-async function load() {
+async function load(silent = false) {
   const sequence = ++loadSequence;
   const contractId = props.contractId;
-  loading.value = true;
+  if (!silent) loading.value = true;
   loadError.value = '';
   try {
     const next = await getUtilityReadiness(contractId);
     if (sequence === loadSequence) data.value = next;
   } catch (error) {
-    if (sequence === loadSequence) loadError.value = apiErrorMessage(error, '请检查连接后重试');
+    if (sequence === loadSequence && !silent) loadError.value = apiErrorMessage(error, '请检查连接后重试');
   } finally {
     if (sequence === loadSequence) loading.value = false;
   }
@@ -144,9 +157,17 @@ async function load() {
 function payload(): RuleReview {
   return {
     meterId: form.meterId, responsibility: form.responsibility,
-    openingReadingId: form.openingReadingId, closingReadingId: form.closingReadingId, evidence: form.evidence.trim(),
+    openingReadingId: form.openingReadingId, ...(scope.value === 'CLOSED' && { closingReadingId: form.closingReadingId }),
+    ...(closingIntervalId.value && { responsibilityIntervalId: closingIntervalId.value }), evidence: form.evidence.trim(),
     ...(form.responsibility === 'TENANT' && { contractId: props.contractId, collectionMode: form.collectionMode as CollectionMode, rateCents: form.rateCents }),
   };
+}
+
+function prepareClosing(row: UtilityReadiness['meters'][number]['responsibilityIntervals'][number]) {
+  closingIntervalId.value = row.id; scope.value = 'CLOSED';
+  form.responsibility = 'TENANT'; form.openingReadingId = row.openingReadingId; form.closingReadingId = '';
+  form.collectionMode = selected.value!.policy!.collectionMode; form.rateCents = selected.value!.policy!.rateCents;
+  form.evidence = '';
 }
 
 async function preview() {

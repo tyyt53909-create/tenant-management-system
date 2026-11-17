@@ -1,3 +1,4 @@
+import { confirmedMeterFixture, confirmedRateFixture } from './utility-fixtures.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import type { Response } from 'supertest';
@@ -44,6 +45,7 @@ async function createMeter(
       initialReading,
     });
   expect(response.status).toBe(201);
+  await confirmedMeterFixture(response.body.id as string);
   return response.body.id as string;
 }
 
@@ -137,6 +139,7 @@ describe('抄表与计价（FIN-08）', () => {
     expect(initial.status).toBe(201);
     expect(initial.body.reading).toMatchObject({ source: 'DEVICE', currentReading: '100' });
     expect(initial.body.reading.id).not.toBe(legacySim.id);
+    await confirmedMeterFixture(meterId);
     const replay = await reading(100, initialTime, { source: 'DEVICE', isInitial: true, messageId: 'shared-id' });
     expect(replay.body.reading.id).toBe(initial.body.reading.id);
 
@@ -240,6 +243,8 @@ describe('抄表与计价（FIN-08）', () => {
 
     const finalOldReading = await reading(110, checkoutTime, false);
     expect(finalOldReading.status).toBe(201);
+    const oldInterval = await prisma.meterResponsibilityInterval.findFirstOrThrow({ where: { meterId } });
+    await prisma.meterResponsibilityInterval.update({ where: { id: oldInterval.id }, data: { endAt: new Date(checkoutTime), closingReadingId: finalOldReading.body.reading.id } });
     const checkoutInspection = await inspect(oldTenant.contractId, 'CHECK_OUT', checkoutTime);
     await confirm(checkoutInspection, oldTenant.tenantToken);
     await prisma.depositLedger.create({
@@ -274,12 +279,12 @@ describe('抄表与计价（FIN-08）', () => {
 
     const single = await reading(120, '2026-04-13T02:00:00.000Z', true);
     expect(single.status).toBe(201);
-    expect(single.body.deduction).toMatchObject({ applied: false, reasonCode: 'OCCUPANCY_UNCERTAIN' });
+    expect(single.body.deduction).toMatchObject({ applied: false, reasonCode: 'OWNERSHIP_UNRESOLVED' });
     const captured = await http(app).post('/meters/batch-readings').set(auth(adminToken))
       .send({ readings: [{ meterId, currentReading: 124, readingTime: latestTime }] });
     expect(captured.status).toBe(201);
     expect(captured.body.results[0]).toMatchObject({
-      success: true, deductionBlocked: { reasonCode: 'OCCUPANCY_UNCERTAIN' },
+      success: true, deductionBlocked: { reasonCode: 'OWNERSHIP_UNRESOLVED' },
     });
     const reset = await http(app).post(`/meters/${meterId}/readings`).set(auth(adminToken))
       .send(readingBody(124, latestTime, { isInitial: true, messageId: 'replacement-baseline' }));
@@ -287,7 +292,7 @@ describe('抄表与计价（FIN-08）', () => {
 
     const blockedBeforeConfirmation = await batch(checkinTime);
     expect(blockedBeforeConfirmation.body).toMatchObject({
-      blockedCount: 1, results: [{ status: 'BLOCKED', reasonCode: 'OCCUPANCY_UNCERTAIN' }],
+      blockedCount: 1, results: [{ status: 'BLOCKED', reasonCode: 'OWNERSHIP_UNRESOLVED' }],
     });
     expect(await prisma.bill.count({ where: { billType: 'UTILITY' } })).toBe(0);
     expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(0);
@@ -304,7 +309,7 @@ describe('抄表与计价（FIN-08）', () => {
 
     const pendingVacancy = await settle(checkinTime);
     expect(pendingVacancy.body).toMatchObject({
-      status: 'BLOCKED', reasonCode: 'OCCUPANCY_UNCERTAIN', usage: 4,
+      status: 'BLOCKED', reasonCode: 'OWNERSHIP_UNRESOLVED', usage: 0,
     });
     expect(await prisma.meterReading.findUniqueOrThrow({ where: { id: vacancyEnd.body.reading.id } }))
       .toMatchObject({ settledAt: null });
@@ -313,8 +318,14 @@ describe('抄表与计价（FIN-08）', () => {
     const blocked = await batch(latestTime);
     expect(blocked.body).toMatchObject({
       blockedCount: 1, settledCount: 0,
-      results: [{ status: 'BLOCKED', reasonCode: 'OCCUPANCY_UNCERTAIN', usage: 14 }],
+      results: [{ status: 'BLOCKED', reasonCode: 'OWNERSHIP_UNRESOLVED', usage: 0 }],
     });
+    await prisma.meterResponsibilityInterval.create({ data: {
+      meterId, roomId, responsibility: 'OWNER', startAt: new Date(checkoutTime), endAt: new Date(checkinTime),
+      openingReadingId: finalOldReading.body.reading.id, closingReadingId: vacancyEnd.body.reading.id, confirmedBy: 'integration-admin', evidence: 'Explicitly reviewed vacant handover',
+    } });
+    await prisma.utilityPolicyVersion.create({ data: { contractId: incoming.contractId, feeType: 'ELECTRICITY', version: 1, collectionMode: 'PREPAY_WITH_SHORTFALL', rateCents: 100, unit: 'kWh', effectiveFrom: new Date(checkinTime), confirmedBy: 'integration-admin', evidence: 'Incoming lease consent' } });
+    await prisma.meterResponsibilityInterval.create({ data: { meterId, roomId, contractId: incoming.contractId, tenantId: incoming.tenantId, responsibility: 'TENANT', startAt: new Date(checkinTime), openingReadingId: vacancyEnd.body.reading.id, confirmedBy: 'integration-admin', evidence: 'Incoming confirmed real baseline' } });
     const vacancy = await settle(checkinTime);
     expect(vacancy.body).toMatchObject({
       status: 'NO_CHANGE', reasonCode: 'VACANT_INTERVAL', settled: true, usage: 4, amount: 0,
@@ -390,7 +401,7 @@ describe('抄表与计价（FIN-08）', () => {
       settleUntil, total: 4, settledCount: 1, noChangeCount: 1, blockedCount: 1, failedCount: 1,
       successCount: 1, failureCount: 2,
       results: [
-        { meterId: blocked, status: 'BLOCKED', reasonCode: 'MISSING_PREPAY_ACCOUNT', usage: 10, amount: 1000, success: false, settled: false, retryCondition: expect.any(String) },
+        { meterId: blocked, status: 'BLOCKED', reasonCode: 'MISSING_PREPAY_ACCOUNT', usage: 0, amount: 0, success: false, settled: false, retryCondition: expect.any(String) },
         { meterId: zero, status: 'NO_CHANGE', reasonCode: 'ZERO_USAGE', success: false },
         { meterId: failing, status: 'FAILED', reasonCode: 'SETTLEMENT_FAILED', success: false },
         { meterId: funded, status: 'SETTLED', usage: 5, amount: 500, success: true, prepayTransactionId: expect.any(String) },
@@ -527,6 +538,7 @@ describe('抄表与计价（FIN-08）', () => {
     const price = await http(app).post(`/meters/${meterId}/price`).set(auth(adminToken))
       .send({ unitPrice: 250, effectiveDate: '2026-01-20' });
     expect(price.status).toBe(201);
+    await confirmedRateFixture(meterId, 250, '2026-01-19T16:00:00.000Z');
 
     const target = await register(100.02, '2026-01-25T02:00:00Z', true);
     expect(target.body.deduction).toMatchObject({ applied: false, reasonCode: 'MISSING_RATE_BOUNDARY' });
@@ -587,6 +599,7 @@ describe('抄表与计价（FIN-08）', () => {
       .set(auth(tenancy.adminToken))
       .send({ unitPrice: 200, effectiveDate: '2026-02-01' });
     expect(price.status).toBe(201);
+    await confirmedRateFixture(meterId, 200, '2026-01-31T16:00:00.000Z');
 
     const boundary = await http(app)
       .post(`/meters/${meterId}/readings`).set(auth(tenancy.adminToken))
@@ -779,7 +792,7 @@ describe('水电结算并发和历史截止时间（CORE-02）', () => {
           SELECT EXISTS (
             SELECT 1 FROM pg_stat_activity
             WHERE datname = current_database()
-              AND query LIKE '%FROM "meters"%FOR UPDATE%'
+              AND query LIKE '%FOR UPDATE%' AND (query LIKE '%FROM "meters"%' OR query LIKE '%FROM rooms%')
               AND cardinality(pg_blocking_pids(pid)) > 0
           ) AS waiting
         `;

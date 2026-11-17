@@ -17,6 +17,8 @@
  * 退出码：全部通过 0；任一步失败 1。
  */
 
+import { randomUUID } from 'node:crypto';
+
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:3100/api';
 const ADMIN_IDENTIFIER = process.env.ADMIN_IDENTIFIER || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
@@ -390,6 +392,23 @@ async function main() {
     expectStatus(first, [200, 201], '登记初始底数');
     assert(first.data.deduction && first.data.deduction.applied === false, '初始底数不应扣费');
 
+    const rule = {
+      meterId: meter.data.id, contractId: contract.id, responsibility: 'TENANT',
+      openingReadingId: first.data.reading.id, collectionMode: 'PREPAY_WITH_SHORTFALL', rateCents: '100',
+      evidence: 'MVP 验收明确核对预付不足补缴条款及真实入住底数',
+    };
+    const preview = await api('POST', '/utility-readiness/preview', { token: adminToken, body: rule });
+    expectStatus(preview, 201, '核验收费规则');
+    assert(preview.data.ready, '真实入住及规则核验必须通过');
+    const confirmed = await api('POST', '/utility-readiness/confirm', {
+      token: adminToken, body: { ...rule, requestId: randomUUID(), reviewToken: preview.data.reviewToken },
+    });
+    expectStatus(confirmed, 201, '明确确认收费规则与开放责任段');
+    assert(confirmed.data.financialEffect === 'NONE', '规则确认不能扣款');
+    const beforeCharge = await api('GET', '/prepay-accounts/' + prepay.id, { token: adminToken });
+    assert(beforeCharge.data.balanceCache === balanceBeforeReading, '预览及规则确认不得改变余额');
+
+
     const res = await api('POST', '/meters/' + meter.data.id + '/readings', {
       token: adminToken,
       body: { currentReading: 150, readingTime: new Date().toISOString() },
@@ -399,7 +418,12 @@ async function main() {
     const acct = await api('GET', '/prepay-accounts/' + prepay.id, { token: adminToken });
     expectStatus(acct, 200, '读取预付余额');
     assert(typeof acct.data.balanceCache === 'number', 'balanceCache 应为数字');
-    assert(acct.data.balanceCache < balanceBeforeReading,
+    assert(res.data.deduction.applied === true && res.data.deduction.amount === 5000 && res.data.deduction.shortfall === 0, '已确认规则应产生精确 5000 分预付费用');
+    assert(typeof res.data.deduction.chargeId === 'string', '完整费用必须有持久来源凭证');
+    const repeated = await api('POST', '/meters/' + meter.data.id + '/settle', { token: adminToken, body: {} });
+    expectStatus(repeated, 201, '重试原消费范围');
+    assert(repeated.data.reasonCode === 'ALREADY_SETTLED', '重试不能重复收取原用量');
+    assert(acct.data.balanceCache === balanceBeforeReading - 5000,
       '读数后余额应被扣减：读数前 ' + balanceBeforeReading + '，实际 ' + acct.data.balanceCache);
     return { detail: '余额 ' + balanceBeforeReading + ' -> ' + acct.data.balanceCache + '分（已扣费）' };
   });

@@ -6,7 +6,8 @@ export interface RuleReview {
   contractId?: string;
   responsibility: 'TENANT' | 'OWNER';
   openingReadingId: string;
-  closingReadingId: string;
+  closingReadingId?: string;
+  responsibilityIntervalId?: string;
   collectionMode?: CollectionMode;
   rateCents?: string;
   evidence: string;
@@ -37,7 +38,7 @@ export interface UtilityReadiness {
     policy: { version: number; collectionMode: CollectionMode; rateCents: string; evidence: string } | null;
     readings: Array<{ id: string; readingTime: string; currentReading: string }>;
     responsibilityIntervals: Array<{
-      id: string; startAt: string; endAt: string; responsibility: 'TENANT' | 'OWNER';
+      id: string; startAt: string; endAt: string | null; openingReadingId: string; responsibility: 'TENANT' | 'OWNER';
       contractId: string | null; evidence: string;
     }>;
   }>;

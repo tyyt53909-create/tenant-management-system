@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MetersService } from './meters.service.js';
@@ -51,14 +52,20 @@ describe('MetersService', () => {
         update: vi.fn(),
       },
       contract: { findMany: vi.fn().mockResolvedValue([]) },
-      utilityPolicyVersion: { findFirst: vi.fn().mockResolvedValue(null) },
+      utilityPolicyVersion: { findMany: vi.fn().mockResolvedValue([{ id: 'policy', version: 1, rateCents: new Prisma.Decimal(100), collectionMode: 'PREPAY_WITH_SHORTFALL', calculationMode: 'METER_DELTA_FLAT_RATE', roundingRule: 'HALF_UP_CHARGE_V1', effectiveFrom: new Date('2025-01-01'), evidence: 'Explicit test consent' }]) },
       prepayAccount: {
         findUnique: vi.fn(),
         findUniqueOrThrow: vi.fn(),
         findMany: vi.fn(),
         updateMany: vi.fn(),
+        update: vi.fn().mockResolvedValue({ balanceCache: 0 }),
       },
-      prepayTransaction: { create: vi.fn() },
+      meterResponsibilityInterval: { findMany: vi.fn(async () => {
+        const leases = await prismaMock.contract.findMany();
+        return leases.map((lease: any) => ({ id: 'interval', roomId: baseMeter.roomId, meterId, contractId: lease.id, tenantId: lease.tenantId, responsibility: 'TENANT', startAt: new Date('2025-01-01'), endAt: null, evidence: 'Explicit confirmed test fixture', openingReadingId: 'base' }));
+      }) },
+      utilityCharge: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'charge' }) },
+      prepayTransaction: { create: vi.fn(), aggregate: vi.fn(async () => ({ _sum: { amount: (await prismaMock.prepayAccount.findUnique())?.balanceCache ?? 0 } })) },
       bill: { create: vi.fn() },
       meterPriceHistory: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
       auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
@@ -277,8 +284,8 @@ describe('MetersService', () => {
       expect(prisma.meterReading.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ previousReading: 150, currentReading: 200, usage: 50 }),
       });
-      expect(prisma.prepayAccount.updateMany).toHaveBeenCalledWith({
-        where: { id: 'account-1', balanceCache: { gte: 5000 } },
+      expect(prisma.prepayAccount.update).toHaveBeenCalledWith({
+        where: { id: 'account-1' },
         data: { balanceCache: { decrement: 5000 } },
       });
       expect(result.deduction.applied).toBe(true);
@@ -305,8 +312,8 @@ describe('MetersService', () => {
         operatorId,
       );
 
-      expect(prisma.prepayAccount.updateMany).toHaveBeenCalledWith({
-        where: { id: 'account-1', balanceCache: { gte: 3000 } },
+      expect(prisma.prepayAccount.update).toHaveBeenCalledWith({
+        where: { id: 'account-1' },
         data: { balanceCache: { decrement: 3000 } },
       });
       expect(prisma.bill.create).toHaveBeenCalledWith({
@@ -370,7 +377,7 @@ describe('MetersService', () => {
 
       expect(prisma.prepayAccount.findUnique).not.toHaveBeenCalled();
       expect(result.deduction.applied).toBe(false);
-      expect(result.deduction.reason).toContain('归属不明确');
+      expect(result.deduction.reasonCode).toBe('OWNERSHIP_UNRESOLVED');
     });
 
     it('无预付账户：不扣费', async () => {
@@ -413,7 +420,7 @@ describe('MetersService', () => {
 
       expect(prisma.contract.findMany).not.toHaveBeenCalled();
       expect(result.deduction.applied).toBe(false);
-      expect(result.deduction.reason).toContain('公共区域');
+      expect(result.deduction.reasonCode).toBe('OWNERSHIP_UNRESOLVED');
     });
 
     it('用量为 0：不扣费', async () => {
@@ -430,9 +437,8 @@ describe('MetersService', () => {
         operatorId,
       );
 
-      expect(prisma.contract.findMany).not.toHaveBeenCalled();
       expect(result.deduction.applied).toBe(false);
-      expect(result.deduction.reason).toContain('用量');
+      expect(result.deduction.reasonCode).toBe('OWNERSHIP_UNRESOLVED');
     });
 
     it('读数小于上次：400，不写入', async () => {

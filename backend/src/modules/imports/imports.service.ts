@@ -209,8 +209,8 @@ export class ImportsService {
         errors.push({ line, message: `合同不存在（${contractNumber || '空'}）` });
         continue;
       }
-      if (!['RENT', 'UTILITY', 'OTHER'].includes(record.billType)) {
-        errors.push({ line, message: 'billType 只能是 RENT/UTILITY/OTHER' });
+      if (!['RENT', 'OTHER'].includes(record.billType)) {
+        errors.push({ line, message: 'billType 只能是 RENT/OTHER；水电费用须经统一规则与来源核验，历史水电迁移需另行核账' });
       }
       if (!/^\d{4}-\d{2}$/.test(record.period ?? '')) {
         errors.push({ line, message: 'period 格式需为 YYYY-MM' });

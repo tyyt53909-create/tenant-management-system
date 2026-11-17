@@ -13,7 +13,7 @@
       <el-form-item label="账单类型" prop="billType">
         <el-select v-model="formData.billType">
           <el-option label="租金" value="RENT" />
-          <el-option label="水电费" value="UTILITY" />
+          <el-option v-if="isEdit && formData.billType === 'UTILITY'" label="水电费（原费用产生）" value="UTILITY" disabled />
           <el-option label="其他" value="OTHER" />
         </el-select>
       </el-form-item>
@@ -21,7 +21,7 @@
         <el-input v-model="formData.period" placeholder="例如：2026-01" />
       </el-form-item>
       <el-form-item label="金额(元)" prop="amount">
-        <el-input-number v-model="formData.amount" :min="0" :precision="2" />
+        <el-input-number v-model="formData.amount" :disabled="isEdit && formData.billType === 'UTILITY'" :min="0" :precision="2" />
       </el-form-item>
       <el-form-item label="到期日期" prop="dueDate">
         <el-date-picker v-model="formData.dueDate" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" />

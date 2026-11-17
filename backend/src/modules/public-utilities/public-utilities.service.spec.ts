@@ -125,37 +125,11 @@ describe('PublicUtilitiesService', () => {
     );
   });
 
-  it('生成补缴账单：跳过金额 0 与已存在的幂等键，并记录生成时间', async () => {
-    prisma.publicUtilityBill.findUnique.mockResolvedValue({
-      id: 'pu1',
-      period: '2026-01',
-      meterType: 'WATER',
-      totalAmount: 6000,
-      billsGeneratedAt: null,
-      allocations: [
-        { id: 'alloc-1', contractId: 'c1', amount: 4000 },
-        { id: 'alloc-2', contractId: 'c2', amount: 2000 },
-        { id: 'alloc-3', contractId: 'c3', amount: 0 },
-      ],
-    });
-    prisma.bill.findUnique.mockResolvedValueOnce({ id: 'existing' }).mockResolvedValueOnce(null);
-    prisma.contract.findUniqueOrThrow.mockResolvedValue({ id: 'c2', roomId: 'r2', room: { roomNumber: '102' } });
-
-    const result = await service.generateBills('pu1', actor);
-
-    expect(result.created).toBe(1);
-    expect(prisma.bill.create).toHaveBeenCalledTimes(1);
-    expect(prisma.bill.create.mock.calls[0][0].data).toMatchObject({
-      billType: 'UTILITY',
-      period: '2026-01',
-      amount: 2000,
-      dedupKey: 'UTILITY:ALLOC:alloc-2',
-      status: 'PENDING',
-    });
-    expect(prisma.publicUtilityBill.update).toHaveBeenCalledWith({
-      where: { id: 'pu1' },
-      data: { billsGeneratedAt: expect.any(Date) },
-    });
+  it('缺少已确认分摊规则和责任来源时保留单据并阻断出账', async () => {
+    prisma.publicUtilityBill.findUnique.mockResolvedValue({ id: 'pu1', billsGeneratedAt: null, allocations: [{ amount: 4000 }] });
+    await expect(service.generateBills('pu1', actor)).rejects.toMatchObject({ response: { code: 'UTILITY_RULE_BLOCKED' } });
+    expect(prisma.bill.create).not.toHaveBeenCalled();
+    expect(prisma.publicUtilityBill.update).not.toHaveBeenCalled();
   });
 
   it('重复生成 → 400', async () => {

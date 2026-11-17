@@ -7,7 +7,6 @@ import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker } from './meter-dedup.util.js';
 import { findEarliestRealReading, findMeterSettlementCursor, findNextConfirmedHandoff, lockMeters, markMeterReadingSettled, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 import { FUTURE_READING_MESSAGE, hasLegacySimulationNote, lookupMeterReading, realMeterReadings } from './meter-reading-scope.js';
-import { quoteMeterInterval, type MeterIntervalBlock } from './meter-interval-quote.js';
 import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
@@ -146,6 +145,9 @@ export class MeterBatchReadingService {
       amount?: number;
       deducted?: number;
       shortfall?: number;
+      chargeId?: string;
+      collectionMode?: string | null;
+      providerAmount?: number;
       vacantUsage?: number;
       deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
       error?: string;
@@ -433,12 +435,12 @@ export class MeterBatchReadingService {
         });
 
         let deduction: Awaited<ReturnType<MeterBillingService['applyReadingDeduction']>> | undefined;
-        let intervalBlock: MeterIntervalBlock | undefined;
+        let intervalBlock: { reasonCode: string; reason: string; retryCondition: string } | undefined;
         let billableUsage = 0;
         if (shouldAutoSettle) {
-          const quote = await quoteMeterInterval(tx, this.priceService, meter, baseline, {
+          const quote = await this.billingService.quoteInterval(tx, meter, baseline, {
             ...reading, currentReading: item.currentReading, readingTime,
-          }, Math.max(0, usage));
+          });
           if ('reasonCode' in quote) {
             intervalBlock = quote;
           } else {
@@ -464,6 +466,7 @@ export class MeterBatchReadingService {
           previousReading,
           usage,
           amount: deduction?.amount ?? 0,
+          chargeId: deduction?.chargeId, collectionMode: deduction?.collectionMode, providerAmount: deduction?.providerAmount ?? 0,
           deducted: deduction?.deducted ?? 0,
           shortfall: deduction?.shortfall ?? 0,
           ...(deduction?.reasonCode === 'VACANT_INTERVAL' && { vacantUsage: billableUsage }),

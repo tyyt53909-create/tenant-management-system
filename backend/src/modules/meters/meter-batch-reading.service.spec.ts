@@ -1,3 +1,4 @@
+import { quoteMeterInterval } from './meter-interval-quote.js';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MeterBatchReadingService } from './meter-batch-reading.service.js';
 import { MeterBillingService } from './meter-billing.service.js';
@@ -12,7 +13,7 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
 
   const operatorId = 'admin-001';
 
-  async function init(withBilling = true) {
+  async function init(_withBilling = true) {
     const prismaMock: any = {
       meter: { findUnique: vi.fn(), findMany: vi.fn() },
       meterReading: {
@@ -32,13 +33,13 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
     prismaMock.meterPriceHistory.findMany.mockResolvedValue([]);
     prismaMock.meterReading.findMany.mockResolvedValue([]);
-    const billingMock: any = { applyReadingDeduction: vi.fn() };
+    const billingMock: any = { applyReadingDeduction: vi.fn(), quoteInterval: vi.fn((tx, meter, baseline, target) => quoteMeterInterval(tx, testPriceService(prismaMock), meter, baseline, target)) };
     const providers: any[] = [
       MeterBatchReadingService,
       { provide: PrismaService, useValue: prismaMock },
       { provide: MeterPriceService, useValue: testPriceService(prismaMock) },
       // QLT-02 / T288：billing 改为必填，未显式提供时用替身（该 spec 只验证调用参数）
-      { provide: MeterBillingService, useValue: withBilling ? billingMock : { applyReadingDeduction: vi.fn() } },
+      { provide: MeterBillingService, useValue: billingMock },
     ];
     const module: TestingModule = await Test.createTestingModule({ providers }).compile();
     service = module.get<MeterBatchReadingService>(MeterBatchReadingService);

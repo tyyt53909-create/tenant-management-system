@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `develop`
-> 集成基準: `origin/develop` @ `46b906b`
+> 分支: `feature/T336-utility-posting`
+> 集成基準: `origin/develop` @ `0f7acf4`；本分支叠加 #175 `efe683f`，T336 PR #176 待合并
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -15,9 +15,9 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | 196 warnings / 0 errors |
+| 後端 lint | ✅ pass | 通过，有既有 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 174 files / 1706 tests |
+| 後端單元測試 | ✅ pass | 179 files / 1784 tests |
 | 後端 e2e | ✅ pass | 4 files / 83 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 34 files / 102 tests |
+| 整合測試 | ✅ pass | 39 files / 153 passed / 2 原有 TODO（不计通过） |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -36,20 +36,21 @@
 
 | 類別 | 數量 |
 |---|---|
-| 總任務數 | 173 |
+| 總任務數 | 174 |
 | 已驗證完成 | 64 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 13 |
+| 進行中 | 14 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
 ### 進行中
+- **T336 LINK-02 正式计费与旧入口收口**（in_progress，plan FIN-08，`feature/T336-utility-posting`，PR #176；证据 `tasks/evidence/T336.md`）
 - **T335 LINK-02 收费规则与责任就绪**（active，plan FIN-08，`feature/T335-utility-readiness`，证据见 `tasks/evidence/T335.md`）
 - **T304 保洁任务：自动建单、指派、验收（WRK-03）**（active，plan WRK-03，`feature/T304-cleaning-tasks`）
 - **T324 读数结算标记防伪**（active，plan FIN-08，`fix/T324-meter-marker-guard`）
@@ -119,15 +120,15 @@
 
 ## 統計
 
-- 資料模型：**62** 張表
-- OpenAPI 路由：**295** 條
+- 資料模型：**64** 張表
+- OpenAPI 路由：**298** 條
 - 後端程式碼：**32450** 行
 - 管理後台程式碼：**33210** 行
 - 小程序程式碼：**8510** 行
 - 文件：**187** 份
 
 ### 測試
-- 後端單元：174 files / 1706 tests
+- 後端單元：179 files / 1784 tests
 - 後端 e2e：4 files / 83 tests
 - 管理後台單元：22 files / 112 tests
 - 小程序單元：168 tests
@@ -143,3 +144,6 @@
 - [數據模型設計 (docs/02-数据模型.md)](./docs/02-数据模型.md)
 - [接口規範 (docs/05-接口规范.md)](./docs/05-接口规范.md)
 - [部署與運維 (docs/12-部署与运维.md)](./docs/12-部署与运维.md)
+
+
+T336 本地验证快照：三种正式收款模式、预览隔离、责任封口、防重与失败回滚已验证；Playwright 24 项通过。依赖 PR #167–#175 仍待合并，未标记整包发布完成。上表为本地门禁记录，最终 SHA 的远端工作流以 [PR #176](https://github.com/tyyt53909-create/tenant-management-system/pull/176) 履历为准；人工 UAT、外部渠道与联合部署验收未运行。

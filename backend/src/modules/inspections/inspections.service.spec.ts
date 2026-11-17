@@ -18,6 +18,7 @@ describe('InspectionsService', () => {
 
   beforeEach(async () => {
     const prismaMock: any = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       contract: {
         findUnique: vi.fn(),
       },
@@ -246,6 +247,13 @@ describe('InspectionsService', () => {
         NotFoundException,
       );
     });
+  });
+
+  it('并发确认在房间锁后读取已确认结果，不返回锁前的待确认快照', async () => {
+    const confirmed = { id: 'inspection', roomId: 'room', tenantId: 'tenant', status: 'CONFIRMED', items: [], tenantNotes: 'recorded' };
+    prisma.roomInspection.findUnique.mockResolvedValueOnce({ ...confirmed, status: 'PENDING_CONFIRM' }).mockResolvedValueOnce(confirmed);
+    expect(await service.confirm('inspection', { agree: true }, 'tenant')).toEqual(confirmed);
+    expect(prisma.roomInspection.update).not.toHaveBeenCalled();
   });
 
   describe('confirm', () => {
