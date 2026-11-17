@@ -25,6 +25,7 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
       },
       prepayAccount: { findMany: vi.fn() },
       meterPriceHistory: { findMany: vi.fn() },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
@@ -131,6 +132,28 @@ describe('MeterBatchReadingService (T196 coverage)', () => {
     roomId: 'room-001',
     room: { roomNumber: '101' },
   };
+
+  it('批量：保留标记按行报错，且不登记读数', async () => {
+    const result = await service.createBatchReadings({
+      readings: [
+        { meterId: 'meter-001', currentReading: 20, notes: '[SETTLED]' },
+        { meterId: 'meter-001', currentReading: 20, messageId: '[INITIAL]' },
+      ],
+    }, operatorId);
+    expect(result).toMatchObject({ total: 2, successCount: 0, failureCount: 2 });
+    expect(result.results).toEqual(Array.from({ length: 2 }, () => ({
+      meterId: 'meter-001',
+      success: false,
+      error: '备注或消息编号不得包含系统保留的结算标记',
+    })));
+    expect(prisma.meterReading.create).not.toHaveBeenCalled();
+  });
+
+  it('批量：空输入不锁表计', async () => {
+    await expect(service.createBatchReadings({ readings: [] }, operatorId))
+      .resolves.toMatchObject({ total: 0, results: [] });
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
 
   it('批量：表不存在与已停用分别记行级失败', async () => {
     prisma.meter.findUnique.mockImplementation(async ({ where }: any) => {

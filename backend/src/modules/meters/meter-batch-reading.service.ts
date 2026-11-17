@@ -4,8 +4,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
-import { buildReadingDedupKey } from './meter-dedup.util.js';
-import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
+import { buildReadingDedupKey, hasReservedReadingMarker } from './meter-dedup.util.js';
+import { findMeterSettlementCursor, lockMeters, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterBatchReadingService {
@@ -146,7 +147,12 @@ export class MeterBatchReadingService {
     }> = [];
 
     await this.prisma.$transaction(async (tx) => {
+      await lockMeters(tx, dto.readings.map(({ meterId }) => meterId));
       for (const item of dto.readings) {
+        if (hasReservedReadingMarker(item.notes) || hasReservedReadingMarker(item.messageId)) {
+          results.push({ meterId: item.meterId, success: false, error: '备注或消息编号不得包含系统保留的结算标记' });
+          continue;
+        }
         const meter = await tx.meter.findUnique({
           where: { id: item.meterId },
           include: { room: true },
@@ -379,19 +385,7 @@ export class MeterBatchReadingService {
 
         let billableUsage = usage;
         if (shouldAutoSettle) {
-          const lastSettledReading = await tx.meterReading.findFirst({
-            where: {
-              meterId: item.meterId,
-              // 同 meter-reading：结算基准要排除模拟读数（T209）
-              source: NOT_SIMULATED,
-              OR: [
-                { settledAt: { not: null } },
-                { notes: { contains: '[SETTLED]' } },
-                { notes: { contains: '[INITIAL]' } },
-              ],
-            },
-            orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
-          });
+          const lastSettledReading = await findMeterSettlementCursor(tx, item.meterId);
           const settleBaseline = lastSettledReading
             ? Number(lastSettledReading.currentReading)
             : previousReading;
@@ -455,7 +449,7 @@ export class MeterBatchReadingService {
           shortfall: deduction.shortfall || 0,
         });
       }
-    });
+    }, METER_WRITE_TRANSACTION);
 
     const successCount = results.filter((r) => r.success).length;
     const failureCount = results.length - successCount;
