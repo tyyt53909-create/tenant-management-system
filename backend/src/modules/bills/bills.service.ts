@@ -22,7 +22,7 @@ import { BillPaymentService } from './bill-payment.service.js';
 import { BillLateFeeService } from './bill-late-fee.service.js';
 import { BillReceiptService } from './bill-receipt.service.js';
 import { AuditLogService } from '../audit/audit-log.service.js';
-import { lockBillForWrite } from './bill-write-lock.js';
+import { BILL_WRITE_TRANSACTION, lockBillForWrite } from './bill-write-lock.js';
 
 const BILL_TYPE_LABEL: Record<string, string> = {
   RENT: '租金',
@@ -286,7 +286,7 @@ export class BillsService {
         after: snapshot(updated),
       });
       return updated;
-    });
+    }, BILL_WRITE_TRANSACTION);
   }
 
   async remove(id: string) {

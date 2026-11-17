@@ -23,6 +23,12 @@ describe('租客自助中心与服务全景闭环集成测试（LSE-05 / T297）
     const base = await seedBase();
     const tenancy = await setupTenancy(app, base);
 
+    const existingOverview = await http(app)
+      .get('/tenants/me/overview')
+      .set(auth(tenancy.tenantToken));
+    expect(existingOverview.status).toBe(200);
+    const existingBills = existingOverview.body.bills;
+
     // 1. 创建待缴账单
     const billRes = await http(app)
       .post('/bills')
@@ -74,9 +80,9 @@ describe('租客自助中心与服务全景闭环集成测试（LSE-05 / T297）
     expect(ov.contract.id).toBe(tenancy.contractId);
     expect(ov.contract.contractNumber).toBeTruthy();
     expect(ov.contract.daysRemaining).toBeGreaterThan(0);
-    expect(ov.bills.pendingCount).toBe(1);
-    expect(ov.bills.pendingAmount).toBe(billAmount);
-    expect(ov.bills.pendingAmountYuan).toBe((billAmount / 100).toFixed(2));
+    expect(ov.bills.pendingCount).toBe(existingBills.pendingCount + 1);
+    expect(ov.bills.pendingAmount).toBe(existingBills.pendingAmount + billAmount);
+    expect(ov.bills.pendingAmountYuan).toBe(((existingBills.pendingAmount + billAmount) / 100).toFixed(2));
     expect(ov.maintenance.activeCount).toBe(1);
     expect(ov.unreadNotificationsCount).toBeGreaterThanOrEqual(1);
     expect(ov.registration.status).toBe('NOT_REGISTERED');

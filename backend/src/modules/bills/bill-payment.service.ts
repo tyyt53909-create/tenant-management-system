@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { PrepayPayBillDto } from './dto/prepay-pay-bill.dto.js';
-import { lockBillForWrite } from './bill-write-lock.js';
+import { BILL_WRITE_TRANSACTION, lockBillForWrite } from './bill-write-lock.js';
 import {
   applyDepositCollection,
   reverseDepositCollection,
@@ -54,7 +54,7 @@ export class BillPaymentService {
     return this.prisma.$transaction(async (tx) => {
       await lockBillForWrite(tx, billId);
       return this.recordPayment(tx, billId, dto, operatorId);
-    });
+    }, BILL_WRITE_TRANSACTION);
   }
 
   /** The caller must hold the bill lock through commit. */
@@ -340,7 +340,7 @@ export class BillPaymentService {
       });
 
       return { payment: voided, bill: updatedBill, reversal, idempotent: false };
-    });
+    }, BILL_WRITE_TRANSACTION);
   }
 
   /**
@@ -470,7 +470,7 @@ export class BillPaymentService {
       });
 
       return { reversal, bill: updatedBill };
-    });
+    }, BILL_WRITE_TRANSACTION);
   }
 
   private async statusAfterReversal(
@@ -654,7 +654,7 @@ export class BillPaymentService {
         user.userId,
       );
       return { payment, accountId: prepayAccount.id };
-    });
+    }, BILL_WRITE_TRANSACTION);
     if (!accountId) return payment;
 
     // 检测低余额预警并触发通知（带每日频控）

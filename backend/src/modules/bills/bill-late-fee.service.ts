@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateLateFeeDto } from './dto/create-late-fee.dto.js';
 import { LateFeeRule, LateFeeUtil } from './utils/late-fee.util.js';
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
-import { lockBillForWrite } from './bill-write-lock.js';
+import { BILL_WRITE_TRANSACTION, lockBillForWrite } from './bill-write-lock.js';
 
 @Injectable()
 export class BillLateFeeService {
@@ -124,7 +124,7 @@ export class BillLateFeeService {
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         },
       });
-    });
+    }, BILL_WRITE_TRANSACTION);
   }
 
   /**
