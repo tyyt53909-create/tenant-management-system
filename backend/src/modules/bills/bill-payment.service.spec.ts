@@ -5,8 +5,6 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
-import { PAYMENT_PROVIDER } from './payment/payment-provider.js';
-import { OfflinePaymentProvider } from './payment/offline-payment.provider.js';
 
 import { AuditLogService } from '../audit/audit-log.service.js';
 import { PrepayService } from '../prepay/prepay.service.js';
@@ -39,6 +37,7 @@ describe('BillPaymentService', () => {
         findUnique: vi.fn(),
       },
       $transaction: vi.fn(),
+      $queryRaw: vi.fn().mockResolvedValue([]),
     };
     prisma.$transaction.mockImplementation((cb: any) => cb(prisma));
     prisma.lateFee.findMany.mockResolvedValue([]);
@@ -48,8 +47,6 @@ describe('BillPaymentService', () => {
       providers: [
         BillPaymentService,
         { provide: PrismaService, useValue: prisma },
-        // QLT-02 / T288：依赖改为必填后，测试显式提供支付通道与业务时钟
-        { provide: PAYMENT_PROVIDER, useValue: new OfflinePaymentProvider() },
         { provide: BusinessClock, useValue: new BusinessClock(new ConfigService({ NODE_ENV: 'test' })) },
         { provide: AuditLogService, useValue: { recordEvent: vi.fn(), log: vi.fn() } },
         {
@@ -818,6 +815,58 @@ describe('BillPaymentService', () => {
   });
 
   describe('payWithPrepay (T296 / PAY-04)', () => {
+    it.each([
+      { status: 'CONFIRMED', amount: 300 },
+      { status: 'VOIDED', amount: undefined },
+    ])('同键预付重放返回 $status 原凭证并跳过扣款', async ({ status, amount }) => {
+      const settled = bill({ status: 'PAID' });
+      const receipt = { id: 'original', billId: 'b1', amount: 300, paymentMethod: 'PREPAY', status };
+      prisma.bill.findUnique.mockResolvedValue(settled);
+      prisma.paymentRecord.findUnique.mockResolvedValue(receipt);
+
+      await expect(service.payWithPrepay('b1', { idempotencyKey: 'payment-key', amount }, {
+        userId: 'operator', role: 'ADMIN',
+      })).resolves.toMatchObject({ payment: receipt, bill: settled, idempotent: true });
+      expect(prisma.prepayAccount.updateMany).not.toHaveBeenCalled();
+      expect(prisma.prepayTransaction.create).not.toHaveBeenCalled();
+      expect(prisma.paymentRecord.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { billId: 'another-bill' },
+      { paymentMethod: 'CASH' },
+      { amount: 301 },
+      { status: 'REVERSAL' },
+    ])('同键预付参数冲突时不扣款：%j', async (override) => {
+      prisma.bill.findUnique.mockResolvedValue(bill());
+      prisma.paymentRecord.findUnique.mockResolvedValue({
+        billId: 'b1', amount: 300, paymentMethod: 'PREPAY', status: 'CONFIRMED', ...override,
+      });
+      await expect(service.payWithPrepay('b1', { idempotencyKey: 'payment-key', amount: 300 }, {
+        userId: 'operator', role: 'ADMIN',
+      })).rejects.toThrow(ConflictException);
+      expect(prisma.prepayAccount.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [1200, 'BILL_PAYMENT_EXCEEDS_AMOUNT'],
+      [800, 'PREPAY_INSUFFICIENT_BALANCE'],
+      [0, 'PREPAY_INSUFFICIENT_BALANCE'],
+    ])('显式预付金额 %i 无法全额扣减时终止事务', async (amount, code) => {
+      prisma.bill.findUnique.mockResolvedValue(bill({ contract: { tenantId: 't1', roomId: 'r1' } }));
+      prisma.paymentRecord.findUnique.mockResolvedValue(null);
+      prisma.lateFee.findMany.mockResolvedValue([
+        { confirmedAmount: 100, settledAmount: null },
+        { confirmedAmount: null, settledAmount: 0 },
+      ]);
+      prisma.prepayAccount.findUnique.mockResolvedValue({ id: 'pa1', balanceCache: 700 });
+      await expect(service.payWithPrepay('b1', { idempotencyKey: 'fresh-key', amount }, {
+        userId: 'operator', role: 'ADMIN',
+      })).rejects.toMatchObject({ response: expect.objectContaining({ code }) });
+      expect(prisma.prepayAccount.updateMany).not.toHaveBeenCalled();
+      expect(prisma.paymentRecord.create).not.toHaveBeenCalled();
+    });
+
     it('预付账户余额不足时抛出 PREPAY_INSUFFICIENT_BALANCE', async () => {
       prisma.bill.findUnique.mockResolvedValue({
         id: 'b1',

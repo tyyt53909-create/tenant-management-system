@@ -175,8 +175,12 @@ export class BillsController {
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  update(@Param('id') id: string, @Body() updateBillDto: UpdateBillDto) {
-    return this.billsService.update(id, updateBillDto);
+  update(
+    @CurrentUser() userParam: CurrentUserParam,
+    @Param('id') id: string,
+    @Body() updateBillDto: UpdateBillDto,
+  ) {
+    return this.billsService.update(id, updateBillDto, resolveAuthUser(userParam).userId);
   }
 
   // 登记收款（管理者）

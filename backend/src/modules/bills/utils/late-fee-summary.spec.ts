@@ -1,10 +1,10 @@
+import { AuditLogService } from '../../audit/audit-log.service.js';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BillsService, summarizeLateFees } from '../bills.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { BillPaymentService } from '../bill-payment.service.js';
 import { BillLateFeeService } from '../bill-late-fee.service.js';
 import { BillReceiptService } from '../bill-receipt.service.js';
-import { OfflinePaymentProvider } from '../payment/offline-payment.provider.js';
 import { BusinessClock } from '../../../common/business-clock/business-clock.service.js';
 import { ConfigService } from '@nestjs/config';
 
@@ -125,6 +125,7 @@ describe('BillsService.findAll（T157 附滞纳金摘要，消除 N+1）', () =>
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BillsService,
+        { provide: AuditLogService, useValue: { recordEvent: vi.fn() } },
         { provide: PrismaService, useValue: prismaMock },
         // QLT-02 / T288：依赖必填后显式提供（本用例只测列表摘要，子服务不参与断言）
         {
@@ -132,7 +133,6 @@ describe('BillsService.findAll（T157 附滞纳金摘要，消除 N+1）', () =>
           useFactory: () =>
             new BillPaymentService(
               prismaMock as never,
-              new OfflinePaymentProvider(),
               new BusinessClock(new ConfigService({ NODE_ENV: 'test' })),
               { recordEvent: vi.fn(), log: vi.fn() } as never,
               { triggerLowBalanceAlertIfNeeded: vi.fn().mockResolvedValue(true) } as never,

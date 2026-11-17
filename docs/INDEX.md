@@ -106,6 +106,7 @@
 - [T266-FIN-02-租金计费引擎.md](../tasks/T266-FIN-02-租金计费引擎.md)：FIN-02，四种付款周期、合同起始月锚点、首期/末期按日折算与幂等出账。
 - [T265-FIN-06-财务禁止硬删除.md](../tasks/T265-FIN-06-财务禁止硬删除.md)：FIN-06，账单/退租/合同/预付账户禁止硬删除，P2003 统一 409。
 - [T264-FIN-05-收款正确性.md](../tasks/T264-FIN-05-收款正确性.md)：FIN-05，行锁失败上抛、Idempotency-Key、收据序列号、作废冲正与滞纳金精确回滚。
+- [T325-CORE-01-账单并发写入.md](../tasks/T325-CORE-01-账单并发写入.md)：收款、取消、改额与预付抵扣的账单锁及真实并发验收。
 - [T263-FIN-01-合同状态机与续签修复.md](../tasks/T263-FIN-01-合同状态机与续签修复.md)：FIN-01，续签唯一约束改为 ACTIVE-only、日期不重叠、激活事务先 RENEWED、定时任务同步。
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08，CI 统一 Node 22、生产依赖审计与镜像扫描门禁、staging 编排/部署 workflow/冒烟脚本。

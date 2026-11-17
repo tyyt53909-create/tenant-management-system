@@ -60,6 +60,8 @@ describe('合同到期提醒、续约意向与续约报价集成测试（T301 / 
     // 设置 30 天后到期（业务日 UTC 零点）
     const endDate30 = new Date(today.getTime() + 30 * MS_PER_DAY);
     const startDate = new Date(today.getTime() - 365 * MS_PER_DAY);
+    const renewalStart = new Date(endDate30.getTime() + MS_PER_DAY);
+    const renewalEnd = new Date(renewalStart.getTime() + 364 * MS_PER_DAY);
 
     const activeContract = await prisma.contract.create({
       data: {
@@ -137,8 +139,8 @@ describe('合同到期提醒、续约意向与续约报价集成测试（T301 / 
       .send({
         offeredRent: 330000,
         offeredDeposit: 330000,
-        startDate: '2026-12-01',
-        endDate: '2027-11-30',
+        startDate: renewalStart.toISOString().slice(0, 10),
+        endDate: renewalEnd.toISOString().slice(0, 10),
         discountNotes: '老带新续约立减200元/月',
       });
     expect(offerRes.status).toBe(201);

@@ -8,7 +8,7 @@ describe('BillLateFeeService', () => {
   let prisma: any;
   const lateBill = (overrides: any = {}) => ({ id: 'b1', status: 'OVERDUE', dueDate: new Date(Date.now() - 10 * 86400000), amount: 10000, paidAmount: 0, contract: { lateFeeRule: {} }, ...overrides });
   beforeEach(async () => {
-    prisma = { bill: { findUnique: vi.fn() }, lateFee: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() }, $transaction: vi.fn() };
+    prisma = { bill: { findUnique: vi.fn() }, lateFee: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() }, $transaction: vi.fn(), $queryRaw: vi.fn().mockResolvedValue([]) };
     prisma.$transaction.mockImplementation((cb: any) => cb(prisma));
     const module = await Test.createTestingModule({ providers: [BillLateFeeService, { provide: PrismaService, useValue: prisma }] }).compile();
     service = module.get(BillLateFeeService);
