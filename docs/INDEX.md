@@ -114,6 +114,8 @@
 - [T329-CORE-02-异常与模拟读数隔离.md](../tasks/T329-CORE-02-异常与模拟读数隔离.md)：隔离未来及模拟读数。
 - [T330-CORE-02-换表与分段计费.md](../tasks/T330-CORE-02-换表与分段计费.md)：交接底数、回退阻断及跨费率分段。
 - [T331-CORE-03-租约确认与生效.md](../tasks/T331-CORE-03-租约确认与生效.md)：明确确认、生效日期、实际入住房态。
+- [T332-CORE-05-入住一次办理.md](../tasks/T332-CORE-05-入住一次办理.md)：同一交易写入租约、应收、预付、底数和房态。
+
 - [T263-FIN-01-合同状态机与续签修复.md](../tasks/T263-FIN-01-合同状态机与续签修复.md)：FIN-01，续签唯一约束改为 ACTIVE-only、日期不重叠、激活事务先 RENEWED、定时任务同步。
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08，CI 统一 Node 22、生产依赖审计与镜像扫描门禁、staging 编排/部署 workflow/冒烟脚本。
