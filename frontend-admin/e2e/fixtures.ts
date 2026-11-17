@@ -10,7 +10,7 @@ export function uid() {
   return Date.now().toString(36).slice(-6) + Math.floor(Math.random() * 1296).toString(36);
 }
 
-async function apiContext() {
+export async function apiContext() {
   // baseURL 必须以 / 结尾，否则相对路径会替换掉 /api 段（WHATWG URL 合并语义）
   const base = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
   const req = await baseRequest.newContext({ baseURL: base });

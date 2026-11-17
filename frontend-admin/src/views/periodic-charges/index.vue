@@ -23,14 +23,14 @@
     </ResourcePanel>
 
     <ResourcePanel v-if="batch" :title="`${batch.building.name} · ${batch.period} 收费批次`">
-      <template #actions>
+      <div class="actions batch-actions">
         <el-button :disabled="busy" @click="refreshBatch()">刷新结果</el-button>
         <el-button :disabled="busy || queued || !needsReview" @click="mutate('recheck')">重新检查异常</el-button>
         <el-button v-if="hasFailedNotices" :disabled="busy" @click="retryNotices">重试站内通知</el-button>
         <el-button type="primary" :disabled="busy || queued || !ready" @click="confirm">
           确认执行 {{ ready || '' }}
         </el-button>
-      </template>
+      </div>
       <div class="batch-summary">
         <span>截止 {{ formatTime(batch.cutoff) }}</span>
         <el-tag v-for="entry in summary" :key="entry.state" :type="stateTypes[entry.state]">
@@ -247,7 +247,7 @@ async function confirm() {
   const readyItems = reviewed.items.filter((item) => item.state === 'READY');
   const total = readyItems.reduce((sum, item) => sum + item.review.amount, 0);
   try {
-    await ElMessageBox.confirm(`确认执行 ${reviewed.building.name} ${readyItems.length} 项，共 ${formatMoney(total)}？`, '确认周期收费', { type: 'warning' });
+    await ElMessageBox.confirm(`确认执行 ${reviewed.building.name} ${readyItems.length} 项，共 ${formatMoney(total)}？`, '确认周期收费', { type: 'warning', customClass: 'periodic-charge-confirm' });
   } catch {
     return;
   }
@@ -294,10 +294,11 @@ onUnmounted(() => clearInterval(poll));
 </script>
 
 <style scoped>
-.charge-workbench { display: grid; gap: 16px; }
+.charge-workbench { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+:global(.periodic-charge-confirm) { max-width: calc(100vw - 32px); }
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0 16px; }
 .filters :deep(.el-date-editor) { width: 100%; }
 .actions, .batch-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.batch-summary { margin-bottom: 12px; }
+.batch-actions, .batch-summary { margin-bottom: 12px; }
 .batch-summary > span, small { color: var(--el-text-color-secondary); }
 </style>
