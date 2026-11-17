@@ -36,14 +36,14 @@
 
 | 類別 | 數量 |
 |---|---|
-| 總任務數 | 171 |
+| 總任務數 | 172 |
 | 已驗證完成 | 64 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 11 |
+| 進行中 | 12 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -64,6 +64,8 @@
 - **T332 ｜CORE-05 入住一次办理**（active，plan FIN-01，`fix/T332-move-in-confirmation`）
 
 - **T333 ｜CORE-06 周期收费工作台**（active，plan FIN-08，`feature/T333-periodic-charges`）
+
+- **T334 ｜CORE-07 入住与周期收费端到端验收**（active，plan QLT-01，`feature/T334-core-journeys`）
 
 ### 阻擋發布
 - 無

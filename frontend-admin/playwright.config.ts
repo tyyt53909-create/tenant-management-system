@@ -7,6 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
  *   后端  -> http://127.0.0.1:3000（NODE_ENV=test，已迁移 + 播种）
  *   前端  -> VITE_API_BASE_URL=http://127.0.0.1:3000/api npm run build && npx vite preview --port 4173
  *   本地  -> E2E_BASE_URL / E2E_API_BASE_URL 可覆盖地址（本地后端多为 :3100）
+ *   核心账务旅程还需要 PLAYWRIGHT_DATABASE_URL（同一已标记测试 PostgreSQL 的非超级用户）
+ *   及 INTEGRATION_DATABASE_MARKER。参照 admin-ui.yml 的 T316 库准备步骤。
  */
 export default defineConfig({
   testDir: './e2e',

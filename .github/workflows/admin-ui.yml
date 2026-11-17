@@ -83,6 +83,17 @@ jobs:
           npx prisma migrate deploy
           npm run prisma:seed
 
+      - name: 标记 PostgreSQL 浏览器验收库
+        env:
+          ALLOW_INTEGRATION_RESET: "true"
+          INTEGRATION_ADMIN_DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          INTEGRATION_DATABASE_MARKER: admin-ui-core-journey-t334
+          INTEGRATION_TESTER_PASSWORD: integration_tester_password
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          bash backend/scripts/prepare-integration-db.sh
+
       - name: 构建并启动后端
         working-directory: backend
         run: |
@@ -135,6 +146,8 @@ jobs:
         env:
           E2E_BASE_URL: http://127.0.0.1:5173
           E2E_API_BASE_URL: http://127.0.0.1:3000/api
+          PLAYWRIGHT_DATABASE_URL: postgresql://integration_tester:integration_tester_password@localhost:5432/test_db
+          INTEGRATION_DATABASE_MARKER: admin-ui-core-journey-t334
 
       - name: 停止后端与前端 dev
         if: always()
