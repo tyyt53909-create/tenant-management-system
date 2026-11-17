@@ -7073,6 +7073,116 @@
         ]
       }
     },
+    "/api/rooms/{roomId}/move-in/preview": {
+      "post": {
+        "operationId": "MoveInsController_preview",
+        "parameters": [
+          {
+            "name": "roomId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveInLeaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveInPreviewDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "MoveIns"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/rooms/{roomId}/move-in": {
+      "post": {
+        "operationId": "MoveInsController_confirm",
+        "parameters": [
+          {
+            "name": "roomId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmMoveInDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveInResultDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "MoveIns"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/contracts/{id}/attachments": {
       "get": {
         "operationId": "ContractAttachmentsController_list",
@@ -17536,6 +17646,219 @@
         "required": [
           "name",
           "phone"
+        ]
+      },
+      "MoveInLeaseDto": {
+        "type": "object",
+        "properties": {
+          "contractId": {
+            "type": "string"
+          },
+          "contract": {
+            "$ref": "#/components/schemas/CreateContractDto"
+          }
+        }
+      },
+      "MoveInMeterDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "meterNumber": {
+            "type": "string"
+          },
+          "meterType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "meterNumber",
+          "meterType"
+        ]
+      },
+      "MoveInBillDto": {
+        "type": "object",
+        "properties": {
+          "billType": {
+            "type": "string",
+            "enum": [
+              "RENT",
+              "DEPOSIT"
+            ]
+          },
+          "period": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "dueDate": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "billType",
+          "period",
+          "amount",
+          "dueDate"
+        ]
+      },
+      "MoveInPreviewDto": {
+        "type": "object",
+        "properties": {
+          "reviewToken": {
+            "type": "string"
+          },
+          "tenantName": {
+            "type": "string"
+          },
+          "meters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveInMeterDto"
+            }
+          },
+          "bills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveInBillDto"
+            }
+          }
+        },
+        "required": [
+          "reviewToken",
+          "tenantName",
+          "meters",
+          "bills"
+        ]
+      },
+      "MoveInReadingDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string"
+          },
+          "currentReading": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 99999999.99
+          }
+        },
+        "required": [
+          "meterId",
+          "currentReading"
+        ]
+      },
+      "ConfirmMoveInDto": {
+        "type": "object",
+        "properties": {
+          "contractId": {
+            "type": "string"
+          },
+          "contract": {
+            "$ref": "#/components/schemas/CreateContractDto"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewToken": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "readings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveInReadingDto"
+            }
+          }
+        },
+        "required": [
+          "requestId",
+          "reviewToken",
+          "readings"
+        ]
+      },
+      "MoveInBaselineDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string"
+          },
+          "readingId": {
+            "type": "string"
+          },
+          "currentReading": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "meterId",
+          "readingId",
+          "currentReading"
+        ]
+      },
+      "OccupiedRoomDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "version"
+        ]
+      },
+      "MoveInResultDto": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "occupiedAt": {
+            "type": "string"
+          },
+          "billIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "prepayAccountId": {
+            "type": "string"
+          },
+          "baselines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoveInBaselineDto"
+            }
+          },
+          "room": {
+            "$ref": "#/components/schemas/OccupiedRoomDto"
+          }
+        },
+        "required": [
+          "requestId",
+          "contractId",
+          "occupiedAt",
+          "billIds",
+          "prepayAccountId",
+          "baselines",
+          "room"
         ]
       },
       "CreateContractTemplateDto": {

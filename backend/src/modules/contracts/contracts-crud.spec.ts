@@ -109,7 +109,7 @@ describe('ContractsService CRUD（T157）', () => {
   describe('create', () => {
     it('关联数据齐备 → 生成合同编号并落库（lateFeeRule 缺省为 {}）', async () => {
       prisma.building.findUnique.mockResolvedValue({ id: 'b-1' });
-      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', buildingId: 'b-1' });
       prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
       prisma.contract.create.mockImplementation(async ({ data }: any) => ({ id: 'c-new', ...data }));
 
@@ -129,7 +129,7 @@ describe('ContractsService CRUD（T157）', () => {
 
     it('未传 lateFeeRule 时继承设置中心默认规则（T276）', async () => {
       prisma.building.findUnique.mockResolvedValue({ id: 'b-1' });
-      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', buildingId: 'b-1' });
       prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
       prisma.contract.create.mockImplementation(async ({ data }: any) => data);
       settings.getValue.mockResolvedValueOnce({ graceDays: 5, dailyRate: null, fixedDaily: 100, cap: 10000 });
@@ -146,7 +146,7 @@ describe('ContractsService CRUD（T157）', () => {
 
     it('传入 lateFeeRule 时原样落库', async () => {
       prisma.building.findUnique.mockResolvedValue({ id: 'b-1' });
-      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', buildingId: 'b-1' });
       prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
       prisma.contract.create.mockImplementation(async ({ data }: any) => data);
 
@@ -160,7 +160,7 @@ describe('ContractsService CRUD（T157）', () => {
 
     it('楼栋不存在 → 400 且不落库', async () => {
       prisma.building.findUnique.mockResolvedValue(null);
-      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', buildingId: 'b-1' });
       prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
 
       await expect(service.create(baseDto as any)).rejects.toThrow(BadRequestException);
@@ -177,7 +177,7 @@ describe('ContractsService CRUD（T157）', () => {
 
     it('租客不存在 → 400', async () => {
       prisma.building.findUnique.mockResolvedValue({ id: 'b-1' });
-      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', buildingId: 'b-1' });
       prisma.tenant.findUnique.mockResolvedValue(null);
 
       await expect(service.create(baseDto as any)).rejects.toThrow(BadRequestException);
@@ -328,7 +328,7 @@ describe('ContractsService CRUD（T157）', () => {
   describe('状态机与资料完整性（T207）', () => {
     it('create：同房源已有未结束合同 → 409（避免同一房间重复出账）', async () => {
       prisma.building.findUnique.mockResolvedValue({ id: 'b-1' });
-      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', buildingId: 'b-1' });
       prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
       prisma.contract.findFirst.mockResolvedValue({ contractNumber: 'C2026-X', status: 'ACTIVE' });
 
@@ -338,7 +338,7 @@ describe('ContractsService CRUD（T157）', () => {
 
     it('create：结束日期早于开始日期 → 400（renew 一直有这条校验，create 之前漏了）', async () => {
       prisma.building.findUnique.mockResolvedValue({ id: 'b-1' });
-      prisma.room.findUnique.mockResolvedValue({ id: 'room-1' });
+      prisma.room.findUnique.mockResolvedValue({ id: 'room-1', buildingId: 'b-1' });
       prisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1' });
 
       await expect(

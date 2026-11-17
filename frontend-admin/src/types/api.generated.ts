@@ -1738,6 +1738,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rooms/{roomId}/move-in/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MoveInsController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rooms/{roomId}/move-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MoveInsController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/contracts/{id}/attachments": {
         parameters: {
             query?: never;
@@ -4237,6 +4269,60 @@ export interface components {
             relationship?: string;
             /** @default false */
             isSigner: boolean;
+        };
+        MoveInLeaseDto: {
+            contractId?: string;
+            contract?: components["schemas"]["CreateContractDto"];
+        };
+        MoveInMeterDto: {
+            id: string;
+            meterNumber: string;
+            meterType: string;
+        };
+        MoveInBillDto: {
+            /** @enum {string} */
+            billType: "RENT" | "DEPOSIT";
+            period: string;
+            amount: number;
+            /** Format: date-time */
+            dueDate: string;
+        };
+        MoveInPreviewDto: {
+            reviewToken: string;
+            tenantName: string;
+            meters: components["schemas"]["MoveInMeterDto"][];
+            bills: components["schemas"]["MoveInBillDto"][];
+        };
+        MoveInReadingDto: {
+            meterId: string;
+            currentReading: number;
+        };
+        ConfirmMoveInDto: {
+            contractId?: string;
+            contract?: components["schemas"]["CreateContractDto"];
+            /** Format: uuid */
+            requestId: string;
+            reviewToken: string;
+            readings: components["schemas"]["MoveInReadingDto"][];
+        };
+        MoveInBaselineDto: {
+            meterId: string;
+            readingId: string;
+            currentReading: number;
+        };
+        OccupiedRoomDto: {
+            id: string;
+            status: string;
+            version: number;
+        };
+        MoveInResultDto: {
+            requestId: string;
+            contractId: string;
+            occupiedAt: string;
+            billIds: string[];
+            prepayAccountId: string;
+            baselines: components["schemas"]["MoveInBaselineDto"][];
+            room: components["schemas"]["OccupiedRoomDto"];
         };
         CreateContractTemplateDto: {
             name: string;
@@ -9345,6 +9431,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MoveInsController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roomId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveInLeaseDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveInPreviewDto"];
+                };
+            };
+            /** @description 错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    MoveInsController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roomId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMoveInDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveInResultDto"];
                 };
             };
             /** @description 错误 */

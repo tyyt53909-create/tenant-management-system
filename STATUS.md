@@ -36,14 +36,14 @@
 
 | 類別 | 數量 |
 |---|---|
-| 總任務數 | 169 |
+| 總任務數 | 170 |
 | 已驗證完成 | 64 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 9 |
+| 進行中 | 10 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -60,6 +60,8 @@
 - **T330 ｜CORE-02 换表、读数回退与分段计费**（active，plan FIN-08，`fix/T330-meter-segmented-settlement`）
 
 - **T331 ｜CORE-03 租约确认与生效**（active，plan FIN-01，`fix/T331-contract-confirmation`）
+
+- **T332 ｜CORE-05 入住一次办理**（active，plan FIN-01，`fix/T332-move-in-confirmation`）
 
 ### 阻擋發布
 - 無
@@ -112,8 +114,8 @@
 
 ## 統計
 
-- 資料模型：**56** 張表
-- OpenAPI 路由：**282** 條
+- 資料模型：**57** 張表
+- OpenAPI 路由：**284** 條
 - 後端程式碼：**32450** 行
 - 管理後台程式碼：**33210** 行
 - 小程序程式碼：**8510** 行
