@@ -43,7 +43,7 @@
             预计总用量: <b>{{ totalUsage.toFixed(2) }}</b>
           </div>
           <div class="stat-pill cost">
-            预计扣费: <b>{{ formatMoney(totalCost) }}</b>
+            参考费用: <b>{{ formatMoney(totalCost) }}</b>
           </div>
         </div>
       </div>
@@ -334,7 +334,7 @@ async function handleSubmitBatch() {
 
   try {
     await ElMessageBox.confirm(
-      `确定提交本次填报的 ${toSubmit.length} 间水电表读数？系统将按预付账户结算。余额不足会生成差额账单，缺账户或跨租住区间的读数会保留待结算。`,
+      `确定提交本次填报的 ${toSubmit.length} 间水电表读数？系统将按已确认规则和责任结算：预付不足补缴、后付全额应收、直缴仅留外部参考。规则或归属未核验时保留读数并阻断计费。`,
       '批量抄表确认',
       {
         confirmButtonText: '确定提交',

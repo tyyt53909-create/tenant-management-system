@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setupActiveContract, createMeter, postReading, loginAsAdmin, ensurePrepayFunded } from './fixtures';
+import { setupActiveContract, createMeter, postReading, loginAsAdmin, ensurePrepayFunded, confirmUtilityRuleFixture } from './fixtures';
 
 /** 流程4：批量抄表 → 周期结算 */
 test.describe('批量抄表并结算', () => {
@@ -24,6 +24,7 @@ test.describe('批量抄表并结算', () => {
     await expect(page.getByText(/批量抄表成功/).first()).toBeVisible({ timeout: 15000 });
 
     // ---- API 追加一条未结算读数（仅采集），UI 做周期结算 ----
+    await confirmUtilityRuleFixture(meter.id, seed.contract.id);
     await postReading(meter.id, 150, { autoSettle: false });
 
     await page.goto('/meters');
@@ -31,20 +32,14 @@ test.describe('批量抄表并结算', () => {
     const settleDialog = page.getByRole('dialog', { name: /结算/ });
     await expect(settleDialog).toBeVisible();
     const settleButton = settleDialog.getByRole('button', { name: '立即结算' });
-    await expect(settleDialog.getByText('无预付账户')).toBeVisible();
-    const responseForSettlement = () => page.waitForResponse(
-      (response) => response.url().endsWith(`/meters/${meter.id}/settle`) && response.request().method() === 'POST',
-    );
-    const blocked = responseForSettlement();
-    await settleButton.click();
-    expect(await (await blocked).json()).toMatchObject({
-      status: 'BLOCKED', reasonCode: 'MISSING_PREPAY_ACCOUNT', settled: false, usage: 50,
-    });
-    await expect(page.getByText(/开立预付账户.*重试/)).toBeVisible();
-    await expect(settleDialog).toBeVisible();
+    await expect(settleButton).toBeDisabled();
+    await expect(settleDialog.getByText('该租客本房间缺少预付账户')).toBeVisible();
+    await settleDialog.getByRole('button', { name: '取消', exact: true }).click();
 
     await ensurePrepayFunded(seed.tenant.id, seed.room.id);
-    const succeeded = responseForSettlement();
+    await page.getByRole('row', { name: new RegExp(meterNumber) }).getByRole('button', { name: '结算' }).click();
+    await expect(settleButton).toBeEnabled();
+    const succeeded = page.waitForResponse((response) => response.url().endsWith('/utility-charges/confirm') && response.request().method() === 'POST');
     await settleButton.click();
     expect(await (await succeeded).json()).toMatchObject({
       status: 'SETTLED', usage: 50, amount: 5000, prepayTransactionId: expect.any(String),

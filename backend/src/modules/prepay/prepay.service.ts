@@ -234,6 +234,7 @@ export class PrepayService {
     dto: CreatePrepayTransactionDto,
     operatorId: string,
   ) {
+    if (dto.relatedType === 'METER_READING') throw apiError(ErrorCode.UTILITY_RULE_BLOCKED, '表计扣费及更正须由统一费用核心产生，不允许手工挂接读数绕过规则');
     const signedAmount = this.resolveSignedAmount(dto);
 
     return this.prisma.$transaction(async (tx) => {

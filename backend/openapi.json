@@ -4746,6 +4746,144 @@
         ]
       }
     },
+    "/api/utility-charges/preview": {
+      "post": {
+        "operationId": "UtilityPostingController_preview",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewUtilityChargeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "UtilityPosting"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/utility-charges/confirm": {
+      "post": {
+        "operationId": "UtilityPostingController_confirm",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmUtilityChargeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "UtilityPosting"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/utility-charges/{id}": {
+      "get": {
+        "operationId": "UtilityPostingController_charge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "UtilityPosting"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/imports/{entity}/template": {
       "get": {
         "operationId": "ImportsController_template",
@@ -17464,6 +17602,12 @@
           "unitPrice": {
             "type": "number"
           },
+          "rateCents": {
+            "type": "string"
+          },
+          "policyVersionId": {
+            "type": "string"
+          },
           "nextOpeningReading": {
             "type": "number"
           }
@@ -17510,7 +17654,13 @@
               "VACANT_INTERVAL",
               "UNCONFIRMED_HANDOFF",
               "MISSING_RATE_BOUNDARY",
-              "RULE_POSTING_NOT_ENABLED"
+              "RULE_POSTING_NOT_ENABLED",
+              "LEGACY_REVIEW_REQUIRED",
+              "OWNERSHIP_UNRESOLVED",
+              "BALANCE_REVIEW_REQUIRED",
+              "UTILITY_COVERAGE_CONFLICT",
+              "POLICY_BOUNDARY_REQUIRED",
+              "AMOUNT_OUT_OF_RANGE"
             ],
             "type": "string"
           },
@@ -17545,6 +17695,26 @@
           },
           "retryCondition": {
             "type": "string"
+          },
+          "chargeId": {
+            "type": "string"
+          },
+          "collectionMode": {
+            "type": "string",
+            "enum": [
+              "PREPAY_WITH_SHORTFALL",
+              "POSTPAID",
+              "DIRECT_TO_PROVIDER"
+            ]
+          },
+          "prepayApplied": {
+            "type": "number"
+          },
+          "receivableAmount": {
+            "type": "number"
+          },
+          "providerAmount": {
+            "type": "number"
           },
           "billId": {
             "type": "string"
@@ -17730,7 +17900,13 @@
               "VACANT_INTERVAL",
               "UNCONFIRMED_HANDOFF",
               "MISSING_RATE_BOUNDARY",
-              "RULE_POSTING_NOT_ENABLED"
+              "RULE_POSTING_NOT_ENABLED",
+              "LEGACY_REVIEW_REQUIRED",
+              "OWNERSHIP_UNRESOLVED",
+              "BALANCE_REVIEW_REQUIRED",
+              "UTILITY_COVERAGE_CONFLICT",
+              "POLICY_BOUNDARY_REQUIRED",
+              "AMOUNT_OUT_OF_RANGE"
             ],
             "type": "string"
           },
@@ -17765,6 +17941,26 @@
           },
           "retryCondition": {
             "type": "string"
+          },
+          "chargeId": {
+            "type": "string"
+          },
+          "collectionMode": {
+            "type": "string",
+            "enum": [
+              "PREPAY_WITH_SHORTFALL",
+              "POSTPAID",
+              "DIRECT_TO_PROVIDER"
+            ]
+          },
+          "prepayApplied": {
+            "type": "number"
+          },
+          "receivableAmount": {
+            "type": "number"
+          },
+          "providerAmount": {
+            "type": "number"
           },
           "billId": {
             "type": "string"
@@ -17808,6 +18004,42 @@
             "type": "boolean"
           }
         }
+      },
+      "PreviewUtilityChargeDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string"
+          },
+          "settleUntil": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "meterId"
+        ]
+      },
+      "ConfirmUtilityChargeDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string"
+          },
+          "settleUntil": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "reviewToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "meterId",
+          "requestId",
+          "reviewToken"
+        ]
       },
       "CreateTagDto": {
         "type": "object",
@@ -19066,7 +19298,13 @@
           },
           "closingReadingId": {
             "type": "string",
-            "maxLength": 100
+            "maxLength": 100,
+            "description": "留空登记开放责任段；结束时以真实终读数封口"
+          },
+          "responsibilityIntervalId": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "封口已有开放责任段的编号"
           },
           "collectionMode": {
             "enum": [
@@ -19093,7 +19331,6 @@
           "meterId",
           "responsibility",
           "openingReadingId",
-          "closingReadingId",
           "evidence"
         ]
       },
@@ -19121,7 +19358,13 @@
           },
           "closingReadingId": {
             "type": "string",
-            "maxLength": 100
+            "maxLength": 100,
+            "description": "留空登记开放责任段；结束时以真实终读数封口"
+          },
+          "responsibilityIntervalId": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "封口已有开放责任段的编号"
           },
           "collectionMode": {
             "enum": [
@@ -19156,7 +19399,6 @@
           "meterId",
           "responsibility",
           "openingReadingId",
-          "closingReadingId",
           "evidence",
           "requestId",
           "reviewToken"

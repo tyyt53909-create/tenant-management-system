@@ -221,3 +221,21 @@ export async function loginAsAdmin(page: any) {
 }
 
 export { expect };
+
+/** Explicit API confirmation of test lease terms; never infer collection consent from funding. */
+export async function confirmUtilityRuleFixture(meterId: string, contractId: string, rateCents = '100', collectionMode = 'PREPAY_WITH_SHORTFALL') {
+  const { req, headers } = await apiContext();
+  try {
+    const response = await req.get(`meters/${meterId}/readings`, { headers });
+    if (response.status() !== 200) throw new Error('读取真实起点失败');
+    const rows = (await response.json()).data as Array<{ id: string }>;
+    const opening = rows.at(-1);
+    if (!opening) throw new Error('缺少真实起读数');
+    const data = { meterId, contractId, responsibility: 'TENANT', openingReadingId: opening.id, collectionMode, rateCents, evidence: 'Playwright fixture: explicitly verified lease terms and real move-in baseline' };
+    const review = await req.post('utility-readiness/preview', { headers, data });
+    const plan = await review.json();
+    if (!plan.ready) throw new Error('规则核验阻断: ' + JSON.stringify(plan.blockingIssues));
+    const result = await req.post('utility-readiness/confirm', { headers, data: { ...data, requestId: crypto.randomUUID(), reviewToken: plan.reviewToken } });
+    if (result.status() !== 201) throw new Error('规则确认失败: ' + await result.text());
+  } finally { await req.dispose(); }
+}

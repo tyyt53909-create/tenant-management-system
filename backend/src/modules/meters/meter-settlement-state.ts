@@ -10,6 +10,14 @@ export const METER_WRITE_TRANSACTION = { isolationLevel: 'ReadCommitted' } as co
 export async function lockMeters(tx: Prisma.TransactionClient, meterIds: string[]) {
   if (meterIds.length === 0) return;
   await tx.$queryRaw`
+    SELECT id FROM rooms WHERE id IN (SELECT "roomId" FROM meters WHERE id IN (${Prisma.join([...new Set(meterIds)])}))
+    ORDER BY id FOR UPDATE
+  `;
+  await tx.$queryRaw`
+    SELECT id FROM contracts WHERE "roomId" IN (SELECT "roomId" FROM meters WHERE id IN (${Prisma.join([...new Set(meterIds)])}))
+    ORDER BY id FOR UPDATE
+  `;
+  await tx.$queryRaw`
     SELECT "id" FROM "meters" WHERE "id" IN (${Prisma.join([...new Set(meterIds)])})
     ORDER BY "id" FOR UPDATE
   `;
@@ -79,7 +87,7 @@ export async function markMeterReadingSettled(
       notes: updatedNotes,
       settledAt: new Date(),
       settledUsage: usage,
-      settledUnitPrice: segments.some((segment) => segment.usage > 0 && segment.unitPrice !== unitPrice) ? null : unitPrice,
+      settledUnitPrice: !Number.isInteger(unitPrice) || segments.some((segment) => segment.usage > 0 && segment.unitPrice !== unitPrice) ? null : unitPrice,
       settledAmount: amount,
       ...(segments.length && { settledSegments: segments.map((segment) => ({ ...segment })) }),
     },

@@ -57,6 +57,10 @@ export type ReadingDeduction =
   | { applied: false; reason: string; reasonCode?: string; retryCondition?: string }
   | {
       applied: true;
+      usage?: number;
+      chargeId?: string;
+      collectionMode?: 'PREPAY_WITH_SHORTFALL' | 'POSTPAID' | 'DIRECT_TO_PROVIDER' | null;
+      providerAmount?: number;
       amount: number;
       deducted: number;
       shortfall: number;
@@ -102,11 +106,17 @@ export interface UnsettledUsage {
     retryCondition?: string;
   };
   settlementBlock?: {
-    reasonCode: 'UNCONFIRMED_HANDOFF' | 'MISSING_RATE_BOUNDARY' | 'RULE_POSTING_NOT_ENABLED';
+    reasonCode: string;
     reason: string;
     retryCondition: string;
   };
   segments?: components['schemas']['MeterChargeSegmentDto'][];
+  reviewToken?: string;
+  collectionMode?: 'PREPAY_WITH_SHORTFALL' | 'POSTPAID' | 'DIRECT_TO_PROVIDER' | null;
+  prepayApplied?: number;
+  receivableAmount?: number;
+  providerAmount?: number;
+  alreadySettled?: boolean;
   prepayBalance?: number | null;
   lastSettledReading: number;
   lastSettledTime: string | null;
@@ -198,6 +208,9 @@ export interface BatchReadingResponse {
     amount?: number;
     deducted?: number;
     shortfall?: number;
+    chargeId?: string;
+    collectionMode?: string | null;
+    providerAmount?: number;
     vacantUsage?: number;
     deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
     error?: string;
@@ -309,3 +322,8 @@ export const runMeterSimulator = (
   return request.post('/meters/simulator/run', data);
 };
 
+
+export interface UtilityChargeCommand { meterId: string; requestId: string; reviewToken: string; settleUntil?: string }
+export const confirmUtilityCharge = (data: UtilityChargeCommand): Promise<MeterSettleResult> => request.post('/utility-charges/confirm', data);
+
+export const previewUtilityCharge = (meterId: string): Promise<UnsettledUsage> => request.post('/utility-charges/preview', { meterId });

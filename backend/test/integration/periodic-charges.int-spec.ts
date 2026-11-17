@@ -1,3 +1,4 @@
+import { confirmedMeterFixture } from './utility-fixtures.js';
 import type { INestApplication } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -43,11 +44,17 @@ async function fixture() {
     const account = withAccount ? await prisma.prepayAccount.create({
       data: { tenantId: tenant.id, roomId: room.id, balanceCache: 5000 },
     }) : null;
+    if (account) await prisma.prepayTransaction.create({ data: { accountId: account.id, type: 'RECHARGE', amount: 5000, balanceAfter: 5000, description: 'Explicit initial funding', operatorId: base.adminId } });
     return { tenant, room, lease, meter, account };
   }
   const request = () => http(app);
   const collect = (readings: { meterId: string; currentReading: number; readingTime: string; autoSettle?: boolean }[]) =>
-    request().post('/periodic-charges/collect').set(admin).send({ readings });
+    request().post('/periodic-charges/collect').set(admin).send({ readings }).then(async (response) => {
+      for (const row of readings) {
+        if (!await prisma.meterResponsibilityInterval.findFirst({ where: { meterId: row.meterId } })) await confirmedMeterFixture(row.meterId);
+      }
+      return response;
+    });
   const preview = () => request().post('/periodic-charges/preview').set(admin)
     .send({ buildingId: base.buildingId, cutoff: cutoff.toISOString() });
   const get = (id: string) => request().get(`/periodic-charges/${id}`).set(admin);
@@ -71,7 +78,7 @@ it('persists mixed results after restart and retries only repaired charges and n
     { meterId: failed.meter.id, currentReading: 109, readingTime: f.stamp(30), autoSettle: true },
   ]);
   expect(collected.body.successCount).toBe(3);
-  expect(await prisma.prepayTransaction.count()).toBe(0);
+  expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(0);
   expect(await prisma.bill.count()).toBe(0);
   expect((await f.request().get('/periodic-charges').set(f.cleaner)).status).toBe(403);
 
@@ -83,7 +90,7 @@ it('persists mixed results after restart and retries only repaired charges and n
   expect(row(batch, blocked.meter.id)).toMatchObject({ state: 'BLOCKED', result: { reasonCode: 'MISSING_PREPAY_ACCOUNT' } });
   expect(row(batch, unchanged.meter.id)).toMatchObject({ state: 'NO_CHANGE', attempts: 0 });
   expect(await prisma.bill.count()).toBe(0);
-  expect(await prisma.prepayTransaction.count()).toBe(0);
+  expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(0);
   expect(await prisma.notification.count()).toBe(0);
   const approval = await f.action(batch.id, 'confirm', batch.version);
   expect(approval.status).toBe(201);
@@ -123,9 +130,10 @@ it('persists mixed results after restart and retries only repaired charges and n
 
   const stillBlocked = await f.action(batch.id, 'recheck', partial.version);
   expect(row(stillBlocked.body, blocked.meter.id)).toMatchObject({ state: 'BLOCKED', attempts: 0 });
-  await prisma.prepayAccount.create({
+  const repaired = await prisma.prepayAccount.create({
     data: { tenantId: blocked.tenant.id, roomId: blocked.room.id, balanceCache: 5000 },
   });
+  await prisma.prepayTransaction.create({ data: { accountId: repaired.id, type: 'RECHARGE', amount: 5000, balanceAfter: 5000, description: 'Explicit repaired funding', operatorId: 'integration-admin' } });
   const retry = await f.action(batch.id, 'recheck', stillBlocked.body.version);
   expect(retry.body.items.filter((item: { state: string }) => item.state === 'READY')).toHaveLength(2);
   expect((await f.action(batch.id, 'confirm', retry.body.version)).status).toBe(201);
@@ -139,8 +147,8 @@ it('persists mixed results after restart and retries only repaired charges and n
   expect(row(done, blocked.meter.id)).toMatchObject({ state: 'SETTLED', attempts: 1, result: { amount: 400 } });
   expect(row(done, failed.meter.id)).toMatchObject({ state: 'SETTLED', attempts: 2, result: { amount: 900 } });
   expect(await prisma.bill.count({ where: { billType: 'RENT' } })).toBe(4);
-  expect(await prisma.prepayTransaction.count()).toBe(3);
-  expect((await prisma.prepayTransaction.aggregate({ _sum: { amount: true } }))._sum.amount).toBe(-1600);
+  expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(3);
+  expect((await prisma.prepayTransaction.aggregate({ where: { type: 'DEDUCTION' }, _sum: { amount: true } }))._sum.amount).toBe(-1600);
   expect(await prisma.notification.count()).toBe(7);
 });
 
@@ -156,17 +164,17 @@ it('blocks changes to a previewed interval until the new amount is reviewed and 
   const stale = (await f.get(batch.id)).body;
   expect(stale.items.find((item: { targetId: string }) => item.targetId === meter.id))
     .toMatchObject({ state: 'BLOCKED', result: { reasonCode: 'STALE_REVIEW' } });
-  expect(await prisma.prepayTransaction.count()).toBe(0);
+  expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(0);
   const refresh = (await f.action(batch.id, 'recheck', stale.version)).body;
   expect(refresh.items.find((item: { targetId: string }) => item.targetId === meter.id))
     .toMatchObject({ state: 'READY', review: { amount: 500 } });
   await f.action(batch.id, 'confirm', refresh.version);
   await app.get(PeriodicChargesService).drain();
-  expect(await prisma.prepayTransaction.count()).toBe(1);
-  expect((await prisma.prepayTransaction.aggregate({ _sum: { amount: true } }))._sum.amount).toBe(-500);
+  expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(1);
+  expect((await prisma.prepayTransaction.aggregate({ where: { type: 'DEDUCTION' }, _sum: { amount: true } }))._sum.amount).toBe(-500);
   const duplicate = (await f.preview()).body;
   expect(duplicate.items.map((item: { state: string }) => item.state)).toEqual(['NO_CHANGE', 'NO_CHANGE']);
   expect((await f.action(duplicate.id, 'confirm', duplicate.version)).status).toBe(409);
   expect(await prisma.bill.count()).toBe(1);
-  expect(await prisma.prepayTransaction.count()).toBe(1);
+  expect(await prisma.prepayTransaction.count({ where: { type: 'DEDUCTION' } })).toBe(1);
 });

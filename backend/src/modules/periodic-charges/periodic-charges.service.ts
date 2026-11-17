@@ -24,6 +24,11 @@ type Receipt = {
   billId?: string;
   prepayTransactionId?: string;
   confirmedBy?: string;
+  chargeId?: string;
+  collectionMode?: string;
+  prepayApplied?: number;
+  receivableAmount?: number;
+  providerAmount?: number;
 };
 const transaction = { ...METER_WRITE_TRANSACTION, timeout: 30_000 };
 const stale = () => blocked('STALE_REVIEW', '预览后结算资料发生变化', '重新检查并确认受影响项目');
@@ -235,7 +240,8 @@ export class PeriodicChargesService {
       : null;
     return {
       receipt: { state: result.status, reasonCode: result.reasonCode, reason: result.reason, retryCondition: result.retryCondition,
-        amount: result.status === 'SETTLED' ? result.amount : 0, billId: result.billId, prepayTransactionId: result.prepayTransactionId },
+        amount: result.status === 'SETTLED' ? result.amount : 0, chargeId: result.chargeId, collectionMode: result.collectionMode,
+        prepayApplied: result.prepayApplied, receivableAmount: result.receivableAmount, providerAmount: result.providerAmount, billId: result.billId, prepayTransactionId: result.prepayTransactionId },
       userId: result.status === 'SETTLED' ? lease?.tenant.userId ?? null : null,
     };
   }
@@ -250,9 +256,11 @@ export class PeriodicChargesService {
         const notice = await this.notifications.create({
           userId: item.notificationUserId!,
           title: '周期收费已处理',
-          body: `项目 ${item.label} 已处理，请查看账单或预付账户流水。`,
+          body: receiptField(item.result, 'collectionMode') === 'DIRECT_TO_PROVIDER'
+            ? `项目 ${item.label} 已记录供应商直缴参考费用，不产生房东应收。`
+            : `项目 ${item.label} 已处理，请查看账单或预付账户流水。`,
           dedupKey: `PERIODIC_CHARGE:${item.id}`,
-          data: { billId: receiptBillId(item.result), itemId: item.id },
+          data: { billId: receiptBillId(item.result), chargeId: receiptField(item.result, 'chargeId'), itemId: item.id },
         });
         if (!notice || typeof notice !== 'object' || !('id' in notice) || typeof notice.id !== 'string') {
           throw new Error('未取得站内通知凭证');
@@ -282,9 +290,10 @@ export class PeriodicChargesService {
   }
 }
 
-function receiptBillId(data: Prisma.JsonValue): string | undefined {
+function receiptBillId(data: Prisma.JsonValue): string | undefined { return receiptField(data, 'billId'); }
+function receiptField(data: Prisma.JsonValue, field: string): string | undefined {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined;
-  return typeof data.billId === 'string' ? data.billId : undefined;
+  return typeof data[field] === 'string' ? data[field] : undefined;
 }
 
 function reviewReceipt(review: ChargeReview, billId?: string): Receipt {
@@ -293,8 +302,10 @@ function reviewReceipt(review: ChargeReview, billId?: string): Receipt {
 }
 
 function compactReceipt(receipt: Receipt): Prisma.InputJsonObject {
-  const { state, reasonCode, reason, retryCondition, amount, billId, prepayTransactionId, confirmedBy } = receipt;
+  const { state, reasonCode, reason, retryCondition, amount, billId, prepayTransactionId, confirmedBy, chargeId, collectionMode, prepayApplied, receivableAmount, providerAmount } = receipt;
   return { state, reasonCode, amount, ...(reason && { reason }), ...(retryCondition && { retryCondition }),
+    ...(chargeId && { chargeId }), ...(collectionMode && { collectionMode }),
+    ...(prepayApplied !== undefined && { prepayApplied }), ...(receivableAmount !== undefined && { receivableAmount }), ...(providerAmount !== undefined && { providerAmount }),
     ...(billId && { billId }), ...(prepayTransactionId && { prepayTransactionId }), ...(confirmedBy && { confirmedBy }) };
 }
 

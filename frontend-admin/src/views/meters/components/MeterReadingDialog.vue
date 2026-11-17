@@ -128,14 +128,23 @@ const handleSubmit = async () => {
         notes: form.notes || undefined,
       });
 
-      const usage = Number(result.reading.usage).toFixed(2);
       const deduction = result.deduction;
+      const usage = Number(deduction.applied ? deduction.usage ?? result.reading.usage : result.reading.usage).toFixed(2);
       if (form.mode === 'HANDOFF') {
         readingResultText.value = '交接读数已保存。请在读数记录中确认旧表末数和新表底数，再发起周期结算。';
         readingResultType.value = 'warning';
       } else if (!deduction.applied) {
         readingResultText.value = `登记成功（用量 ${usage}）；扣费提示：${[deduction.reason, deduction.retryCondition].filter(Boolean).join('。')}`;
         readingResultType.value = 'warning';
+      } else if (deduction.collectionMode === 'DIRECT_TO_PROVIDER') {
+        readingResultText.value = `用量 ${usage}；供应商直缴参考 ${formatMoney(deduction.providerAmount ?? deduction.amount)}，不产生房东应收`;
+        readingResultType.value = 'success';
+      } else if (deduction.collectionMode === 'POSTPAID') {
+        readingResultText.value = `用量 ${usage}；已列房东应收 ${formatMoney(deduction.shortfall)}`;
+        readingResultType.value = 'success';
+      } else if (deduction.collectionMode === null) {
+        readingResultText.value = `空置期用量 ${usage} 已留存，无租客应收`;
+        readingResultType.value = 'success';
       } else if (deduction.shortfall > 0) {
         readingResultText.value = `用量 ${usage}；已扣费 ${formatMoney(deduction.deducted)}；余额不足，已生成补缴账单 ${formatMoney(deduction.shortfall)}`;
         readingResultType.value = 'warning';

@@ -1,3 +1,4 @@
+import { lockLeaseRoom } from '../contracts/contract-activation.js';
 import {
   Injectable,
   NotFoundException,
@@ -238,6 +239,10 @@ export class InspectionsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, inspection.roomId);
+      const current = await tx.roomInspection.findUnique({ where: { id } });
+      if (!current) throw new NotFoundException('验房单不存在');
+      if (current.roomId !== inspection.roomId || (current.status === 'CONFIRMED' && dto.status !== 'CONFIRMED')) throw new ConflictException('验房资料已确认或归属已变化');
       if (dto.items !== undefined) {
         await tx.inspectionItem.deleteMany({ where: { inspectionId: id } });
         if (dto.items.length > 0) {
@@ -294,18 +299,22 @@ export class InspectionsService {
     const agree = dto.agree !== false;
     const targetStatus: InspectionStatus = agree ? 'CONFIRMED' : 'REJECTED';
 
-    const updated = await this.prisma.roomInspection.update({
-      where: { id },
-      data: {
-        status: targetStatus,
-        tenantConfirmedAt: agree ? new Date() : null,
-        tenantNotes: dto.tenantNotes || inspection.tenantNotes,
-        tenantSignature: dto.tenantSignature || inspection.tenantSignature,
-      },
-      include: { items: true, room: true, tenant: true },
+    return this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, inspection.roomId);
+      const current = await tx.roomInspection.findUnique({ where: { id, ...(isTenant ? scopedWhere(tenantId) : {}) }, include: { items: true, room: true, tenant: true } });
+      if (!current) throw new NotFoundException('验房单不存在');
+      if (current.roomId !== inspection.roomId) throw new ConflictException('验房归属已变化');
+      if (current.status === 'CONFIRMED') return current;
+      return tx.roomInspection.update({
+        where: { id },
+        data: {
+          status: targetStatus, tenantConfirmedAt: agree ? new Date() : null,
+          tenantNotes: dto.tenantNotes || current.tenantNotes,
+          tenantSignature: dto.tenantSignature || current.tenantSignature,
+        },
+        include: { items: true, room: true, tenant: true },
+      });
     });
-
-    return updated;
   }
 
   async remove(id: string) {
@@ -314,7 +323,13 @@ export class InspectionsService {
       throw new ConflictException('已确认生效的验房单不可删除');
     }
 
-    await this.prisma.roomInspection.delete({ where: { id } });
-    return { success: true, message: '验房单已删除' };
+    return this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, inspection.roomId);
+      const current = await tx.roomInspection.findUnique({ where: { id } });
+      if (!current) throw new NotFoundException('验房单不存在');
+      if (current.status === 'CONFIRMED') throw new ConflictException('已确认生效的验房单不可删除');
+      await tx.roomInspection.delete({ where: { id } });
+      return { success: true, message: '验房单已删除' };
+    });
   }
 }

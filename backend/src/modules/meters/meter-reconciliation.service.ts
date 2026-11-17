@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { MeterType, Prisma } from '@prisma/client';
+import { Prisma, type MeterType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MeterPriceService } from './meter-price.service.js';
 import type { MeterChargeSegment } from './meter-interval-quote.js';
@@ -32,6 +32,7 @@ export interface ReconciliationRow {
   /** 该表当月实际产生的扣费与账单金额（分） */
   chargedAmount: number;
   billAmount: number;
+  providerAmount: number;
   /** 差额 = 扣费 + 账单 − 应收；0 表示对平 */
   difference: number;
   issues: string[];
@@ -83,9 +84,11 @@ export class MeterReconciliationService {
     const readings = await this.prisma.meterReading.findMany({
       where: { meterId: { in: meterIds }, readingTime: { gte: start, lt: end }, ...realMeterReadings(this.prisma) },
       orderBy: [{ meterId: 'asc' }, { readingTime: 'asc' }],
-      select: { id: true, meterId: true, currentReading: true, usage: true, readingTime: true, settledSegments: true },
+      select: { id: true, meterId: true, currentReading: true, usage: true, readingTime: true, settledSegments: true, settledAmount: true },
     });
 
+    const charges = await this.prisma.utilityCharge.findMany({ where: { meterId: { in: meterIds }, endAt: { gte: start, lt: end } } });
+    const chargesByMeter = groupBy(charges, (charge) => charge.meterId);
     const readingsByMeter = groupBy(readings, (reading) => reading.meterId);
 
     const rows: ReconciliationRow[] = [];
@@ -112,15 +115,21 @@ export class MeterReconciliationService {
         ? meterReadings[meterReadings.length - 1].readingTime
         : end;
       const unitPrice = priceBook.priceFor(meter, pricingAt);
-      const readingAmount = segmented?.amount ?? Math.round(readingUsage * unitPrice);
-      const difference = chargedAmount + billAmount - readingAmount;
+      const formal = chargesByMeter.get(meter.id) ?? [];
+      const formalTargetIds = new Set(formal.map((charge) => charge.targetReadingId));
+      const legacy = meterReadings.filter((reading) => !formalTargetIds.has(reading.id));
+      const providerAmount = formal.reduce((sum, charge) => sum + charge.providerAmount, 0);
+      const readingAmount = formal.length ? formal.reduce((sum, charge) => sum + charge.totalAmount, 0)
+        + legacy.reduce((sum, reading) => sum + (reading.settledAmount ?? 0), 0)
+        : segmented?.amount ?? Math.round(readingUsage * unitPrice);
+      const difference = chargedAmount + billAmount + providerAmount - readingAmount;
 
       const issues: string[] = [];
       if (meterReadings.length < 2) issues.push('本月读数不足两笔，无法核对');
       if (meterReadings.length >= 2 && Math.abs(readingUsage - recordedUsage) > 0.01) {
         issues.push(`读数差值 ${readingUsage} 与落库用量 ${recordedUsage} 不一致`);
       }
-      if (difference !== 0) issues.push(`扣费+账单 ${chargedAmount + billAmount} 分 ≠ 应收 ${readingAmount} 分`);
+      if (difference !== 0) issues.push(`扣费+账单+外部参考 ${chargedAmount + billAmount + providerAmount} 分 ≠ 费用 ${readingAmount} 分`);
 
       rows.push({
         meterId: meter.id,
@@ -137,6 +146,7 @@ export class MeterReconciliationService {
         readingAmount,
         chargedAmount,
         billAmount,
+        providerAmount,
         difference,
         issues,
       });
@@ -151,7 +161,7 @@ export class MeterReconciliationService {
     const bills = await this.prisma.$queryRaw<{ total: bigint | null }[]>`
       SELECT COALESCE(SUM("amount"), 0)::bigint AS total
       FROM "bills"
-      WHERE "billType" = 'UTILITY'
+      WHERE "billType" = 'UTILITY' AND status <> 'CANCELLED'
         AND "snapshot"->>'readingId' = ANY(${readingIds})
     `;
     return Number(bills[0]?.total ?? 0);
@@ -169,13 +179,13 @@ function reconcileSettledSegments(readings: Array<{ id: string; settledSegments:
     if (segments[0]?.startReadingId !== covered
       || segments.at(-1)?.endReadingId !== reading.id) continue;
 
-    let segmentAmount = 0n;
+    let segmentAmount = new Prisma.Decimal(0);
     for (const segment of segments) {
       const units = Math.round(segment.usage * 100);
       usageHundredths += units;
-      segmentAmount += BigInt(units) * BigInt(segment.unitPrice);
+      segmentAmount = segmentAmount.plus(new Prisma.Decimal(units).div(100).mul(segment.rateCents ?? segment.unitPrice));
     }
-    amount += Number((segmentAmount + 50n) / 100n);
+    amount += segmentAmount.toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber();
     covered = reading.id;
   }
   return readings.length > 1 && covered === readings.at(-1)?.id
@@ -190,12 +200,13 @@ function summarize(rows: ReconciliationRow[]) {
     totalReadingAmount: rows.reduce((sum, row) => sum + row.readingAmount, 0),
     totalChargedAmount: rows.reduce((sum, row) => sum + row.chargedAmount, 0),
     totalBillAmount: rows.reduce((sum, row) => sum + row.billAmount, 0),
+    totalProviderAmount: rows.reduce((sum, row) => sum + row.providerAmount, 0),
     totalDifference: rows.reduce((sum, row) => sum + row.difference, 0),
   };
 }
 
 function emptySummary() {
-  return { meters: 0, withIssues: 0, totalReadingAmount: 0, totalChargedAmount: 0, totalBillAmount: 0, totalDifference: 0 };
+  return { meters: 0, withIssues: 0, totalReadingAmount: 0, totalChargedAmount: 0, totalBillAmount: 0, totalDifference: 0, totalProviderAmount: 0 };
 }
 
 function groupBy<T>(items: T[], key: (item: T) => string) {

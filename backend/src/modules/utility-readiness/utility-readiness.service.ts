@@ -5,6 +5,7 @@ import { BusinessClock } from '../../common/business-clock/business-clock.servic
 import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 import { lockLeaseRoom } from '../contracts/contract-activation.js';
 import { lockMeters, findMeterSettlementCursor, METER_WRITE_TRANSACTION } from '../meters/meter-settlement-state.js';
+import { quotePricedMeterInterval } from '../meters/meter-interval-quote.js';
 import { realMeterReadings } from '../meters/meter-reading-scope.js';
 import { resolveMeterUsageOwner } from '../meters/meter-usage-attribution.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -13,7 +14,7 @@ import type { ConfirmUtilityRuleDto, ReviewUtilityRuleDto, UtilityInventoryQuery
 type Issue = { code: string; message: string };
 const issue = (code: string, message: string): Issue => ({ code, message });
 
-/** Expand phase: confirms evidence and previews rules. Financial posting remains a separate rollout. */
+/** Confirms rule and responsibility evidence; this action never posts money. */
 @Injectable()
 export class UtilityReadinessService {
   constructor(private readonly prisma: PrismaService, private readonly clock: BusinessClock) {}
@@ -56,7 +57,7 @@ export class UtilityReadinessService {
           cursor: await findMeterSettlementCursor(tx, meter.id),
         };
       }));
-      return { contract: lease, meters: rows, phase: 'EVIDENCE_REVIEW', financialPostingEnabled: false };
+      return { contract: lease, meters: rows, phase: 'FORMAL_POSTING', financialPostingEnabled: true };
     }, { isolationLevel: 'RepeatableRead' });
   }
 
@@ -73,7 +74,7 @@ export class UtilityReadinessService {
         const unresolvedMeters = meters.filter((meter) => !lease.utilityPolicyVersions.some((p) => p.feeType === meter.meterType));
         return { contractId: lease.id, contractNumber: lease.contractNumber, roomId: lease.roomId, unresolvedMeterIds: unresolvedMeters.map((m) => m.id) };
       }));
-      return { items, nextCursor: leases.length > 200 ? items.at(-1)!.contractId : null, financialPostingEnabled: false };
+      return { items, nextCursor: leases.length > 200 ? items.at(-1)!.contractId : null, financialPostingEnabled: true };
     }, { isolationLevel: 'RepeatableRead' });
   }
 
@@ -109,13 +110,16 @@ export class UtilityReadinessService {
           effectiveFrom: plan.opening!.readingTime, confirmedBy: operatorId, confirmedAt: this.clock.now(), evidence: dto.evidence.trim(),
         } });
       }
-      const interval = await tx.meterResponsibilityInterval.create({ data: {
+      const intervalData = {
         meterId: dto.meterId, roomId: plan.meter.roomId!,
         contractId: dto.contractId ?? null, tenantId: plan.contract?.tenantId ?? null,
-        responsibility: dto.responsibility, startAt: plan.opening!.readingTime, endAt: plan.closing!.readingTime,
-        openingReadingId: dto.openingReadingId, closingReadingId: dto.closingReadingId,
+        responsibility: dto.responsibility, startAt: plan.opening!.readingTime, endAt: plan.closing?.readingTime ?? null,
+        openingReadingId: dto.openingReadingId, closingReadingId: dto.closingReadingId ?? null,
         confirmedBy: operatorId, confirmedAt: this.clock.now(), evidence: dto.evidence.trim(),
-      } });
+      };
+      const interval = dto.responsibilityIntervalId
+        ? await tx.meterResponsibilityInterval.update({ where: { id: dto.responsibilityIntervalId }, data: { endAt: intervalData.endAt, closingReadingId: intervalData.closingReadingId, evidence: `${plan.existingInterval!.evidence}\n封口：${dto.evidence.trim()}` } })
+        : await tx.meterResponsibilityInterval.create({ data: intervalData });
       const result = {
         responsibilityIntervalId: interval.id, policyVersionId: policy?.id ?? null,
         policyVersion: policy?.version ?? null, financialEffect: 'NONE',
@@ -137,12 +141,20 @@ export class UtilityReadinessService {
     const billingIssues: Issue[] = [];
     if (!meter.isActive) blockingIssues.push(issue('METER_UNAVAILABLE', '表计已停用'));
     const readings = await tx.meterReading.findMany({
-      where: { meterId: dto.meterId, ...realMeterReadings(tx), id: { in: [dto.openingReadingId, dto.closingReadingId] } },
+      where: { meterId: dto.meterId, ...realMeterReadings(tx), id: { in: [dto.openingReadingId, ...(dto.closingReadingId ? [dto.closingReadingId] : [])] } },
     });
     const opening = readings.find((r) => r.id === dto.openingReadingId) ?? null;
     const closing = readings.find((r) => r.id === dto.closingReadingId) ?? null;
-    const validBoundaries = opening && closing && opening.readingTime < closing.readingTime && closing.readingTime <= this.clock.now();
-    if (!validBoundaries) blockingIssues.push(issue('MISSING_BASELINE', '请选择同一表计上按时间先后排列的两笔真实读数，时间不得在未来'));
+    const scopeEnd = closing?.readingTime ?? this.clock.now();
+    const validBoundaries = opening && opening.readingTime < scopeEnd && scopeEnd <= this.clock.now() && (!dto.closingReadingId || closing);
+    const existingInterval = dto.responsibilityIntervalId ? await tx.meterResponsibilityInterval.findUnique({ where: { id: dto.responsibilityIntervalId } }) : null;
+    if (dto.responsibilityIntervalId && (!closing || !existingInterval || existingInterval.endAt !== null
+      || existingInterval.meterId !== dto.meterId || existingInterval.openingReadingId !== dto.openingReadingId
+      || existingInterval.contractId !== (dto.contractId ?? null) || existingInterval.responsibility !== dto.responsibility)) {
+      blockingIssues.push(issue('CLOSE_INTERVAL_CONFLICT', '封口须使用原开放段的表计、起读数及责任人与真实终读数'));
+    }
+    if (!closing && dto.responsibility !== 'TENANT') blockingIssues.push(issue('OWNER_BOUNDARY_REQUIRED', '空置责任段须以真实起终读数确认'));
+    if (!validBoundaries) blockingIssues.push(issue('MISSING_BASELINE', '请选择同一表计上按时间先后排列的真实起读数及可选终读数，时间不得在未来'));
 
     const contract = dto.contractId ? await tx.contract.findUnique({ where: { id: dto.contractId } }) : null;
     const ownershipEvidence = await tx.contract.findMany({
@@ -170,11 +182,11 @@ export class UtilityReadinessService {
       if (!contract || contract.roomId !== meter.roomId || contract.buildingId !== meter.buildingId) {
         blockingIssues.push(issue('OWNERSHIP_UNRESOLVED', '合同、房间和表计不一致'));
       } else if (contract.status === 'DRAFT' || (validBoundaries
-        && (this.clock.todayUtc(opening.readingTime) < contract.startDate || this.clock.todayUtc(closing.readingTime) > contract.endDate))) {
+        && (this.clock.todayUtc(opening.readingTime) < contract.startDate || this.clock.todayUtc(scopeEnd) > contract.endDate))) {
         blockingIssues.push(issue('LEASE_INTERVAL_INVALID', '责任段须在已生效的合同租期内'));
       }
       if (validBoundaries && contract?.roomId === meter.roomId) {
-        const owner = await resolveMeterUsageOwner(tx, this.clock, meter.roomId, opening.readingTime, closing.readingTime);
+        const owner = await resolveMeterUsageOwner(tx, this.clock, meter.roomId, opening.readingTime, scopeEnd);
         if (owner.kind !== 'TENANT' || owner.contractId !== contract.id || owner.tenantId !== contract.tenantId) {
           blockingIssues.push(issue('OWNERSHIP_UNRESOLVED', '交接事实尚不能将整段用量归属本合同，请先核验入住及退租记录'));
         }
@@ -182,7 +194,7 @@ export class UtilityReadinessService {
       if (latestPolicy && !policy && opening && latestPolicy.effectiveFrom >= opening.readingTime) {
         blockingIssues.push(issue('POLICY_VERSION_CONFLICT', '新规则生效点须晚于已确认版本，历史版本保留'));
       }
-      if (validBoundaries && policies.some((row) => row.effectiveFrom > opening.readingTime && row.effectiveFrom < closing.readingTime)) {
+      if (validBoundaries && policies.some((row) => row.effectiveFrom > opening.readingTime && row.effectiveFrom < scopeEnd)) {
         blockingIssues.push(issue('RATE_BOUNDARY_REQUIRED', '该段跨越已确认的规则版本，请在生效读数处分段核验'));
       }
     } else {
@@ -192,28 +204,33 @@ export class UtilityReadinessService {
       if (validBoundaries) {
         const overlapLease = await tx.contract.findFirst({ where: {
           roomId: meter.roomId, status: { not: 'DRAFT' },
-          startDate: { lte: this.clock.todayUtc(closing.readingTime) }, endDate: { gte: this.clock.todayUtc(opening.readingTime) },
+          startDate: { lte: this.clock.todayUtc(scopeEnd) }, endDate: { gte: this.clock.todayUtc(opening.readingTime) },
         }, select: { id: true } });
-        const owner = await resolveMeterUsageOwner(tx, this.clock, meter.roomId, opening.readingTime, closing.readingTime);
+        const owner = await resolveMeterUsageOwner(tx, this.clock, meter.roomId, opening.readingTime, scopeEnd);
         if (overlapLease && owner.kind !== 'VACANT') blockingIssues.push(issue('OWNERSHIP_UNRESOLVED', '该段与租约日期重叠，请先核验实际交接事实'));
       }
     }
 
+    if (existingInterval && (!policy || policy.collectionMode !== dto.collectionMode || !policy.rateCents.eq(requestedRate))) blockingIssues.push(issue('CLOSE_POLICY_CONFLICT', '封口不能修改已确认规则'));
     const overlaps = validBoundaries ? await tx.meterResponsibilityInterval.findMany({ where: {
-      meterId: meter.id, startAt: { lt: closing.readingTime }, endAt: { gt: opening.readingTime },
+      meterId: meter.id, ...(dto.responsibilityIntervalId && { id: { not: dto.responsibilityIntervalId } }),
+      ...(closing && { startAt: { lt: closing.readingTime } }), OR: [{ endAt: null }, { endAt: { gt: opening.readingTime } }],
     }, select: { id: true } }) : [];
     if (overlaps.length) blockingIssues.push(issue('RESPONSIBILITY_OVERLAP', '该用量范围已有确认责任段，请查看原纪录'));
     const intervalReadings = validBoundaries ? await tx.meterReading.findMany({
-      where: { meterId: meter.id, ...realMeterReadings(tx), readingTime: { gte: opening.readingTime, lte: closing.readingTime } },
+      where: { meterId: meter.id, ...realMeterReadings(tx), readingTime: { gte: opening.readingTime, lte: scopeEnd } },
       orderBy: [{ readingTime: 'asc' }, { id: 'asc' }], take: 2001,
     }) : [];
     if (intervalReadings.length > 2000) blockingIssues.push(issue('INTERVAL_TOO_LARGE', '该段读数过多，请分段核验'));
-    if (intervalReadings.some((row, index) => row.handoffRequired || row.handoffPreviousFinal != null
-      || (index > 0 && row.currentReading.lt(intervalReadings[index - 1].currentReading)))) {
-      blockingIssues.push(issue('HANDOFF_REVIEW_REQUIRED', '该段含回退或换表，请按已确认的物理表段分别核验'));
-    }
-    const usage = validBoundaries ? closing.currentReading.minus(opening.currentReading) : new Prisma.Decimal(0);
-    const rawAmount = usage.mul(requestedRate).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+    const physical = validBoundaries && closing ? await quotePricedMeterInterval(tx, meter, opening, closing, 0, {
+      priceFor: () => requestedRate.toNumber(), hasUnpricedHistory: () => false, changesBetween: () => [],
+      exactRateFor: () => ({ rateCents: requestedRate.toString(), policyVersionId: policy?.id ?? 'PROPOSED_RULE' }),
+    }) : null;
+    if (physical && 'reasonCode' in physical) blockingIssues.push(issue('HANDOFF_REVIEW_REQUIRED', physical.reason));
+    const usage = physical && !('reasonCode' in physical) ? new Prisma.Decimal(physical.usage) : new Prisma.Decimal(0);
+    const rawAmount = physical && !('reasonCode' in physical) ? new Prisma.Decimal(physical.amount) : new Prisma.Decimal(0);
+    const chargedTail = existingInterval && closing ? await tx.utilityCharge.findFirst({ where: { meterId: meter.id, endAt: { gt: closing.readingTime } }, select: { id: true } }) : null;
+    if (chargedTail) blockingIssues.push(issue('CLOSE_COVERAGE_CONFLICT', '已有费用超出本次封口时点，须先核对原费用，不能缩短责任段'));
     if (rawAmount.lt(0) || rawAmount.gt(2147483647)) blockingIssues.push(issue('AMOUNT_OUT_OF_RANGE', '计费金额超出支持范围'));
 
     const account = contract ? await tx.prepayAccount.findUnique({ where: { tenantId_roomId: { tenantId: contract.tenantId, roomId: meter.roomId } } }) : null;
@@ -223,7 +240,7 @@ export class UtilityReadinessService {
       if (!account) billingIssues.push(issue('PREPAY_ACCOUNT_MISSING', '预付模式正式计费前需建立本租客本房间账户'));
       else if (!accountConsistent) billingIssues.push(issue('BALANCE_REVIEW_REQUIRED', '预付余额与流水不一致，请核账'));
     }
-    const amountsKnown = blockingIssues.length === 0;
+    const amountsKnown = blockingIssues.length === 0 && closing !== null;
     const totalAmount = dto.responsibility === 'TENANT' ? rawAmount.toNumber() : 0;
     const prepayApplied = dto.collectionMode === 'PREPAY_WITH_SHORTFALL' ? Math.min(Math.max(0, account?.balanceCache ?? 0), totalAmount) : 0;
     const financialPreview = {
@@ -234,11 +251,11 @@ export class UtilityReadinessService {
       providerAmount: amountsKnown ? dto.collectionMode === 'DIRECT_TO_PROVIDER' ? totalAmount : 0 : null,
       financialEffect: 'NONE',
     };
-    const snapshot = { request: normalize(dto), meter, opening, closing, contract, ownershipEvidence, policies, overlaps, intervalReadings, account, ledger };
+    const snapshot = { request: normalize(dto), meter, opening, closing, contract, ownershipEvidence, policies, overlaps, intervalReadings, account, ledger, existingInterval, chargedTail };
     return {
       ready: blockingIssues.length === 0, blockingIssues, billingIssues, reviewToken: hash(snapshot),
-      financialPreview, financialPostingEnabled: false, phase: 'EVIDENCE_REVIEW',
-      meter, contract, opening, closing, policy, nextPolicyVersion: (latestPolicy?.version ?? 0) + 1,
+      financialPreview, financialPostingEnabled: true, phase: 'FORMAL_POSTING',
+      meter, contract, opening, closing, policy, existingInterval, nextPolicyVersion: (latestPolicy?.version ?? 0) + 1,
       unit: meter.meterType === 'ELECTRICITY' ? 'kWh' : 'm³',
     };
   }
@@ -247,7 +264,7 @@ export class UtilityReadinessService {
 function normalize(dto: ReviewUtilityRuleDto) {
   return {
     meterId: dto.meterId, contractId: dto.contractId ?? null, responsibility: dto.responsibility,
-    openingReadingId: dto.openingReadingId, closingReadingId: dto.closingReadingId,
+    openingReadingId: dto.openingReadingId, closingReadingId: dto.closingReadingId ?? null, responsibilityIntervalId: dto.responsibilityIntervalId ?? null,
     collectionMode: dto.collectionMode ?? null, rateCents: dto.rateCents === undefined ? null : new Prisma.Decimal(dto.rateCents).toString(),
     evidence: dto.evidence.trim(),
   };

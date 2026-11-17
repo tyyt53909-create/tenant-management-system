@@ -92,10 +92,10 @@
     />
 
     <!-- 周期结算对话框 -->
-    <el-dialog v-model="settleDialogVisible" title="水电周期结算" width="560px">
+    <el-dialog v-model="settleDialogVisible" title="水电周期结算" width="min(96%, 560px)">
       <div v-loading="settleDataLoading">
         <el-alert
-          title="将累计结算上次结算或初始底数至今的未计费度数，从租客预付账户扣费或生成差额补缴账单。"
+          title="将累计结算上次结算或初始底数至今的未计费度数，按已确认模式处理：预付不足补缴、后付全额应收、直缴只留外部参考。预览不扣款。"
           type="info"
           :closable="false"
           style="margin-bottom: 16px"
@@ -109,6 +109,9 @@
             {{ unsettledInfo?.settlementBlock ? '—' : (unsettledInfo?.segments?.length ?? 0) > 1 ? '见分段明细'
               : formatMoney(unsettledInfo?.unitPrice ?? currentMeter?.unitPrice ?? 0) + '/' + (unitMap[currentMeter?.meterType || ''] || '') }}
           </el-descriptions-item>
+          <el-descriptions-item label="预付抵扣">{{ formatMoney(unsettledInfo?.prepayApplied ?? 0) }}</el-descriptions-item>
+          <el-descriptions-item label="房东应收">{{ formatMoney(unsettledInfo?.receivableAmount ?? 0) }}</el-descriptions-item>
+          <el-descriptions-item label="外部直缴参考">{{ formatMoney(unsettledInfo?.providerAmount ?? 0) }}</el-descriptions-item>
           <el-descriptions-item label="预付余额">
             <span v-if="unsettledInfo && typeof unsettledInfo.prepayBalance === 'number'" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? 'var(--error-text)' : 'var(--success-text)', fontWeight: 'bold' }">
               {{ formatMoney(unsettledInfo.prepayBalance) }}
@@ -258,7 +261,7 @@ import {
   confirmMeterHandoff,
   getUnsettledUsage,
   type UnsettledUsage,
-  settleMeter,
+  confirmUtilityCharge,
   type MeterReading,
 } from '@/api/meters';
 import type { Meter } from '@/types';
@@ -413,8 +416,9 @@ const handleConfirmSettle = async () => {
   if (!meter) return;
   settleSubmitLoading.value = true;
   try {
-    const res = await settleMeter(meter.id, {
-      notes: settleNotes.value || undefined,
+    if (!unsettledInfo.value?.reviewToken) return;
+    const res = await confirmUtilityCharge({
+      meterId: meter.id, requestId: crypto.randomUUID(), reviewToken: unsettledInfo.value.reviewToken,
       settleUntil: settleCutoff.value?.toISOString(),
     });
     if (res.status === 'BLOCKED') {

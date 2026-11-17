@@ -38,12 +38,12 @@ export async function reviewUtility(
     const reason = info.attribution;
     return blocked(reason.reasonCode, reason.reason, reason.retryCondition);
   }
-  if (info.contractId && info.estimatedAmount > 0 && info.prepayBalance == null) {
+  if (info.contractId && info.estimatedAmount > 0 && 'collectionMode' in info && info.collectionMode === 'PREPAY_WITH_SHORTFALL' && info.prepayBalance == null) {
     return blocked('MISSING_PREPAY_ACCOUNT', '租客缺预付账户', '开户并核对归属后重新预览');
   }
   const fingerprint = seal([
     info.targetReadingId, info.baselineReadingId, info.contractId, info.currentReading, info.unsettledUsage,
-    info.estimatedAmount, 'segments' in info ? info.segments : null,
+    info.estimatedAmount, 'segments' in info ? info.segments : null, 'reviewToken' in info ? info.reviewToken : null,
   ]);
   return {
     state: 'READY', amount: info.estimatedAmount, reasonCode: 'READY', reason: '待确认结算',

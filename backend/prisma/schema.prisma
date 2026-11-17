@@ -488,6 +488,8 @@ model Room {
   @@index([buildingId, status])
   @@index([status, cleanStatus])
   @@map("rooms")
+  utilityCharges UtilityCharge[]
+
 }
 
 model FloorPlan {
@@ -588,6 +590,8 @@ model Tenant {
   @@index([isActive])
   @@index([phone])
   @@map("tenants")
+  utilityCharges UtilityCharge[]
+
 }
 
 // 5. User（用户账号）
@@ -723,6 +727,8 @@ model Contract {
   @@index([status, endDate])
   @@index([signStatus])
   @@map("contracts")
+  utilityCharges UtilityCharge[]
+
 }
 
 model MoveInRequest {
@@ -794,6 +800,8 @@ model Bill {
   @@index([status, dueDate])
   @@index([isOverdue, dueDate])
   @@map("bills")
+  utilityCharge UtilityCharge?
+
 }
 
 // 8.1 DepositLedger / DepositTransaction（押金台账，FIN-03 / T267）
@@ -994,6 +1002,8 @@ model PrepayTransaction {
   @@index([accountId, createdAt])
   @@index([relatedId, relatedType])
   @@map("prepay_transactions")
+  utilityCharge UtilityCharge?
+
 }
 
 // 12.1 PrepayRechargeOrder（预付线上充值单）
@@ -1055,6 +1065,8 @@ model Meter {
   @@index([roomId])
   @@index([publicAreaId])
   @@map("meters")
+  utilityCharges UtilityCharge[]
+
 }
 
 // 14. MeterReading（读数记录）
@@ -1100,6 +1112,9 @@ model MeterReading {
   @@unique([meterId, dedupKey])
   @@index([meterId, readingTime])
   @@map("meter_readings")
+  chargeBaselines UtilityCharge[] @relation("ChargeBaseline")
+  chargeTargets UtilityCharge[] @relation("ChargeTarget")
+
 }
 
 enum UtilityCollectionMode {
@@ -1133,9 +1148,11 @@ model UtilityPolicyVersion {
   @@unique([contractId, feeType, version])
   @@unique([contractId, feeType, effectiveFrom])
   @@map("utility_policy_versions")
+  utilityCharges UtilityCharge[]
+
 }
 
-/// 本阶段登记有真实起、终读数的闭合责任段，边界共享且用量不重叠。
+/// 已确认责任段。开放段仅有真实起读数，结束时追加真实交接读数。
 model MeterResponsibilityInterval {
   id               String @id @default(cuid())
   meterId          String
@@ -1148,11 +1165,11 @@ model MeterResponsibilityInterval {
   tenant           Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   responsibility   MeterResponsibilityType
   startAt          DateTime
-  endAt            DateTime
+  endAt            DateTime?
   openingReadingId String
   openingReading   MeterReading @relation("ResponsibilityOpening", fields: [openingReadingId], references: [id], onDelete: Restrict)
-  closingReadingId String
-  closingReading   MeterReading @relation("ResponsibilityClosing", fields: [closingReadingId], references: [id], onDelete: Restrict)
+  closingReadingId String?
+  closingReading   MeterReading? @relation("ResponsibilityClosing", fields: [closingReadingId], references: [id], onDelete: Restrict)
   confirmedBy      String
   confirmedAt      DateTime @default(now())
   evidence         String @db.Text
@@ -1161,6 +1178,8 @@ model MeterResponsibilityInterval {
   @@index([meterId, startAt, endAt])
   @@index([contractId])
   @@map("meter_responsibility_intervals")
+  utilityCharges UtilityCharge[]
+
 }
 
 /// 规则/责任核验请求的持久化重放结果，与审计及确认资料同事务提交。
@@ -2164,4 +2183,56 @@ model PeriodicChargeItem {
   @@index([state, id])
   @@index([notificationState])
   @@map("periodic_charge_items")
+}
+
+/// 不可变的正式费用。内部资金守恒或直缴外部金额由数据库检查约束保护。
+model UtilityCharge {
+  id String @id @default(cuid())
+  meterId String
+  meter Meter @relation(fields: [meterId], references: [id], onDelete: Restrict)
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  contractId String?
+  contract Contract? @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  tenantId String?
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  responsibilityIntervalId String
+  responsibilityInterval MeterResponsibilityInterval @relation(fields: [responsibilityIntervalId], references: [id], onDelete: Restrict)
+  policyVersionId String?
+  policyVersion UtilityPolicyVersion? @relation(fields: [policyVersionId], references: [id], onDelete: Restrict)
+  baselineReadingId String
+  baselineReading MeterReading @relation("ChargeBaseline", fields: [baselineReadingId], references: [id], onDelete: Restrict)
+  targetReadingId String
+  targetReading MeterReading @relation("ChargeTarget", fields: [targetReadingId], references: [id], onDelete: Restrict)
+  startAt DateTime
+  endAt DateTime
+  collectionMode UtilityCollectionMode?
+  usage Decimal @db.Decimal(14, 2)
+  totalAmount Int
+  prepayApplied Int
+  receivableAmount Int
+  providerAmount Int
+  billId String? @unique
+  bill Bill? @relation(fields: [billId], references: [id], onDelete: Restrict)
+  prepayTransactionId String? @unique
+  prepayTransaction PrepayTransaction? @relation(fields: [prepayTransactionId], references: [id], onDelete: Restrict)
+  snapshot Json
+  operatorId String
+  createdAt DateTime @default(now())
+  notificationState String @default("PENDING")
+
+  @@unique([meterId, baselineReadingId, targetReadingId])
+  @@index([contractId, createdAt])
+  @@map("utility_charges")
+}
+
+/// 正式确认重放结果，与费用及游标在同一事务提交。
+model UtilityPostingConfirmation {
+  requestId String @id
+  payloadHash String
+  result Json
+  confirmedBy String
+  confirmedAt DateTime @default(now())
+
+  @@map("utility_posting_confirmations")
 }

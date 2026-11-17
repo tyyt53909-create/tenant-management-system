@@ -732,21 +732,24 @@ describe('BillsService', () => {
       expect(result.id).toBe('bill-existing');
     });
 
-    it('create：水电补缴不占用租金去重键', async () => {
+    it('create：手工水电金额不能绕过统一规则及来源检查', async () => {
+      await expect(service.create({ contractId: 'contract-1', billType: 'UTILITY', period: '2026-11', amount: 3000, dueDate: '2026-11-05' } as any))
+        .rejects.toMatchObject({ response: { code: 'UTILITY_RULE_BLOCKED' } });
+      expect(prisma.bill.create).not.toHaveBeenCalled();
+    });
+
+    it('create：其他费用继续使用独立非租金凭证', async () => {
       prisma.contract.findUnique.mockResolvedValue({ id: 'contract-1' });
       prisma.bill.create.mockResolvedValue({ id: billId });
+      await service.create({ contractId: 'contract-1', billType: 'OTHER', period: '2026-11', amount: 3000, dueDate: '2026-11-05' } as any);
+      expect(prisma.bill.create).toHaveBeenCalledWith({ data: expect.objectContaining({ dedupKey: null }) });
+    });
 
-      await service.create({
-        contractId: 'contract-1',
-        billType: 'UTILITY',
-        period: '2026-11',
-        amount: 3000,
-        dueDate: '2026-11-05',
-      } as any);
-
-      expect(prisma.bill.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ dedupKey: null }),
-      });
+    it('update：水电费用金额以来源为准，未收款也不能改写', async () => {
+      prisma.bill.findUnique.mockResolvedValue({ id: billId, billType: 'UTILITY', amount: 3000, paidAmount: 0, status: 'PENDING' });
+      await expect(service.update(billId, { amount: 3001 })).rejects.toMatchObject({ response: { code: 'BILL_AMOUNT_LOCKED' } });
+      expect(prisma.bill.update).not.toHaveBeenCalled();
+      expect(await service.update(billId, { amount: 3000 })).toMatchObject({ amount: 3000 });
     });
 
     it('create：非唯一键异常应直接抛出', async () => {

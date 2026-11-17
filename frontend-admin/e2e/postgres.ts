@@ -104,3 +104,13 @@ export function readRuleEvidence(contract: string, meter: string) {
     );
   `, { contract, meter });
 }
+
+export function readUtilityCharges(meter: string) {
+  return query<Array<{ id: string; tenantId: string; contractId: string; collectionMode: string; totalAmount: number; prepayApplied: number; receivableAmount: number; providerAmount: number; billId: string | null; prepayTransactionId: string | null; confirmations: number }>>(`
+    SELECT coalesce(json_agg(row_to_json(c) ORDER BY c.id), '[]') FROM (
+      SELECT id, "tenantId", "contractId", "collectionMode", "totalAmount", "prepayApplied", "receivableAmount", "providerAmount", "billId", "prepayTransactionId",
+        (SELECT count(*) FROM utility_posting_confirmations p WHERE p.result->>'chargeId' = u.id) AS confirmations
+      FROM utility_charges u WHERE "meterId" = :'meter'
+    ) c;
+  `, { meter });
+}

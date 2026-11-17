@@ -12,6 +12,7 @@ describe('CheckoutService', () => {
 
   beforeEach(async () => {
     const prismaMock: any = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       checkoutRecord: {
         findUnique: vi.fn(),
         findUniqueOrThrow: vi.fn(),

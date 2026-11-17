@@ -2314,6 +2314,30 @@
     ]
   },
   {
+    "method": "GET",
+    "path": "/api/utility-charges/:id",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/utility-charges/confirm",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/utility-charges/preview",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "POST",
     "path": "/api/utility-readiness/confirm",
     "public": false,

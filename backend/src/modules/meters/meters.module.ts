@@ -1,3 +1,4 @@
+import { UtilityPostingController } from './utility-posting.controller.js';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MetersService } from './meters.service.js';
@@ -18,7 +19,7 @@ import { MeterAnomalySimulationRunner } from './meter-anomaly-simulation.runner.
 
 @Module({
   imports: [PrismaModule],
-  controllers: [MetersController],
+  controllers: [MetersController, UtilityPostingController],
   providers: [
     MeterPriceService,
     MeterBillingService,

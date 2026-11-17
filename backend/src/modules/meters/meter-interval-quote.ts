@@ -1,8 +1,8 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { MeterPriceInput, MeterPriceService } from './meter-price.service.js';
 import { realMeterReadings } from './meter-reading-scope.js';
 
-interface IntervalReading {
+export interface IntervalReading {
   id: string;
   readingTime: Date;
   currentReading: number | Prisma.Decimal;
@@ -20,6 +20,8 @@ export interface MeterChargeSegment {
   endReading: number;
   usage: number;
   unitPrice: number;
+  rateCents?: string;
+  policyVersionId?: string;
   nextOpeningReading?: number;
 }
 
@@ -45,6 +47,13 @@ export interface MeterIntervalQuote {
 
 type QuoteDb = Pick<Prisma.TransactionClient, 'meterReading' | 'meterPriceHistory'>;
 
+export interface IntervalPricing {
+  priceFor(meter: MeterPriceInput, at: Date): number;
+  hasUnpricedHistory(meter: MeterPriceInput, at: Date): boolean;
+  changesBetween(meter: MeterPriceInput, start: Date, end: Date): Array<{ at: number | null; unitPrice: number; hasPriorRate: boolean }>;
+  exactRateFor?(at: Date): { rateCents: string; policyVersionId: string };
+}
+
 export async function quoteMeterInterval(
   db: QuoteDb,
   prices: MeterPriceService,
@@ -52,8 +61,17 @@ export async function quoteMeterInterval(
   baseline: IntervalReading | null,
   target: IntervalReading,
   fallbackUsage = 0,
+  pricing?: IntervalPricing,
 ): Promise<MeterIntervalQuote | MeterIntervalBlock> {
-  const book = await prices.loadPriceBook([meter], db);
+  const book: IntervalPricing = pricing ?? await prices.loadPriceBook([meter], db);
+  return quotePricedMeterInterval(db, meter, baseline, target, fallbackUsage, book);
+}
+
+/** Physical segmentation is shared by evidence review and actual posting. */
+export async function quotePricedMeterInterval(
+  db: QuoteDb, meter: MeterPriceInput, baseline: IntervalReading | null, target: IntervalReading,
+  fallbackUsage: number, book: IntervalPricing,
+): Promise<MeterIntervalQuote | MeterIntervalBlock> {
   const currentRate = book.priceFor(meter, target.readingTime);
 
   if (baseline?.handoffRequired && (!baseline.handoffConfirmedAt || baseline.handoffPreviousFinal == null)) {
@@ -86,7 +104,7 @@ export async function quoteMeterInterval(
   let changeIndex = 0;
   let previous = baseline;
   let totalUnits = 0;
-  let totalHundredthsOfCent = 0n;
+  let exactAmount = new Prisma.Decimal(0);
 
   for (const next of [...rows, target]) {
     const opening = Number(previous.currentReading);
@@ -108,18 +126,19 @@ export async function quoteMeterInterval(
     if (boundary?.at != null && boundary.at < nextAt) return MISSING_RATE_BOUNDARY;
 
     totalUnits += units;
-    totalHundredthsOfCent += BigInt(units) * BigInt(unitPrice);
+    const exactRate = book.exactRateFor?.(previous.readingTime);
+    exactAmount = exactAmount.plus(new Prisma.Decimal(units).div(100).mul(exactRate?.rateCents ?? unitPrice));
     const last = segments.at(-1);
     const end = {
       endReadingId: next.id, endAt: next.readingTime.toISOString(), endReading: closing,
       ...(handoff && { nextOpeningReading: Number(next.currentReading) }),
     };
-    if (last && last.unitPrice === unitPrice && last.nextOpeningReading === undefined) {
+    if (last && last.unitPrice === unitPrice && last.policyVersionId === exactRate?.policyVersionId && last.nextOpeningReading === undefined) {
       Object.assign(last, end, { usage: (Math.round(last.usage * 100) + units) / 100 });
     } else {
       segments.push({
         startReadingId: previous.id, startAt: previous.readingTime.toISOString(),
-        startReading: opening, usage: units / 100, unitPrice, ...end,
+        startReading: opening, usage: units / 100, unitPrice, ...exactRate, ...end,
       });
     }
     if (boundary?.at === nextAt) {
@@ -132,7 +151,7 @@ export async function quoteMeterInterval(
   // 保留每段精度，合计后只舍入一次。计费结果按整数分写入。
   return {
     usage: totalUnits / 100,
-    amount: Number((totalHundredthsOfCent + 50n) / 100n),
+    amount: exactAmount.toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber(),
     unitPrice: segments.find((segment) => segment.usage > 0)?.unitPrice ?? currentRate,
     segments,
   };
