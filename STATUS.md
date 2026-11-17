@@ -15,11 +15,11 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ✅ pass | exit 0 |
+| 後端 lint | ✅ pass | 232 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
 | 後端單元測試 | ✅ pass | 174 files / 1719 tests |
 | 後端 e2e | ✅ pass | 4 files / 83 tests |
-| 管理後台 lint | ✅ pass | exit 0 |
+| 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
 | 管理後台 build | ✅ pass | exit 0 |
 | 小程序單元測試 | ✅ pass | 168 tests |
@@ -42,9 +42,9 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 5 |
+| 進行中 | 6 |
 | 文件 active（不計入進行中） | 12 |
-| 草稿 | 7 |
+| 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
@@ -54,6 +54,7 @@
 - **T325 ｜CORE-01 账单并发写入**（active，plan FIN-05，`fix/T325-bill-write-lock`）
 - **T326 ｜CORE-02 表计并发与结算游标**（active，plan FIN-08，`fix/T326-meter-settlement-lock`）
 - **T337 ｜发布链路 P1 修复**（active，plan M3，`fix/T337-deployment-regressions`）
+- **T338 ｜共享源码 CI 路径过滤**（active，plan QLT-04，`fix/T338-shared-ci-paths`）
 
 ### 阻擋發布
 - 無
