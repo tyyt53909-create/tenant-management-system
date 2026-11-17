@@ -29,7 +29,7 @@ export class MeterAnomalySimulationRunner {
 
     // 1. 基准准备
     const latest = await this.prisma.meterReading.findFirst({
-      where: { meterId: meter.id },
+      where: { meterId: meter.id, source: 'SIMULATED' },
       orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
     });
     const baseVal = latest ? Number(latest.currentReading) : 100.0;
@@ -42,12 +42,12 @@ export class MeterAnomalySimulationRunner {
       const val1 = Math.round((baseVal + 1.0) * 100) / 100;
 
       // 首次发送
-      await this.metersService.createReading(
+      const first = await this.metersService.createReading(
         meter.id,
         {
           currentReading: val1,
           readingTime: t1.toISOString(),
-          source: 'DEVICE',
+          source: 'SIMULATED',
           autoSettle: false,
           messageId: dupMsgId,
           notes: '[ANOMALY] 幂等测试首次上报',
@@ -61,7 +61,7 @@ export class MeterAnomalySimulationRunner {
         {
           currentReading: val1,
           readingTime: t1.toISOString(),
-          source: 'DEVICE',
+          source: 'SIMULATED',
           autoSettle: false,
           messageId: dupMsgId,
           notes: '[ANOMALY] 幂等测试重复上报',
@@ -69,7 +69,7 @@ export class MeterAnomalySimulationRunner {
         operatorId,
       );
 
-      const isDeduplicated = res2.deduction?.applied === false && String(res2.deduction?.reason).includes('重复消息');
+      const isDeduplicated = res2.deduction?.applied === false && res2.reading.id === first.reading.id;
       testCases.push({
         testCase: 'DUPLICATE_MESSAGE_ID',
         name: '相同 messageId 重复上传幂等防御',
@@ -93,12 +93,12 @@ export class MeterAnomalySimulationRunner {
       const dupTimeStr = new Date(baseTimeMs + 120_000).toISOString();
       const val2 = Math.round((baseVal + 2.0) * 100) / 100;
 
-      await this.metersService.createReading(
+      const first = await this.metersService.createReading(
         meter.id,
         {
           currentReading: val2,
           readingTime: dupTimeStr,
-          source: 'DEVICE',
+          source: 'SIMULATED',
           autoSettle: false,
           notes: '[ANOMALY] 时间戳重复测试首次',
         },
@@ -110,14 +110,14 @@ export class MeterAnomalySimulationRunner {
         {
           currentReading: val2,
           readingTime: dupTimeStr,
-          source: 'DEVICE',
+          source: 'SIMULATED',
           autoSettle: false,
           notes: '[ANOMALY] 时间戳重复测试二次',
         },
         operatorId,
       );
 
-      const isTimestampDedup = resDup.deduction?.applied === false && String(resDup.deduction?.reason).includes('重复上报');
+      const isTimestampDedup = resDup.deduction?.applied === false && resDup.reading.id === first.reading.id;
       testCases.push({
         testCase: 'DUPLICATE_TIMESTAMP',
         name: '同一时间戳与读数设备重发防重',
@@ -146,7 +146,7 @@ export class MeterAnomalySimulationRunner {
         {
           currentReading: futureVal,
           readingTime: futureTime.toISOString(),
-          source: 'DEVICE',
+          source: 'SIMULATED',
           autoSettle: false,
           notes: '[ANOMALY] 前置未来正常读数',
         },
@@ -161,7 +161,7 @@ export class MeterAnomalySimulationRunner {
         {
           currentReading: delayedVal,
           readingTime: delayedTime.toISOString(),
-          source: 'DEVICE',
+          source: 'SIMULATED',
           autoSettle: false,
           notes: '[ANOMALY] 延迟到达包',
         },
@@ -203,7 +203,7 @@ export class MeterAnomalySimulationRunner {
           {
             currentReading: rollbackVal,
             readingTime: rollbackTime.toISOString(),
-            source: 'DEVICE',
+            source: 'SIMULATED',
             allowRollover: false,
             notes: '[ANOMALY] 非法倒走读数',
           },

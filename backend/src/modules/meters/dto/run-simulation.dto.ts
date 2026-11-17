@@ -30,7 +30,7 @@ export class RunSimulationDto {
   @Max(90)
   days?: number;
 
-  /** 是否自动结算扣费（默认 false，仅上报未结算用量留存，待后续周期结算） */
+  /** 兼容旧客户端。模拟读数只进入模拟报告，此参数不会触发扣费 */
   @IsOptional()
   @IsBoolean()
   autoSettle?: boolean;

@@ -18,7 +18,7 @@ describe('MeterBillingService', () => {
   beforeEach(async () => {
     const mock: any = {
       meter: { findUnique: vi.fn(), findMany: vi.fn() },
-      meterReading: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+      meterReading: { fields: { createdAt: Symbol('meterReading.createdAt') }, findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
       contract: { findMany: vi.fn().mockResolvedValue([]) },
       prepayAccount: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), updateMany: vi.fn() },
       prepayTransaction: { create: vi.fn() },
@@ -139,6 +139,22 @@ describe('MeterBillingService', () => {
     await expect(service.settleMeter(meter.id, { notes }, 'op')).rejects.toThrow('系统保留标记');
     await expect(service.settleBatch({ meterIds: [meter.id], notes }, 'op')).rejects.toThrow('系统保留标记');
     expect(prisma.meterReading.update).not.toHaveBeenCalled();
+  });
+
+  it('结算截止时间超过现在时，预览、单表和批量都只读取当前已发生的数据', async () => {
+    const future = '2090-01-01T00:00:00.000Z';
+    prisma.meter.findUnique.mockResolvedValue(meter);
+    prisma.meterReading.findFirst.mockResolvedValue(null);
+
+    expect(await service.getUnsettledUsage(meter.id, future)).toMatchObject({ hasReadings: false });
+    await expect(service.settleMeter(meter.id, { settleUntil: future }, 'op'))
+      .rejects.toThrow('指定结算时间前无任何读数');
+    const batch = await service.settleBatch({ meterIds: [meter.id], settleUntil: future }, 'op');
+    expect(batch).toMatchObject({ settledCount: 0, blockedCount: 1, results: [{ reasonCode: 'NO_READINGS' }] });
+    expect(new Date(batch.settleUntil).getTime()).toBeLessThan(Date.parse(future));
+    for (const [query] of prisma.meterReading.findFirst.mock.calls) {
+      expect(query.where.readingTime.lte.getTime()).toBeLessThan(Date.parse(future));
+    }
   });
 
   it('deducts available balance and bills shortfall, including failed conditional update and unknown label', async () => {

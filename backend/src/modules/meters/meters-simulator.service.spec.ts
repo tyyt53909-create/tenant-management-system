@@ -169,14 +169,14 @@ describe('MetersSimulatorService', () => {
         // Case 1 重复 messageId 反应
         if (dto.notes?.includes('幂等测试重复上报')) {
           return {
-            reading: { id: 'r-dup-msg' } as any,
+            reading: { id: 'r-normal' } as any,
             deduction: { applied: false, reason: '重复消息（messageId 已存在），已忽略并返回已有记录' },
           };
         }
         // Case 2 重复时间戳反应
         if (dto.notes?.includes('时间戳重复测试二次')) {
           return {
-            reading: { id: 'r-dup-time' } as any,
+            reading: { id: 'r-normal' } as any,
             deduction: { applied: false, reason: '同一时间戳与读数的设备重复上报，已忽略' },
           };
         }

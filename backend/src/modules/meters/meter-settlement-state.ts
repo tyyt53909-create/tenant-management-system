@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { isSettledReading } from './meter-dedup.util.js';
-import { NOT_SIMULATED } from './meter-types.constants.js';
+import { realMeterReadings } from './meter-reading-scope.js';
 
 /** 加锁后的查询必须看见上一事务刚提交的读数和结算状态。 */
 export const METER_WRITE_TRANSACTION = { isolationLevel: 'ReadCommitted' } as const;
@@ -22,7 +22,7 @@ export async function findMeterSettlementCursor(
   const reading = await db.meterReading.findFirst({
     where: {
       meterId,
-      source: NOT_SIMULATED,
+      ...realMeterReadings(db),
       OR: [
         { settledAt: { not: null } },
         { notes: { contains: '[SETTLED]' } },
@@ -40,7 +40,7 @@ export async function findEarliestRealReading(
   meterId: string,
 ) {
   return db.meterReading.findFirst({
-    where: { meterId, source: NOT_SIMULATED },
+    where: { meterId, ...realMeterReadings(db) },
     orderBy: [{ readingTime: 'asc' }, { createdAt: 'asc' }],
   });
 }

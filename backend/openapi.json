@@ -16463,7 +16463,7 @@
           },
           "autoSettle": {
             "type": "boolean",
-            "description": "是否自动结算扣费（默认 false，仅上报未结算用量留存，待后续周期结算）"
+            "description": "兼容旧客户端。模拟读数只进入模拟报告，此参数不会触发扣费"
           },
           "faultTypes": {
             "description": "异常测试类型列表（针对 ANOMALY_TEST，可选）",

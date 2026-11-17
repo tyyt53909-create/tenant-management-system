@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import type { Response } from 'supertest';
+import { BusinessClock } from '../../src/common/business-clock/business-clock.service.js';
+import { SimulationScenario } from '../../src/modules/meters/dto/run-simulation.dto.js';
+import { MetersSimulatorService } from '../../src/modules/meters/meters-simulator.service.js';
+import { MetersService } from '../../src/modules/meters/meters.service.js';
 import { MeterBillingService } from '../../src/modules/meters/meter-billing.service.js';
 import { prisma, createApp, resetDatabase, seedBase, setupTenancy, http, auth, type SeedBase } from './harness.js';
 
@@ -68,6 +72,145 @@ function setupMeterTenancy(base: SeedBase) {
 }
 
 describe('抄表与计价（FIN-08）', () => {
+  it('未来及模拟读数不进入底数、真实结算和统计，旧模拟幂等键不阻塞真实上报', async () => {
+    const base = await seedBase();
+    const { adminToken, tenantId, roomId, contractId } = await setupMeterTenancy(base);
+    const account = await preparePrepay(adminToken, tenantId, roomId, 300);
+    const created = await http(app).post('/meters').set(auth(adminToken)).send({
+      buildingId: base.buildingId, roomId, meterType: 'ELECTRICITY', meterNumber: 'IT-ISOLATION',
+      unitPrice: 100, priceEffectiveDate: '2026-01-01',
+    });
+    expect(created.status).toBe(201);
+    const meterId = created.body.id as string;
+    const now = Date.UTC(2026, 3, 14, 12);
+    const timeAt = (delta: number) => new Date(now + delta).toISOString();
+    const initialTime = timeAt(-120_000);
+    const firstRealTime = timeAt(-90_000);
+    const secondRealTime = timeAt(-60_000);
+    const futureTime = new Date(Date.now() + 86_400_000).toISOString();
+    const reading = (value: number, time: string, extra: Record<string, unknown> = {}) =>
+      http(app).post(`/meters/${meterId}/readings`).set(auth(adminToken)).send(readingBody(value, time, extra));
+
+    const legacySim = await prisma.meterReading.create({ data: {
+      meterId, source: 'SIMULATED', currentReading: 900, previousReading: 0, usage: 900,
+      readingTime: new Date(timeAt(-100_000)), settledAt: new Date(timeAt(-100_000)), dedupKey: 'msg:shared-id',
+    } });
+    const legacyAnomaly = await prisma.meterReading.create({ data: {
+      meterId, source: 'DEVICE', currentReading: 2000, previousReading: 900, usage: 1100,
+      readingTime: new Date(timeAt(-70_000)), notes: '[ANOMALY] 旧模拟器伪设备',
+    } });
+    // 这条旧记录现在已在过去，但在写入时是未来读数。
+    const legacyFuture = await prisma.meterReading.create({ data: {
+      meterId, source: 'DEVICE', currentReading: 3000, previousReading: 100, usage: 2900,
+      readingTime: new Date(timeAt(-40_000)), createdAt: new Date(timeAt(-70_000)),
+      settledAt: new Date(timeAt(-70_000)),
+    } });
+
+    const currentFuture = await prisma.meterReading.create({ data: {
+      meterId, source: 'MANUAL', currentReading: 3500, previousReading: 3000, usage: 500,
+      readingTime: new Date(futureTime), createdAt: new Date(futureTime), settledAt: new Date(futureTime),
+    } });
+
+    const service = app.get(MetersService);
+    const simulated = await service.createReading(meterId, {
+      source: 'SIMULATED', currentReading: 1200, readingTime: futureTime, autoSettle: true,
+      messageId: 'shared-id',
+    }, 'integration-admin');
+    expect(simulated.reading).toMatchObject({ source: 'SIMULATED', settledAt: null, settledAmount: null });
+    const simulatedNext = await service.createReading(meterId, {
+      source: 'SIMULATED', currentReading: 1300, readingTime: new Date(Date.parse(futureTime) + 60_000).toISOString(), autoSettle: true,
+    }, 'integration-admin');
+    expect(simulatedNext.deduction).toMatchObject({ applied: false });
+    expect(simulatedNext.reading.settledAt).toBeNull();
+    const anomalyReport = await app.get(MetersSimulatorService).runSimulation({
+      scenario: SimulationScenario.ANOMALY_TEST, meterId, autoSettle: true,
+    }, 'integration-admin');
+    expect(anomalyReport).toMatchObject({ success: true, anomalyResults: { passedCount: 4 } });
+    expect(await prisma.meterReading.count({
+      where: { meterId, source: 'DEVICE', notes: { contains: '[ANOMALY]' } },
+    })).toBe(1);
+    expect(await prisma.prepayAccount.findUniqueOrThrow({ where: { id: account } }))
+      .toMatchObject({ balanceCache: 300 });
+    expect(await prisma.bill.count({ where: { billType: 'UTILITY' } })).toBe(0);
+
+    const initial = await reading(100, initialTime, { source: 'DEVICE', isInitial: true, messageId: 'shared-id' });
+    expect(initial.status).toBe(201);
+    expect(initial.body.reading).toMatchObject({ source: 'DEVICE', currentReading: '100' });
+    expect(initial.body.reading.id).not.toBe(legacySim.id);
+    const replay = await reading(100, initialTime, { source: 'DEVICE', isInitial: true, messageId: 'shared-id' });
+    expect(replay.body.reading.id).toBe(initial.body.reading.id);
+
+    const rejected = await reading(4000, futureTime, { autoSettle: true, isInitial: true });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.details).toMatchObject({ reasonCode: 'FUTURE_READING' });
+    const mixed = await http(app).post('/meters/batch-readings').set(auth(adminToken)).send({ readings: [
+      { meterId, currentReading: 4000, readingTime: futureTime, autoSettle: true },
+      { meterId, currentReading: 110, readingTime: firstRealTime, autoSettle: false },
+    ] });
+    expect(mixed.status).toBe(201);
+    expect(mixed.body).toMatchObject({ successCount: 1, failureCount: 1, results: [
+      { success: false, reasonCode: 'FUTURE_READING' }, { success: true, previousReading: 100, usage: 10 },
+    ] });
+    expect(await prisma.meterReading.count({ where: { meterId, currentReading: 4000 } })).toBe(0);
+
+    const settled = await http(app).post('/meters/settle-batch').set(auth(adminToken))
+      .send({ meterIds: [meterId], settleUntil: futureTime });
+    expect(settled.status).toBe(201);
+    expect(settled.body).toMatchObject({ settledCount: 1, results: [
+      { contractId, status: 'SETTLED', baselineReading: 100, currentReading: 110, usage: 10, amount: 1000 },
+    ] });
+    expect(new Date(settled.body.settleUntil).getTime()).toBeLessThan(Date.parse(futureTime));
+
+    const updated = await reading(115, secondRealTime, { autoSettle: true });
+    expect(updated.status).toBe(201);
+    expect(updated.body).toMatchObject({
+      reading: { previousReading: '110', usage: '5' },
+      deduction: { applied: true, amount: 500, shortfall: 500 },
+    });
+    expect(await prisma.prepayAccount.findUniqueOrThrow({ where: { id: account } }))
+      .toMatchObject({ balanceCache: 0 });
+    expect(await prisma.prepayTransaction.findMany({ where: { accountId: account, type: 'DEDUCTION' } }))
+      .toMatchObject([{ amount: -300 }]);
+    const bills = await prisma.bill.findMany({ where: { billType: 'UTILITY' }, orderBy: { amount: 'asc' } });
+    expect(bills).toMatchObject([{ contractId, amount: 500 }, { contractId, amount: 700 }]);
+
+    const sheet = await http(app).get('/meters/batch-sheet').set(auth(adminToken));
+    expect(sheet.status).toBe(200);
+    expect(sheet.body).toEqual(expect.arrayContaining([expect.objectContaining({ meterId, lastReading: 115 })]));
+    const history = await http(app).get(`/meters/${meterId}/readings`).set(auth(adminToken));
+    expect(history.status).toBe(200);
+    expect(history.body.meta.total).toBe(3);
+    expect(history.body.data.map((row: { currentReading: string }) => row.currentReading)).toEqual(['115', '110', '100']);
+
+    const overview = await http(app).get('/meters/usage-overview').set(auth(adminToken))
+      .query({ month: secondRealTime.slice(0, 7), buildingId: base.buildingId });
+    expect(overview.status).toBe(200);
+    expect(overview.body.electricity).toMatchObject({ usage: 15, count: 3 });
+    const clock = vi.spyOn(app.get(BusinessClock), 'now').mockReturnValue(new Date(secondRealTime));
+    try {
+      const summary = await http(app).get('/dashboard/management-summary').set(auth(adminToken));
+      expect(summary.status).toBe(200);
+      expect(summary.body.meters).toMatchObject({ electricity: 15, read: 1 });
+    } finally {
+      clock.mockRestore();
+    }
+
+    const reconciliation = await http(app).get('/meters/reconciliation').set(auth(adminToken))
+      .query({ period: secondRealTime.slice(0, 7), buildingId: base.buildingId });
+    expect(reconciliation.status).toBe(200);
+    expect(reconciliation.body.rows).toEqual([expect.objectContaining({
+      meterId, openingReading: 100, closingReading: 115, readingUsage: 15,
+      chargedAmount: 300, billAmount: 1200, difference: 0,
+    })]);
+
+    const csv = await http(app).get('/meters/readings/export').set(auth(adminToken)).query({ meterId });
+    expect(csv.status).toBe(200);
+    expect(csv.text).toContain(updated.body.reading.id);
+    for (const id of [legacySim.id, legacyAnomaly.id, legacyFuture.id, currentFuture.id, simulatedNext.reading.id]) {
+      expect(csv.text).not.toContain(id);
+    }
+  });
+
   it('退租、空置、入住按实测界点分账；缺交接或跨区间时所有入口都保留待结算', async () => {
     const base = await seedBase();
     const oldTenant = await setupMeterTenancy(base);
@@ -210,7 +353,7 @@ describe('抄表与计价（FIN-08）', () => {
     const zero = await createMeter(adminToken, base.buildingId, blockedTenancy.roomId, 100, 100);
     const funded = await createMeter(adminToken, base.buildingId, fundedTenancy.roomId, 100, 100);
     const failing = await createMeter(adminToken, base.buildingId, fundedTenancy.roomId, 100, 100);
-    const readingTime = new Date(Date.now() + 1000).toISOString();
+    const readingTime = new Date().toISOString();
     const settleUntil = readingTime;
 
     const record = async (meterId: string, value: number, autoSettle: boolean) => {

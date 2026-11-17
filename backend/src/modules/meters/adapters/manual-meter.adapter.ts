@@ -1,4 +1,5 @@
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { realMeterReadings } from '../meter-reading-scope.js';
 import type { AdapterReading, MeterAdapter } from './meter-adapter.js';
 
 export class ManualMeterAdapter implements MeterAdapter {
@@ -8,7 +9,7 @@ export class ManualMeterAdapter implements MeterAdapter {
 
   async fetchReading(meterId: string): Promise<AdapterReading | null> {
     const reading = await this.prisma.meterReading.findFirst({
-      where: { meterId, source: 'MANUAL' },
+      where: { meterId, ...realMeterReadings(this.prisma), source: 'MANUAL' },
       orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
     });
     return reading ? toAdapterReading(reading) : null;
@@ -22,7 +23,7 @@ export class SimulatorMeterAdapter implements MeterAdapter {
 
   async fetchReading(meterId: string): Promise<AdapterReading | null> {
     const reading = await this.prisma.meterReading.findFirst({
-      where: { meterId, source: 'DEVICE' },
+      where: { meterId, ...realMeterReadings(this.prisma), source: 'DEVICE' },
       orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
     });
     return reading ? toAdapterReading(reading) : null;

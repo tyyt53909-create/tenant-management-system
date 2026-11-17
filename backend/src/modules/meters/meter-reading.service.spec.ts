@@ -26,6 +26,7 @@ describe('MeterReadingService (T196 coverage)', () => {
     const prismaMock: any = {
       meter: { findUnique: vi.fn() },
       meterReading: {
+        fields: { createdAt: Symbol('meterReading.createdAt') },
         findUnique: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
@@ -67,9 +68,38 @@ describe('MeterReadingService (T196 coverage)', () => {
     vi.restoreAllMocks();
   });
 
+  it('拒绝未来真实读数且不启动事务', async () => {
+    await expect(service.createReading(meterId, {
+      currentReading: 100, source: 'DEVICE', autoSettle: true, readingTime: '2090-01-01T00:00:00.000Z',
+    }, operatorId)).rejects.toThrow('读数时间不能晚于服务器接收时间');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('模拟读数使用独立时间线且始终不入账（初始=%s）', async (isInitial) => {
+    const readingTime = '2090-01-02T00:00:00.000Z';
+    prisma.meterReading.findFirst.mockResolvedValue(isInitial
+      ? null : { currentReading: 100, readingTime: new Date('2090-01-01T00:00:00.000Z') });
+    prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({ id: 'simulated-reading', ...data }));
+
+    const result = await service.createReading(meterId, {
+      currentReading: 110, source: 'SIMULATED', autoSettle: true, isInitial, readingTime,
+    }, operatorId);
+    expect(result.deduction).toMatchObject({ applied: false });
+    expect(result.reading).toMatchObject({
+      source: 'SIMULATED', previousReading: isInitial ? 110 : 100, usage: isInitial ? 0 : 10,
+    });
+    expect(result.reading.settledAt).toBeUndefined();
+    expect(prisma.meterReading.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { meterId, source: 'SIMULATED' },
+    }));
+    expect(billing.applyReadingDeduction).not.toHaveBeenCalled();
+    expect(prisma.meterReading.update).not.toHaveBeenCalled();
+  });
+
   it.each([
     { notes: '[SETTLED]' },
     { messageId: '[INITIAL]' },
+    { source: 'DEVICE' as const, notes: '[ANOMALY] 旧模拟数据不能走设备入口' },
   ])('带系统结算标记的读数不会进入事务：%j', async (input) => {
     await expect(service.createReading(meterId, { currentReading: 20, ...input }, operatorId))
       .rejects.toThrow('系统保留的结算标记');

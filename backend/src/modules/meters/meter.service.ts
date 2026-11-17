@@ -8,6 +8,7 @@ import { SetMeterDefaultPriceDto } from './dto/set-meter-default-price.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
 import { METER_ADAPTER, type MeterAdapter } from './adapters/meter-adapter.js';
 import { MeterPriceService } from './meter-price.service.js';
+import { realMeterReadings } from './meter-reading-scope.js';
 
 @Injectable()
 export class MeterService {
@@ -32,8 +33,11 @@ export class MeterService {
     const existing = await this.prisma.meter.findUnique({ where: { meterNumber: dto.meterNumber } });
     if (existing) throw new ConflictException('表号已存在');
 
+    const effectiveDate = this.priceService.toDateOnly(dto.priceEffectiveDate);
+    const receivedAt = new Date();
+    // 未来费率仍可排期，设备绑定的初始读数最多以当前接收时间为准。
+    const initialReadingTime = effectiveDate > receivedAt ? receivedAt : effectiveDate;
     return this.prisma.$transaction(async (tx) => {
-      const effectiveDate = this.priceService.toDateOnly(dto.priceEffectiveDate);
       // 未传单价时使用设置中心的类型默认价（T276）；两者都没有则明确拒绝
       const unitPrice =
         dto.unitPrice ?? (await this.priceService.resolveTypeDefault(dto.meterType, effectiveDate, tx));
@@ -72,11 +76,12 @@ export class MeterService {
             previousReading: dto.initialReading,
             usage: 0,
             source: 'MANUAL',
-            readingTime: effectiveDate,
+            readingTime: initialReadingTime,
+            createdAt: receivedAt,
             readBy: 'SYSTEM',
             notes: '[INITIAL] 设备绑定登记初始底数',
-            dedupKey: `initial:${meter.id}:${effectiveDate.toISOString()}`,
-            settledAt: effectiveDate,
+            dedupKey: `initial:${meter.id}:${initialReadingTime.toISOString()}`,
+            settledAt: initialReadingTime,
             settledUsage: 0,
             settledUnitPrice: meter.unitPrice,
             settledAmount: 0,
@@ -106,7 +111,7 @@ export class MeterService {
         include: {
           room: { select: { roomNumber: true } },
           building: { select: { name: true } },
-          readings: { orderBy: [{readingTime:'desc'}, {createdAt:'desc'}], take: 1,
+          readings: { where: realMeterReadings(this.prisma), orderBy: [{readingTime:'desc'}, {createdAt:'desc'}], take: 1,
             select: { currentReading:true,previousReading:true,usage:true,readingTime:true } },
         },
       }),
@@ -122,7 +127,7 @@ export class MeterService {
   async findOne(id: string) {
     const meter = await this.prisma.meter.findUnique({
       where: { id },
-      include: { room: true, building: true, readings: { take: 10, orderBy: { readingTime: 'desc' } } },
+      include: { room: true, building: true, readings: { where: realMeterReadings(this.prisma), take: 10, orderBy: { readingTime: 'desc' } } },
     });
     if (!meter) throw new NotFoundException('水电表不存在');
     return meter;

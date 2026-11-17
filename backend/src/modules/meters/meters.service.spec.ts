@@ -42,6 +42,7 @@ describe('MetersService', () => {
         delete: vi.fn(),
       },
       meterReading: {
+        fields: { createdAt: Symbol('meterReading.createdAt') },
         findUnique: vi.fn(),
         findFirst: vi.fn(),
         findMany: vi.fn(),
@@ -598,7 +599,7 @@ describe('MetersService', () => {
       expect(result.data).toEqual(records);
       expect(result.meta).toEqual({ page: 1, limit: 20, total: 2, totalPages: 1 });
       expect(prisma.meterReading.findMany).toHaveBeenCalledWith({
-        where: { meterId },
+        where: expect.objectContaining({ meterId, source: { not: 'SIMULATED' }, AND: expect.any(Array) }),
         skip: 0,
         take: 20,
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],

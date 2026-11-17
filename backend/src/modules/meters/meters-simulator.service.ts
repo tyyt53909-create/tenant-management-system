@@ -84,7 +84,7 @@ export class MetersSimulatorService {
 
     for (const meter of targetMeters) {
       const latest = await this.prisma.meterReading.findFirst({
-        where: { meterId: meter.id },
+        where: { meterId: meter.id, source: 'SIMULATED' },
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
@@ -160,7 +160,6 @@ export class MetersSimulatorService {
             currentReading: currentVal,
             readingTime: pointTime.toISOString(),
             source: 'SIMULATED',
-            autoSettle: !!dto.autoSettle,
             messageId: msgId,
             notes: `[SIM_DAILY_HOURLY] 第${h + 1}小时仿真读数（${h}:00）`,
           },
@@ -213,7 +212,7 @@ export class MetersSimulatorService {
 
     for (const meter of targetMeters) {
       const latest = await this.prisma.meterReading.findFirst({
-        where: { meterId: meter.id },
+        where: { meterId: meter.id, source: 'SIMULATED' },
         orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
       });
 
@@ -269,7 +268,6 @@ export class MetersSimulatorService {
             currentReading: currentVal,
             readingTime: pointTime.toISOString(),
             source: 'SIMULATED',
-            autoSettle: !!dto.autoSettle,
             messageId: msgId,
             notes: `[SIM_TIME_TRAVEL] 第${d + 1}/${days}天仿真读数`,
           },
@@ -297,7 +295,7 @@ export class MetersSimulatorService {
       success: true,
       scenario: SimulationScenario.TIME_TRAVEL_MONTH,
       days,
-      message: `已完成 ${days} 天月度时间穿梭用量模拟（${targetMeters.length} 只表计，累计 ${grandTotalReadings} 条读数），已就绪待结算用量`,
+      message: `已完成 ${days} 天月度时间穿梭用量模拟（${targetMeters.length} 只表计，累计 ${grandTotalReadings} 条读数），仅用于模拟报告`,
       totalMeters: targetMeters.length,
       totalReadings: grandTotalReadings,
       meterResults,
