@@ -36,14 +36,14 @@
 
 | 類別 | 數量 |
 |---|---|
-| 總任務數 | 162 |
+| 總任務數 | 164 |
 | 已驗證完成 | 64 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 2 |
+| 進行中 | 4 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -51,7 +51,9 @@
 
 ### 進行中
 - **T304 保洁任务：自动建单、指派、验收（WRK-03）**（active，plan WRK-03，`feature/T304-cleaning-tasks`）
+- **T324 读数结算标记防伪**（active，plan FIN-08，`fix/T324-meter-marker-guard`）
 - **T325 ｜CORE-01 账单并发写入**（active，plan FIN-05，`fix/T325-bill-write-lock`）
+- **T326 ｜CORE-02 表计并发与结算游标**（active，plan FIN-08，`fix/T326-meter-settlement-lock`）
 
 ### 阻擋發布
 - 無

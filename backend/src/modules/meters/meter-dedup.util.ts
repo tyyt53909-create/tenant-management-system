@@ -48,3 +48,8 @@ export function isUniqueViolation(error: unknown, field?: string): boolean {
   if (typeof target === 'string') return target.includes(field);
   return false;
 }
+
+/** 保留历史结算标记供读取旧记录，禁止外部输入伪造。 */
+export function hasReservedReadingMarker(value?: string | null): boolean {
+  return value?.includes('[SETTLED]') === true || value?.includes('[INITIAL]') === true;
+}

@@ -34,6 +34,7 @@ describe('MeterReadingService (T196 coverage)', () => {
         update: vi.fn(),
       },
       meterPriceHistory: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(),
     };
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
@@ -64,6 +65,15 @@ describe('MeterReadingService (T196 coverage)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it.each([
+    { notes: '[SETTLED]' },
+    { messageId: '[INITIAL]' },
+  ])('带系统结算标记的读数不会进入事务：%j', async (input) => {
+    await expect(service.createReading(meterId, { currentReading: 20, ...input }, operatorId))
+      .rejects.toThrow('系统保留的结算标记');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('构造时未注入 billingService 则内部创建默认实例（findReadings 仍可用）', async () => {
@@ -195,7 +205,7 @@ describe('MeterReadingService (T196 coverage)', () => {
     const t = new Date('2026-10-10T10:00:00Z');
     prisma.meterReading.findFirst.mockImplementation(async (args: any) => {
       if (args?.where?.notes?.contains) return null;
-      if (args?.where?.OR) return { id: 'r-settled', currentReading: 50, readingTime: t };
+      if (args?.where?.OR) return { id: 'r-settled', currentReading: 50, readingTime: t, settledAt: t };
       return { id: 'r-prev', readingTime: t, currentReading: 50 };
     });
     prisma.meterReading.create.mockImplementation(async ({ data }: any) => ({ id: 'r-4', ...data }));

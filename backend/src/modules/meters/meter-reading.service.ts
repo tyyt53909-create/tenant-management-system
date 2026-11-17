@@ -5,8 +5,9 @@ import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
-import { buildReadingDedupKey, isSettledReading, isUniqueViolation } from './meter-dedup.util.js';
-import { NOT_SIMULATED, settlesByDefault } from './meter-types.constants.js';
+import { buildReadingDedupKey, hasReservedReadingMarker, isUniqueViolation } from './meter-dedup.util.js';
+import { findMeterSettlementCursor, lockMeters, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
+import { settlesByDefault } from './meter-types.constants.js';
 
 @Injectable()
 export class MeterReadingService {
@@ -33,6 +34,9 @@ export class MeterReadingService {
     dto: Omit<CreateMeterReadingDto, 'source'> & { source?: 'MANUAL' | 'DEVICE' | 'SIMULATED' },
     operatorId: string,
   ) {
+    if (hasReservedReadingMarker(dto.notes) || hasReservedReadingMarker(dto.messageId)) {
+      throw new BadRequestException('备注或消息编号不得包含系统保留的结算标记');
+    }
     const readingTime = dto.readingTime ? new Date(dto.readingTime) : new Date();
     const source = dto.source || 'MANUAL';
     // 手工录入默认结算。设备上报和模拟器读数默认只采集。
@@ -47,6 +51,7 @@ export class MeterReadingService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+      await lockMeters(tx, [meterId]);
       const meter = await tx.meter.findUnique({ where: { id: meterId } });
 
       if (!meter) {
@@ -223,19 +228,7 @@ export class MeterReadingService {
       // 统一结算基准：若开启自动结算，结算基准应为上次已结算读数（避免设备采集后人工抄表漏计前段用量）
       let billableUsage = usage;
       if (shouldAutoSettle) {
-        const lastSettledReading = await tx.meterReading.findFirst({
-          where: {
-            meterId,
-            // 结算基准必须排除模拟读数，否则仿真器的 [INITIAL]/[SETTLED] 会成为真实扣费起点（T209）
-            source: NOT_SIMULATED,
-            OR: [
-              { settledAt: { not: null } },
-              { notes: { contains: '[SETTLED]' } },
-              { notes: { contains: '[INITIAL]' } },
-            ],
-          },
-          orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
-        });
+        const lastSettledReading = await findMeterSettlementCursor(tx, meterId);
         const settleBaseline = lastSettledReading
           ? Number(lastSettledReading.currentReading)
           : previousReading;
@@ -288,7 +281,7 @@ export class MeterReadingService {
       }
 
       return { reading, deduction };
-    });
+    }, METER_WRITE_TRANSACTION);
     } catch (error) {
       // 并发重投：两个请求同时通过前置检查时由唯一约束兜底，返回先落库的那条
       if (isUniqueViolation(error, 'dedupKey')) {

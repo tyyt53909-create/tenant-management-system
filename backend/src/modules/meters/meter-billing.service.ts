@@ -6,7 +6,7 @@ import { randomHex } from '../../common/utils/secure-random.js';
 import { SettleMeterDto } from './dto/settle-meter.dto.js';
 import { METER_TYPE_LABEL, NOT_SIMULATED } from './meter-types.constants.js';
 import { MeterPriceService } from './meter-price.service.js';
-import { isSettledReading } from './meter-dedup.util.js';
+import { findMeterSettlementCursor, lockMeters, METER_WRITE_TRANSACTION } from './meter-settlement-state.js';
 
 @Injectable()
 export class MeterBillingService {
@@ -167,19 +167,17 @@ export class MeterBillingService {
       };
     }
 
-    const lastSettledReading = await this.findLastSettledReading(
-      this.prisma,
-      meterId,
-      latestReading.readingTime,
-    );
+    const lastSettledReading = await findMeterSettlementCursor(this.prisma, meterId);
 
-    if (lastSettledReading && lastSettledReading.id === latestReading.id) {
+    if (lastSettledReading && (
+      lastSettledReading.id === latestReading.id || lastSettledReading.readingTime > latestReading.readingTime
+    )) {
       return {
         meterId,
         unsettledUsage: 0,
         estimatedAmount: 0,
-        lastSettledReading: Number(latestReading.currentReading),
-        lastSettledTime: latestReading.readingTime,
+        lastSettledReading: Number(lastSettledReading.currentReading),
+        lastSettledTime: lastSettledReading.readingTime,
         currentReading: Number(latestReading.currentReading),
         readingTime: latestReading.readingTime,
         hasReadings: true,
@@ -243,7 +241,7 @@ export class MeterBillingService {
     const settleUntil = dto.settleUntil ? new Date(dto.settleUntil) : new Date();
 
     return this.prisma.$transaction(async (tx) => {
-      await this.lockMeter(tx, meterId);
+      await lockMeters(tx, [meterId]);
 
       const meter = await tx.meter.findUnique({ where: { id: meterId } });
       if (!meter) throw new NotFoundException('水电表不存在');
@@ -261,19 +259,19 @@ export class MeterBillingService {
         throw new BadRequestException('该水电表在指定结算时间前无任何读数记录');
       }
 
-      const lastSettledReading = await this.findLastSettledReading(
-        tx,
-        meterId,
-        latestReading.readingTime,
-      );
+      const lastSettledReading = await findMeterSettlementCursor(tx, meterId);
 
-      if (lastSettledReading && lastSettledReading.id === latestReading.id) {
+      if (lastSettledReading && (
+        lastSettledReading.id === latestReading.id || lastSettledReading.readingTime > latestReading.readingTime
+      )) {
         return {
           meterId,
           settled: false,
           usage: 0,
           amount: 0,
-          reason: '最新读数已结算，无新增未结算用量',
+          reason: lastSettledReading.id === latestReading.id
+            ? '最新读数已结算，无新增未结算用量'
+            : '截止时间内的用量已结算，无新增未结算用量',
         };
       }
 
@@ -342,7 +340,7 @@ export class MeterBillingService {
         unitPrice,
         deduction,
       };
-    });
+    }, METER_WRITE_TRANSACTION);
   }
 
   /**
@@ -379,36 +377,6 @@ export class MeterBillingService {
       failureCount: results.filter((r) => !r.success).length,
       results,
     };
-  }
-
-  /**
-   * 最近一次已结算读数：结构化 `settledAt` 优先，兼容历史备注标记。
-   * 查询上界为 `at`，避免把未来已结算读数当成当前基准。
-   */
-  private async findLastSettledReading(
-    db: Pick<Prisma.TransactionClient, 'meterReading'> | PrismaService,
-    meterId: string,
-    at: Date,
-  ) {
-    const reading = await db.meterReading.findFirst({
-      where: {
-        meterId,
-        source: NOT_SIMULATED,
-        readingTime: { lte: at },
-        OR: [
-          { settledAt: { not: null } },
-          { notes: { contains: '[SETTLED]' } },
-          { notes: { contains: '[INITIAL]' } },
-        ],
-      },
-      orderBy: [{ readingTime: 'desc' }, { createdAt: 'desc' }],
-    });
-    return reading && isSettledReading(reading) ? reading : null;
-  }
-
-  /** 锁住表行，串行化同一块表的结算；行不存在时不阻塞，后续 findUnique 抛 404。 */
-  private async lockMeter(tx: Prisma.TransactionClient, meterId: string) {
-    await tx.$queryRaw`SELECT "id" FROM "meters" WHERE "id" = ${meterId} FOR UPDATE`;
   }
 
   /** 写结构化结算字段，同时保留 [SETTLED] 备注供旧报表与历史逻辑识别。 */
