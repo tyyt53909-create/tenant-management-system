@@ -6,8 +6,8 @@ applies_to:
   - .github/workflows/release.yml
   - docker-compose.staging.yml
   - scripts/smoke.mjs
-last_verified: 2026-10-24
-verified_commit: 68c0fac
+last_verified: 2026-11-18
+verified_commit: 7eec558
 supersedes: null
 superseded_by: null
 version: 1.0
@@ -60,7 +60,7 @@ staging 与生产使用同一镜像、同一迁移，只替换环境变量与端
    - Actions → **Deploy Staging** → Run workflow；
    - `image_tag` 填 SHA 或版本号；
    - `rollback=false`。
-4. workflow 会：SSH 拉取镜像 → `migrate deploy` → `up -d` → 等待 `/health/ready` → 跑 `scripts/smoke.mjs`。
+4. runner 检出工作流所在的代码版本并安装 Node 22，经 SSH 拉取镜像和启动编排。迁移服务成功后启动应用，runner 随后从检出的工作区执行 `scripts/smoke.mjs`，同时检查 `/health/ready` 和公开 API。
 5. 首次种子（仅一次）：
    ```bash
    cd /srv/tenant-staging
