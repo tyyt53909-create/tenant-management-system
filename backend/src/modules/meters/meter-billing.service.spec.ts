@@ -58,6 +58,15 @@ describe('MeterBillingService', () => {
     expect(tx.prepayTransaction.create).not.toHaveBeenCalled();
   });
 
+  it('blocks reviewed policy posting before the legacy price and account logic', async () => {
+    prisma.contract.findMany.mockResolvedValue([meterTestContract()]);
+    prisma.utilityPolicyVersion.findFirst.mockResolvedValue({ id: 'policy' });
+    expect(await service.applyReadingDeduction(prisma, { ...meter, unitPrice: 0 }, reading, 10, 'admin', baseline))
+      .toMatchObject({ applied: false, reasonCode: 'RULE_POSTING_NOT_ENABLED' });
+    expect(prisma.prepayAccount.findUnique).not.toHaveBeenCalled();
+    expect(prisma.bill.create).not.toHaveBeenCalled();
+  });
+
   it('连续续租可沿用同一租客的入住依据，同时阻断跨合同累计扣费', async () => {
     const prior = {
       ...meterTestContract('prior'),
