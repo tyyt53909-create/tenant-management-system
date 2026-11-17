@@ -1,5 +1,6 @@
 import request from '@/utils/request';
 import type { Meter, PaginatedResponse, QueryParams } from '@/types';
+import type { components } from '@/types/api.generated';
 
 export const getMeters = (params: QueryParams): Promise<PaginatedResponse<Meter>> => {
   return request.get('/meters', { params });
@@ -49,7 +50,7 @@ export interface MeterReadingPayload {
 }
 
 export type ReadingDeduction =
-  | { applied: false; reason: string }
+  | { applied: false; reason: string; reasonCode?: string; retryCondition?: string }
   | {
       applied: true;
       amount: number;
@@ -73,17 +74,9 @@ export const createMeterReading = (
 };
 
 /** 水电结算结果（后端 `meter-billing.service.ts` 的返回形状） */
-export interface MeterSettleResult {
-  meterId: string;
-  settled: boolean;
-  usage: number;
-  amount: number;
-  unitPrice?: number;
-  baselineReading?: number;
-  currentReading?: number;
-  reason?: string;
+export type MeterSettleResult = components['schemas']['MeterSettlementResultDto'] & {
   deduction?: ReadingDeduction;
-}
+};
 
 /** 未结算用量（后端 `getUnsettledUsage` 的返回形状） */
 export interface UnsettledUsage {
@@ -105,12 +98,11 @@ export interface UnsettledUsage {
 }
 
 /** 批量结算汇总（后端 `settleBatch` 的返回形状） */
-export interface SettleBatchResult {
-  total: number;
-  successCount: number;
-  failureCount: number;
-  results: Array<MeterSettleResult & { success: boolean; error?: string }>;
-}
+export type SettleBatchResult = components['schemas']['MeterBatchSettlementResultDto'] & {
+  results: Array<components['schemas']['MeterBatchSettlementItemDto'] & {
+    deduction?: ReadingDeduction;
+  }>;
+};
 
 /** 周期结算指定水电表（采集与结算拆分） */
 export const settleMeter = (
@@ -130,7 +122,7 @@ export const getUnsettledUsage = (
 
 /** 批量周期结算水电表 */
 export const settleBatch = (
-  data: { buildingId?: string; meterIds?: string[]; settleUntil?: string; notes?: string }
+  data: components['schemas']['SettleMeterBatchDto']
 ): Promise<SettleBatchResult> => {
   return request.post('/meters/settle-batch', data);
 };
@@ -185,6 +177,7 @@ export interface BatchReadingResponse {
     amount?: number;
     deducted?: number;
     shortfall?: number;
+    deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
     error?: string;
   }>;
 }

@@ -143,6 +143,7 @@ export class MeterBatchReadingService {
       amount?: number;
       deducted?: number;
       shortfall?: number;
+      deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
       error?: string;
     }> = [];
 
@@ -409,7 +410,7 @@ export class MeterBatchReadingService {
           },
         });
 
-        let deduction: { applied?: boolean; amount?: number; deducted?: number; shortfall?: number; reason?: string } = { applied: false, amount: 0, deducted: 0, shortfall: 0 };
+        let deduction: Awaited<ReturnType<MeterBillingService['applyReadingDeduction']>> | undefined;
         if (shouldAutoSettle) {
           const unitPrice = await this.priceService.resolveUnitPrice(meter, readingTime, tx);
           deduction = await this.billingService.applyReadingDeduction(
@@ -444,9 +445,16 @@ export class MeterBatchReadingService {
           currentReading: item.currentReading,
           previousReading,
           usage,
-          amount: deduction.amount || 0,
-          deducted: deduction.deducted || 0,
-          shortfall: deduction.shortfall || 0,
+          amount: deduction?.amount ?? 0,
+          deducted: deduction?.deducted ?? 0,
+          shortfall: deduction?.shortfall ?? 0,
+          ...(deduction?.reasonCode === 'MISSING_PREPAY_ACCOUNT' && {
+            deductionBlocked: {
+              reasonCode: deduction.reasonCode,
+              reason: deduction.reason,
+              retryCondition: deduction.retryCondition,
+            },
+          }),
         });
       }
     }, METER_WRITE_TRANSACTION);

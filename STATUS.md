@@ -36,14 +36,14 @@
 
 | 類別 | 數量 |
 |---|---|
-| 總任務數 | 164 |
+| 總任務數 | 165 |
 | 已驗證完成 | 64 |
 | 歷史完成（缺 merge 證據） | 76 |
 | 已完成但未合併 | 0 |
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 4 |
+| 進行中 | 5 |
 | 文件 active（不計入進行中） | 12 |
 | 草稿 | 6 |
 | 阻塞 | 0 |
@@ -54,6 +54,7 @@
 - **T324 读数结算标记防伪**（active，plan FIN-08，`fix/T324-meter-marker-guard`）
 - **T325 ｜CORE-01 账单并发写入**（active，plan FIN-05，`fix/T325-bill-write-lock`）
 - **T326 ｜CORE-02 表计并发与结算游标**（active，plan FIN-08，`fix/T326-meter-settlement-lock`）
+- **T327 ｜CORE-02 批量结算结果与缺账户**（active，plan FIN-08，`fix/T327-meter-batch-results`）
 
 ### 阻擋發布
 - 無

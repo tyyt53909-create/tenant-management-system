@@ -63,6 +63,101 @@ function readingBody(currentReading: number, readingTime: string, extra: Record<
 }
 
 describe('抄表与计价（FIN-08）', () => {
+  it('批量结算区分四类结果；缺账户补办、余额不足和失败重试均可核账', async () => {
+    const base = await seedBase();
+    const blockedTenancy = await setupTenancy(app, base);
+    const fundedTenancy = await setupTenancy(app, base);
+    const { adminToken } = blockedTenancy;
+    const fundedAccount = await preparePrepay(adminToken, fundedTenancy.tenantId, fundedTenancy.roomId);
+    const blocked = await createMeter(adminToken, base.buildingId, blockedTenancy.roomId, 100, 100);
+    const zero = await createMeter(adminToken, base.buildingId, blockedTenancy.roomId, 100, 100);
+    const funded = await createMeter(adminToken, base.buildingId, fundedTenancy.roomId, 100, 100);
+    const failing = await createMeter(adminToken, base.buildingId, fundedTenancy.roomId, 100, 100);
+    const readingTime = new Date(Date.now() + 1000).toISOString();
+    const settleUntil = readingTime;
+
+    const record = async (meterId: string, value: number, autoSettle: boolean) => {
+      const response = await http(app).post(`/meters/${meterId}/readings`).set(auth(adminToken))
+        .send(readingBody(value, readingTime, { autoSettle }));
+      expect(response.status).toBe(201);
+      return response.body;
+    };
+    const settle = (meterIds: string[]) => http(app).post('/meters/settle-batch').set(auth(adminToken))
+      .send({ meterIds, settleUntil });
+
+    const blockedReading = await record(blocked, 110, true);
+    expect(blockedReading.deduction).toMatchObject({ applied: false, reasonCode: 'MISSING_PREPAY_ACCOUNT' });
+    await record(zero, 100, false);
+    const fundedReading = (await record(funded, 105, false)).reading;
+    const failingReading = (await record(failing, 107, false)).reading;
+
+    // 在真实资金写入后模拟结算异常，验证该条事务回滚且批量继续。
+    const billing = app.get(MeterBillingService);
+    const apply = billing.applyReadingDeduction.bind(billing);
+    const failure = vi.spyOn(billing, 'applyReadingDeduction').mockImplementation(async (...args) => {
+      const result = await apply(...args);
+      if (args[1].id === failing) throw new Error('fixture: settlement interrupted');
+      return result;
+    });
+    let first: Response;
+    try {
+      first = await settle([blocked, zero, failing, funded]);
+    } finally {
+      failure.mockRestore();
+    }
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({
+      settleUntil, total: 4, settledCount: 1, noChangeCount: 1, blockedCount: 1, failedCount: 1,
+      successCount: 1, failureCount: 2,
+      results: [
+        { meterId: blocked, status: 'BLOCKED', reasonCode: 'MISSING_PREPAY_ACCOUNT', usage: 10, amount: 1000, success: false, settled: false, retryCondition: expect.any(String) },
+        { meterId: zero, status: 'NO_CHANGE', reasonCode: 'ZERO_USAGE', success: false },
+        { meterId: failing, status: 'FAILED', reasonCode: 'SETTLEMENT_FAILED', success: false },
+        { meterId: funded, status: 'SETTLED', usage: 5, amount: 500, success: true, prepayTransactionId: expect.any(String) },
+      ],
+    });
+    for (const id of [blockedReading.reading.id, failingReading.id]) {
+      expect(await prisma.meterReading.findUniqueOrThrow({ where: { id } })).toMatchObject({ settledAt: null });
+    }
+    expect(await prisma.bill.count({ where: { billType: 'UTILITY' } })).toBe(0);
+    expect(await prisma.prepayAccount.findUniqueOrThrow({ where: { id: fundedAccount } }))
+      .toMatchObject({ balanceCache: 99500 });
+    expect(await prisma.prepayTransaction.findMany({ where: { relatedType: 'METER_READING' } }))
+      .toMatchObject([{ amount: -500, relatedId: fundedReading.id }]);
+
+    const account = await http(app).post('/prepay-accounts').set(auth(adminToken))
+      .send({ roomId: blockedTenancy.roomId, tenantId: blockedTenancy.tenantId });
+    expect(account.status).toBe(201);
+    const recharge = await http(app).post(`/prepay-accounts/${account.body.id}/transactions`).set(auth(adminToken))
+      .send({ type: 'RECHARGE', amount: 300, description: '集成测试余额不足' });
+    expect(recharge.status).toBe(201);
+
+    const retry = await settle([blocked, failing]);
+    expect(retry.status).toBe(201);
+    expect(retry.body).toMatchObject({
+      settledCount: 2, blockedCount: 0, failedCount: 0,
+      results: [
+        { meterId: blocked, status: 'SETTLED', usage: 10, amount: 1000, billId: expect.any(String), prepayTransactionId: expect.any(String) },
+        { meterId: failing, status: 'SETTLED', amount: 700 },
+      ],
+    });
+    const replay = await settle([blocked, zero, failing, funded]);
+    expect(replay.status).toBe(201);
+    expect(replay.body).toMatchObject({ total: 4, settledCount: 0, noChangeCount: 4, blockedCount: 0, failedCount: 0 });
+
+    const { billId, prepayTransactionId } = retry.body.results[0];
+    expect(await prisma.bill.findMany({ where: { billType: 'UTILITY' } })).toMatchObject([
+      { id: billId, contractId: blockedTenancy.contractId, amount: 700 },
+    ]);
+    expect(await prisma.prepayTransaction.findMany({ where: { accountId: account.body.id, type: 'DEDUCTION' } }))
+      .toMatchObject([{ id: prepayTransactionId, amount: -300, balanceAfter: 0, relatedId: blockedReading.reading.id }]);
+    expect(await prisma.prepayAccount.findUniqueOrThrow({ where: { id: account.body.id } }))
+      .toMatchObject({ balanceCache: 0 });
+    const settledReading = await prisma.meterReading.findUniqueOrThrow({ where: { id: blockedReading.reading.id } });
+    expect(settledReading).toMatchObject({ settledAt: expect.any(Date), settledAmount: 1000 });
+    expect(Number(settledReading.settledUsage)).toBe(10);
+  });
+
   it('调价跨月后按读数业务日的生效价结算，历史读数不被新价重算', async () => {
     const base = await seedBase();
     const tenancy = await setupTenancy(app, base);

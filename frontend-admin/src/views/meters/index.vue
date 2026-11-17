@@ -354,7 +354,11 @@ const handleConfirmSettle = async () => {
   settleSubmitLoading.value = true;
   try {
     const res = await settleMeter(meter.id, { notes: settleNotes.value || undefined });
-    if (!res.settled) {
+    if (res.status === 'BLOCKED') {
+      ElMessage.warning([res.reason, res.retryCondition].filter(Boolean).join('。'));
+      return;
+    }
+    if (res.status === 'NO_CHANGE' || !res.settled) {
       ElMessage.info(res.reason || '无待结算用量');
     } else {
       ElMessage.success(`周期结算成功！结算用量 ${res.usage}，金额 ${formatMoney(res.amount)}`);

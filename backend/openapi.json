@@ -4065,20 +4065,26 @@
       "post": {
         "operationId": "MetersController_settleBatch",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettleMeterBatchDto"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/MeterBatchSettlementResultDto"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -4346,7 +4352,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/MeterSettlementResultDto"
                 }
               }
             }
@@ -16606,6 +16612,157 @@
           "readings"
         ]
       },
+      "SettleMeterBatchDto": {
+        "type": "object",
+        "properties": {
+          "buildingId": {
+            "type": "string"
+          },
+          "meterIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "settleUntil": {
+            "type": "string",
+            "description": "结算截止时间（默认当前时间）"
+          },
+          "notes": {
+            "type": "string",
+            "description": "结算备注"
+          }
+        }
+      },
+      "MeterBatchSettlementItemDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "SETTLED",
+              "NO_CHANGE",
+              "BLOCKED",
+              "FAILED"
+            ],
+            "type": "string"
+          },
+          "reasonCode": {
+            "enum": [
+              "SETTLED",
+              "ALREADY_SETTLED",
+              "ZERO_USAGE",
+              "ZERO_CHARGE",
+              "PUBLIC_AREA",
+              "NO_ACTIVE_CONTRACT",
+              "MISSING_PREPAY_ACCOUNT",
+              "NO_READINGS",
+              "METER_NOT_FOUND",
+              "SETTLEMENT_FAILED"
+            ],
+            "type": "string"
+          },
+          "settled": {
+            "type": "boolean",
+            "description": "兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。"
+          },
+          "usage": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number",
+            "description": "整数分。未处理的读数可能返回预计应收金额，实际入账以 status 和凭证为准。"
+          },
+          "unitPrice": {
+            "type": "number"
+          },
+          "baselineReading": {
+            "type": "number"
+          },
+          "currentReading": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "retryCondition": {
+            "type": "string"
+          },
+          "billId": {
+            "type": "string"
+          },
+          "prepayTransactionId": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "仅 SETTLED 为 true。"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "meterId",
+          "status",
+          "reasonCode",
+          "settled",
+          "usage",
+          "amount",
+          "success"
+        ]
+      },
+      "MeterBatchSettlementResultDto": {
+        "type": "object",
+        "properties": {
+          "settleUntil": {
+            "type": "string",
+            "description": "本批使用的结算截止时间，可用于按原范围重试。"
+          },
+          "total": {
+            "type": "number"
+          },
+          "settledCount": {
+            "type": "number"
+          },
+          "noChangeCount": {
+            "type": "number"
+          },
+          "blockedCount": {
+            "type": "number"
+          },
+          "failedCount": {
+            "type": "number"
+          },
+          "successCount": {
+            "type": "number",
+            "description": "兼容字段，等于 settledCount。"
+          },
+          "failureCount": {
+            "type": "number",
+            "description": "兼容字段，等于 blockedCount + failedCount。"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeterBatchSettlementItemDto"
+            }
+          }
+        },
+        "required": [
+          "settleUntil",
+          "total",
+          "settledCount",
+          "noChangeCount",
+          "blockedCount",
+          "failedCount",
+          "successCount",
+          "failureCount",
+          "results"
+        ]
+      },
       "CreateMeterReadingDto": {
         "type": "object",
         "properties": {
@@ -16661,6 +16818,78 @@
             "description": "结算备注"
           }
         }
+      },
+      "MeterSettlementResultDto": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "SETTLED",
+              "NO_CHANGE",
+              "BLOCKED",
+              "FAILED"
+            ],
+            "type": "string"
+          },
+          "reasonCode": {
+            "enum": [
+              "SETTLED",
+              "ALREADY_SETTLED",
+              "ZERO_USAGE",
+              "ZERO_CHARGE",
+              "PUBLIC_AREA",
+              "NO_ACTIVE_CONTRACT",
+              "MISSING_PREPAY_ACCOUNT",
+              "NO_READINGS",
+              "METER_NOT_FOUND",
+              "SETTLEMENT_FAILED"
+            ],
+            "type": "string"
+          },
+          "settled": {
+            "type": "boolean",
+            "description": "兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。"
+          },
+          "usage": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number",
+            "description": "整数分。未处理的读数可能返回预计应收金额，实际入账以 status 和凭证为准。"
+          },
+          "unitPrice": {
+            "type": "number"
+          },
+          "baselineReading": {
+            "type": "number"
+          },
+          "currentReading": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "retryCondition": {
+            "type": "string"
+          },
+          "billId": {
+            "type": "string"
+          },
+          "prepayTransactionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "meterId",
+          "status",
+          "reasonCode",
+          "settled",
+          "usage",
+          "amount"
+        ]
       },
       "SetMeterPriceDto": {
         "type": "object",
