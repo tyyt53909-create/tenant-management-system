@@ -25,9 +25,24 @@ test('过期文件按保留天数筛选，无法解析的保留', () => {
   assert.deepEqual(expiredBackups(files, { now, retentionDays: 0 }), []);
 });
 
-test('同一数据库忽略密码、端口默认值和 query', () => {
-  const base = 'postgresql://user:secret@db.example:5432/tenant';
-  assert.equal(sameDatabaseTarget(base, 'postgres://user:other@db.example/tenant?sslmode=require'), true);
-  assert.equal(sameDatabaseTarget(base, 'postgresql://user:secret@db.example:5432/rehearsal'), false);
-  assert.equal(sameDatabaseTarget('', base), false);
+const source = 'postgresql://source:password@db.example:5432/tenant';
+
+test('同一数据库与账号、密码、默认端口及非路由参数无关', () => {
+  assert.equal(sameDatabaseTarget(source, 'postgres://other:password@DB.EXAMPLE./ten%61nt?sslmode=require'), true);
+  assert.equal(sameDatabaseTarget(source, 'postgresql://other@db.example:05432/tenant'), true);
+  assert.equal(sameDatabaseTarget(source, 'postgresql://other@db.example:5432/rehearsal'), false);
+  assert.equal(sameDatabaseTarget(source, 'postgresql://other@db.example:5433/tenant'), false);
+});
+
+test('缺少目标和包含路由覆盖的连接串无法比较', () => {
+  for (const target of [
+    undefined,
+    'postgresql://other@db.example',
+    'postgresql://other@db.example,other.example/tenant',
+    'postgresql://other@/tenant',
+    'postgresql://other@db.example/rehearsal?%64bname=tenant',
+    'postgresql://other@db.example/other/../tenant',
+  ]) {
+    assert.equal(sameDatabaseTarget(source, target), null);
+  }
 });

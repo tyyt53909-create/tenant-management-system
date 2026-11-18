@@ -1,0 +1,45 @@
+name: Deployment CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'backend/**'
+      - 'frontend-admin/**'
+      - 'shared/**'
+      - 'landing/**'
+      - 'docker/nginx-admin.conf'
+      - 'docker-compose.prod.yml'
+      - '.dockerignore'
+      - '.github/workflows/deploy-staging.yml'
+      - '.github/workflows/deployment-ci.yml'
+      - 'scripts/backup-core*.mjs'
+      - 'scripts/restore-*.sh'
+      - 'scripts/restore-rehearsal.test.mjs'
+      - 'scripts/deploy-staging.test.rb'
+      - 'scripts/test-deploy-images.sh'
+      - 'scripts/smoke.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 恢复演练与 Staging 工作流回归
+        run: |
+          node --test scripts/backup-core.test.mjs scripts/restore-rehearsal.test.mjs
+          ruby scripts/deploy-staging.test.rb
+
+      - name: 构建镜像并验证生产编排
+        run: bash scripts/test-deploy-images.sh
