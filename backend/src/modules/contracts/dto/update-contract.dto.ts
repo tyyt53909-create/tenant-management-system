@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsEnum, IsOptional } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
 import { CreateContractDto } from './create-contract.dto.js';
 import { ContractSignStatus } from '@prisma/client';
 
@@ -15,6 +15,11 @@ export class UpdateContractDto extends PartialType(CreateContractDto) {
   @IsEnum(ContractStatus)
   @IsOptional()
   status?: ContractStatus;
+
+  /** 仅撤销已确认且尚未生效的租约。 */
+  @IsOptional()
+  @IsBoolean()
+  withdrawConfirmation?: boolean;
 
   @IsEnum(ContractSignStatus)
   @IsOptional()

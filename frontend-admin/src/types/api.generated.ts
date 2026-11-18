@@ -4104,9 +4104,41 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        ConfirmLeaseDto: {
+            /** @description 管理员核对条款时读取的最后更新时间。 */
+            expectedUpdatedAt: string;
+        };
+        ConfirmLeaseResponseDto: {
+            /** Format: date-time */
+            leaseConfirmedAt: string;
+            leaseConfirmedBy: string;
+            id: string;
+            buildingId: string;
+            roomId: string;
+            tenantId: string;
+            contractNumber: string;
+            rentAmount: number;
+            depositAmount: number;
+            paymentCycle: string;
+            paymentDay: number;
+            /** Format: date-time */
+            startDate: string;
+            /** Format: date-time */
+            endDate: string;
+            lateFeeRule: {
+                [key: string]: unknown;
+            };
+            status: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         UpdateContractDto: {
             /** @enum {string} */
             status?: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED" | "RENEWED";
+            /** @description 仅撤销已确认且尚未生效的租约。 */
+            withdrawConfirmation?: boolean;
             /** @enum {string} */
             signStatus?: "UNSIGNED" | "SIGNING" | "SIGNED" | "REJECTED";
         };
@@ -8906,24 +8938,19 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
-        responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmLeaseDto"];
             };
+        };
+        responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConfirmLeaseResponseDto"];
+                };
             };
             /** @description 错误 */
             default: {

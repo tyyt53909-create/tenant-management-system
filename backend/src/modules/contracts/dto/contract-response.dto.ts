@@ -16,6 +16,11 @@ export class ContractResponseDto {
   updatedAt: Date;
 }
 
+export class ConfirmLeaseResponseDto extends ContractResponseDto {
+  leaseConfirmedAt: Date;
+  leaseConfirmedBy: string;
+}
+
 export class PaginatedContractsResponseDto {
   data: ContractResponseDto[];
   meta: {

@@ -270,13 +270,15 @@ describe('J6 续签（真实 DB）', () => {
       .send({ startDate: iso(nextStart), endDate: iso(nextEnd) });
     expect(again.status).toBe(409);
 
-    const confirmation = await http(app).post(`/contracts/${renewed.body.id}/confirm`).set(auth(tenancy.adminToken));
+    const confirmation = await http(app).post(`/contracts/${renewed.body.id}/confirm`).set(auth(tenancy.adminToken))
+      .send({ expectedUpdatedAt: renewed.body.updatedAt });
     expect(confirmation.status).toBe(201);
     expect(confirmation.body).toMatchObject({ status: 'DRAFT', leaseConfirmedBy: base.adminId });
 
     const businessTime = vi.spyOn(app.get(BusinessClock), 'now').mockReturnValue(nextStart);
     try {
-      const activate = await http(app).post(`/contracts/${renewed.body.id}/confirm`).set(auth(tenancy.adminToken));
+      const activate = await http(app).post(`/contracts/${renewed.body.id}/confirm`).set(auth(tenancy.adminToken))
+        .send({ expectedUpdatedAt: confirmation.body.updatedAt });
       expect(activate.status, JSON.stringify(activate.body)).toBe(201);
       expect(activate.body.status).toBe('ACTIVE');
     } finally {

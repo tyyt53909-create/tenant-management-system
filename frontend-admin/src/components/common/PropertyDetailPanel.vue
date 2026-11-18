@@ -52,7 +52,7 @@ import request from '@/utils/request';
 import { formatDateOnly,formatDateTime } from '@/utils/table';
 import { stateLabel } from '@/utils/resource';
 import type { ResourceRecord } from '@/utils/resource';
-import { contractReminder,currentLeaseQuery,detailTabs,displayMoney,PAYMENT_CYCLES,propertyPhotos,roomFacts,ROOM_TYPES,stateTone } from '@/utils/propertyDetail';
+import { contractReminder,currentLeaseQueries,detailTabs,displayMoney,PAYMENT_CYCLES,propertyPhotos,roomFacts,ROOM_TYPES,stateTone } from '@/utils/propertyDetail';
 import type { PropertyKind } from '@/utils/propertyDetail';
 import DetailPaneFrame from './DetailPaneFrame.vue';
 import DetailRecordList from './DetailRecordList.vue';
@@ -89,10 +89,23 @@ async function load(){
     record.value=data;
     if(props.kind==='rooms'){
       leaseLoading.value=true;
-      request.get('/contracts',{params:currentLeaseQuery(data),signal,silentError:true}).then((result:any)=>{
-        if(!Array.isArray(result.data))throw new Error('租约响应格式不正确');
-        if(current===generation)lease.value=result.data[0] || null;
-      }).catch(()=>{if(current===generation)leaseError.value='当前租约暂时未能加载，请重试。';}).finally(()=>{if(current===generation)leaseLoading.value=false;});
+      void (async () => {
+        try {
+          for (const params of currentLeaseQueries(data)) {
+            const result = await request.get<unknown, { data: ResourceRecord[] }>('/contracts', { params, signal, silentError: true });
+            if (current !== generation) return;
+            if (!Array.isArray(result.data)) throw new Error('租约响应格式不正确');
+            if (result.data[0]) {
+              lease.value = result.data[0];
+              break;
+            }
+          }
+        } catch {
+          if (current === generation) leaseError.value = '当前租约暂时未能加载，请重试。';
+        } finally {
+          if (current === generation) leaseLoading.value = false;
+        }
+      })();
     }
   }catch{if(current===generation)error.value='请检查连接或确认记录仍然存在。';}
   finally{if(current===generation)loading.value=false;}

@@ -241,11 +241,11 @@ describe('ContractsService CRUD（T157）', () => {
   describe('confirmLease', () => {
     it('records the first confirmer and keeps a future draft from activating', async () => {
       const future = new Date('2099-01-01');
-      const draft = { id: 'c-1', roomId: 'room-1', status: 'DRAFT', startDate: future, endDate: new Date('2100-01-01') };
+      const draft = { id: 'c-1', roomId: 'room-1', status: 'DRAFT', startDate: future, endDate: new Date('2100-01-01'), updatedAt: new Date('2026-11-18') };
       const confirmed = { ...draft, leaseConfirmedAt: new Date(), leaseConfirmedBy: 'admin-1' };
       prisma.contract.findUnique.mockResolvedValue(draft);
       prisma.contract.update.mockResolvedValue(confirmed);
-      expect(await service.confirmLease('c-1', 'admin-1')).toEqual(confirmed);
+      expect(await service.confirmLease('c-1', 'admin-1', draft.updatedAt.toISOString())).toEqual(confirmed);
       expect(prisma.contract.update).toHaveBeenCalledTimes(1);
       expect(prisma.contract.update).toHaveBeenCalledWith({
         where: { id: 'c-1' }, data: { leaseConfirmedAt: expect.any(Date), leaseConfirmedBy: 'admin-1' },
@@ -256,7 +256,7 @@ describe('ContractsService CRUD（T157）', () => {
       prisma.contract.findUnique.mockResolvedValue({
         id: 'c-1', roomId: 'room-1', status: 'DRAFT', endDate: new Date('2000-01-01'),
       });
-      await expect(service.confirmLease('c-1', 'admin-1')).rejects.toThrow(ConflictException);
+      await expect(service.confirmLease('c-1', 'admin-1', '2026-11-18')).rejects.toThrow(ConflictException);
       expect(prisma.contract.update).not.toHaveBeenCalled();
     });
   });

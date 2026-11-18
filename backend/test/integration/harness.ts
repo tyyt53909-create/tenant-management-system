@@ -237,7 +237,8 @@ export async function setupTenancy(app: INestApplication, base: SeedBase): Promi
 
   const activate = await http(app)
     .post(`/contracts/${contractId}/confirm`)
-    .set(auth(adminToken));
+    .set(auth(adminToken))
+    .send({ expectedUpdatedAt: contractResponse.body.updatedAt });
   if (activate.status !== 201 || activate.body.status !== 'ACTIVE') {
     throw new Error(`合同生效失败: ${activate.status} ${JSON.stringify(activate.body)}`);
   }

@@ -1,3 +1,6 @@
+import { ApiCreatedResponse } from '@nestjs/swagger';
+import { ConfirmLeaseDto } from './dto/ConfirmLease.dto.js';
+import { ConfirmLeaseResponseDto } from './dto/contract-response.dto.js';
 import {
   Controller,
   Get,
@@ -217,10 +220,11 @@ export class ContractsController {
   }
 
   @Post(':id/confirm')
+  @ApiCreatedResponse({ type: ConfirmLeaseResponseDto })
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  confirmLease(@Param('id') id: string, @CurrentUser() auth: CurrentUserParam) {
-    return this.contractsService.confirmLease(id, resolveAuthUser(auth).userId);
+  confirmLease(@Param('id') id: string, @CurrentUser() auth: CurrentUserParam, @Body() dto: ConfirmLeaseDto) {
+    return this.contractsService.confirmLease(id, resolveAuthUser(auth).userId, dto.expectedUpdatedAt);
   }
 
   @Patch(':id')

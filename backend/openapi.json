@@ -6547,20 +6547,26 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmLeaseDto"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/ConfirmLeaseResponseDto"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -17032,6 +17038,99 @@
           "endDate"
         ]
       },
+      "ConfirmLeaseDto": {
+        "type": "object",
+        "properties": {
+          "expectedUpdatedAt": {
+            "type": "string",
+            "description": "管理员核对条款时读取的最后更新时间。"
+          }
+        },
+        "required": [
+          "expectedUpdatedAt"
+        ]
+      },
+      "ConfirmLeaseResponseDto": {
+        "type": "object",
+        "properties": {
+          "leaseConfirmedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "leaseConfirmedBy": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "buildingId": {
+            "type": "string"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "contractNumber": {
+            "type": "string"
+          },
+          "rentAmount": {
+            "type": "number"
+          },
+          "depositAmount": {
+            "type": "number"
+          },
+          "paymentCycle": {
+            "type": "string"
+          },
+          "paymentDay": {
+            "type": "number"
+          },
+          "startDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "endDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lateFeeRule": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaseConfirmedAt",
+          "leaseConfirmedBy",
+          "id",
+          "buildingId",
+          "roomId",
+          "tenantId",
+          "contractNumber",
+          "rentAmount",
+          "depositAmount",
+          "paymentCycle",
+          "paymentDay",
+          "startDate",
+          "endDate",
+          "lateFeeRule",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "UpdateContractDto": {
         "type": "object",
         "properties": {
@@ -17044,6 +17143,10 @@
               "TERMINATED",
               "RENEWED"
             ]
+          },
+          "withdrawConfirmation": {
+            "type": "boolean",
+            "description": "仅撤销已确认且尚未生效的租约。"
           },
           "signStatus": {
             "type": "string",

@@ -30,7 +30,6 @@ describe('房态流转表（T288 抽取自 rooms.service）', () => {
 
   it('跳级与回退一律拒绝', () => {
     const illegal: Array<[string, string]> = [
-      ['VACANT+CLEAN', 'OCCUPIED+CLEAN'],
       ['RESERVED+CLEAN', 'VACANT+CLEAN'],
       ['OCCUPIED+CLEAN', 'RESERVED+CLEAN'],
       ['VACANT+CLEANING', 'OCCUPIED+CLEAN'],
@@ -50,14 +49,15 @@ describe('房态流转表（T288 抽取自 rooms.service）', () => {
   });
 
   it('非法流转抛 ROOM_NOT_AVAILABLE 且消息含起止状态', () => {
-    expect(() => assertTransitionTable('VACANT+CLEAN', 'OCCUPIED+CLEAN')).toThrow(/不允许的房态流转/);
-    expect(() => assertTransitionTable('VACANT+CLEAN', 'OCCUPIED+CLEAN')).toThrow(/VACANT\+CLEAN → OCCUPIED\+CLEAN/);
+    expect(() => assertTransitionTable('VACANT+CLEANING', 'OCCUPIED+CLEAN')).toThrow(/不允许的房态流转/);
+    expect(() => assertTransitionTable('VACANT+CLEANING', 'OCCUPIED+CLEAN')).toThrow(/VACANT\+CLEANING → OCCUPIED\+CLEAN/);
     expect(() => assertTransitionTable('VACANT+CLEAN', 'RESERVED+CLEAN')).not.toThrow();
   });
 
   it('前置条件按目标状态给出，且与文档一一对应', () => {
     expect(requiredPreconditions('VACANT+CLEAN', 'RESERVED+CLEAN')).toEqual([{ kind: 'DRAFT_CONTRACT' }]);
     expect(requiredPreconditions('RESERVED+CLEAN', 'OCCUPIED+CLEAN')).toEqual([{ kind: 'CONTRACT_STARTED' }]);
+    expect(requiredPreconditions('VACANT+CLEAN', 'OCCUPIED+CLEAN')).toEqual([{ kind: 'CONTRACT_STARTED' }]);
     expect(requiredPreconditions('OCCUPIED+CLEAN', 'VACANT+PENDING_CLEAN')).toEqual([
       { kind: 'CHECKOUT_RECORD' },
     ]);

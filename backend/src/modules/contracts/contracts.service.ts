@@ -305,7 +305,7 @@ export class ContractsService {
     return this.maskContract(contract);
   }
 
-  async confirmLease(id: string, operatorId: string) {
+  async confirmLease(id: string, operatorId: string, expectedUpdatedAt: string) {
     const locator = await this.prisma.contract.findUnique({ where: { id }, select: { roomId: true } });
     if (!locator) throw new NotFoundException('合同不存在');
     const result = await this.prisma.$transaction(async (tx) => {
@@ -315,6 +315,9 @@ export class ContractsService {
       if (lease.status === 'ACTIVE' && lease.leaseConfirmedAt) return lease;
       const today = this.clock.todayUtc();
       if (lease.status !== 'DRAFT' || lease.endDate < today) throw new ConflictException('仅未到期的草稿可确认');
+      if (!lease.leaseConfirmedAt && lease.updatedAt.getTime() !== Date.parse(expectedUpdatedAt)) {
+        throw new ConflictException('合同条款已更新，请刷新并重新核对后确认');
+      }
       const confirmed = lease.leaseConfirmedAt ? lease : await tx.contract.update({
         where: { id },
         data: { leaseConfirmedAt: this.clock.now(), leaseConfirmedBy: operatorId },
@@ -341,6 +344,29 @@ export class ContractsService {
       throw new NotFoundException('合同不存在');
     }
 
+    if (dto.withdrawConfirmation) {
+      if (contract.status !== 'DRAFT' || !contract.leaseConfirmedAt) {
+        throw new ConflictException('只能撤销已确认且尚未生效的合同');
+      }
+      if (Object.keys(dto).some((key) => key !== 'withdrawConfirmation' && dto[key as keyof UpdateContractDto] !== undefined)) {
+        throw new BadRequestException('撤销确认时不能同时修改合同');
+      }
+      const terminated = await tx.contract.update({
+        where: { id }, data: { status: 'TERMINATED' }, include: { coTenants: true, template: true },
+      });
+      if (!(await this.findOtherOpenContract(tx, contract.roomId))) {
+        await tx.room.updateMany({
+          where: { id: contract.roomId, status: 'RESERVED' },
+          data: { status: 'VACANT', version: { increment: 1 } },
+        });
+      }
+      return this.maskContract(terminated);
+    }
+
+    if (contract.status === 'DRAFT' && contract.leaseConfirmedAt) {
+      throw new ConflictException('已确认的待生效合同不能编辑');
+    }
+
     const statusChanged = dto.status !== undefined && dto.status !== contract.status;
     if (statusChanged && !isContractTransitionAllowed(contract.status, dto.status!)) {
       throw new ConflictException(
@@ -350,9 +376,6 @@ export class ContractsService {
 
     if (statusChanged && dto.status === 'ACTIVE') {
       throw new ConflictException('请使用合同确认入口生效');
-    }
-    if (contract.status === 'DRAFT' && contract.leaseConfirmedAt) {
-      throw new ConflictException('已确认的待生效合同不能编辑');
     }
 
     if ((dto.startDate || dto.paymentCycle) && contract.status !== 'DRAFT') {

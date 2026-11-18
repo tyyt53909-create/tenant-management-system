@@ -267,7 +267,9 @@ async function main() {
     expectStatus(reserved, 200, '流转至 RESERVED（草稿合同）');
     assert(reserved.data.status === 'RESERVED', '应为 RESERVED，实际 ' + reserved.data.status);
 
-    const activated = await api('POST', '/contracts/' + contract.id + '/confirm', { token: adminToken });
+    const activated = await api('POST', '/contracts/' + contract.id + '/confirm', {
+      token: adminToken, body: { expectedUpdatedAt: contract.updatedAt },
+    });
     expectStatus(activated, 201, '合同确认');
     assert(activated.data.status === 'ACTIVE', '合同应为 ACTIVE，实际 ' + activated.data.status);
 

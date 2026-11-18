@@ -32,7 +32,7 @@ export interface FlowData {
  * 预置“房间 + 租客 + 已生效合同（房态 OCCUPIED）”一条龙。
  * 与 scripts/e2e-mvp/run.mjs 步骤 2/3/4/4b 同序，保证月度账单/抄表/退租前置成立。
  */
-export async function setupActiveContract(tag = 'PW'): Promise<FlowData> {
+export async function setupActiveContract(tag = 'PW', futureDraft = false): Promise<FlowData> {
   const id = tag + '-' + uid();
   const { req, headers } = await apiContext();
   try {
@@ -56,7 +56,7 @@ export async function setupActiveContract(tag = 'PW'): Promise<FlowData> {
     if (tenantRes.status() !== 201) throw new Error('创建租客失败: ' + tenantRes.status());
     const tenant = await tenantRes.json();
 
-    const start = new Date();
+    const start = new Date(Date.now() + (futureDraft ? 2 : -1) * 86400000);
     const end = new Date(Date.now() + 365 * 86400000);
     const contractRes = await req.post('contracts', {
       headers,
@@ -83,7 +83,8 @@ export async function setupActiveContract(tag = 'PW'): Promise<FlowData> {
     });
     if (reserved.status() !== 200) throw new Error('房态 RESERVED 失败: ' + reserved.status());
     const reservedBody = await reserved.json();
-    const activated = await req.post(`contracts/${contract.id}/confirm`, { headers });
+    if (futureDraft) return { uid: id, buildingId, room: reservedBody, tenant, contract };
+    const activated = await req.post(`contracts/${contract.id}/confirm`, { headers, data: { expectedUpdatedAt: contract.updatedAt } });
     if (activated.status() !== 201 || (await activated.json()).status !== 'ACTIVE') {
       throw new Error('合同确认并生效失败: ' + activated.status());
     }
