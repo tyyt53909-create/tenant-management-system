@@ -88,6 +88,17 @@ export function sameDatabaseTarget(left, right) {
   return a === null || b === null ? null : a === b;
 }
 
+/** 仅移除 Prisma 的 schema，不重编码 libpq 参数、密码或库名。 */
+function libpqUrl(raw) {
+  const queryStart = raw.indexOf('?');
+  if (queryStart === -1) return raw;
+  const kept = raw.slice(queryStart + 1).split('&').filter((parameter) => {
+    const equals = parameter.indexOf('=');
+    return equals === -1 || decodeURIComponent(parameter.slice(0, equals)) !== 'schema';
+  });
+  return raw.slice(0, queryStart) + (kept.length ? `?${kept.join('&')}` : '');
+}
+
 function isDirectRun() {
   const entry = process.argv[1];
   return Boolean(entry) && import.meta.url === pathToFileURL(entry).href;
@@ -101,13 +112,24 @@ if (isDirectRun()) {
     for (const name of expiredBackups(names, { retentionDays })) {
       process.stdout.write(`${name}\n`);
     }
-  } else if (command === 'same-database') {
-    const same = sameDatabaseTarget(process.env.REHEARSAL_DATABASE_URL, process.env.DATABASE_URL);
-    if (same === null) process.exit(2);
-    process.exit(same ? 0 : 3);
+  } else if (command === 'rehearsal-target') {
+    const { DATABASE_URL, REHEARSAL_DATABASE_URL } = process.env;
+    // 在原始连接串上检查路由覆盖，不能用清理步骤掩盖它们。
+    const same = sameDatabaseTarget(REHEARSAL_DATABASE_URL, DATABASE_URL);
+    if (same === true) {
+      process.exitCode = 3;
+    } else if (same === null) {
+      process.exitCode = 2;
+    } else {
+      try {
+        process.stdout.write(libpqUrl(REHEARSAL_DATABASE_URL));
+      } catch {
+        process.exitCode = 2;
+      }
+    }
   } else {
     process.stderr.write('用法：backup-core.mjs expired <days> <file...>\n');
-    process.stderr.write('      backup-core.mjs same-database (读取 DATABASE_URL 和 REHEARSAL_DATABASE_URL)\n');
+    process.stderr.write('      backup-core.mjs rehearsal-target (读取 DATABASE_URL 和 REHEARSAL_DATABASE_URL)\n');
     process.exit(2);
   }
 }
