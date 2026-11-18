@@ -64,7 +64,7 @@
         <el-table-column prop="status" label="状态" width="150">
           <template #default="{ row }">
             <div class="contract-status">
-              <el-tag :type="statusTypeMap[row.status]">{{ statusMap[row.status] }}</el-tag>
+              <el-tag :type="statusTypeMap[row.status]">{{ row.status === 'DRAFT' && row.leaseConfirmedAt ? '已确认待生效' : statusMap[row.status] }}</el-tag>
               <el-tooltip
                 v-if="row.status === 'RENEWED' || row.renewedFromId"
                 placement="top"
@@ -89,8 +89,12 @@
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="renew" :disabled="!canRenew(row as Contract)">发起续签</el-dropdown-item>
-                    <el-dropdown-item command="edit">编辑合同</el-dropdown-item>
-                    <el-dropdown-item command="delete" divided style="color: var(--error-text)">删除合同</el-dropdown-item>
+                    <el-dropdown-item v-if="row.status === 'DRAFT'" command="confirm">确认租约</el-dropdown-item>
+                    <el-dropdown-item command="edit" :disabled="row.status === 'DRAFT' && !!row.leaseConfirmedAt">编辑合同</el-dropdown-item>
+                    <el-dropdown-item v-if="row.status === 'DRAFT' && row.leaseConfirmedAt" command="void-confirmation" divided>
+                      撤销待生效租约
+                    </el-dropdown-item>
+                    <el-dropdown-item v-else :disabled="!!row.leaseConfirmedAt" command="delete" divided style="color: var(--error-text)">删除合同</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -235,6 +239,8 @@ import {
   getContracts,
   createContract,
   updateContract,
+  confirmLease,
+  withdrawLeaseConfirmation,
   deleteContract,
   renewContract,
 } from '@/api/contracts';
@@ -383,8 +389,45 @@ const handleDelete = async (row: Contract) => {
   }
 };
 
+async function handleConfirmLease(row: Contract) {
+  try {
+    await ElMessageBox.confirm(
+      '请核对合同条款。确认后，合同在起租日到达时可以生效。实际入住需另行办理。',
+      '确认租约',
+      { type: 'warning', distinguishCancelAndClose: true },
+    );
+    const confirmed = await confirmLease(row.id, row.updatedAt);
+    ElMessage.success(confirmed.status === 'ACTIVE' ? '租约已生效' : '租约已确认，等待生效');
+    void fetchData();
+    void detailPanel.value?.reload();
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      notifyApiError(error, '确认租约失败');
+      void fetchData();
+      void detailPanel.value?.reload();
+    }
+  }
+}
+
+async function handleVoidConfirmation(row: Contract) {
+  try {
+    await ElMessageBox.confirm('撤销后保留租约及确认记录。', '撤销待生效租约', {
+      distinguishCancelAndClose: true,
+      type: 'warning',
+    });
+    await withdrawLeaseConfirmation(row.id);
+    ElMessage.success('待生效租约已撤销');
+    void fetchData();
+    void detailPanel.value?.reload();
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') notifyApiError(error, '撤销租约失败');
+  }
+}
+
 function handleContractCommand(command: string, row: Contract) {
   if (command === 'renew') handleRenew(row);
+  else if (command === 'confirm') void handleConfirmLease(row);
+  else if (command === 'void-confirmation') void handleVoidConfirmation(row);
   else if (command === 'edit') handleEdit(row);
   else if (command === 'delete') void handleDelete(row);
 }

@@ -10,6 +10,7 @@ function build(options: { role?: string; enabled?: boolean }) {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
     undefined,
     undefined,
     undefined,

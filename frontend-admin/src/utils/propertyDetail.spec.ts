@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest';
-import { contractReminder,currentLeaseQuery,detailTabs,displayMoney,propertyPhotos,roomFacts,stateTone } from './propertyDetail';
+import { contractReminder,currentLeaseQueries,detailTabs,displayMoney,propertyPhotos,roomFacts,stateTone } from './propertyDetail';
 
 describe('原型详情的数据呈现边界',()=>{
   it('房源与合同有对应的实际分组，合同扫描件可单独进入',()=>{
@@ -15,8 +15,8 @@ describe('原型详情的数据呈现边界',()=>{
     expect(displayMoney(123456)).toBe('¥1,234.56');
   });
   it('预订房源查草稿合同，其他房态只查询生效合同而不是过期租约',()=>{
-    expect(currentLeaseQuery({id:'r1',status:'RESERVED'})).toEqual({roomId:'r1',status:'DRAFT',limit:1});
-    expect(currentLeaseQuery({id:'r1',status:'VACANT'}).status).toBe('ACTIVE');
+    expect(currentLeaseQueries({ id: 'r1', status: 'RESERVED' }).map((query) => query.status)).toEqual(['ACTIVE', 'DRAFT']);
+    expect(currentLeaseQueries({ id: 'r1', status: 'VACANT' })).toEqual([{ roomId: 'r1', status: 'ACTIVE', limit: 1 }]);
   });
   it('封面仅来自房源照片，与合同扫描件区分，外站不带鉴权加载',()=>{
     const room={photos:[{fileUrl:'/api/files/room.png'},{fileUrl:'https://evil.test/room.png'}]};

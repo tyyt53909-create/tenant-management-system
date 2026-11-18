@@ -1,3 +1,4 @@
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -54,6 +55,7 @@ export class SchedulerService {
     private readonly prisma: PrismaService,
     private readonly billsService: BillsService,
     private readonly notificationsService: NotificationsService,
+    clock: BusinessClock,
     @Optional() dailyJobsService?: SchedulerDailyJobsService,
     @Optional() monthlyBillsService?: SchedulerMonthlyBillsService,
     @Optional() private readonly metrics?: MetricsService,
@@ -63,7 +65,7 @@ export class SchedulerService {
   ) {
     this.dailyJobsService =
       dailyJobsService ??
-      new SchedulerDailyJobsService(prisma, billsService, notificationsService);
+      new SchedulerDailyJobsService(prisma, billsService, notificationsService, clock);
     this.monthlyBillsService =
       monthlyBillsService ??
       new SchedulerMonthlyBillsService(prisma, billsService, notificationsService);

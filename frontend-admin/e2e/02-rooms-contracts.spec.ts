@@ -55,4 +55,18 @@ test.describe('建房源并签合同', () => {
     await expect(page.getByText('创建成功').first()).toBeVisible({ timeout: 8000 });
     await expect(page.getByRole('row', { name: new RegExp(roomNumber) })).toBeVisible({ timeout: 8000 });
   });
+  test('后台可确认并撤销待生效租约', async ({ page }) => {
+    const seed = await setupActiveContract('CONFIRM', true);
+    await loginAsAdmin(page);
+    await page.goto('/contracts');
+    const row = page.getByRole('row', { name: new RegExp(seed.contract.contractNumber) });
+    await row.getByRole('button', { name: '更多合同操作' }).click();
+    await page.getByRole('menuitem', { name: '确认租约', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '确定', exact: true }).click();
+    await expect(row).toContainText('已确认待生效');
+    await row.getByRole('button', { name: '更多合同操作' }).click();
+    await page.getByRole('menuitem', { name: '撤销待生效租约', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '确定', exact: true }).click();
+    await expect(row).toContainText('已终止');
+  });
 });

@@ -23,6 +23,8 @@ import {
   isContractTransitionAllowed,
   roomUpdateForContractTransition,
 } from './contract-transitions.js';
+import { activateConfirmedLease, lockLeaseRoom } from './contract-activation.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { SchedulerMonthlyBillsService } from '../scheduler/scheduler-monthly-bills.service.js';
 import { CryptoService } from '../../common/crypto/crypto.service.js';
 import { ContractTemplatesService } from './contract-templates.service.js';
@@ -54,6 +56,7 @@ export class ContractsService {
     @Inject(ELECTRONIC_SIGN_PROVIDER) private readonly signProvider: ElectronicSignProvider,
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService,
+    private readonly clock: BusinessClock,
   ) {}
 
   /** 脱敏共同承租人信息，不向前端直接暴露明文证件号 */
@@ -302,10 +305,66 @@ export class ContractsService {
     return this.maskContract(contract);
   }
 
+  async confirmLease(id: string, operatorId: string, expectedUpdatedAt: string) {
+    const locator = await this.prisma.contract.findUnique({ where: { id }, select: { roomId: true } });
+    if (!locator) throw new NotFoundException('合同不存在');
+    const result = await this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, locator.roomId);
+      const lease = await tx.contract.findUnique({ where: { id } });
+      if (!lease) throw new NotFoundException('合同不存在');
+      if (lease.status === 'ACTIVE' && lease.leaseConfirmedAt) return lease;
+      const today = this.clock.todayUtc();
+      if (lease.status !== 'DRAFT' || lease.endDate < today) throw new ConflictException('仅未到期的草稿可确认');
+      if (!lease.leaseConfirmedAt && lease.updatedAt.getTime() !== Date.parse(expectedUpdatedAt)) {
+        throw new ConflictException('合同条款已更新，请刷新并重新核对后确认');
+      }
+      const confirmed = lease.leaseConfirmedAt ? lease : await tx.contract.update({
+        where: { id },
+        data: { leaseConfirmedAt: this.clock.now(), leaseConfirmedBy: operatorId },
+      });
+      const activated = await activateConfirmedLease(tx, confirmed, today);
+      return activated ? { ...confirmed, status: 'ACTIVE' as const } : confirmed;
+    });
+    if (result.status === 'ACTIVE') await this.rentBills.issueDueRentBills(id);
+    return result;
+  }
+
   async update(id: string, dto: UpdateContractDto) {
-    const contract = await this.prisma.contract.findUnique({ where: { id } });
+    const locator = await this.prisma.contract.findUnique({ where: { id }, select: { roomId: true } });
+    if (!locator) throw new NotFoundException('合同不存在');
+    return this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, locator.roomId);
+      return this.updateInTransaction(tx, id, dto);
+    });
+  }
+
+  private async updateInTransaction(tx: Prisma.TransactionClient, id: string, dto: UpdateContractDto) {
+    const contract = await tx.contract.findUnique({ where: { id } });
     if (!contract) {
       throw new NotFoundException('合同不存在');
+    }
+
+    if (dto.withdrawConfirmation) {
+      if (contract.status !== 'DRAFT' || !contract.leaseConfirmedAt) {
+        throw new ConflictException('只能撤销已确认且尚未生效的合同');
+      }
+      if (Object.keys(dto).some((key) => key !== 'withdrawConfirmation' && dto[key as keyof UpdateContractDto] !== undefined)) {
+        throw new BadRequestException('撤销确认时不能同时修改合同');
+      }
+      const terminated = await tx.contract.update({
+        where: { id }, data: { status: 'TERMINATED' }, include: { coTenants: true, template: true },
+      });
+      if (!(await this.findOtherOpenContract(tx, contract.roomId))) {
+        await tx.room.updateMany({
+          where: { id: contract.roomId, status: 'RESERVED' },
+          data: { status: 'VACANT', version: { increment: 1 } },
+        });
+      }
+      return this.maskContract(terminated);
+    }
+
+    if (contract.status === 'DRAFT' && contract.leaseConfirmedAt) {
+      throw new ConflictException('已确认的待生效合同不能编辑');
     }
 
     const statusChanged = dto.status !== undefined && dto.status !== contract.status;
@@ -315,8 +374,12 @@ export class ContractsService {
       );
     }
 
+    if (statusChanged && dto.status === 'ACTIVE') {
+      throw new ConflictException('请使用合同确认入口生效');
+    }
+
     if ((dto.startDate || dto.paymentCycle) && contract.status !== 'DRAFT') {
-      const posted = await this.prisma.bill.findFirst({
+      const posted = await tx.bill.findFirst({
         where: { contractId: id, billType: 'RENT', status: { not: 'CANCELLED' } },
         select: { id: true },
       });
@@ -347,94 +410,64 @@ export class ContractsService {
     }
     if (dto.signStatus) updateData.signStatus = dto.signStatus;
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      let renewedOldId: string | undefined;
-      if (statusChanged && dto.status === 'ACTIVE') {
-        const other = await this.findOtherOpenContract(tx, contract.roomId, id);
-        if (other) {
-          const isRenewalOfActive =
-            !!contract.renewedFromId &&
-            contract.renewedFromId === other.id &&
-            other.status === 'ACTIVE';
-          if (!isRenewalOfActive) {
-            throw new ConflictException(
-              `该房源已有未结束的合同（${other.contractNumber}，状态 ${other.status}），不能同时存在两份生效/草稿合同`,
-            );
-          }
-          const oldEnd = new Date(other.endDate);
-          const newStart = dto.startDate ? new Date(dto.startDate) : contract.startDate;
-          if (newStart <= oldEnd) {
-            throw new ConflictException('续签合同的起始日必须晚于原合同到期日');
-          }
-          renewedOldId = other.id;
-        }
-      }
-
-      if (renewedOldId) {
-        await tx.contract.update({
-          where: { id: renewedOldId },
-          data: { status: 'RENEWED' },
+    if (dto.coTenants !== undefined) {
+      await tx.contractCoTenant.deleteMany({ where: { contractId: id } });
+      if (dto.coTenants.length > 0) {
+        await tx.contractCoTenant.createMany({
+          data: dto.coTenants.map((c) => ({
+            contractId: id,
+            name: c.name,
+            phone: c.phone,
+            idType: c.idType,
+            idNumber: c.idNumber ? this.crypto.encrypt(c.idNumber) : null,
+            relationship: c.relationship,
+            isSigner: c.isSigner ?? false,
+          })),
         });
       }
+    }
 
-      if (dto.coTenants !== undefined) {
-        await tx.contractCoTenant.deleteMany({ where: { contractId: id } });
-        if (dto.coTenants.length > 0) {
-          await tx.contractCoTenant.createMany({
-            data: dto.coTenants.map((c) => ({
-              contractId: id,
-              name: c.name,
-              phone: c.phone,
-              idType: c.idType,
-              idNumber: c.idNumber ? this.crypto.encrypt(c.idNumber) : null,
-              relationship: c.relationship,
-              isSigner: c.isSigner ?? false,
-            })),
-          });
-        }
-      }
-
-      const saved = await tx.contract.update({
-        where: { id },
-        data: updateData,
-        include: { coTenants: true, template: true },
-      });
-
-      if (statusChanged) {
-        const room = await tx.room.findUnique({ where: { id: contract.roomId }, select: { status: true } });
-        if (room) {
-          const roomUpdate = roomUpdateForContractTransition(room, contract.status, dto.status!);
-          if (roomUpdate) {
-            await tx.room.update({ where: { id: contract.roomId }, data: roomUpdate });
-          }
-        }
-      }
-
-      return saved;
+    const saved = await tx.contract.update({
+      where: { id },
+      data: updateData,
+      include: { coTenants: true, template: true },
     });
 
-    if (statusChanged && dto.status === 'ACTIVE') {
-      await this.rentBills.issueDueRentBills(id);
+    if (statusChanged) {
+      const room = await tx.room.findUnique({ where: { id: contract.roomId }, select: { status: true } });
+      if (room) {
+        const roomUpdate = roomUpdateForContractTransition(room, contract.status, dto.status!);
+        if (roomUpdate) {
+          await tx.room.update({ where: { id: contract.roomId }, data: roomUpdate });
+        }
+      }
     }
-    return this.maskContract(updated);
+
+    return this.maskContract(saved);
   }
 
   async remove(id: string) {
-    const contract = await this.prisma.contract.findUnique({ where: { id } });
-    if (!contract) {
-      throw new NotFoundException('合同不存在');
-    }
+    const locator = await this.prisma.contract.findUnique({ where: { id }, select: { roomId: true } });
+    if (!locator) throw new NotFoundException('合同不存在');
+    return this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, locator.roomId);
+      const contract = await tx.contract.findUnique({ where: { id } });
+      if (!contract) {
+        throw new NotFoundException('合同不存在');
+      }
 
-    const [bills, checkouts] = await Promise.all([
-      this.prisma.bill.count({ where: { contractId: id } }),
-      this.prisma.checkoutRecord.count({ where: { contractId: id } }),
-    ]);
-    if (bills > 0 || checkouts > 0) {
-      throw new ConflictException('合同已有账单或退租记录，不能删除；请保留合同并作废相关单据');
-    }
+      if (contract.leaseConfirmedAt) throw new ConflictException('已确认合同必须保留');
+      const [bills, checkouts] = await Promise.all([
+        tx.bill.count({ where: { contractId: id } }),
+        tx.checkoutRecord.count({ where: { contractId: id } }),
+      ]);
+      if (bills > 0 || checkouts > 0) {
+        throw new ConflictException('合同已有账单或退租记录，不能删除；请保留合同并作废相关单据');
+      }
 
-    await this.prisma.contract.delete({ where: { id } });
-    return { message: '合同已删除' };
+      await tx.contract.delete({ where: { id } });
+      return { message: '合同已删除' };
+    });
   }
 
   private findOtherOpenContract(

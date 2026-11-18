@@ -867,6 +867,14 @@
     ]
   },
   {
+    "method": "POST",
+    "path": "/api/contracts/:id/confirm",
+    "public": false,
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
     "method": "GET",
     "path": "/api/contracts/:id/pdf",
     "public": false,

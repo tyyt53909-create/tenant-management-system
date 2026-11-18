@@ -1,3 +1,4 @@
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -20,6 +21,7 @@ describe('RoomsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RoomsService,
+        { provide: BusinessClock, useValue: new BusinessClock({ get: () => 'Asia/Shanghai' } as never) },
         {
           provide: PrismaService,
           useValue: {
@@ -65,6 +67,7 @@ describe('RoomsService', () => {
               findMany: vi.fn(),
               updateMany: vi.fn(),
             },
+            $queryRaw: vi.fn(),
             $transaction: vi.fn(),
           },
         },
@@ -345,12 +348,12 @@ describe('RoomsService', () => {
       });
     });
 
-    it('非法房态流转应被拒绝（VACANT+CLEAN → OCCUPIED+CLEAN）', async () => {
+    it('空置房缺少生效租约时拒绝入住', async () => {
       const mockRoom = { id: 'room-123', status: 'VACANT', cleanStatus: 'CLEAN' };
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(mockRoom as any);
 
       await expect(service.update('room-123', { status: 'OCCUPIED' } as any)).rejects.toThrow(
-        '不允许的房态流转',
+        '该房间没有处于租期的生效合同',
       );
       expect(prisma.room.update).not.toHaveBeenCalled();
     });
@@ -465,7 +468,8 @@ describe('RoomsService', () => {
       await expect(
         service.update('room-123', { photos } as any),
       ).rejects.toThrow(BadRequestException);
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.roomPhoto.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.roomPhoto.createMany).not.toHaveBeenCalled();
     });
 
     it('应该拒绝不存在的房源', async () => {
@@ -538,12 +542,12 @@ describe('RoomsService', () => {
       expect(prisma.room.updateMany).not.toHaveBeenCalled();
     });
 
-    it('非法流转 VACANT+CLEAN → OCCUPIED+CLEAN 被拒绝', async () => {
+    it('空置房入住端点也要求生效租约', async () => {
       vi.spyOn(prisma.room, 'findUnique').mockResolvedValue(baseRoom as any);
 
       await expect(
         service.updateStatus('room-123', { status: 'OCCUPIED', version: 3 } as any),
-      ).rejects.toThrow('不允许的房态流转');
+      ).rejects.toThrow('该房间没有处于租期的生效合同');
     });
 
     it('退租流转缺少退租记录被拒绝', async () => {

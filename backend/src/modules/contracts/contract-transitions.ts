@@ -27,8 +27,6 @@ export interface RoomEffect {
 }
 
 const ROOM_EFFECTS: Record<string, RoomEffect> = {
-  // DRAFT → ACTIVE：合同生效日到达/管理者手动生效 → 预留房转为已入住
-  'DRAFT->ACTIVE': { status: 'OCCUPIED', requiresRoomStatus: 'RESERVED' },
   // ACTIVE → TERMINATED：提前退租 → 房间退出占用并进入待清洁
   'ACTIVE->TERMINATED': { status: 'VACANT', cleanStatus: 'PENDING_CLEAN', requiresRoomStatus: 'OCCUPIED' },
   'EXPIRED->TERMINATED': { status: 'VACANT', cleanStatus: 'PENDING_CLEAN', requiresRoomStatus: 'OCCUPIED' },

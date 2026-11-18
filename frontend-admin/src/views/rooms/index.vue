@@ -323,7 +323,10 @@ const roomTypeMap: Record<string, string> = {
   THREE_BED: '三室一厅',
   STUDIO: '开间',
 };
-function leaseOf(row:Room){return row.contracts?.find(contract=>contract.status===(row.status==='RESERVED'?'DRAFT':'ACTIVE'));}
+function leaseOf(row: Room) {
+  return row.contracts?.find((contract) => contract.status === 'ACTIVE')
+    ?? (row.status === 'RESERVED' ? row.contracts?.find((contract) => contract.status === 'DRAFT') : undefined);
+}
 function roomSubtitle(row: Room) {
   const area = row.area == null ? '面积未记录' : `${row.area} m²`;
   return `${roomTypeMap[row.roomType]} · ${area} · ${row.building?.name || '未关联楼栋'} / ${row.floor} 楼`;

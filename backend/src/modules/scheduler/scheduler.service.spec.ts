@@ -1,3 +1,4 @@
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SchedulerService, SYSTEM_OPERATOR } from './scheduler.service.js';
@@ -19,11 +20,13 @@ describe('SchedulerService（定时任务）', () => {
     vi.setSystemTime(FIXED_NOW);
 
     prisma = {
+      $queryRaw: vi.fn(),
       contract: {
         findMany: vi.fn(),
         findFirst: vi.fn().mockResolvedValue(null),
         findUnique: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       room: { findUnique: vi.fn(), update: vi.fn() },
       $transaction: vi.fn(),
@@ -43,6 +46,7 @@ describe('SchedulerService（定时任务）', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SchedulerService,
+        { provide: BusinessClock, useValue: new BusinessClock({ get: () => 'Asia/Shanghai' } as never) },
         { provide: PrismaService, useValue: prisma },
         { provide: BillsService, useValue: billsService },
         { provide: NotificationsService, useValue: notifications },
@@ -59,11 +63,14 @@ describe('SchedulerService（定时任务）', () => {
   });
 
   describe('autoTransitionContracts', () => {
-    it('DRAFT 生效日到达 → ACTIVE，预留房间随动 OCCUPIED（版本递增）', async () => {
+    it('已确认 DRAFT 到起租日 → ACTIVE，房间维持预留', async () => {
       prisma.contract.findMany
         .mockResolvedValueOnce([{ id: 'c-1', roomId: 'r-1' }]) // DRAFT
         .mockResolvedValueOnce([]); // EXPIRED
-      prisma.room.findUnique.mockResolvedValue({ id: 'r-1', status: 'RESERVED' });
+      prisma.contract.findUnique.mockResolvedValue({
+        id: 'c-1', roomId: 'r-1', status: 'DRAFT', leaseConfirmedAt: FIXED_NOW,
+        startDate: new Date('2026-10-13'), endDate: new Date('2027-10-13'),
+      });
 
       const result = await service.autoTransitionContracts();
 
@@ -71,10 +78,7 @@ describe('SchedulerService（定时任务）', () => {
         where: { id: 'c-1' },
         data: { status: 'ACTIVE' },
       });
-      expect(prisma.room.update).toHaveBeenCalledWith({
-        where: { id: 'r-1' },
-        data: { status: 'OCCUPIED', version: { increment: 1 } },
-      });
+      expect(prisma.room.update).not.toHaveBeenCalled();
       expect(result).toEqual({ activated: 1, expired: 0 });
     });
 
@@ -89,28 +93,18 @@ describe('SchedulerService（定时任务）', () => {
       expect(prisma.contract.findMany).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
-          where: { status: 'DRAFT', startDate: { lte: new Date('2026-10-14T00:00:00.000Z') } },
+          where: { status: 'DRAFT', leaseConfirmedAt: { not: null }, startDate: { lte: new Date('2026-10-14') }, endDate: { gte: new Date('2026-10-14') } },
         }),
       );
     });
 
     it('续签 DRAFT 生效：先置旧合同 RENEWED，再激活新合同', async () => {
-      prisma.contract.findMany
-        .mockResolvedValueOnce([
-          {
-            id: 'c-new',
-            roomId: 'r-1',
-            startDate: new Date('2026-12-01T00:00:00.000Z'),
-            renewedFromId: 'c-old',
-          },
-        ])
-        .mockResolvedValueOnce([]);
+      prisma.contract.findMany.mockResolvedValueOnce([{ id: 'c-new', roomId: 'r-1' }]).mockResolvedValueOnce([]);
       prisma.contract.findUnique.mockResolvedValue({
-        id: 'c-old',
-        status: 'ACTIVE',
-        endDate: new Date('2026-11-30T00:00:00.000Z'),
+        id: 'c-new', roomId: 'r-1', status: 'DRAFT', leaseConfirmedAt: FIXED_NOW, renewedFromId: 'c-old',
+        startDate: new Date('2026-10-13'), endDate: new Date('2027-10-13'),
       });
-      prisma.room.findUnique.mockResolvedValue({ id: 'r-1', status: 'OCCUPIED' });
+      prisma.contract.findFirst.mockResolvedValue({ id: 'c-old', endDate: new Date('2026-10-12') });
 
       const result = await service.autoTransitionContracts();
 
@@ -146,7 +140,7 @@ describe('SchedulerService（定时任务）', () => {
 
       const result = await service.autoTransitionContracts();
 
-      expect(prisma.contract.update).toHaveBeenCalledTimes(2);
+      expect(prisma.contract.updateMany).toHaveBeenCalledTimes(2);
       expect(notifications.create).toHaveBeenCalledTimes(1);
       expect(notifications.create).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'u-1', title: '合同已到期' }),

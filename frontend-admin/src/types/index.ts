@@ -94,6 +94,7 @@ export interface Building {
 
 // 合同
 export interface Contract {
+  leaseConfirmedAt?: string | null;
   id: string;
   contractNumber: string;
   buildingId: string;

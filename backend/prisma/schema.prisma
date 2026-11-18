@@ -675,6 +675,8 @@ model Contract {
   lateFeeRule Json
 
   status ContractStatus @default(DRAFT)
+  leaseConfirmedAt DateTime?
+  leaseConfirmedBy String?
 
   /// 关联合同条款模板（可空）
   templateId String?

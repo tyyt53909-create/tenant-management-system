@@ -35,9 +35,10 @@ export function propertyPhotos(kind: PropertyKind, record: ResourceRecord | null
   return photos.filter(photo => photo && typeof photo.fileUrl === 'string' && protectedFilePath(photo.fileUrl));
 }
 
-/** 房租只来自真实租约；已预订显示草稿，其他房态查生效合同，不冒充房源定价。 */
-export function currentLeaseQuery(room: ResourceRecord) {
-  return { roomId:room.id, status:room.status === 'RESERVED' ? 'DRAFT' : 'ACTIVE', limit:1 };
+/** 优先展示已生效租约，预订房间没有生效租约时再查草稿。 */
+export function currentLeaseQueries(room: ResourceRecord) {
+  const active = { roomId: room.id, status: 'ACTIVE', limit: 1 };
+  return room.status === 'RESERVED' ? [active, { ...active, status: 'DRAFT' }] : [active];
 }
 
 /** 只表示合同日期与状态，不推断租客已缴费，也不虚构下一张账单。 */

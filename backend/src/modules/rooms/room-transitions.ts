@@ -12,7 +12,7 @@ import { apiError, ErrorCode } from '../../common/errors/error-codes.js';
 
 /** 允许的房态流转（键与值均为 `status+cleanStatus`，docs/04 §1.3） */
 export const ALLOWED_ROOM_TRANSITIONS: Record<string, readonly string[]> = {
-  'VACANT+CLEAN': ['RESERVED+CLEAN', 'MAINTENANCE+CLEAN'],
+  'VACANT+CLEAN': ['RESERVED+CLEAN', 'OCCUPIED+CLEAN', 'MAINTENANCE+CLEAN'],
   'RESERVED+CLEAN': ['OCCUPIED+CLEAN'],
   'OCCUPIED+CLEAN': ['VACANT+PENDING_CLEAN', 'MAINTENANCE+CLEAN'],
   'MAINTENANCE+CLEAN': ['OCCUPIED+CLEAN', 'VACANT+PENDING_CLEAN'],
@@ -49,7 +49,7 @@ export function requiredPreconditions(from: string, to: string): TransitionPreco
   if (from === to) return [];
   const requirements: TransitionPrecondition[] = [];
   if (to === 'RESERVED+CLEAN') requirements.push({ kind: 'DRAFT_CONTRACT' });
-  if (from === 'RESERVED+CLEAN' && to === 'OCCUPIED+CLEAN') {
+  if ((from === 'RESERVED+CLEAN' || from === 'VACANT+CLEAN') && to === 'OCCUPIED+CLEAN') {
     requirements.push({ kind: 'CONTRACT_STARTED' });
   }
   if (to === 'VACANT+PENDING_CLEAN') requirements.push({ kind: 'CHECKOUT_RECORD' });
@@ -59,7 +59,7 @@ export function requiredPreconditions(from: string, to: string): TransitionPreco
 
 export const PRECONDITION_MESSAGES: Record<TransitionPrecondition['kind'], string> = {
   DRAFT_CONTRACT: '流转前置条件不满足：该房间没有草稿合同',
-  CONTRACT_STARTED: '流转前置条件不满足：合同起始日期未到',
+  CONTRACT_STARTED: '流转前置条件不满足：该房间没有处于租期的生效合同',
   CHECKOUT_RECORD: '流转前置条件不满足：该房间没有退租记录',
   MAINTENANCE_REQUEST: '流转前置条件不满足：该房间没有报修工单',
 };

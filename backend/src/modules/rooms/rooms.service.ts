@@ -1,3 +1,5 @@
+import { lockLeaseRoom } from '../contracts/contract-activation.js';
+import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
 import {
   Injectable,
   NotFoundException,
@@ -28,6 +30,7 @@ export class RoomsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly clock: BusinessClock,
   ) {}
 
   async create(dto: CreateRoomDto) {
@@ -209,8 +212,17 @@ export class RoomsService {
   }
 
   async update(id: string, dto: UpdateRoomDto) {
+    const { room, updated, targetStatus, targetCleanStatus } = await this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, id);
+      return this.updateInTransaction(tx, id, dto);
+    });
+    await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
+    return updated;
+  }
+
+  private async updateInTransaction(tx: Prisma.TransactionClient, id: string, dto: UpdateRoomDto) {
     // 1. 检查房源是否存在
-    const room = await this.prisma.room.findUnique({
+    const room = await tx.room.findUnique({
       where: { id },
     });
 
@@ -226,7 +238,7 @@ export class RoomsService {
 
       // 验证楼栋是否存在
       if (dto.buildingId && dto.buildingId !== room.buildingId) {
-        const building = await this.prisma.building.findUnique({
+        const building = await tx.building.findUnique({
           where: { id: dto.buildingId },
         });
         if (!building) {
@@ -235,7 +247,7 @@ export class RoomsService {
       }
 
       // 检查唯一性（排除自身）
-      const existingRoom = await this.prisma.room.findFirst({
+      const existingRoom = await tx.room.findFirst({
         where: {
           buildingId,
           floor,
@@ -252,7 +264,7 @@ export class RoomsService {
     // 3. 房态流转校验（若 status / cleanStatus 有变化）
     const targetStatus = dto.status ?? room.status;
     const targetCleanStatus = dto.cleanStatus ?? room.cleanStatus;
-    await this.assertTransitionAllowed(room, targetStatus, targetCleanStatus);
+    await this.assertTransitionAllowed(tx, room, targetStatus, targetCleanStatus);
 
     // 4. 更新（乐观锁：提供 version 时校验；每次成功更新 version 递增）
     const { version: expectedVersion, facilities, photos, availableDate, ...fields } = dto;
@@ -268,45 +280,41 @@ export class RoomsService {
     // 提供 photos 时全量替换照片；房源与照片同事务，避免「照片删了但房源没更新」。
     if (photos !== undefined) {
       const photoRows = buildRoomPhotoRows(photos);
-      const updated = await this.prisma.$transaction(async (tx) => {
-        if (expectedVersion !== undefined) {
-          const result = await tx.room.updateMany({
-            where: { id, version: expectedVersion },
-            data,
-          });
-
-          if (result.count === 0) {
-            throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
-          }
-        } else {
-          await tx.room.update({ where: { id }, data });
-        }
-
-        await tx.roomPhoto.deleteMany({ where: { roomId: id } });
-        if (photoRows.length > 0) {
-          await tx.roomPhoto.createMany({
-            data: photoRows.map((photo) => ({ ...photo, roomId: id })),
-          });
-          await bindPhotoAssets(tx, photos, id);
-        }
-
-        return tx.room.findUniqueOrThrow({
-          where: { id },
-          include: {
-            photos: {
-              select: { id: true, fileUrl: true, thumbnail: true, fileSize: true, sortOrder: true },
-              orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
-            },
-          },
+      if (expectedVersion !== undefined) {
+        const result = await tx.room.updateMany({
+          where: { id, version: expectedVersion },
+          data,
         });
-      });
 
-      await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
-      return updated;
+        if (result.count === 0) {
+          throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
+        }
+      } else {
+        await tx.room.update({ where: { id }, data });
+      }
+
+      await tx.roomPhoto.deleteMany({ where: { roomId: id } });
+      if (photoRows.length > 0) {
+        await tx.roomPhoto.createMany({
+          data: photoRows.map((photo) => ({ ...photo, roomId: id })),
+        });
+        await bindPhotoAssets(tx, photos, id);
+      }
+
+      const updated = await tx.room.findUniqueOrThrow({
+        where: { id },
+        include: {
+          photos: {
+            select: { id: true, fileUrl: true, thumbnail: true, fileSize: true, sortOrder: true },
+            orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+          },
+        },
+      });
+      return { room, updated, targetStatus, targetCleanStatus };
     }
 
     if (expectedVersion !== undefined) {
-      const result = await this.prisma.room.updateMany({
+      const result = await tx.room.updateMany({
         where: { id, version: expectedVersion },
         data,
       });
@@ -315,14 +323,12 @@ export class RoomsService {
         throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
       }
 
-      const updated = await this.prisma.room.findUniqueOrThrow({ where: { id } });
-      await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
-      return updated;
+      const updated = await tx.room.findUniqueOrThrow({ where: { id } });
+      return { room, updated, targetStatus, targetCleanStatus };
     }
 
-    const updated = await this.prisma.room.update({ where: { id }, data });
-    await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
-    return updated;
+    const updated = await tx.room.update({ where: { id }, data });
+    return { room, updated, targetStatus, targetCleanStatus };
   }
 
   /**
@@ -334,6 +340,7 @@ export class RoomsService {
    * 规则表已抽到 `room-transitions.ts`（纯函数可单测），这里只负责查库。
    */
   private async assertTransitionAllowed(
+    tx: Prisma.TransactionClient,
     room: { id: string; status: string; cleanStatus: string },
     targetStatus: string,
     targetCleanStatus: string,
@@ -344,39 +351,41 @@ export class RoomsService {
     assertTransitionTable(from, to);
 
     for (const precondition of requiredPreconditions(from, to)) {
-      assertPreconditionMet(precondition, await this.hasPrecondition(room.id, precondition.kind));
+      assertPreconditionMet(precondition, await this.hasPrecondition(tx, room.id, precondition.kind));
     }
   }
 
   /** 查询流转前置数据是否存在（按 kind 分派，避免每个条件各写一段 if）。 */
   private async hasPrecondition(
+    tx: Prisma.TransactionClient,
     roomId: string,
     kind: ReturnType<typeof requiredPreconditions>[number]['kind'],
   ): Promise<boolean> {
     switch (kind) {
       case 'DRAFT_CONTRACT': {
-        const draft = await this.prisma.contract.findFirst({
+        const draft = await tx.contract.findFirst({
           where: { roomId, status: 'DRAFT' },
           select: { id: true },
         });
         return !!draft;
       }
       case 'CONTRACT_STARTED': {
-        const contract = await this.prisma.contract.findFirst({
-          where: { roomId, status: { in: ['DRAFT', 'ACTIVE'] }, startDate: { lte: new Date() } },
+        const today = this.clock.todayUtc();
+        const contract = await tx.contract.findFirst({
+          where: { roomId, status: 'ACTIVE', startDate: { lte: today }, endDate: { gte: today } },
           select: { id: true },
         });
         return !!contract;
       }
       case 'CHECKOUT_RECORD': {
-        const checkout = await this.prisma.checkoutRecord.findFirst({
+        const checkout = await tx.checkoutRecord.findFirst({
           where: { roomId },
           select: { id: true },
         });
         return !!checkout;
       }
       case 'MAINTENANCE_REQUEST': {
-        const request = await this.prisma.maintenanceRequest.findFirst({
+        const request = await tx.maintenanceRequest.findFirst({
           where: { roomId },
           select: { id: true },
         });
@@ -391,35 +400,39 @@ export class RoomsService {
    * 房态流转（乐观锁：version 必填；冲突 409）
    */
   async updateStatus(id: string, dto: UpdateRoomStatusDto) {
-    const room = await this.prisma.room.findUnique({ where: { id } });
+    const { room, updated, targetStatus, targetCleanStatus } = await this.prisma.$transaction(async (tx) => {
+      await lockLeaseRoom(tx, id);
+      const room = await tx.room.findUnique({ where: { id } });
 
-    if (!room) {
-      throw new NotFoundException('房源不存在');
-    }
+      if (!room) {
+        throw new NotFoundException('房源不存在');
+      }
 
-    if (dto.status === undefined && dto.cleanStatus === undefined) {
-      throw new BadRequestException('请提供 status 或 cleanStatus');
-    }
+      if (dto.status === undefined && dto.cleanStatus === undefined) {
+        throw new BadRequestException('请提供 status 或 cleanStatus');
+      }
 
-    const targetStatus = dto.status ?? room.status;
-    const targetCleanStatus = dto.cleanStatus ?? room.cleanStatus;
+      const targetStatus = dto.status ?? room.status;
+      const targetCleanStatus = dto.cleanStatus ?? room.cleanStatus;
 
-    await this.assertTransitionAllowed(room, targetStatus, targetCleanStatus);
+      await this.assertTransitionAllowed(tx, room, targetStatus, targetCleanStatus);
 
-    const result = await this.prisma.room.updateMany({
-      where: { id, version: dto.version },
-      data: {
-        status: targetStatus,
-        cleanStatus: targetCleanStatus,
-        version: { increment: 1 },
-      },
+      const result = await tx.room.updateMany({
+        where: { id, version: dto.version },
+        data: {
+          status: targetStatus,
+          cleanStatus: targetCleanStatus,
+          version: { increment: 1 },
+        },
+      });
+
+      if (result.count === 0) {
+        throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
+      }
+
+      const updated = await tx.room.findUniqueOrThrow({ where: { id } });
+      return { room, updated, targetStatus, targetCleanStatus };
     });
-
-    if (result.count === 0) {
-      throw apiError(ErrorCode.ROOM_VERSION_CONFLICT);
-    }
-
-    const updated = await this.prisma.room.findUniqueOrThrow({ where: { id } });
     await this.notifyCleanersIfPendingClean(room, targetStatus, targetCleanStatus);
     return updated;
   }
