@@ -165,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, h } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getBatchSheet, submitBatchReadings } from '@/api/meters';
 import type { BatchSheetItem, BatchReadingSubmitItem } from '@/api/meters';
@@ -334,7 +334,7 @@ async function handleSubmitBatch() {
 
   try {
     await ElMessageBox.confirm(
-      `确定提交本次填报的 ${toSubmit.length} 间水电表读数？系统将自动核算用量并从预付账户扣费（不足生成补缴账单）。`,
+      `确定提交本次填报的 ${toSubmit.length} 间水电表读数？余额不足会生成差额账单。无生效合同或缺预付账户时，读数将保留待结算。`,
       '批量抄表确认',
       {
         confirmButtonText: '确定提交',
@@ -349,16 +349,24 @@ async function handleSubmitBatch() {
   submitting.value = true;
   try {
     const res = await submitBatchReadings(toSubmit);
-    if (res.failureCount === 0) {
-      ElMessage.success(`批量抄表成功！共登记 ${res.successCount} 条读数并扣费`);
+    const blocked = res.results.filter((item) => item.deductionBlocked);
+    if (res.failureCount === 0 && blocked.length === 0) {
+      ElMessage.success(`批量抄表成功！共登记 ${res.successCount} 条读数`);
       visible.value = false;
       emit('success');
     } else {
-      ElMessageBox.alert(
-        `批量抄表完成：成功 ${res.successCount} 间，失败 ${res.failureCount} 间。\n失败详情可在控制台或界面查看。`,
-        '处理结果',
-        { type: 'warning' }
-      );
+      const summary = `登记成功 ${res.successCount} 条，登记失败 ${res.failureCount} 条，结算待处理 ${blocked.length} 条。`;
+      const details = res.results.flatMap((item) => {
+        const label = item.meterNumber ?? item.meterId;
+        if (item.deductionBlocked) {
+          const { reason, retryCondition } = item.deductionBlocked;
+          return [`${label}：读数已保存，${reason}。${retryCondition}。`];
+        }
+        return item.success ? [] : [`${label}：${item.error ?? '登记失败'}`];
+      });
+      void ElMessageBox.alert(h('div', [h('p', summary), h('ul', details.map((detail) => h('li', detail)))]), '批量抄表结果', {
+        type: 'warning',
+      }).catch(() => undefined);
       // 清空成功项，保留失败项供排查
       for (const item of res.results) {
         if (item.success) {

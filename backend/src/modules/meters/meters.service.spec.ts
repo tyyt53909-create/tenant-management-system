@@ -933,9 +933,9 @@ describe('MetersService', () => {
 
   describe('settleBatch', () => {
     it('按列表批量结算，汇总成功和失败结果', async () => {
+      prisma.meter.findUnique.mockResolvedValueOnce(null);
       vi.spyOn(service, 'settleMeter')
-        .mockResolvedValueOnce({ settled: true, usage: 50, amount: 5000 } as any)
-        .mockRejectedValueOnce(new BadRequestException('无读数记录'));
+        .mockResolvedValueOnce({ meterId: 'm-1', settled: true, status: 'SETTLED', reasonCode: 'SETTLED', usage: 50, amount: 5000 });
 
       const res = await service.settleBatch({ meterIds: ['m-1', 'm-2'] }, operatorId);
 
@@ -944,7 +944,7 @@ describe('MetersService', () => {
       expect(res.failureCount).toBe(1);
       expect(res.results[0].success).toBe(true);
       expect(res.results[1].success).toBe(false);
-      expect(res.results[1].error).toContain('无读数记录');
+      expect(res.results[1]).toMatchObject({ status: 'FAILED', reasonCode: 'METER_NOT_FOUND', error: '水电表不存在' });
     });
   });
 });

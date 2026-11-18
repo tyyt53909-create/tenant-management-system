@@ -1,5 +1,6 @@
+import { Prisma } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { MeterBillingService } from './meter-billing.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
@@ -51,7 +52,9 @@ describe('MeterBillingService', () => {
     expect(await service.applyReadingDeduction(tx, meter, reading, 1, 'op')).toMatchObject({ applied: false });
     tx.contract.findFirst.mockResolvedValue({ id: 'contract-1', tenantId: 'tenant-1' });
     tx.prepayAccount.findUnique.mockResolvedValueOnce(null);
-    expect(await service.applyReadingDeduction(tx, meter, reading, 1, 'op')).toMatchObject({ applied: false });
+    expect(await service.applyReadingDeduction(tx, meter, reading, 1, 'op')).toMatchObject({ applied: false, reasonCode: 'MISSING_PREPAY_ACCOUNT' });
+    expect(tx.bill.create).not.toHaveBeenCalled();
+    expect(tx.prepayTransaction.create).not.toHaveBeenCalled();
   });
 
   it('deducts available balance and bills shortfall, including failed conditional update and unknown label', async () => {
@@ -143,17 +146,51 @@ describe('MeterBillingService', () => {
   });
 
   it('settles batches from explicit IDs or queried building, using default/custom functions and captures errors', async () => {
-    const custom = vi.fn().mockResolvedValueOnce({ meterId: 'a' }).mockRejectedValueOnce('bad');
+    const settled = { settled: true as const, status: 'SETTLED' as const, reasonCode: 'SETTLED' as const, usage: 5, amount: 50 };
+    const custom = vi.fn<MeterBillingService['settleMeter']>()
+      .mockResolvedValueOnce({ meterId: 'a', ...settled }).mockRejectedValueOnce(new Error('database details'));
     const explicit = await service.settleBatch({ meterIds: ['a', 'b'] }, 'op', custom);
-    expect(explicit).toMatchObject({ total: 2, successCount: 1, failureCount: 1 });
+    expect(explicit).toMatchObject({ total: 2, settledCount: 1, noChangeCount: 0, blockedCount: 0, failedCount: 1 });
+    expect(explicit.results[1]).toMatchObject({ status: 'FAILED', reasonCode: 'SETTLEMENT_FAILED', error: '结算执行失败' });
     prisma.meter.findMany.mockResolvedValue([{ id: 'c' }]);
-    const result = await service.settleBatch({ buildingId: 'building-1' }, 'op', async (id) => ({ meterId: id }));
+    const result = await service.settleBatch({ buildingId: 'building-1' }, 'op', async (id) => ({ meterId: id, ...settled }));
     expect(result).toMatchObject({ total: 1, successCount: 1 });
     expect(prisma.meter.findMany).toHaveBeenCalledWith({ where: { isActive: true, buildingId: 'building-1' }, select: { id: true } });
-    prisma.meter.findMany.mockResolvedValue([]);
+    prisma.meter.findMany.mockClear();
     expect(await service.settleBatch({ meterIds: [] }, 'op')).toMatchObject({ total: 0 });
-    vi.spyOn(service, 'settleMeter').mockResolvedValue({ meterId: 'd' } as any);
+    expect(await service.settleBatch({ buildingId: 'building-1', meterIds: [] }, 'op')).toMatchObject({ total: 0 });
+    await expect(service.settleBatch({}, 'op')).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.meter.findMany).not.toHaveBeenCalled();
+    vi.spyOn(service, 'settleMeter').mockResolvedValue({ meterId: 'd', ...settled });
     expect(await service.settleBatch({ meterIds: ['d'], settleUntil: '2026-01-31', notes: 'batch' }, 'op')).toMatchObject({ successCount: 1 });
+  });
+
+  it('仅将本服务的未找到表计与缺读数归为预期错误，其余错误安全记录后继续', async () => {
+    prisma.meter.findUnique.mockResolvedValueOnce(null).mockResolvedValue(meter);
+    prisma.meterReading.findFirst.mockResolvedValueOnce(null);
+    const sensitive = 'sensitive-failure-fixture';
+    const settle = vi.fn<MeterBillingService['settleMeter']>()
+      .mockImplementationOnce(service.settleMeter.bind(service))
+      .mockImplementationOnce(service.settleMeter.bind(service))
+      .mockRejectedValueOnce(new NotFoundException(sensitive))
+      .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError(sensitive, {
+        code: 'P2034', clientVersion: 'test', meta: { field: sensitive },
+      }))
+      .mockResolvedValueOnce({ meterId: 'later', settled: true, status: 'SETTLED', reasonCode: 'SETTLED', usage: 1, amount: 10 });
+    const logger = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    try {
+      const result = await service.settleBatch({ meterIds: ['missing', 'empty', 'other', 'db', 'later'] }, 'op', settle);
+      expect(result.results.map(({ reasonCode }) => reasonCode)).toEqual([
+        'METER_NOT_FOUND', 'NO_READINGS', 'SETTLEMENT_FAILED', 'SETTLEMENT_FAILED', 'SETTLED',
+      ]);
+      expect(JSON.stringify(result)).not.toContain(sensitive);
+      expect(logger.mock.calls).toEqual([
+        [{ event: 'meter.batch_settlement.failed', meterId: 'other', reasonCode: 'SETTLEMENT_FAILED', errorKind: 'HttpException', httpStatus: 404 }],
+        [{ event: 'meter.batch_settlement.failed', meterId: 'db', reasonCode: 'SETTLEMENT_FAILED', errorKind: 'PrismaKnownRequestError', prismaCode: 'P2034' }],
+      ]);
+    } finally {
+      logger.mockRestore();
+    }
   });
 
   it('t196: 预览支持显式截止时间；无基线无账户时基线与余额兜底', async () => {
@@ -236,18 +273,17 @@ describe('MeterBillingService', () => {
     );
   });
 
-  it('t196: 扣费未成功且无原因时回退默认文案', async () => {
-    prisma.meter.findUnique.mockResolvedValue(meter);
+  it('公共区域表无应收入账，也不变更结算游标', async () => {
+    prisma.meter.findUnique.mockResolvedValue({ ...meter, roomId: null });
     prisma.meterReading.findFirst.mockImplementation(async (args: any) => {
       if (args?.where?.OR) return null;
       if (args?.where?.readingTime)
         return { ...reading, id: 'latest', currentReading: 110, notes: 'n' };
       return { currentReading: 100 };
     });
-    vi.spyOn(service, 'applyReadingDeduction').mockResolvedValue({ applied: false } as any);
     const result = await service.settleMeter('m', {}, 'op');
-    expect(result).toMatchObject({ settled: false, usage: 10 });
-    expect(result.reason).toBe('扣费或账单生成未成功，未标记结算');
+    expect(result).toMatchObject({ settled: false, status: 'NO_CHANGE', reasonCode: 'PUBLIC_AREA', usage: 10 });
+    expect(prisma.meterReading.update).not.toHaveBeenCalled();
   });
 
   it('t196: 原备注为空但结算单有备注时 SETTLED 后拼接备注', async () => {

@@ -130,7 +130,7 @@ const handleSubmit = async () => {
       const usage = Number(result.reading.usage).toFixed(2);
       const deduction = result.deduction;
       if (!deduction.applied) {
-        readingResultText.value = `登记成功（用量 ${usage}）；扣费提示：${deduction.reason}`;
+        readingResultText.value = `登记成功（用量 ${usage}）；扣费提示：${[deduction.reason, deduction.retryCondition].filter(Boolean).join('。')}`;
         readingResultType.value = 'warning';
       } else if (deduction.shortfall > 0) {
         readingResultText.value = `用量 ${usage}；已扣费 ${formatMoney(deduction.deducted)}；余额不足，已生成补缴账单 ${formatMoney(deduction.shortfall)}`;
