@@ -2,8 +2,10 @@ import request from '../utils/request.js'
 import { API_BASE_URL } from '../utils/api-config.js'
 
 /**
+ * @typedef {'SUBMITTED' | 'ACKNOWLEDGED' | 'ASSIGNED' | 'IN_PROGRESS' | 'PENDING_CONFIRM' | 'COMPLETED' | 'CANCELLED'} MaintenanceStatus
+ *
  * @typedef {Object} MaintenanceQuery
- * @property {string} [status] - PENDING | PROCESSING | COMPLETED | CANCELLED
+ * @property {MaintenanceStatus} [status]
  * @property {number} [page]
  * @property {number} [limit]
  *
@@ -38,6 +40,27 @@ export const getMaintenanceDetail = (id) => request.get(`/maintenance/${encodeUR
 export const createMaintenance = (data) => {
   return request.post('/maintenance', data)
 }
+
+/**
+ * @typedef {Object} MaintenanceListItem
+ * @property {string} id
+ * @property {string} title
+ * @property {string} description
+ * @property {MaintenanceStatus} status
+ * @property {'LOW' | 'NORMAL' | 'URGENT'} priority
+ * @property {string} createdAt
+ * @property {string | null} assignedTo
+ * @property {{ roomNumber: string }} [room]
+ *
+ * @typedef {{ data: MaintenanceListItem[], meta: { page: number, limit: number, total: number, totalPages: number } }} MaintenancePage
+ */
+
+/**
+ * 获取当前管理者可见的报修（ADMIN / PROPERTY_MANAGER），楼栋范围由后端校验。
+ * @param {MaintenanceQuery} [params]
+ * @returns {Promise<MaintenancePage>}
+ */
+export const getAllMaintenance = (params) => request.get('/maintenance', params)
 
 /**
  * 上传单张报修照片（multipart/form-data，字段名 file）

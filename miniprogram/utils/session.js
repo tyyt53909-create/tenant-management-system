@@ -3,6 +3,10 @@ import { API_BASE_URL } from './api-config.js'
 
 export const CLEANER_PAGE = '/pages/cleaning/cleaning'
 
+export function isMaintenanceManager(role) {
+  return role === 'ADMIN' || role === 'PROPERTY_MANAGER'
+}
+
 export function openHome(role) {
   if (role === 'CLEANER') uni.reLaunch({ url: CLEANER_PAGE })
   else uni.switchTab({ url: '/pages/index/index' })

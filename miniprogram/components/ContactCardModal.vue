@@ -69,12 +69,12 @@
       </view>
 
       <!-- 快速快捷入口 -->
-      <view class="quick-navs">
-        <view class="quick-nav-btn" @tap="goToMaintenance">
+      <view v-if="canOpenMaintenance || canOpenContract" class="quick-navs">
+        <view v-if="canOpenMaintenance" class="quick-nav-btn" @tap="goToMaintenance">
           <text class="quick-icon">🛠️</text>
           <text class="quick-label">在线报修</text>
         </view>
-        <view class="quick-nav-btn" @tap="goToContract">
+        <view v-if="canOpenContract" class="quick-nav-btn" @tap="goToContract">
           <text class="quick-icon">📄</text>
           <text class="quick-label">查看合同</text>
         </view>
@@ -96,7 +96,9 @@ export default {
     contact: {
       type: Object,
       default: () => ({})
-    }
+    },
+    canOpenMaintenance: { type: Boolean, default: true },
+    canOpenContract: { type: Boolean, default: true }
   },
   methods: {
     close() {

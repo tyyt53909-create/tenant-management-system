@@ -53,10 +53,12 @@ test('页面跳转全部指向存在的包内路径', async () => {
     '../pages/profile/profile.vue',
     '../pages/cleaning/cleaning.vue',
     '../components/ContactCardModal.vue',
+    '../components/home/TenantHome.vue',
+    '../components/home/AdminHome.vue',
   ]
   for (const source of sources) {
     const code = await readFile(new URL(source, import.meta.url), 'utf8')
-    for (const match of code.matchAll(/'(\/(?:pages|packageA)\/[a-zA-Z0-9/_-]+)'/g)) {
+    for (const match of code.matchAll(/['`](\/(?:pages|packageA)\/[a-zA-Z0-9/_-]+)(?=['`?])/g)) {
       const target = match[1]
       assert.ok(main.has(target) || sub.has(target), `${source} 指向不存在的页面 ${target}`)
     }

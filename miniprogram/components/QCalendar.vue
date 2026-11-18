@@ -2,15 +2,17 @@
   <view class="life-calendar">
     <view class="calendar-header"><text class="calendar-title">生活月历</text><view class="month-nav"><text>{{ year }}年{{ month + 1 }}月</text><button class="calendar-arrow" aria-label="上个月" @tap="move(-1)">‹</button><button class="calendar-arrow" aria-label="下个月" @tap="move(1)">›</button></view></view>
     <view class="calendar-grid"><text v-for="label in weekdays" :key="label" class="weekday">{{ label }}</text><view v-for="(day, index) in days" :key="index" :class="['calendar-day', { selected: day && selected === day, today: day && today === key(day), blank: !day }]" @tap="select(day)"><text v-if="day">{{ day }}</text><view v-if="day && eventDates.includes(key(day))" class="event-dot" /></view></view>
-    <view v-if="selectedEvents.length" class="calendar-event" @tap="$emit('open', selectedEvents[0])"><view class="event-icon"><QIcon :name="selectedEvents[0].type === 'repair' ? 'repair' : 'wallet'" :size="34" /></view><view class="event-copy"><text class="event-title">{{ month + 1 }}月{{ selected }}日 · {{ selectedEvents[0].title }}</text><text class="event-description">{{ selectedEvents[0].description }}{{ selectedEvents.length > 1 ? ` · 共 ${selectedEvents.length} 项` : '' }}</text></view><text class="q-arrow">›</text></view>
-    <view v-else class="calendar-event"><view class="event-icon"><QIcon name="calendar" :size="34" /></view><view class="event-copy"><text class="event-title">{{ month + 1 }}月{{ selected }}日</text><text class="event-description">暂无近期安排，安心生活</text></view></view>
+    <view v-for="event in selectedEvents" :key="event.id" class="calendar-event" @tap="$emit('open', event)"><view class="event-icon"><QIcon :name="event.type === 'repair' ? 'repair' : 'wallet'" :size="34" /></view><view class="event-copy"><text class="event-title">{{ month + 1 }}月{{ selected }}日 · {{ event.title }}</text><text class="event-description">{{ event.description }}</text></view><text class="q-arrow">›</text></view>
+    <view v-if="!selectedEvents.length" class="calendar-event"><view class="event-icon"><QIcon name="calendar" :size="34" /></view><view class="event-copy"><text class="event-title">{{ month + 1 }}月{{ selected }}日</text><text class="event-description">{{ loading ? '正在加载日程…' : hasError ? '部分日程暂未更新' : '当天暂无安排' }}</text></view></view>
   </view>
 </template>
 <script>
 import QIcon from './QIcon.vue'
 import { monthDays, dateKey } from '../utils/calendar.js'
 export default {
-  components: { QIcon }, props: { events: { type: Array, default: () => [] } }, emits: ['open'],
+  components: { QIcon },
+  props: { events: { type: Array, default: () => [] }, loading: Boolean, hasError: Boolean },
+  emits: ['open'],
   data() { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth(), selected: d.getDate(), today: dateKey(d.getFullYear(), d.getMonth(), d.getDate()), weekdays: ['一', '二', '三', '四', '五', '六', '日'] } },
   computed: { days() { return monthDays(this.year, this.month) }, eventDates() { return this.events.map(e => e.date) }, selectedEvents() { return this.events.filter(e => e.date === this.key(this.selected)) } },
   methods: { key(day) { return dateKey(this.year, this.month, day) }, select(day) { if (day) this.selected = day }, move(delta) { const d = new Date(this.year, this.month + delta, 1); this.year = d.getFullYear(); this.month = d.getMonth(); this.selected = 1 } }
