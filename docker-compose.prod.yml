@@ -136,7 +136,7 @@ services:
   worker:
     extends:
       service: backend
-    command: ["node", "dist/worker.js"]
+    command: ["node", "dist/backend/src/worker.js"]
     environment:
       PROCESS_ROLE: worker
       QUEUE_ENABLED: "true"

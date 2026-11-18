@@ -1,14 +1,15 @@
 # OPT-25 / T198：管理后台 + 落地页静态镜像（nginx）
 # 构建：docker build --build-arg VITE_API_BASE_URL=/api -f frontend-admin/Dockerfile .
-# 注意 context 为仓库根（需同时拿到 landing/）。
+# 注意 context 为仓库根（需同时拿到 shared/ 和 landing/）。
 
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 COPY frontend-admin/package.json frontend-admin/package-lock.json ./frontend-admin/
 RUN cd frontend-admin && npm ci
 COPY frontend-admin/ ./frontend-admin/
+COPY shared/ ./shared/
 RUN cd frontend-admin && npm run build
 
 FROM nginx:1.27-alpine AS runner

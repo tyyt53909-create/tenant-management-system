@@ -5,8 +5,8 @@
 #              （seed 为预编译 JS，运行时不需要 TS 执行器）
 # 构建：docker build -f backend/Dockerfile .（仓库根为上下文）
 #   T289 起 shared/ 源码直引：docker build 上下文必须是仓库根，dockerfile 指向 backend/Dockerfile，
-#   prisma/seed 等路径在 -f 下不变；CI 与文档后续按此调整。
-# T253 / OPS-02：运行在 Node 24 LTS（CI 仍为 Node 20，统一由 OPS-08 处理）。
+#   构建期保留 backend/ 和 shared/ 的相对位置。
+# T253 / OPS-02：运行在 Node 24 LTS。
 
 FROM node:24-alpine AS deps
 WORKDIR /app
@@ -15,14 +15,15 @@ COPY backend/prisma/schema.prisma ./prisma/
 RUN npm ci
 
 FROM node:24-alpine AS builder
-WORKDIR /app
+WORKDIR /app/backend
 # Alpine 上 Prisma 自动探测 OpenSSL 经常失败，显式锁定 musl + openssl3 引擎；
 # openssl 运行库 builder/runner 都要（generate/seed/migrate/app 都加载引擎）。
 RUN apk add --no-cache openssl
 # 引擎按目标架构选择（uname 即镜像架构，与运行处一致；本地 arm64 / 生产 amd64）
 # 注意：不要用 $TARGETARCH，它只在 buildx 下才有值，普通 docker build 为空。
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY backend/ ./
+COPY shared/ /app/shared/
 RUN ARCH="$(uname -m)" \
   && if [ "$ARCH" = "aarch64" ] ; then export PRISMA_CLI_BINARY_TARGETS=linux-musl-arm64-openssl-3.0.x KEEP_PAT="arm64-openssl-3.0.x" ; else export PRISMA_CLI_BINARY_TARGETS=linux-musl-openssl-3.0.x KEEP_PAT="musl-openssl-3.0.x" ; fi \
   && npx prisma generate \
@@ -56,12 +57,12 @@ STOPSIGNAL SIGTERM
 RUN apk add --no-cache openssl \
   && addgroup -S app && adduser -S -u 1001 -G app app \
   && mkdir -p /app/uploads && chown -R app:app /app
-COPY --from=builder --chown=app:app /app/package.json ./
-COPY --from=builder --chown=app:app /app/node_modules ./node_modules
-COPY --from=builder --chown=app:app /app/dist ./dist
-COPY --from=builder --chown=app:app /app/dist-seed ./dist-seed
+COPY --from=builder --chown=app:app /app/backend/package.json ./
+COPY --from=builder --chown=app:app /app/backend/node_modules ./node_modules
+COPY --from=builder --chown=app:app /app/backend/dist ./dist
+COPY --from=builder --chown=app:app /app/backend/dist-seed ./dist-seed
 # migrate one-shot 需要 schema + migrations
-COPY --from=builder --chown=app:app /app/prisma ./prisma
+COPY --from=builder --chown=app:app /app/backend/prisma ./prisma
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \

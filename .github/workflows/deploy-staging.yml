@@ -27,6 +27,8 @@ jobs:
     name: Deploy & smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: 校验输入与 secrets
         env:
@@ -52,6 +54,16 @@ jobs:
             echo "请先按 docs/20-staging与发布闸门.md 配置，再重新运行。" >&2
             exit 1
           fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: 通过 SSH 部署
         env:

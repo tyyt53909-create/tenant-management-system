@@ -1,11 +1,11 @@
 # 文档索引
 
 > 本文档是所有项目文档的唯一注册表
-> 最后更新: 2026-10-25
-> 文档总数: 171 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
-> 状态标注: active 115、draft 8、archived 48（交接记录按规范即时归档）、未标注元信息 0
-> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 183 份（含本索引与归档）
-> 任务书: 136 个（仓库根目录 `tasks/*.md` 实际文件数）
+> 最后更新: 2026-11-18
+> 文档总数: 193 份（口径：`docs/**/*.md` 去除 `docs/INDEX.md` 与 `docs/archive/**`，即 CI 检查范围）
+> 状态标注: active 119、draft 8、archived 66（交接记录按规范即时归档）、未标注元信息 0
+> 归档文档: 11 份（`docs/archive/`，见第 5 节）；`docs/` 下 .md 实际合计 205 份（含本索引与归档）
+> 任务书: 167 个（仓库根目录 `tasks/*.md` 实际文件数）
 
 **使用说明**：
 - 新增文档必须先在此登记才可合并
@@ -33,18 +33,18 @@
 | [11-小程序构建与配置.md](./11-小程序构建与配置.md) | 小程序构建与配置 | 事实来源类 | active | medium | miniprogram/\*\* | 2026-10-13 | 安装、开发/生产 API 配置、产物位置与风险界线 |
 | [10-主题系统架构.md](./10-主题系统架构.md) | 主题系统架构 | 事实来源类 | draft | medium | miniprogram/theme/\*\*、miniprogram/utils/theme.js | 2026-10-13 | ⚠️ 仍描述 Vuex 版架构，T146 后需人工复核更新 |
 | [主题系统-完成总结.md](./主题系统-完成总结.md) | 主题系统完成总结 | 过程类 | draft | medium | miniprogram/\*\* | 2026-10-13 | ⚠️ T146 前的历史记录，含已废弃的 Vuex 说明 |
-| [12-部署与运维.md](./12-部署与运维.md) | 部署与运维 | 事实来源类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\*、docker-compose.yml | 2026-10-16 | 环境变量清单；T174 OTP 开关与 SMTP，T175 限流与 TRUST_PROXY |
+| [12-部署与运维.md](./12-部署与运维.md) | 部署与运维 | 事实来源类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\*、docker-compose.yml | 2026-11-18 | 环境变量清单；T174 OTP 开关与 SMTP，T175 限流与 TRUST_PROXY |
 | [14-下一阶段计划（草案）.md](./14-下一阶段计划（草案）.md) | 下一阶段计划（草案） | 过程类 | draft | strong | docs/**、backend/**、frontend-admin/**、miniprogram/** | 2026-10-18 | 文檔二草案：只彙整已有证据的剩余工作，**范围待人工确认** |
 | [13-架构与现有代码优化计划.md](./13-架构与现有代码优化计划.md) | 架构与现有代码优化计划 | 过程类 | active | strong | backend/\*\*、frontend-admin/\*\*、miniprogram/\*\* | 2026-10-15 | OPT-01～OPT-28，不加新业务功能 |
 | [15-管理后台设计系统.md](./15-管理后台设计系统.md) | 管理后台设计系统 | 事实来源类 | active | medium | frontend-admin/src/styles/\*\*、frontend-admin/src/style.css、frontend-admin/src/components/common/ResourcePanel.vue、frontend-admin/src/views/\*\* | 2026-10-18 | 令牌唯一来源、WCAG AA 对比度表、11px 字级地板、页面骨架与顶栏断点 |
 | [16-房源模型接口契约.md](./16-房源模型接口契约.md) | 房源模型接口契约 | 事实来源类 | active | strong | backend/src/modules/space/\*\*、backend/src/modules/floor-plans/\*\*、frontend-admin/src/types/space.ts、frontend-admin/src/components/space/\*\* | 2026-10-21 | SpaceModel v1、座標系、FloorPlan/RoomShape、角色投影與 fixture；T221～T227 共享契約 |
 | [19-生产化路线图.md](./19-生产化路线图.md) | 生产化路线图（第二轮） | 过程类 | active | strong | tasks/\*\*、docs/09-待确认清单.md、AGENTS.md、scripts/task-check.mjs、scripts/status-core.mjs、.github/workflows/status-check.yml | 2026-10-23 | M0–M5 里程碑、65 个计划任务与 T250–T314 映射、DEC-01~09、任务书 schema、ISS 摘要 |
-| [20-staging与发布闸门.md](./20-staging与发布闸门.md) | staging 与发布闸门 | 事实来源类 | active | strong | .github/workflows/deploy-staging.yml、.github/workflows/release.yml、docker-compose.staging.yml、scripts/smoke.mjs | 2026-10-24 | staging 拓扑、secrets、部署/回滚、冒烟与 Go/No-Go |
+| [20-staging与发布闸门.md](./20-staging与发布闸门.md) | staging 与发布闸门 | 事实来源类 | active | strong | .github/workflows/deploy-staging.yml、.github/workflows/release.yml、docker-compose.staging.yml、scripts/smoke.mjs | 2026-11-18 | staging 拓扑、secrets、部署/回滚、冒烟与 Go/No-Go |
 | [21-指标口径与金额格式.md](./21-指标口径与金额格式.md) | 指标口径与金额格式 | 事实来源类 | active | strong | backend/src/common/metrics/\*\*、backend/src/common/utils/{money,csv}.util.ts、frontend-admin/src/utils/{money,csv}.ts | 2026-10-24 | T275：出账/收款/未收/收缴率/出租率/趋势口径，金额与 CSV 导出单一管道 |
 | [22-可观测性与告警.md](./22-可观测性与告警.md) | 可观测性与告警 | 事实来源类 | active | strong | backend/src/common/{metrics,alerts}/\*\*、backend/src/modules/scheduler/\*\* | 2026-10-25 | T277：Prometheus 指标、/metrics 访问控制、告警 webhook、JobRun PARTIAL、锁 TTL |
-| [23-后台任务与队列.md](./23-后台任务与队列.md) | 后台任务与队列 | 事实来源类 | active | strong | backend/src/modules/jobs/\*\*、backend/src/worker.ts、backend/src/modules/scheduler/\*\* | 2026-10-25 | T278：BullMQ 生产者/Worker、死信运维接口、重试与优雅关闭、生产 compose worker |
+| [23-后台任务与队列.md](./23-后台任务与队列.md) | 后台任务与队列 | 事实来源类 | active | strong | backend/src/modules/jobs/\*\*、backend/src/worker.ts、backend/src/modules/scheduler/\*\* | 2026-11-18 | T278：BullMQ 生产者/Worker、死信运维接口、重试与优雅关闭、生产 compose worker |
 | [24-多实例运行约束.md](./24-多实例运行约束.md) | 多实例运行约束 | 事实来源类 | active | strong | backend/src/redis/\*\*、backend/src/config/env.validation.ts、backend/test/integration/multi-instance.int-spec.ts | 2026-10-25 | T279：共享状态清单、MULTI_INSTANCE 启动约束、Redis 并发连接语义、跨实例会话验证 |
-| [25-备份与恢复.md](./25-备份与恢复.md) | 备份、PITR 与恢复演练 | 事实来源类 | active | strong | scripts/backup-db.sh、scripts/restore-db.sh、scripts/restore-rehearsal.sh、scripts/backup-core.mjs | 2026-10-25 | T280：每日逻辑备份、checksum、保留策略、恢复与月度演练、托管 PITR |
+| [25-备份与恢复.md](./25-备份与恢复.md) | 备份、PITR 与恢复演练 | 事实来源类 | active | strong | scripts/backup-db.sh、scripts/restore-db.sh、scripts/restore-rehearsal.sh、scripts/backup-core.mjs | 2026-11-18 | T280：每日逻辑备份、checksum、保留策略、恢复与月度演练、托管 PITR |
 | [26-SLO与性能基准.md](./26-SLO与性能基准.md) | SLO 与性能基准 | 事实来源类 | active | strong | scripts/perf-baseline.k6.js、scripts/slo.mjs、scripts/slo-check.mjs | 2026-10-25 | T281：P95/错误率目标、k6 执行与判定、发布前频率与边界 |
 | [27-实时推送.md](./27-实时推送.md) | 实时推送：WebSocket + 轮询后备 | 事实来源类 | active | strong | backend/src/modules/notifications/\*\*、frontend-admin/src/utils/notificationSocket.ts | 2026-10-25 | T282：Socket.IO 鉴权与房间、通知落库推送、断线轮询、多实例边界 |
 | [28-报修工单时间线.md](./28-报修工单时间线.md) | 报修工单时间线与双向沟通 | 事实来源类 | active | strong | backend/src/modules/maintenance/**、frontend-admin/src/views/maintenance/** | 2026-10-25 | T283：maintenance_messages、系统事件、双方留言与权限 |
@@ -110,6 +110,8 @@
 - [T325-CORE-01-账单并发写入.md](../tasks/T325-CORE-01-账单并发写入.md)：收款、取消、改额与预付抵扣的账单锁及真实并发验收。
 - [T326-CORE-02-表计并发与结算游标.md](../tasks/T326-CORE-02-表计并发与结算游标.md)：单笔、批量和周期结算共用表计锁，历史截止时间不重复扣费。
 - [T327-CORE-02-批量结算结果与缺账户.md](../tasks/T327-CORE-02-批量结算结果与缺账户.md)：结算分类、缺账户补办和差额核对。
+- [T337-发布链路P1修复.md](../tasks/T337-发布链路P1修复.md)：恢复演练保护、双镜像、生产 Worker 与 staging 冒烟。
+- [T338-共享源码CI路径过滤.md](../tasks/T338-共享源码CI路径过滤.md)：跟进共享源码变更的 CI 触发覆盖。
 - [T263-FIN-01-合同状态机与续签修复.md](../tasks/T263-FIN-01-合同状态机与续签修复.md)：FIN-01，续签唯一约束改为 ACTIVE-only、日期不重叠、激活事务先 RENEWED、定时任务同步。
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08，CI 统一 Node 22、生产依赖审计与镜像扫描门禁、staging 编排/部署 workflow/冒烟脚本。
@@ -134,6 +136,7 @@
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-11-18-T337-发布链路P1修复.md](./handoff/2026-11-18-T337-发布链路P1修复.md)：恢复演练同库保护、双镜像、Worker 与 staging 冒烟回归。
 - [2026-10-28-T304-保洁任务自动建单指派与验收.md](./handoff/2026-10-28-T304-保洁任务自动建单指派与验收.md)：T304，保洁工单建模、退租自动建单、管家派工调度、保洁员开工完工与验收恢复房态闭环（WRK-03）。
 - [2026-10-26-T303-维修工单派工SLA与费用转嫁.md](./handoff/2026-10-26-T303-维修工单派工SLA与费用转嫁.md)：T303，维修工单派工调度、SLA时限计算与监控告警、维修师傅专属端点、租客验收与过失费用转嫁（WRK-02）。
 - [2026-10-26-T302-员工角色权限与楼栋范围.md](./handoff/2026-10-26-T302-员工角色权限与楼栋范围.md)：T302，员工多角色体系（管家/财务/维修/保洁/业主）、楼栋管辖范围映射、员工服务升级与数据范围隔离（WRK-01，DEC-08，ISS-47）。
