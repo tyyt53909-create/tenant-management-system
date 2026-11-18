@@ -1,23 +1,11 @@
 # 项目状态跟踪
 
-> 分支: `HEAD`
+> 分支: `fix/T327-meter-batch-results`
 > 集成基準: `origin/develop` @ `3c554ab`
 > 發布就緒: **NO-GO**
-> Gates: 0 pass / 0 fail / 14 not-run
+> Gates: 12 pass / 0 fail / 2 not-run
 
 ### NO-GO 原因
-  - 後端 lint: not-run
-  - 後端型別檢查: not-run
-  - 後端單元測試: not-run
-  - 後端 e2e: not-run
-  - 管理後台 lint: not-run
-  - 管理後台單元測試: not-run
-  - 管理後台 build: not-run
-  - 小程序單元測試: not-run
-  - 小程序 build: not-run
-  - OpenAPI 生成物: not-run
-  - 文檔檢查: not-run
-  - 整合測試: not-run
   - 安全掃描: not-run
   - 人工 UAT: not-run
 
@@ -27,20 +15,20 @@
 
 | Gate | 狀態 | 證據 |
 |---|---|---|
-| 後端 lint | ⏸ not-run | 未提供 |
-| 後端型別檢查 | ⏸ not-run | 未提供 |
-| 後端單元測試 | ⏸ not-run | 未提供 |
-| 後端 e2e | ⏸ not-run | 未提供 |
-| 管理後台 lint | ⏸ not-run | 未提供 |
-| 管理後台單元測試 | ⏸ not-run | 未提供 |
-| 管理後台 build | ⏸ not-run | 未提供 |
-| 小程序單元測試 | ⏸ not-run | 未提供 |
-| 小程序 build | ⏸ not-run | 未提供 |
-| OpenAPI 生成物 | ⏸ not-run | 未提供 |
-| 文檔檢查 | ⏸ not-run | 未提供 |
-| 整合測試 | ⏸ not-run | 未提供 |
-| 安全掃描 | ⏸ not-run | 未提供 |
-| 人工 UAT | ⏸ not-run | 未提供 |
+| 後端 lint | ✅ pass | 232 warnings / 0 errors |
+| 後端型別檢查 | ✅ pass | exit 0 |
+| 後端單元測試 | ✅ pass | 174 files / 1719 tests |
+| 後端 e2e | ✅ pass | 4 files / 83 tests |
+| 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
+| 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
+| 管理後台 build | ✅ pass | exit 0 |
+| 小程序單元測試 | ✅ pass | 168 tests |
+| 小程序 build | ✅ pass | exit 0 |
+| OpenAPI 生成物 | ✅ pass | exit 0 |
+| 文檔檢查 | ✅ pass | exit 0 |
+| 整合測試 | ✅ pass | 34 files / 114 tests |
+| 安全掃描 | ⏸ not-run | 尚無 CI artifact |
+| 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
 ---
 
@@ -125,10 +113,10 @@
 - 文件：**193** 份
 
 ### 測試
-- 後端單元：未提供
-- 後端 e2e：未提供
-- 管理後台單元：未提供
-- 小程序單元：未提供
+- 後端單元：174 files / 1719 tests
+- 後端 e2e：4 files / 83 tests
+- 管理後台單元：22 files / 112 tests
+- 小程序單元：168 tests
 
 ---
 
