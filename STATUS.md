@@ -1,7 +1,7 @@
 # 项目状态跟踪
 
-> 分支: `fix/T331-contract-confirmation`
-> 集成基準: `origin/develop` @ `3c554ab`
+> 分支: `develop`
+> 集成基準: `origin/develop` @ `33ac070`
 > 發布就緒: **NO-GO**
 > Gates: 12 pass / 0 fail / 2 not-run
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | 後端 lint | ✅ pass | 232 warnings / 0 errors |
 | 後端型別檢查 | ✅ pass | exit 0 |
-| 後端單元測試 | ✅ pass | 174 files / 1718 tests |
+| 後端單元測試 | ✅ pass | 174 files / 1719 tests |
 | 後端 e2e | ✅ pass | 4 files / 83 tests |
 | 管理後台 lint | ✅ pass | 0 warnings / 0 errors |
 | 管理後台單元測試 | ✅ pass | 22 files / 112 tests |
@@ -26,7 +26,7 @@
 | 小程序 build | ✅ pass | exit 0 |
 | OpenAPI 生成物 | ✅ pass | exit 0 |
 | 文檔檢查 | ✅ pass | exit 0 |
-| 整合測試 | ✅ pass | 35 files / 114 tests |
+| 整合測試 | ✅ pass | 34 files / 113 tests |
 | 安全掃描 | ⏸ not-run | 尚無 CI artifact |
 | 人工 UAT | ⏸ not-run | 尚無驗收紀錄 |
 
@@ -42,9 +42,9 @@
 | 已完成但缺 handoff | 0 |
 | handoff 未登記 INDEX | 0 |
 | 已完成但缺 merge 證據（strict） | 0 |
-| 進行中 | 6 |
+| 進行中 | 7 |
 | 文件 active（不計入進行中） | 12 |
-| 草稿 | 7 |
+| 草稿 | 6 |
 | 阻塞 | 0 |
 | 無法分類 | 2 |
 
@@ -55,6 +55,7 @@
 - **T326 ｜CORE-02 表计并发与结算游标**（active，plan FIN-08，`fix/T326-meter-settlement-lock`）
 - **T331 ｜CORE-03 租约确认与生效**（active，plan FIN-01，`fix/T331-contract-confirmation`）
 - **T337 ｜发布链路 P1 修复**（active，plan M3，`fix/T337-deployment-regressions`）
+- **T338 ｜共享源码 CI 路径过滤**（active，plan QLT-04，`fix/T338-shared-ci-paths`）
 
 ### 阻擋發布
 - 無
@@ -92,6 +93,7 @@
 
 ## 近期交接
 
+- [交接记录：T338 共享源码 CI 路径过滤](docs/handoff/2026-11-18-T338-共享源码CI路径过滤.md)
 - [交接记录：T337 发布链路 P1 修复](docs/handoff/2026-11-18-T337-发布链路P1修复.md)
 - [T331｜租约确认与生效交接](docs/handoff/2026-11-17-T331-租约确认与生效.md)
 - [交接记录：T304 保洁任务：自动建单、指派、验收（WRK-03）](docs/handoff/2026-10-28-T304-保洁任务自动建单指派与验收.md)
@@ -99,7 +101,6 @@
 - [交接记录：T302 员工角色、权限与楼栋范围（WRK-01）](docs/handoff/2026-10-26-T302-员工角色权限与楼栋范围.md)
 - [交接记录：T301 到期提醒、续约意向与续约报价（LSE-04）](docs/handoff/2026-10-26-T301-到期提醒续约意向与续约报价.md)
 - [交接记录：T300 入住/退租验房与租客退租申请（LSE-03）](docs/handoff/2026-10-26-T300-入住退租验房与退租申请.md)
-- [交接记录：T299 合同模板、PDF、电子签约与共同承租人（LSE-02）](docs/handoff/2026-10-26-T299-合同模板PDF电子签约共同承租人.md)
 
 ---
 
@@ -107,13 +108,13 @@
 
 - 資料模型：**56** 張表
 - OpenAPI 路由：**281** 條
-- 後端程式碼：**37352** 行
-- 管理後台程式碼：**36968** 行
+- 後端程式碼：**37406** 行
+- 管理後台程式碼：**37037** 行
 - 小程序程式碼：**8721** 行
-- 文件：**193** 份
+- 文件：**194** 份
 
 ### 測試
-- 後端單元：174 files / 1718 tests
+- 後端單元：174 files / 1719 tests
 - 後端 e2e：4 files / 83 tests
 - 管理後台單元：22 files / 112 tests
 - 小程序單元：168 tests
