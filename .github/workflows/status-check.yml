@@ -11,6 +11,7 @@ on:
       - 'backend/**'
       - 'frontend-admin/**'
       - 'miniprogram/**'
+      - 'shared/**'
       - 'scripts/**'
       - 'tasks/**'
       - 'docs/**'
