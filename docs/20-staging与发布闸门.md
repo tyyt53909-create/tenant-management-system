@@ -3,11 +3,18 @@ status: active
 owner_tier: strong
 applies_to:
   - .github/workflows/deploy-staging.yml
+  - .github/workflows/backend-ci.yml
+  - .github/workflows/backend-e2e.yml
+  - .github/workflows/admin-ci.yml
+  - .github/workflows/admin-ui.yml
+  - .github/workflows/miniprogram-ci.yml
+  - .github/workflows/status-check.yml
+  - .github/workflows/deployment-ci.yml
   - .github/workflows/release.yml
   - docker-compose.staging.yml
   - scripts/smoke.mjs
 last_verified: 2026-11-18
-verified_commit: 7eec558
+verified_commit: f55d067
 supersedes: null
 superseded_by: null
 version: 1.0
@@ -97,6 +104,8 @@ staging 与生产使用同一镜像、同一迁移，只替换环境变量与端
 - [ ] 退租结算 → 押金退还
 
 ## 6. 发布闸门（Go / No-Go）
+
+仅修改 `shared/` 时，目标为 `main` 或 `develop` 的 PR 会触发后端 CI、后端 E2E、管理后台 CI、管理后台 Playwright、小程序测试、Status Check 和 Deployment CI。直接推送到这两个分支时，前五套测试和 Status Check 也会运行。Deployment CI 在 PR 中验证镜像与编排。
 
 Go 条件（全部满足）：
 

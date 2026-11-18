@@ -39,7 +39,7 @@
 | [15-管理后台设计系统.md](./15-管理后台设计系统.md) | 管理后台设计系统 | 事实来源类 | active | medium | frontend-admin/src/styles/\*\*、frontend-admin/src/style.css、frontend-admin/src/components/common/ResourcePanel.vue、frontend-admin/src/views/\*\* | 2026-10-18 | 令牌唯一来源、WCAG AA 对比度表、11px 字级地板、页面骨架与顶栏断点 |
 | [16-房源模型接口契约.md](./16-房源模型接口契约.md) | 房源模型接口契约 | 事实来源类 | active | strong | backend/src/modules/space/\*\*、backend/src/modules/floor-plans/\*\*、frontend-admin/src/types/space.ts、frontend-admin/src/components/space/\*\* | 2026-10-21 | SpaceModel v1、座標系、FloorPlan/RoomShape、角色投影與 fixture；T221～T227 共享契約 |
 | [19-生产化路线图.md](./19-生产化路线图.md) | 生产化路线图（第二轮） | 过程类 | active | strong | tasks/\*\*、docs/09-待确认清单.md、AGENTS.md、scripts/task-check.mjs、scripts/status-core.mjs、.github/workflows/status-check.yml | 2026-10-23 | M0–M5 里程碑、65 个计划任务与 T250–T314 映射、DEC-01~09、任务书 schema、ISS 摘要 |
-| [20-staging与发布闸门.md](./20-staging与发布闸门.md) | staging 与发布闸门 | 事实来源类 | active | strong | .github/workflows/deploy-staging.yml、.github/workflows/release.yml、docker-compose.staging.yml、scripts/smoke.mjs | 2026-11-18 | staging 拓扑、secrets、部署/回滚、冒烟与 Go/No-Go |
+| [20-staging与发布闸门.md](./20-staging与发布闸门.md) | staging 与发布闸门 | 事实来源类 | active | strong | .github/workflows/deploy-staging.yml、.github/workflows/release.yml、docker-compose.staging.yml、scripts/smoke.mjs | 2026-11-18 | staging 拓扑、secrets、部署/回滚、冒烟与 Go/No-Go；共享源码的测试触发规则 |
 | [21-指标口径与金额格式.md](./21-指标口径与金额格式.md) | 指标口径与金额格式 | 事实来源类 | active | strong | backend/src/common/metrics/\*\*、backend/src/common/utils/{money,csv}.util.ts、frontend-admin/src/utils/{money,csv}.ts | 2026-10-24 | T275：出账/收款/未收/收缴率/出租率/趋势口径，金额与 CSV 导出单一管道 |
 | [22-可观测性与告警.md](./22-可观测性与告警.md) | 可观测性与告警 | 事实来源类 | active | strong | backend/src/common/{metrics,alerts}/\*\*、backend/src/modules/scheduler/\*\*、backend/src/modules/meters/meter-billing.service.ts | 2026-11-18 | Prometheus 指标、告警 webhook、定时任务与水电批量结算异常 |
 | [23-后台任务与队列.md](./23-后台任务与队列.md) | 后台任务与队列 | 事实来源类 | active | strong | backend/src/modules/jobs/\*\*、backend/src/worker.ts、backend/src/modules/scheduler/\*\* | 2026-11-18 | T278：BullMQ 生产者/Worker、死信运维接口、重试与优雅关闭、生产 compose worker |
@@ -136,6 +136,7 @@
 - [T255-QLT-01-真实数据库测试骨架.md](../tasks/T255-QLT-01-真实数据库测试骨架.md)：QLT-01，真实 PostgreSQL 集成测试 harness、J1/J5 旅程、J2–J7 留桩与 integration gate。
 - [T251-OPS-08-CI闸门与staging.md](../tasks/T251-OPS-08-CI闸门与staging.md)：OPS-08 草案（CI 统一闸门、依赖/镜像扫描、staging 一键部署与 smoke）；M0 剩余项，待派发。
 - [T230-房源照片上传.md](../tasks/T230-房源照片上传.md)：房源新增/编辑对话框上传、排序、删除照片；最多 20 张，首张封面，后端事务落库。
+- [2026-11-18-T338-共享源码CI路径过滤.md](./handoff/2026-11-18-T338-共享源码CI路径过滤.md)：共享源码单独变更的 push 与 PR 触发验证。
 - [2026-11-18-T337-发布链路P1修复.md](./handoff/2026-11-18-T337-发布链路P1修复.md)：恢复演练同库保护、双镜像、Worker 与 staging 冒烟回归。
 - [2026-10-28-T304-保洁任务自动建单指派与验收.md](./handoff/2026-10-28-T304-保洁任务自动建单指派与验收.md)：T304，保洁工单建模、退租自动建单、管家派工调度、保洁员开工完工与验收恢复房态闭环（WRK-03）。
 - [2026-10-26-T303-维修工单派工SLA与费用转嫁.md](./handoff/2026-10-26-T303-维修工单派工SLA与费用转嫁.md)：T303，维修工单派工调度、SLA时限计算与监控告警、维修师傅专属端点、租客验收与过失费用转嫁（WRK-02）。
