@@ -9,7 +9,7 @@ import { JobsQueueService, SCHEDULER_QUEUE } from './modules/jobs/jobs-queue.ser
 /**
  * 独立后台任务 Worker（OPS-05 / T278）。
  *
- * 启动：`node dist/worker.js`（或 `npm run start:worker`），环境变量：
+ * 启动：`node dist/backend/src/worker.js`（或 `npm run start:worker`），环境变量：
  * - `QUEUE_ENABLED=true`     必须；否则直接退出
  * - `PROCESS_ROLE=worker`    Web 进程的 cron 不重复触发
  * - `QUEUE_PREFIX`           必须与 Web 一致

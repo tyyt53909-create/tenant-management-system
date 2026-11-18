@@ -2,6 +2,7 @@
 # OPS-07 / T280：恢复演练。恢复到独立空库，校验关键表后再提醒清理。
 #
 # 用法：
+#   DATABASE_URL=postgresql://.../tenant_system \
 #   REHEARSAL_DATABASE_URL=postgresql://.../tenant_rehearsal \
 #     ./scripts/restore-rehearsal.sh backups/tenant-....dump --yes
 #
@@ -12,20 +13,29 @@ FILE="${1:-}"
 CONFIRM="${2:-}"
 
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
-  echo "用法：REHEARSAL_DATABASE_URL=... $0 <backup.dump> --yes" >&2
+  echo "用法：DATABASE_URL=... REHEARSAL_DATABASE_URL=... $0 <backup.dump> --yes" >&2
   exit 1
 fi
 if [ "$CONFIRM" != "--yes" ]; then
   echo "拒绝执行：演练会清空目标库。确认后追加 --yes。" >&2
   exit 1
 fi
+: "${DATABASE_URL:?必须设置 DATABASE_URL（用于比对来源库）}"
 : "${REHEARSAL_DATABASE_URL:?必须设置 REHEARSAL_DATABASE_URL（独立空库）}"
 command -v psql >/dev/null || { echo "缺少 psql" >&2; exit 1; }
 
-if [ -n "${DATABASE_URL:-}" ] && node "$(dirname "$0")/backup-core.mjs" same-database "$REHEARSAL_DATABASE_URL" "$DATABASE_URL"; then
-  echo "拒绝执行：演练库不能与 DATABASE_URL 指向同一数据库" >&2
+if [ -n "${PGHOSTADDR:-}" ] || [ -n "${PGSERVICE:-}" ]; then
+  echo "拒绝执行：PGHOSTADDR 或 PGSERVICE 可覆盖连接目标" >&2
   exit 1
 fi
+
+comparison=0
+node "$(dirname "$0")/backup-core.mjs" same-database || comparison=$?
+case "$comparison" in
+  0) echo "拒绝执行：演练库不能与 DATABASE_URL 指向同一数据库" >&2; exit 1 ;;
+  3) ;; # 已确认连接串指向不同目标。
+  *) echo "拒绝执行：无法比较来源库和演练库连接串" >&2; exit 1 ;;
+esac
 
 echo "[rehearsal] 恢复到演练库：$(date -u +%FT%TZ)"
 DATABASE_URL="$REHEARSAL_DATABASE_URL" "$(dirname "$0")/restore-db.sh" "$FILE" --yes
