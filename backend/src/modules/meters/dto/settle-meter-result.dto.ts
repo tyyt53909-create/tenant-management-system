@@ -3,8 +3,34 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 const SETTLEMENT_REASON_CODES = [
   'SETTLED', 'ALREADY_SETTLED', 'ZERO_USAGE', 'ZERO_CHARGE', 'PUBLIC_AREA',
   'NO_ACTIVE_CONTRACT', 'MISSING_PREPAY_ACCOUNT', 'NO_READINGS', 'METER_NOT_FOUND',
-  'SETTLEMENT_FAILED',
+  'PREVIEW_STALE', 'SETTLEMENT_FAILED',
 ] as const;
+
+export class MeterSettlementPreviewDto {
+  meterId!: string;
+  /** 服务端预览使用的截止时间。确认与重试应原样传回。 */
+  @ApiProperty({ type: String, format: 'date-time' })
+  settleUntil!: string;
+  /** 截止时间内的最新读数，在结算事务中核对。 */
+  targetReadingId?: string;
+  meterNumber?: string;
+  meterType?: string;
+  unitPrice?: number;
+  roomNumber?: string;
+  @ApiPropertyOptional({ type: String, nullable: true })
+  tenantName?: string | null;
+  @ApiPropertyOptional({ type: Number, nullable: true })
+  prepayBalance?: number | null;
+  lastSettledReading!: number;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  lastSettledTime!: Date | null;
+  currentReading!: number;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  readingTime!: Date | null;
+  unsettledUsage!: number;
+  estimatedAmount!: number;
+  hasReadings!: boolean;
+}
 
 export class MeterSettlementResultDto {
   @ApiProperty()

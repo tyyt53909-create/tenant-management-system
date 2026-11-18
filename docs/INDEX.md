@@ -41,7 +41,7 @@
 | [19-生产化路线图.md](./19-生产化路线图.md) | 生产化路线图（第二轮） | 过程类 | active | strong | tasks/\*\*、docs/09-待确认清单.md、AGENTS.md、scripts/task-check.mjs、scripts/status-core.mjs、.github/workflows/status-check.yml | 2026-10-23 | M0–M5 里程碑、65 个计划任务与 T250–T314 映射、DEC-01~09、任务书 schema、ISS 摘要 |
 | [20-staging与发布闸门.md](./20-staging与发布闸门.md) | staging 与发布闸门 | 事实来源类 | active | strong | .github/workflows/deploy-staging.yml、.github/workflows/release.yml、docker-compose.staging.yml、scripts/smoke.mjs | 2026-11-18 | staging 拓扑、secrets、部署/回滚、冒烟与 Go/No-Go |
 | [21-指标口径与金额格式.md](./21-指标口径与金额格式.md) | 指标口径与金额格式 | 事实来源类 | active | strong | backend/src/common/metrics/\*\*、backend/src/common/utils/{money,csv}.util.ts、frontend-admin/src/utils/{money,csv}.ts | 2026-10-24 | T275：出账/收款/未收/收缴率/出租率/趋势口径，金额与 CSV 导出单一管道 |
-| [22-可观测性与告警.md](./22-可观测性与告警.md) | 可观测性与告警 | 事实来源类 | active | strong | backend/src/common/{metrics,alerts}/\*\*、backend/src/modules/scheduler/\*\* | 2026-10-25 | T277：Prometheus 指标、/metrics 访问控制、告警 webhook、JobRun PARTIAL、锁 TTL |
+| [22-可观测性与告警.md](./22-可观测性与告警.md) | 可观测性与告警 | 事实来源类 | active | strong | backend/src/common/{metrics,alerts}/\*\*、backend/src/modules/scheduler/\*\*、backend/src/modules/meters/meter-billing.service.ts | 2026-11-18 | Prometheus 指标、告警 webhook、定时任务与水电批量结算异常 |
 | [23-后台任务与队列.md](./23-后台任务与队列.md) | 后台任务与队列 | 事实来源类 | active | strong | backend/src/modules/jobs/\*\*、backend/src/worker.ts、backend/src/modules/scheduler/\*\* | 2026-11-18 | T278：BullMQ 生产者/Worker、死信运维接口、重试与优雅关闭、生产 compose worker |
 | [24-多实例运行约束.md](./24-多实例运行约束.md) | 多实例运行约束 | 事实来源类 | active | strong | backend/src/redis/\*\*、backend/src/config/env.validation.ts、backend/test/integration/multi-instance.int-spec.ts | 2026-10-25 | T279：共享状态清单、MULTI_INSTANCE 启动约束、Redis 并发连接语义、跨实例会话验证 |
 | [25-备份与恢复.md](./25-备份与恢复.md) | 备份、PITR 与恢复演练 | 事实来源类 | active | strong | scripts/backup-db.sh、scripts/restore-db.sh、scripts/restore-rehearsal.sh、scripts/backup-core.mjs | 2026-11-18 | T280：每日逻辑备份、checksum、保留策略、恢复与月度演练、托管 PITR |
@@ -109,7 +109,7 @@
 - [T324-FIN-08-读数结算标记防伪.md](../tasks/T324-FIN-08-读数结算标记防伪.md)：拒绝备注和设备消息编号中的系统结算标记。
 - [T325-CORE-01-账单并发写入.md](../tasks/T325-CORE-01-账单并发写入.md)：收款、取消、改额与预付抵扣的账单锁及真实并发验收。
 - [T326-CORE-02-表计并发与结算游标.md](../tasks/T326-CORE-02-表计并发与结算游标.md)：单笔、批量和周期结算共用表计锁，历史截止时间不重复扣费。
-- [T327-CORE-02-批量结算结果与缺账户.md](../tasks/T327-CORE-02-批量结算结果与缺账户.md)：结算分类、缺账户补办和差额核对。
+- [T327-CORE-02-批量结算结果与缺账户.md](../tasks/T327-CORE-02-批量结算结果与缺账户.md)：结算分类、缺账户补办、预览范围锁定及差额核对。
 - [T337-发布链路P1修复.md](../tasks/T337-发布链路P1修复.md)：恢复演练保护、双镜像、生产 Worker 与 staging 冒烟。
 - [T338-共享源码CI路径过滤.md](../tasks/T338-共享源码CI路径过滤.md)：跟进共享源码变更的 CI 触发覆盖。
 - [T263-FIN-01-合同状态机与续签修复.md](../tasks/T263-FIN-01-合同状态机与续签修复.md)：FIN-01，续签唯一约束改为 ACTIVE-only、日期不重叠、激活事务先 RENEWED、定时任务同步。

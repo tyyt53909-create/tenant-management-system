@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Res, Req, NotFoundException } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { ApiCreatedResponse } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiQuery } from '@nestjs/swagger';
 import { MetersService } from './meters.service.js';
 import { MetersSimulatorService } from './meters-simulator.service.js';
 import { CreateMeterDto } from './dto/create-meter.dto.js';
@@ -8,12 +8,12 @@ import { UpdateMeterDto } from './dto/update-meter.dto.js';
 import { QueryMetersDto } from './dto/query-meters.dto.js';
 import { CreateMeterReadingDto } from './dto/create-meter-reading.dto.js';
 import { QueryMeterReadingsDto } from './dto/query-meter-readings.dto.js';
-import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
+import { BatchMeterReadingsDto, BatchReadingResultDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { QueryUsageOverviewDto } from './dto/query-usage-overview.dto.js';
 import { QueryReconciliationDto } from './dto/query-reconciliation.dto.js';
 import { MeterReconciliationService } from './meter-reconciliation.service.js';
 import { SettleMeterBatchDto, SettleMeterDto } from './dto/settle-meter.dto.js';
-import { MeterBatchSettlementResultDto, MeterSettlementResultDto } from './dto/settle-meter-result.dto.js';
+import { MeterBatchSettlementResultDto, MeterSettlementPreviewDto, MeterSettlementResultDto } from './dto/settle-meter-result.dto.js';
 import { SetMeterPriceDto } from './dto/set-meter-price.dto.js';
 import { SetMeterDefaultPriceDto } from './dto/set-meter-default-price.dto.js';
 import { RunSimulationDto } from './dto/run-simulation.dto.js';
@@ -105,6 +105,7 @@ export class MetersController {
 
   // 批量登记读数（仅 ADMIN）
   @Post('batch-readings')
+  @ApiCreatedResponse({ type: BatchReadingResultDto })
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   createBatchReadings(@CurrentUser() userParam: CurrentUserParam, @Body() dto: BatchMeterReadingsDto) {
@@ -115,6 +116,7 @@ export class MetersController {
   // 批量周期结算水电表（仅 ADMIN）
   @Post('settle-batch')
   @ApiCreatedResponse({ type: MeterBatchSettlementResultDto })
+  @ApiBadRequestResponse({ description: '必须提供表计列表或有效的楼栋范围' })
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   settleBatch(
@@ -190,6 +192,8 @@ export class MetersController {
 
   // 查询水电表未结算用量及预估金额（仅 ADMIN）
   @Get(':id/unsettled-usage')
+  @ApiOkResponse({ type: MeterSettlementPreviewDto })
+  @ApiQuery({ name: 'settleUntil', required: false, schema: { type: 'string', format: 'date-time' } })
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   getUnsettledUsage(

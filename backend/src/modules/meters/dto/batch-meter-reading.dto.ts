@@ -1,5 +1,6 @@
 import { IsNumber, IsString, IsDateString, IsOptional, IsBoolean, Min, IsArray, ValidateNested, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SingleMeterReadingItemDto {
   @IsString({ message: 'meterId 必须为字符串' })
@@ -62,4 +63,38 @@ export class QueryBatchSheetDto {
 
   @IsOptional()
   floor?: number;
+}
+
+const BATCH_DEDUCTION_BLOCK_CODES = ['NO_ACTIVE_CONTRACT', 'MISSING_PREPAY_ACCOUNT'] as const;
+
+export class BatchReadingDeductionBlockDto {
+  @ApiProperty({ enum: BATCH_DEDUCTION_BLOCK_CODES })
+  reasonCode!: (typeof BATCH_DEDUCTION_BLOCK_CODES)[number];
+  reason!: string;
+  retryCondition!: string;
+}
+
+export class BatchReadingResultItemDto {
+  meterId!: string;
+  meterNumber?: string;
+  roomNumber?: string;
+  /** 读数是否保存或已登记。扣费状态见 deductionBlocked。 */
+  success!: boolean;
+  currentReading?: number;
+  previousReading?: number;
+  usage?: number;
+  amount?: number;
+  deducted?: number;
+  shortfall?: number;
+  @ApiPropertyOptional({ type: BatchReadingDeductionBlockDto })
+  deductionBlocked?: BatchReadingDeductionBlockDto;
+  error?: string;
+}
+
+export class BatchReadingResultDto {
+  total!: number;
+  successCount!: number;
+  failureCount!: number;
+  @ApiProperty({ type: [BatchReadingResultItemDto] })
+  results!: BatchReadingResultItemDto[];
 }

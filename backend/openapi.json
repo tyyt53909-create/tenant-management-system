@@ -4026,19 +4026,15 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "成功",
+          "201": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/BatchReadingResultDto"
                 }
               }
             }
-          },
-          "201": {
-            "description": ""
           },
           "default": {
             "description": "错误",
@@ -4085,6 +4081,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "必须提供表计列表或有效的楼栋范围"
           },
           "default": {
             "description": "错误",
@@ -4395,7 +4394,8 @@
             "required": false,
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "date-time"
             }
           }
         ],
@@ -4405,7 +4405,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/MeterSettlementPreviewDto"
                 }
               }
             }
@@ -16612,13 +16612,110 @@
           "readings"
         ]
       },
+      "BatchReadingDeductionBlockDto": {
+        "type": "object",
+        "properties": {
+          "reasonCode": {
+            "enum": [
+              "NO_ACTIVE_CONTRACT",
+              "MISSING_PREPAY_ACCOUNT"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "retryCondition": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reasonCode",
+          "reason",
+          "retryCondition"
+        ]
+      },
+      "BatchReadingResultItemDto": {
+        "type": "object",
+        "properties": {
+          "deductionBlocked": {
+            "$ref": "#/components/schemas/BatchReadingDeductionBlockDto"
+          },
+          "meterId": {
+            "type": "string"
+          },
+          "meterNumber": {
+            "type": "string"
+          },
+          "roomNumber": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "读数是否保存或已登记。扣费状态见 deductionBlocked。"
+          },
+          "currentReading": {
+            "type": "number"
+          },
+          "previousReading": {
+            "type": "number"
+          },
+          "usage": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "deducted": {
+            "type": "number"
+          },
+          "shortfall": {
+            "type": "number"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "meterId",
+          "success"
+        ]
+      },
+      "BatchReadingResultDto": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchReadingResultItemDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "successCount": {
+            "type": "number"
+          },
+          "failureCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "results",
+          "total",
+          "successCount",
+          "failureCount"
+        ]
+      },
       "SettleMeterBatchDto": {
         "type": "object",
         "properties": {
           "buildingId": {
-            "type": "string"
+            "type": "string",
+            "description": "meterIds 未提供时，仅结算此楼栋的在用表。不能省略两个范围字段。"
           },
           "meterIds": {
+            "description": "指定表计列表优先；空列表执行零项，不回退到楼栋。",
             "type": "array",
             "items": {
               "type": "string"
@@ -16660,6 +16757,7 @@
               "MISSING_PREPAY_ACCOUNT",
               "NO_READINGS",
               "METER_NOT_FOUND",
+              "PREVIEW_STALE",
               "SETTLEMENT_FAILED"
             ],
             "type": "string"
@@ -16809,6 +16907,14 @@
       "SettleMeterDto": {
         "type": "object",
         "properties": {
+          "expectedTargetReadingId": {
+            "type": "string",
+            "description": "使用预览的 targetReadingId，同时传入同一次预览返回的 settleUntil。"
+          },
+          "expectedBaselineReading": {
+            "type": "number",
+            "description": "同一次预览返回的 lastSettledReading，核对结算底数。"
+          },
           "settleUntil": {
             "type": "string",
             "description": "结算截止时间（默认当前时间）"
@@ -16845,6 +16951,7 @@
               "MISSING_PREPAY_ACCOUNT",
               "NO_READINGS",
               "METER_NOT_FOUND",
+              "PREVIEW_STALE",
               "SETTLEMENT_FAILED"
             ],
             "type": "string"
@@ -16889,6 +16996,79 @@
           "settled",
           "usage",
           "amount"
+        ]
+      },
+      "MeterSettlementPreviewDto": {
+        "type": "object",
+        "properties": {
+          "settleUntil": {
+            "type": "string",
+            "description": "服务端预览使用的截止时间。确认与重试应原样传回。",
+            "format": "date-time"
+          },
+          "tenantName": {
+            "type": "string",
+            "nullable": true
+          },
+          "prepayBalance": {
+            "type": "number",
+            "nullable": true
+          },
+          "lastSettledTime": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "readingTime": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "meterId": {
+            "type": "string"
+          },
+          "targetReadingId": {
+            "type": "string",
+            "description": "截止时间内的最新读数，在结算事务中核对。"
+          },
+          "meterNumber": {
+            "type": "string"
+          },
+          "meterType": {
+            "type": "string"
+          },
+          "unitPrice": {
+            "type": "number"
+          },
+          "roomNumber": {
+            "type": "string"
+          },
+          "lastSettledReading": {
+            "type": "number"
+          },
+          "currentReading": {
+            "type": "number"
+          },
+          "unsettledUsage": {
+            "type": "number"
+          },
+          "estimatedAmount": {
+            "type": "number"
+          },
+          "hasReadings": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "settleUntil",
+          "lastSettledTime",
+          "readingTime",
+          "meterId",
+          "lastSettledReading",
+          "currentReading",
+          "unsettledUsage",
+          "estimatedAmount",
+          "hasReadings"
         ]
       },
       "SetMeterPriceDto": {

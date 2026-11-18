@@ -1,5 +1,6 @@
+import { Prisma } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { MeterBillingService } from './meter-billing.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { BusinessClock } from '../../common/business-clock/business-clock.service.js';
@@ -155,10 +156,41 @@ describe('MeterBillingService', () => {
     const result = await service.settleBatch({ buildingId: 'building-1' }, 'op', async (id) => ({ meterId: id, ...settled }));
     expect(result).toMatchObject({ total: 1, successCount: 1 });
     expect(prisma.meter.findMany).toHaveBeenCalledWith({ where: { isActive: true, buildingId: 'building-1' }, select: { id: true } });
-    prisma.meter.findMany.mockResolvedValue([]);
+    prisma.meter.findMany.mockClear();
     expect(await service.settleBatch({ meterIds: [] }, 'op')).toMatchObject({ total: 0 });
+    expect(await service.settleBatch({ buildingId: 'building-1', meterIds: [] }, 'op')).toMatchObject({ total: 0 });
+    await expect(service.settleBatch({}, 'op')).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.meter.findMany).not.toHaveBeenCalled();
     vi.spyOn(service, 'settleMeter').mockResolvedValue({ meterId: 'd', ...settled });
     expect(await service.settleBatch({ meterIds: ['d'], settleUntil: '2026-01-31', notes: 'batch' }, 'op')).toMatchObject({ successCount: 1 });
+  });
+
+  it('仅将本服务的未找到表计与缺读数归为预期错误，其余错误安全记录后继续', async () => {
+    prisma.meter.findUnique.mockResolvedValueOnce(null).mockResolvedValue(meter);
+    prisma.meterReading.findFirst.mockResolvedValueOnce(null);
+    const sensitive = 'sensitive-failure-fixture';
+    const settle = vi.fn<MeterBillingService['settleMeter']>()
+      .mockImplementationOnce(service.settleMeter.bind(service))
+      .mockImplementationOnce(service.settleMeter.bind(service))
+      .mockRejectedValueOnce(new NotFoundException(sensitive))
+      .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError(sensitive, {
+        code: 'P2034', clientVersion: 'test', meta: { field: sensitive },
+      }))
+      .mockResolvedValueOnce({ meterId: 'later', settled: true, status: 'SETTLED', reasonCode: 'SETTLED', usage: 1, amount: 10 });
+    const logger = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    try {
+      const result = await service.settleBatch({ meterIds: ['missing', 'empty', 'other', 'db', 'later'] }, 'op', settle);
+      expect(result.results.map(({ reasonCode }) => reasonCode)).toEqual([
+        'METER_NOT_FOUND', 'NO_READINGS', 'SETTLEMENT_FAILED', 'SETTLEMENT_FAILED', 'SETTLED',
+      ]);
+      expect(JSON.stringify(result)).not.toContain(sensitive);
+      expect(logger.mock.calls).toEqual([
+        [{ event: 'meter.batch_settlement.failed', meterId: 'other', reasonCode: 'SETTLEMENT_FAILED', errorKind: 'HttpException', httpStatus: 404 }],
+        [{ event: 'meter.batch_settlement.failed', meterId: 'db', reasonCode: 'SETTLEMENT_FAILED', errorKind: 'PrismaKnownRequestError', prismaCode: 'P2034' }],
+      ]);
+    } finally {
+      logger.mockRestore();
+    }
   });
 
   it('t196: 预览支持显式截止时间；无基线无账户时基线与余额兜底', async () => {

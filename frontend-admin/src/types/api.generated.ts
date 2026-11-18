@@ -3965,8 +3965,37 @@ export interface components {
         BatchMeterReadingsDto: {
             readings: components["schemas"]["SingleMeterReadingItemDto"][];
         };
+        BatchReadingDeductionBlockDto: {
+            /** @enum {string} */
+            reasonCode: "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT";
+            reason: string;
+            retryCondition: string;
+        };
+        BatchReadingResultItemDto: {
+            deductionBlocked?: components["schemas"]["BatchReadingDeductionBlockDto"];
+            meterId: string;
+            meterNumber?: string;
+            roomNumber?: string;
+            /** @description 读数是否保存或已登记。扣费状态见 deductionBlocked。 */
+            success: boolean;
+            currentReading?: number;
+            previousReading?: number;
+            usage?: number;
+            amount?: number;
+            deducted?: number;
+            shortfall?: number;
+            error?: string;
+        };
+        BatchReadingResultDto: {
+            results: components["schemas"]["BatchReadingResultItemDto"][];
+            total: number;
+            successCount: number;
+            failureCount: number;
+        };
         SettleMeterBatchDto: {
+            /** @description meterIds 未提供时，仅结算此楼栋的在用表。不能省略两个范围字段。 */
             buildingId?: string;
+            /** @description 指定表计列表优先；空列表执行零项，不回退到楼栋。 */
             meterIds?: string[];
             /** @description 结算截止时间（默认当前时间） */
             settleUntil?: string;
@@ -3978,7 +4007,7 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "PREVIEW_STALE" | "SETTLEMENT_FAILED";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
@@ -4029,6 +4058,10 @@ export interface components {
             notes?: string;
         };
         SettleMeterDto: {
+            /** @description 使用预览的 targetReadingId，同时传入同一次预览返回的 settleUntil。 */
+            expectedTargetReadingId?: string;
+            /** @description 同一次预览返回的 lastSettledReading，核对结算底数。 */
+            expectedBaselineReading?: number;
             /** @description 结算截止时间（默认当前时间） */
             settleUntil?: string;
             /** @description 结算备注 */
@@ -4039,7 +4072,7 @@ export interface components {
             /** @enum {string} */
             status: "SETTLED" | "NO_CHANGE" | "BLOCKED" | "FAILED";
             /** @enum {string} */
-            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "SETTLEMENT_FAILED";
+            reasonCode: "SETTLED" | "ALREADY_SETTLED" | "ZERO_USAGE" | "ZERO_CHARGE" | "PUBLIC_AREA" | "NO_ACTIVE_CONTRACT" | "MISSING_PREPAY_ACCOUNT" | "NO_READINGS" | "METER_NOT_FOUND" | "PREVIEW_STALE" | "SETTLEMENT_FAILED";
             /** @description 兼容旧调用方，零用量也可能写入结算标记。计费结果请读取 status。 */
             settled: boolean;
             usage: number;
@@ -4052,6 +4085,31 @@ export interface components {
             retryCondition?: string;
             billId?: string;
             prepayTransactionId?: string;
+        };
+        MeterSettlementPreviewDto: {
+            /**
+             * Format: date-time
+             * @description 服务端预览使用的截止时间。确认与重试应原样传回。
+             */
+            settleUntil: string;
+            tenantName?: string | null;
+            prepayBalance?: number | null;
+            /** Format: date-time */
+            lastSettledTime: string | null;
+            /** Format: date-time */
+            readingTime: string | null;
+            meterId: string;
+            /** @description 截止时间内的最新读数，在结算事务中核对。 */
+            targetReadingId?: string;
+            meterNumber?: string;
+            meterType?: string;
+            unitPrice?: number;
+            roomNumber?: string;
+            lastSettledReading: number;
+            currentReading: number;
+            unsettledUsage: number;
+            estimatedAmount: number;
+            hasReadings: boolean;
         };
         SetMeterPriceDto: {
             unitPrice: number;
@@ -7355,22 +7413,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["BatchReadingResultDto"];
+                };
             };
             /** @description 错误 */
             default: {
@@ -7403,6 +7452,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MeterBatchSettlementResultDto"];
                 };
+            };
+            /** @description 必须提供表计列表或有效的楼栋范围 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description 错误 */
             default: {
@@ -7612,7 +7668,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MeterSettlementPreviewDto"];
                 };
             };
             /** @description 错误 */

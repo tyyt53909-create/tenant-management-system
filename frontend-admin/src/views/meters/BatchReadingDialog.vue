@@ -165,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, h } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getBatchSheet, submitBatchReadings } from '@/api/meters';
 import type { BatchSheetItem, BatchReadingSubmitItem } from '@/api/meters';
@@ -334,7 +334,7 @@ async function handleSubmitBatch() {
 
   try {
     await ElMessageBox.confirm(
-      `确定提交本次填报的 ${toSubmit.length} 间水电表读数？系统将按预付账户结算。余额不足会生成差额账单，缺账户的读数会保留待结算。`,
+      `确定提交本次填报的 ${toSubmit.length} 间水电表读数？余额不足会生成差额账单。无生效合同或缺预付账户时，读数将保留待结算。`,
       '批量抄表确认',
       {
         confirmButtonText: '确定提交',
@@ -355,14 +355,18 @@ async function handleSubmitBatch() {
       visible.value = false;
       emit('success');
     } else {
-      const blockedMeters = blocked.map((item) => item.meterNumber ?? item.meterId).join('、');
-      const summary = `登记成功 ${res.successCount} 条，失败 ${res.failureCount} 条。`;
-      const blockedSummary = blocked.length
-        ? `以下表计的读数已保存，结算待处理（缺预付账户）：${blockedMeters}。开立账户并核对费用归属后，请在水电表页面执行周期结算。`
-        : '';
-      ElMessageBox.alert([summary, blockedSummary].filter(Boolean).join(' '), '批量抄表结果', {
-        type: 'warning',
+      const summary = `登记成功 ${res.successCount} 条，登记失败 ${res.failureCount} 条，结算待处理 ${blocked.length} 条。`;
+      const details = res.results.flatMap((item) => {
+        const label = item.meterNumber ?? item.meterId;
+        if (item.deductionBlocked) {
+          const { reason, retryCondition } = item.deductionBlocked;
+          return [`${label}：读数已保存，${reason}。${retryCondition}。`];
+        }
+        return item.success ? [] : [`${label}：${item.error ?? '登记失败'}`];
       });
+      void ElMessageBox.alert(h('div', [h('p', summary), h('ul', details.map((detail) => h('li', detail)))]), '批量抄表结果', {
+        type: 'warning',
+      }).catch(() => undefined);
       // 清空成功项，保留失败项供排查
       for (const item of res.results) {
         if (item.success) {

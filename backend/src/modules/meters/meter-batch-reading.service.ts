@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma, ReadingSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { BatchMeterReadingsDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
+import { BatchMeterReadingsDto, BatchReadingResultDto, BatchReadingResultItemDto, QueryBatchSheetDto } from './dto/batch-meter-reading.dto.js';
 import { MeterBillingService } from './meter-billing.service.js';
 import { MeterPriceService } from './meter-price.service.js';
 import { buildReadingDedupKey, hasReservedReadingMarker } from './meter-dedup.util.js';
@@ -131,21 +131,8 @@ export class MeterBatchReadingService {
    * 批量读数登记（行级独立报告 + 事务原子性处理有效行）
    * - 支持初始底数、消息去重、乱序检测与按需扣费
    */
-  async createBatchReadings(dto: BatchMeterReadingsDto, operatorId: string) {
-    const results: Array<{
-      meterId: string;
-      meterNumber?: string;
-      roomNumber?: string;
-      success: boolean;
-      currentReading?: number;
-      previousReading?: number;
-      usage?: number;
-      amount?: number;
-      deducted?: number;
-      shortfall?: number;
-      deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
-      error?: string;
-    }> = [];
+  async createBatchReadings(dto: BatchMeterReadingsDto, operatorId: string): Promise<BatchReadingResultDto> {
+    const results: BatchReadingResultItemDto[] = [];
 
     await this.prisma.$transaction(async (tx) => {
       await lockMeters(tx, dto.readings.map(({ meterId }) => meterId));
@@ -448,7 +435,7 @@ export class MeterBatchReadingService {
           amount: deduction?.amount ?? 0,
           deducted: deduction?.deducted ?? 0,
           shortfall: deduction?.shortfall ?? 0,
-          ...(deduction?.reasonCode === 'MISSING_PREPAY_ACCOUNT' && {
+          ...((deduction?.reasonCode === 'MISSING_PREPAY_ACCOUNT' || deduction?.reasonCode === 'NO_ACTIVE_CONTRACT') && {
             deductionBlocked: {
               reasonCode: deduction.reasonCode,
               reason: deduction.reason,

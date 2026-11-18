@@ -95,25 +95,29 @@
     <el-dialog v-model="settleDialogVisible" title="水电周期结算" width="560px">
       <div v-loading="settleDataLoading">
         <el-alert
-          title="将累计结算上次结算或初始底数至今的未计费度数，从租客预付账户扣费或生成差额补缴账单。"
+          title="按预览截止时间结算未计费用量，从租客预付账户扣费或生成差额补缴账单。"
           type="info"
           :closable="false"
           style="margin-bottom: 16px"
         />
-        <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
+        <el-alert v-if="settlePreviewNotice" :title="settlePreviewNotice" type="warning" :closable="false" />
+        <el-descriptions v-if="unsettledInfo" :column="2" border size="small" style="margin-bottom: 16px">
           <el-descriptions-item label="表号">{{ currentMeter?.meterNumber }}</el-descriptions-item>
           <el-descriptions-item label="类型">{{ meterTypeMap[currentMeter?.meterType || ''] }}</el-descriptions-item>
           <el-descriptions-item label="房源">{{ unsettledInfo?.roomNumber || '公共区域' }}</el-descriptions-item>
           <el-descriptions-item label="签约租客">{{ unsettledInfo?.tenantName || '无生效合同' }}</el-descriptions-item>
-          <el-descriptions-item label="单价">{{ formatMoney(currentMeter?.unitPrice || 0) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
+          <el-descriptions-item label="单价">{{ formatMoney(unsettledInfo.unitPrice ?? currentMeter?.unitPrice ?? 0) }}/{{ unitMap[currentMeter?.meterType || ''] || '' }}</el-descriptions-item>
           <el-descriptions-item label="预付余额">
-            <span v-if="unsettledInfo && unsettledInfo.prepayBalance !== null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? 'var(--error-text)' : 'var(--success-text)', fontWeight: 'bold' }">
+            <span v-if="unsettledInfo.prepayBalance != null" :style="{ color: unsettledInfo.prepayBalance < (unsettledInfo.estimatedAmount || 0) ? 'var(--error-text)' : 'var(--success-text)', fontWeight: 'bold' }">
               {{ formatMoney(unsettledInfo.prepayBalance) }}
             </span>
             <span v-else style="color: var(--text-muted)">无预付账户</span>
           </el-descriptions-item>
           <el-descriptions-item label="起步结算底数">{{ unsettledInfo?.lastSettledReading ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="当前最新读数">{{ unsettledInfo?.currentReading ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="截止时读数">{{ unsettledInfo?.currentReading ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="结算截止时间" :span="2">
+            {{ settleCutoffFormatter.format(new Date(unsettledInfo.settleUntil)) }}
+          </el-descriptions-item>
           <el-descriptions-item label="待结算用量">
             <span style="font-size: 15px; font-weight: bold; color: var(--info-text)">
               {{ unsettledInfo?.unsettledUsage ?? 0 }} {{ unitMap[currentMeter?.meterType || ''] || '' }}
@@ -135,10 +139,13 @@
 
       <template #footer>
         <el-button @click="settleDialogVisible = false">取消</el-button>
+        <el-button :disabled="settleSubmitLoading" :loading="settleDataLoading" @click="loadSettlePreview">
+          刷新结算预览
+        </el-button>
         <el-button
           type="primary"
           :loading="settleSubmitLoading"
-          :disabled="!unsettledInfo || unsettledInfo.unsettledUsage <= 0"
+          :disabled="settleDataLoading || !unsettledInfo?.targetReadingId || unsettledInfo.unsettledUsage <= 0"
           @click="handleConfirmSettle"
         >
           立即结算
@@ -210,6 +217,7 @@ import {
   getUnsettledUsage,
   settleMeter,
   type MeterReading,
+  type UnsettledUsage,
 } from '@/api/meters';
 import type { Meter } from '@/types';
 import { usePagedTable } from '@/composables';
@@ -242,7 +250,10 @@ const settleDialogVisible = ref(false);
 const settleDataLoading = ref(false);
 const settleSubmitLoading = ref(false);
 const settleNotes = ref('');
-const unsettledInfo = ref<any>(null);
+const unsettledInfo = ref<UnsettledUsage | null>(null);
+const settlePreviewNotice = ref('');
+let settlePreviewRequest = 0;
+const settleCutoffFormatter = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'medium' });
 
 const meterTypeMap: Record<string, string> = {
   ELECTRICITY: '电表',
@@ -335,27 +346,47 @@ const handleReading = (row: Meter) => {
 const handleOpenSettle = async (row: Meter) => {
   currentMeter.value = row;
   settleNotes.value = '';
-  unsettledInfo.value = null;
   settleDialogVisible.value = true;
-  settleDataLoading.value = true;
-  try {
-    const res = await getUnsettledUsage(row.id);
-    unsettledInfo.value = res;
-  } catch (err: any) {
-    ElMessage.error(apiErrorMessage(err, '获取未结算用量失败'));
-  } finally {
-    settleDataLoading.value = false;
-  }
+  await loadSettlePreview();
 };
 
-const handleConfirmSettle = async () => {
+async function loadSettlePreview() {
   const meter = currentMeter.value;
   if (!meter) return;
+  const requestId = ++settlePreviewRequest;
+  unsettledInfo.value = null;
+  settlePreviewNotice.value = '';
+  settleDataLoading.value = true;
+  try {
+    const preview = await getUnsettledUsage(meter.id);
+    if (requestId === settlePreviewRequest) unsettledInfo.value = preview;
+  } catch (err: unknown) {
+    if (requestId === settlePreviewRequest) settlePreviewNotice.value = apiErrorMessage(err, '获取未结算用量失败');
+  } finally {
+    if (requestId === settlePreviewRequest) settleDataLoading.value = false;
+  }
+}
+
+const handleConfirmSettle = async () => {
+  const preview = unsettledInfo.value;
+  if (!preview?.targetReadingId || preview.unsettledUsage <= 0 || settleSubmitLoading.value) return;
   settleSubmitLoading.value = true;
   try {
-    const res = await settleMeter(meter.id, { notes: settleNotes.value || undefined });
+    const res = await settleMeter(preview.meterId, {
+      settleUntil: preview.settleUntil,
+      expectedTargetReadingId: preview.targetReadingId,
+      expectedBaselineReading: preview.lastSettledReading,
+      notes: settleNotes.value || undefined,
+    });
+    if (unsettledInfo.value !== preview) return;
     if (res.status === 'BLOCKED') {
-      ElMessage.warning([res.reason, res.retryCondition].filter(Boolean).join('。'));
+      const notice = [res.reason, res.retryCondition].filter(Boolean).join('。');
+      if (res.reasonCode === 'PREVIEW_STALE') {
+        unsettledInfo.value = null;
+        settlePreviewNotice.value = notice;
+      } else {
+        ElMessage.warning(notice);
+      }
       return;
     }
     if (res.status === 'NO_CHANGE' || !res.settled) {

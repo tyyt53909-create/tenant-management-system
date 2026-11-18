@@ -78,24 +78,7 @@ export type MeterSettleResult = components['schemas']['MeterSettlementResultDto'
   deduction?: ReadingDeduction;
 };
 
-/** 未结算用量（后端 `getUnsettledUsage` 的返回形状） */
-export interface UnsettledUsage {
-  meterId: string;
-  meterNumber?: string;
-  meterType?: Meter['meterType'];
-  unitPrice?: number;
-  roomNumber?: string;
-  tenantName?: string | null;
-  prepayBalance?: number | null;
-  lastSettledReading: number;
-  lastSettledTime: string | null;
-  currentReading: number;
-  readingTime: string | null;
-  unsettledUsage: number;
-  estimatedAmount: number;
-  targetReadingId?: string;
-  hasReadings: boolean;
-}
+export type UnsettledUsage = components['schemas']['MeterSettlementPreviewDto'];
 
 /** 批量结算汇总（后端 `settleBatch` 的返回形状） */
 export type SettleBatchResult = components['schemas']['MeterBatchSettlementResultDto'] & {
@@ -107,7 +90,7 @@ export type SettleBatchResult = components['schemas']['MeterBatchSettlementResul
 /** 周期结算指定水电表（采集与结算拆分） */
 export const settleMeter = (
   meterId: string,
-  data?: { settleUntil?: string; notes?: string }
+  data?: components['schemas']['SettleMeterDto']
 ): Promise<MeterSettleResult> => {
   return request.post(`/meters/${meterId}/settle`, data || {});
 };
@@ -162,25 +145,7 @@ export interface BatchReadingSubmitItem {
   notes?: string;
 }
 
-export interface BatchReadingResponse {
-  total: number;
-  successCount: number;
-  failureCount: number;
-  results: Array<{
-    meterId: string;
-    meterNumber?: string;
-    roomNumber?: string;
-    success: boolean;
-    currentReading?: number;
-    previousReading?: number;
-    usage?: number;
-    amount?: number;
-    deducted?: number;
-    shortfall?: number;
-    deductionBlocked?: { reasonCode: string; reason: string; retryCondition: string };
-    error?: string;
-  }>;
-}
+export type BatchReadingResponse = components['schemas']['BatchReadingResultDto'];
 
 export const getBatchSheet = (params?: {
   buildingId?: string;
