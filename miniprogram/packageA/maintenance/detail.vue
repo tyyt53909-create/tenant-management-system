@@ -6,20 +6,20 @@
     </view>
     <view v-else-if="error" class="q-error" @tap="load">{{ error }} · 点此重试</view>
     <view v-if="record && !blocked" class="q-surface repair-banner"><QIcon name="repair" :size="48" /><view><text class="banner-title">{{ record.title }}</text><text class="banner-description">{{ record.description }}</text></view></view>
-    <template v-if="record && !blocked"><view class="q-section-heading"><text>处理进度</text><text class="q-link" @tap="load">刷新状态</text></view><view class="q-surface flow-surface"><view v-if="record.status === 'CANCELLED'" class="q-empty">本次报修已取消</view><view v-else v-for="(step, index) in steps" :key="step.status" :class="['flow-step', { done: index < currentStep, current: index === currentStep, future: index > currentStep }]"><view class="flow-node"><text v-if="index < currentStep">✓</text></view><view><text class="flow-title">{{ step.title }}</text><text class="flow-description">{{ index <= currentStep ? step.description : '等待下一阶段' }}</text></view></view></view><view class="q-surface record-information"><view class="q-detail-row"><text>报修编号</text><text>{{ record.id }}</text></view><view class="q-detail-row"><text>提交时间</text><text>{{ record.createdAt?.replace('T', ' ').slice(0, 16) }}</text></view><view class="q-detail-row"><text>优先级</text><text>{{ priority }}</text></view></view><text v-if="record.status === 'PENDING_CONFIRM'" class="q-note">维修已处理，请联系管理者确认实际结果。当前租客端不提供状态修改。</text></template>
+    <template v-if="record && !blocked"><view class="q-section-heading"><text>处理进度</text><text class="q-link" @tap="load">刷新状态</text></view><view class="q-surface flow-surface"><view v-if="record.status === 'CANCELLED'" class="q-empty">本次报修已取消</view><view v-else v-for="(step, index) in steps" :key="step.status" :class="['flow-step', { done: index < currentStep, current: index === currentStep, future: index > currentStep }]"><view class="flow-node"><text v-if="index < currentStep">✓</text></view><view><text class="flow-title">{{ step.title }}</text><text class="flow-description">{{ index <= currentStep ? step.description : '等待下一阶段' }}</text></view></view></view><view class="q-surface record-information"><view class="q-detail-row"><text>报修编号</text><text>{{ record.id }}</text></view><view class="q-detail-row"><text>提交时间</text><text>{{ record.createdAt?.replace('T', ' ').slice(0, 16) }}</text></view><view class="q-detail-row"><text>优先级</text><text>{{ priority }}</text></view></view><text v-if="!isManager && record.status === 'PENDING_CONFIRM'" class="q-note">维修已处理，请联系管理者确认实际结果。当前租客端不提供状态修改。</text></template>
     <view v-if="record?.resolution && !blocked" class="q-surface resolution-block"><text class="resolution-heading">处理说明</text><text class="resolution-copy">{{ record.resolution }}</text></view>
     <template v-if="record?.photos?.length && !blocked"><view class="q-section-heading"><text>报修照片</text><text class="q-link">点击查看大图</text></view><view class="repair-photos"><ProtectedPhoto v-for="photo in record.photos" :key="photo.id" :url="photo.fileUrl || photo.url" /></view></template>
-    <view v-if="loading" class="q-empty">正在加载处理进度…</view><button class="q-outline return-button" @tap="back">返回我的报修</button>
+    <view v-if="loading" class="q-empty">正在加载处理进度…</view><button class="q-outline return-button" @tap="back">{{ isManager ? '返回工单工作台' : '返回我的报修' }}</button>
   </view>
 </template>
 <script>
 import QIcon from '../../components/QIcon.vue'
 import ProtectedPhoto from '../../components/ProtectedPhoto.vue'
 import { getMaintenanceDetail } from '../../api/index.js'
-import { ensureTenantSession, hasCapability } from '../../utils/session.js'
+import { ensureTenantSession, hasCapability, isMaintenanceManager } from '../../utils/session.js'
 export default {
   components: { QIcon, ProtectedPhoto },
-  data() { return { id: '', record: null, loading: false, error: '', blocked: false, steps: [{ status: 'SUBMITTED', title: '已提交', description: '已收到你的报修申请' }, { status: 'ACKNOWLEDGED', title: '已受理', description: '管理者已受理，准备安排维修' }, { status: 'ASSIGNED', title: '已派单', description: '维修人员已安排' }, { status: 'IN_PROGRESS', title: '处理中', description: '工作人员正在跟进维修' }, { status: 'PENDING_CONFIRM', title: '待确认', description: '维修已处理，等待结果确认' }, { status: 'COMPLETED', title: '已完成', description: '本次报修服务已完成' }] } },
+  data() { return { id: '', record: null, loading: false, error: '', blocked: false, isManager: false, steps: [{ status: 'SUBMITTED', title: '已提交', description: '已收到你的报修申请' }, { status: 'ACKNOWLEDGED', title: '已受理', description: '管理者已受理，准备安排维修' }, { status: 'ASSIGNED', title: '已派单', description: '维修人员已安排' }, { status: 'IN_PROGRESS', title: '处理中', description: '工作人员正在跟进维修' }, { status: 'PENDING_CONFIRM', title: '待确认', description: '维修已处理，等待结果确认' }, { status: 'COMPLETED', title: '已完成', description: '本次报修服务已完成' }] } },
   computed: { currentStep() { return this.steps.findIndex(s => s.status === this.record?.status) }, priority() { return { LOW: '低', NORMAL: '普通', URGENT: '紧急' }[this.record?.priority] || '—' } },
   onLoad(query) { this.id = query.id || ''; this.load() },
   methods: {
@@ -28,7 +28,9 @@ export default {
       this.loading = true; this.error = ''
       try {
         if (!await ensureTenantSession()) return
-        if (!hasCapability('tenant.maintenance.read')) {
+        const role = uni.getStorageSync('user_role')
+        this.isManager = isMaintenanceManager(role)
+        if (!this.isManager && (role !== 'TENANT' || !hasCapability('tenant.maintenance.read'))) {
           this.blocked = true
           return
         }
@@ -43,7 +45,10 @@ export default {
         }
       } finally { this.loading = false }
     },
-    back() { uni.switchTab({ url: '/pages/maintenance/maintenance' }) }
+    back() {
+      if (this.isManager && getCurrentPages().length > 1) uni.navigateBack()
+      else uni.switchTab({ url: this.isManager ? '/pages/index/index' : '/pages/maintenance/maintenance' })
+    }
   }
 }
 </script>

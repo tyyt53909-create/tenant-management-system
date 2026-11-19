@@ -30,6 +30,8 @@ describe('resolveCorsOrigins', () => {
     expect(DEFAULT_ORIGINS).toContain('http://localhost:5173');
     expect(DEFAULT_ORIGINS).toContain('http://127.0.0.1:5173');
     expect(DEFAULT_ORIGINS).toContain('http://127.0.0.1:5174');
+    expect(DEFAULT_ORIGINS).toContain('http://localhost:5175');
+    expect(DEFAULT_ORIGINS).toContain('http://127.0.0.1:5175');
   });
 
   it('返回新数组，调用方修改不会污染默认值', () => {

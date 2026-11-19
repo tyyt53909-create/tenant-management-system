@@ -267,7 +267,7 @@ test('tenant login preserves existing home tab', async () => {
   assert.deepEqual(navigation, ['/pages/index/index'])
 })
 for (const [path, method] of [
-  ['index/index', 'loadData'], ['bills/bills', 'loadBills'],
+  ['index/index', 'loadUser'], ['bills/bills', 'loadBills'],
   ['maintenance/maintenance', 'loadMaintenanceList'],
   ['account/account', 'loadData'], ['contract/contract', 'loadContract'],
   ['profile/profile', 'loadUserInfo']
