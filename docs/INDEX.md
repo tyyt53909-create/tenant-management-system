@@ -52,7 +52,7 @@
 | [30-前端请求层一致性.md](./30-前端请求层一致性.md) | 前端请求层一致性 | 事实来源类 | active | strong | frontend-admin/src/utils/request.ts、frontend-admin/src/utils/apiError.ts、frontend-admin/src/utils/notify.ts | 2026-10-25 | T285：错误码驱动、统一解析、提示去重、刷新竞态按码识别 |
 | [31-管理后台角色路由与组件拆分.md](./31-管理后台角色路由与组件拆分.md) | 管理后台角色路由与组件拆分 | 事实来源类 | active | strong | frontend-admin/src/router/index.ts、frontend-admin/src/utils/access.ts、frontend-admin/src/utils/billRow.ts | 2026-10-25 | T286：meta.roles 守卫、导航过滤、型别化结算 API、账单行纯函数 |
 | [32-小程序工程化.md](./32-小程序工程化.md) | 小程序工程化：分包、隐私、类型与页面测试 | 事实来源类 | active | strong | miniprogram/pages.json、miniprogram/packageA/**、miniprogram/utils/privacy.js | 2026-10-25 | T287：主包/分包划分、预下载、隐私授权、typecheck 与页面测试 |
-| [小程序角色化首页-下一步开发计划.md](./小程序角色化首页-下一步开发计划.md) | 小程序角色化首页 | 过程类 | active | strong | miniprogram/components/home/\*\*、miniprogram/pages/index/\*\* | 2026-11-18 | 角色首页、develop 移植范围与验收记录 |
+| [小程序角色化首页-下一步开发计划.md](./小程序角色化首页-下一步开发计划.md) | 小程序角色化首页 | 过程类 | active | strong | miniprogram/components/home/\*\*、miniprogram/components/QCalendar.vue、miniprogram/pages/index/\*\* | 2026-11-19 | 角色首页、develop 移植范围与验收记录 |
 | [33-依赖注入与大服务拆分.md](./33-依赖注入与大服务拆分.md) | 依赖注入清理与大服务拆分 | 事实来源类 | active | strong | backend/src/modules/**、backend/src/common/dependency-hygiene.spec.ts | 2026-10-25 | T288：关键依赖必填、可选依赖白名单、RoomsService 拆分、静态防回归 |
 
 ---
